@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Worldview</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Worldview">
+<meta name="theme-color" content="#f7f6f2">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<style>
+  :root {
+    --ink: #16404f;          /* dark teal from the sketches */
+    --ink-soft: #3d6472;
+    --paper: #f7f6f2;
+    --card: #ffffff;
+    --line: #16404f;
+    --accent: #1d5d73;
+    --radius: 14px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overscroll-behavior: none; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .serif { font-family: Georgia, "Times New Roman", serif; }
+
+  /* ---------- Views ---------- */
+  .view { flex: 1; display: none; flex-direction: column; min-height: 0; }
+  .view.active { display: flex; }
+
+  /* ---------- Home ---------- */
+  #home-header {
+    padding: calc(env(safe-area-inset-top) + 22px) 24px 0;
+    text-align: center;
+  }
+  #home-header h1 {
+    font-size: 22px; letter-spacing: 0.12em; text-transform: uppercase;
+    font-weight: 600;
+  }
+  #home-header p { color: var(--ink-soft); font-size: 13px; margin-top: 4px; font-style: italic; }
+  #gear {
+    position: absolute; top: calc(env(safe-area-inset-top) + 18px); right: 18px;
+    background: none; border: none; font-size: 20px; color: var(--ink-soft); cursor: pointer;
+  }
+
+  #carousel-wrap {
+    flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0;
+    perspective: 1100px; touch-action: none; overflow: hidden;
+  }
+  #carousel { position: relative; width: 100%; height: 350px; transform-style: preserve-3d; }
+
+  .card {
+    position: absolute; left: 50%; top: 50%;
+    width: 262px; height: 320px; margin: -160px 0 0 -131px;
+    background: var(--card);
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 22px; text-align: center;
+    box-shadow: 0 8px 24px rgba(22,64,79,0.08);
+    will-change: transform, opacity;
+    cursor: grab; user-select: none; -webkit-user-select: none;
+    backface-visibility: hidden;
+  }
+  .card .card-title { font-size: 21px; line-height: 1.3; font-weight: 600; }
+  .card .card-cat {
+    position: absolute; top: 14px; left: 0; right: 0;
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft);
+  }
+  .card .card-hint {
+    position: absolute; bottom: 14px; left: 0; right: 0;
+    font-size: 11px; color: var(--ink-soft);
+  }
+  .card.lesson-card { cursor: pointer; }
+
+  /* new-lesson card */
+  .card.new-card .prompt-line { font-size: 17px; margin-bottom: 16px; line-height: 1.5; }
+  .card.new-card .method {
+    text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px;
+    color: var(--accent); cursor: pointer; font-style: italic;
+  }
+  .card.new-card input {
+    width: 100%; padding: 13px 14px; font-size: 16px;
+    border: 1.5px solid var(--line); border-radius: 10px;
+    background: var(--paper); color: var(--ink); text-align: center;
+    outline: none;
+  }
+  .card.new-card input::placeholder { color: #9ab0b8; }
+  .card.new-card button {
+    margin-top: 14px; padding: 11px 30px; font-size: 16px;
+    background: var(--accent); color: #fff; border: none; border-radius: 10px; cursor: pointer;
+  }
+  .card.new-card button:disabled { opacity: 0.45; }
+
+  /* ---------- Learning-paths sheet ---------- */
+  #paths-sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    background: var(--card);
+    border-top: 1.5px solid var(--line);
+    border-radius: 18px 18px 0 0;
+    padding: 18px 0 calc(env(safe-area-inset-bottom) + 22px);
+    transform: translateY(105%);
+    transition: transform 0.28s ease;
+    box-shadow: 0 -10px 30px rgba(22,64,79,0.15);
+  }
+  #paths-sheet.open { transform: translateY(0); }
+  #paths-sheet h3 { text-align: center; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 4px; }
+  #paths-sheet .sheet-sub { text-align: center; font-size: 15px; font-weight: 600; margin-bottom: 14px; padding: 0 24px; }
+  #paths-row {
+    display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory;
+    padding: 4px calc(50% - 110px) 10px; scrollbar-width: none;
+  }
+  #paths-row::-webkit-scrollbar { display: none; }
+  .path-card {
+    scroll-snap-align: center;
+    flex: 0 0 220px; min-height: 110px;
+    border: 1.5px solid var(--line); border-radius: 12px;
+    background: var(--paper);
+    display: flex; align-items: center; justify-content: center;
+    padding: 14px; font-size: 15px; line-height: 1.4; text-align: center; cursor: pointer;
+  }
+  .path-card.loading { color: var(--ink-soft); font-style: italic; border-style: dashed; }
+  #sheet-close {
+    display: block; margin: 12px auto 0; background: none; border: none;
+    color: var(--ink-soft); font-size: 13px; cursor: pointer; text-decoration: underline;
+  }
+
+  /* ---------- Bottom bar ---------- */
+  #bottom-bar {
+    flex: 0 0 auto;
+    margin: 0 18px calc(env(safe-area-inset-bottom) + 14px);
+    height: 52px;
+    border: 1.5px solid var(--line); border-radius: 12px;
+    background: var(--card);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft);
+    cursor: pointer; user-select: none;
+    touch-action: none;
+  }
+
+  /* ---------- Chat ---------- */
+  #chat-header {
+    padding: calc(env(safe-area-inset-top) + 14px) 16px 12px;
+    display: flex; align-items: center; gap: 12px;
+    border-bottom: 1.5px solid var(--line); background: var(--card);
+  }
+  #chat-back { background: none; border: none; font-size: 22px; color: var(--ink); cursor: pointer; padding: 2px 8px; }
+  #chat-title { font-size: 16px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #chat-method { font-size: 11px; color: var(--ink-soft); font-style: italic; }
+  #chat-scroll { flex: 1; overflow-y: auto; padding: 18px 16px 10px; -webkit-overflow-scrolling: touch; }
+  .msg { max-width: 88%; margin-bottom: 14px; padding: 12px 15px; border-radius: 14px; font-size: 16px; line-height: 1.55; word-wrap: break-word; }
+  .msg.user { margin-left: auto; background: var(--ink); color: #fff; border-bottom-right-radius: 4px; }
+  .msg.assistant { margin-right: auto; background: var(--card); border: 1.5px solid var(--line); border-bottom-left-radius: 4px; }
+  .msg.assistant.thinking { color: var(--ink-soft); font-style: italic; border-style: dashed; }
+  .msg p { margin-bottom: 8px; } .msg p:last-child { margin-bottom: 0; }
+  .msg code { background: rgba(22,64,79,0.08); padding: 1px 5px; border-radius: 4px; font-size: 14px; }
+  .msg.user code { background: rgba(255,255,255,0.2); }
+  #chat-input-row {
+    display: flex; gap: 10px; padding: 10px 14px calc(env(safe-area-inset-bottom) + 12px);
+    border-top: 1.5px solid var(--line); background: var(--card);
+  }
+  #chat-input {
+    flex: 1; padding: 12px 14px; font-size: 16px; border: 1.5px solid var(--line);
+    border-radius: 12px; background: var(--paper); color: var(--ink); outline: none; resize: none;
+    max-height: 110px; font-family: inherit;
+  }
+  #chat-send {
+    align-self: flex-end; padding: 12px 18px; font-size: 16px; border: none; border-radius: 12px;
+    background: var(--accent); color: #fff; cursor: pointer;
+  }
+  #chat-send:disabled { opacity: 0.45; }
+
+  /* ---------- Profile ---------- */
+  #profile-header {
+    padding: calc(env(safe-area-inset-top) + 22px) 24px 12px; text-align: center;
+  }
+  #profile-header h2 { font-size: 19px; letter-spacing: 0.1em; text-transform: uppercase; }
+  #profile-header p { color: var(--ink-soft); font-size: 13px; margin-top: 4px; font-style: italic; }
+  #profile-scroll { flex: 1; overflow-y: auto; padding: 10px 22px 20px; }
+  .cat-block { margin-bottom: 22px; }
+  .cat-block h3 {
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft);
+    border-bottom: 1.5px solid var(--line); padding-bottom: 6px; margin-bottom: 10px;
+    display: flex; justify-content: space-between;
+  }
+  .cat-lesson {
+    padding: 11px 14px; border: 1.5px solid var(--line); border-radius: 10px;
+    background: var(--card); margin-bottom: 8px; font-size: 15px; cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  }
+  .cat-lesson span.n { color: var(--ink-soft); font-size: 12px; white-space: nowrap; }
+  #profile-empty { text-align: center; color: var(--ink-soft); font-style: italic; margin-top: 60px; padding: 0 30px; line-height: 1.6; }
+  #profile-back {
+    flex: 0 0 auto; margin: 0 18px calc(env(safe-area-inset-bottom) + 14px);
+    height: 52px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--card);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); cursor: pointer;
+    touch-action: none;
+  }
+
+  /* ---------- Settings sheet ---------- */
+  #settings {
+    position: fixed; inset: 0; z-index: 50; background: rgba(22,64,79,0.35);
+    display: none; align-items: flex-end;
+  }
+  #settings.open { display: flex; }
+  #settings-panel {
+    background: var(--card); width: 100%; border-radius: 18px 18px 0 0;
+    padding: 24px 24px calc(env(safe-area-inset-bottom) + 28px);
+  }
+  #settings-panel h3 { font-size: 16px; margin-bottom: 16px; }
+  #settings-panel label { display: block; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 14px 0 6px; }
+  #settings-panel input, #settings-panel select {
+    width: 100%; padding: 12px 14px; font-size: 16px; border: 1.5px solid var(--line);
+    border-radius: 10px; background: var(--paper); color: var(--ink); outline: none;
+  }
+  #settings-panel .hint { font-size: 12px; color: var(--ink-soft); margin-top: 8px; line-height: 1.5; }
+  #settings-save {
+    margin-top: 20px; width: 100%; padding: 14px; font-size: 16px;
+    background: var(--accent); color: #fff; border: none; border-radius: 12px; cursor: pointer;
+  }
+
+  #toast {
+    position: fixed; top: calc(env(safe-area-inset-top) + 14px); left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 10px; font-size: 14px;
+    z-index: 100; display: none; max-width: 86%; text-align: center;
+  }
+
+  /* ---------- cost label ---------- */
+  #chat-cost { font-size: 11px; color: var(--ink-soft); white-space: nowrap; align-self: center; }
+
+  /* ---------- voice mode ---------- */
+  #chat-mic {
+    align-self: flex-end; padding: 12px 14px; font-size: 17px; border: 1.5px solid var(--line);
+    border-radius: 12px; background: var(--card); color: var(--ink); cursor: pointer;
+  }
+  #voice-overlay {
+    position: fixed; inset: 0; z-index: 45; background: var(--paper);
+    display: none; flex-direction: column;
+    padding: calc(env(safe-area-inset-top) + 16px) 0 calc(env(safe-area-inset-bottom) + 26px);
+    user-select: none; -webkit-user-select: none;
+  }
+  #voice-close {
+    position: absolute; top: calc(env(safe-area-inset-top) + 12px); right: 16px;
+    background: none; border: none; font-size: 22px; color: var(--ink-soft); cursor: pointer;
+    padding: 8px; z-index: 2;
+  }
+  #voice-scroll {
+    flex: 1; overflow-y: auto; padding: 60px 20px 24px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .vmsg { max-width: 90%; margin-bottom: 14px; font-size: 16px; line-height: 1.55; opacity: 0.55; }
+  .vmsg.user { margin-left: auto; text-align: right; color: var(--accent); font-style: italic; }
+  .vmsg.assistant { margin-right: auto; }
+  .vmsg.live { opacity: 1; font-size: 19px; }
+  .voice-current {
+    margin: 6px 0 16px; opacity: 1 !important;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 23px; line-height: 1.65;
+  }
+  .voice-current .w { color: #b9c8cd; transition: color 0.12s; }
+  .voice-current .w.spoken { color: var(--ink); }
+  .voice-current .w.current { color: var(--accent); background: rgba(29,93,115,0.12); border-radius: 4px; }
+  #voice-status {
+    flex: 0 0 auto; display: flex; align-items: center; justify-content: center; gap: 10px;
+    font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft);
+  }
+  #voice-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+  #voice-dot.pulse { animation: vpulse 1.4s ease-in-out infinite; }
+  #voice-dot.held { transform: scale(1.6); animation: none; background: var(--ink); }
+  @keyframes vpulse { 0%,100% { opacity: 0.35; } 50% { opacity: 1; } }
+</style>
+</head>
+<body>
+
+<!-- ============ HOME ============ -->
+<div id="view-home" class="view active">
+  <div id="home-header">
+    <h1 class="serif">Worldview</h1>
+    <p>learn anything, one conversation at a time</p>
+    <button id="gear" title="Settings">&#9881;</button>
+  </div>
+
+  <div id="carousel-wrap">
+    <div id="carousel"></div>
+  </div>
+
+  <div id="bottom-bar">&#9650;&nbsp;&nbsp;profile</div>
+</div>
+
+<!-- ============ CHAT ============ -->
+<div id="view-chat" class="view">
+  <div id="chat-header">
+    <button id="chat-back">&#8249;</button>
+    <div style="flex:1;min-width:0">
+      <div id="chat-title"></div>
+      <div id="chat-method"></div>
+    </div>
+    <div id="chat-cost"></div>
+  </div>
+  <div id="chat-scroll"></div>
+  <div id="chat-input-row">
+    <textarea id="chat-input" rows="1" placeholder="Reply&hellip;"></textarea>
+    <button id="chat-mic" title="Voice mode">&#127908;</button>
+    <button id="chat-send">&#8593;</button>
+  </div>
+</div>
+
+<!-- ============ PROFILE ============ -->
+<div id="view-profile" class="view">
+  <div id="profile-header">
+    <h2 class="serif">Your Worldview</h2>
+    <p>what you&rsquo;ve been curious about</p>
+  </div>
+  <div id="profile-scroll"></div>
+  <div id="profile-back">&#9660;&nbsp;&nbsp;lessons</div>
+</div>
+
+<!-- ============ Learning paths sheet ============ -->
+<div id="paths-sheet">
+  <h3>Possible learning paths</h3>
+  <div class="sheet-sub" id="sheet-lesson-title"></div>
+  <div id="paths-row"></div>
+  <button id="sheet-close">close</button>
+</div>
+
+<!-- ============ Voice mode ============ -->
+<div id="voice-overlay">
+  <button id="voice-close">&#10005;</button>
+  <div id="voice-scroll"></div>
+  <div id="voice-status"><span id="voice-dot"></span><span id="voice-status-text">listening</span></div>
+</div>
+
+<!-- ============ Settings ============ -->
+<div id="settings">
+  <div id="settings-panel">
+    <h3>Settings</h3>
+    <label>Anthropic API key</label>
+    <input id="set-key" type="password" placeholder="sk-ant-..." autocomplete="off">
+    <div class="hint">Stored only on this device (localStorage). Get a key at console.anthropic.com.</div>
+    <label>Model</label>
+    <select id="set-model">
+      <option value="claude-opus-4-8">Claude Opus 4.8 (best)</option>
+      <option value="claude-sonnet-5">Claude Sonnet 5 (balanced)</option>
+      <option value="claude-haiku-4-5">Claude Haiku 4.5 (fastest)</option>
+    </select>
+    <label>Voice</label>
+    <select id="set-voice"></select>
+    <label style="display:flex;align-items:center;gap:10px;text-transform:none;font-size:15px;letter-spacing:0;color:var(--ink);margin-top:18px;">
+      <input id="set-voicedefault" type="checkbox" style="width:auto;accent-color:var(--accent);transform:scale(1.3);">
+      Start lessons in voice mode
+    </label>
+    <button id="settings-save">Save</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+/* ================= state ================= */
+const LS_KEY = "worldview-v1";
+let state = { apiKey: "", model: "claude-opus-4-8", lessons: [], voiceURI: "", voiceDefault: false };
+try { Object.assign(state, JSON.parse(localStorage.getItem(LS_KEY) || "{}")); } catch (e) {}
+const save = () => localStorage.setItem(LS_KEY, JSON.stringify(state));
+
+const METHODS = [
+  { key: "socratic", label: "Socratically", starter: t => `Teach me ${t} Socratically.` },
+  { key: "feynman",  label: "through the Feynman Technique", starter: t => `Teach me ${t} through the Feynman Technique.` },
+  { key: "quiz",     label: "with a quiz", starter: t => `Quiz me on ${t}.` },
+];
+let methodIdx = 0;
+let currentLessonId = null;
+let streaming = false;
+
+const SYSTEM_PROMPTS = {
+  socratic: `You are a Socratic tutor inside a minimal mobile learning app called Worldview. Teach through questions, not lectures. Start by probing what the student already knows about the topic, then build from their answers — one question at a time, filling gaps as they appear. Keep each reply short (2-5 sentences plus one clear question). Be warm and genuinely curious about their reasoning. If they're wrong, don't correct them outright; ask a question that exposes the contradiction. Occasionally, when a milestone of understanding is reached, briefly affirm what they've figured out before moving deeper.`,
+  feynman: `You are a tutor using the Feynman Technique inside a minimal mobile learning app called Worldview. First give the student a brief, plain-language pass over the topic (a few sentences, no jargon). Then ask them to explain it back to you as if teaching a 12-year-old. Listen for gaps, oversimplifications, or borrowed jargon in their explanation, point out exactly where their explanation broke down, re-explain just that piece more simply, and have them try again. Keep replies short and focused on one gap at a time.`,
+  quiz: `You are a quizmaster inside a minimal mobile learning app called Worldview. Quiz the student on the topic, one question at a time, starting easy and getting harder based on their performance. After each answer, tell them if they were right, give a one-or-two-sentence explanation, and then ask the next question. Mix formats: recall, multiple choice, and "explain why". Keep score casually and mention it every few questions.`,
+};
+
+/* ================= tiny helpers ================= */
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+function md(s) { // minimal markdown: paragraphs, bold, italics, inline code
+  return esc(s)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    .replace(/\*([^*]+)\*/g, "<i>$1</i>")
+    .split(/\n{2,}/).map(p => `<p>${p.replace(/\n/g, "<br>")}</p>`).join("");
+}
+function toast(msg, ms = 3500) {
+  const t = $("toast"); t.textContent = msg; t.style.display = "block";
+  clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", ms);
+}
+function show(view) {
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  $("view-" + view).classList.add("active");
+}
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const getLesson = id => state.lessons.find(l => l.id === id);
+
+/* ================= Anthropic API ================= */
+const API_URL = "https://api.anthropic.com/v1/messages";
+function headers() {
+  return {
+    "content-type": "application/json",
+    "x-api-key": state.apiKey,
+    "anthropic-version": "2023-06-01",
+    "anthropic-dangerous-direct-browser-access": "true",
+  };
+}
+
+async function streamChat(system, messages, onText) {
+  const res = await fetch(API_URL, {
+    method: "POST", headers: headers(),
+    body: JSON.stringify({ model: state.model, max_tokens: 8000, stream: true, system, messages }),
+  });
+  if (!res.ok) {
+    let msg = `API error ${res.status}`;
+    try { msg = (await res.json()).error.message; } catch (e) {}
+    throw new Error(msg);
+  }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "", full = "";
+  const usage = { input: 0, output: 0 };
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n\n")) >= 0) {
+      const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+      for (const line of chunk.split("\n")) {
+        if (!line.startsWith("data: ")) continue;
+        let ev; try { ev = JSON.parse(line.slice(6)); } catch (e) { continue; }
+        if (ev.type === "content_block_delta" && ev.delta && ev.delta.type === "text_delta") {
+          full += ev.delta.text; onText(full);
+        } else if (ev.type === "message_start" && ev.message && ev.message.usage) {
+          usage.input = ev.message.usage.input_tokens || 0;
+        } else if (ev.type === "message_delta" && ev.usage) {
+          usage.output = ev.usage.output_tokens || 0;
+        } else if (ev.type === "error") {
+          throw new Error(ev.error && ev.error.message || "stream error");
+        }
+      }
+    }
+  }
+  return { text: full, usage };
+}
+
+/* ---- cost tracking ($/MTok input, output) ---- */
+const PRICES = {
+  "claude-opus-4-8":  [5, 25],
+  "claude-sonnet-5":  [3, 15],
+  "claude-haiku-4-5": [1, 5],
+};
+function addCost(lesson, model, usage) {
+  if (!lesson || !usage) return;
+  const p = PRICES[model] || [5, 25];
+  lesson.cost = (lesson.cost || 0) + (usage.input * p[0] + usage.output * p[1]) / 1e6;
+}
+function fmtCost(c) {
+  if (!c) return "";
+  return c < 0.005 ? "&lt;1&cent;" : c < 1 ? Math.round(c * 100) + "&cent;" : "$" + c.toFixed(2);
+}
+function updateCostLabel(lesson) {
+  $("chat-cost").innerHTML = lesson && lesson.cost ? "&asymp;" + fmtCost(lesson.cost) : "";
+}
+
+// background call (haiku): structured JSON output
+async function jsonCall(system, userText, schema, maxTokens = 512, costLesson = null) {
+  const res = await fetch(API_URL, {
+    method: "POST", headers: headers(),
+    body: JSON.stringify({
+      model: "claude-haiku-4-5", max_tokens: maxTokens, system,
+      messages: [{ role: "user", content: userText }],
+      output_config: { format: { type: "json_schema", schema } },
+    }),
+  });
+  if (!res.ok) throw new Error(`meta call failed (${res.status})`);
+  const data = await res.json();
+  if (costLesson && data.usage) {
+    addCost(costLesson, "claude-haiku-4-5", { input: data.usage.input_tokens, output: data.usage.output_tokens });
+    save();
+  }
+  const text = (data.content.find(b => b.type === "text") || {}).text || "{}";
+  return JSON.parse(text);
+}
+
+/* ================= Home / circular wheel ================= */
+const wheel = { pos: 0, cards: [], ids: [] };
+
+function renderHome() {
+  const c = $("carousel");
+  c.innerHTML = "";
+  wheel.cards = []; wheel.ids = [];
+
+  // new-lesson card (always index 0)
+  const nc = document.createElement("div");
+  nc.className = "card new-card";
+  nc.innerHTML = `
+    <div class="prompt-line">Teach me <span style="opacity:.5">____</span><br><span class="method" id="method-toggle">${METHODS[methodIdx].label}</span></div>
+    <input id="topic-input" type="text" placeholder="the steam engine, fungi, anything&hellip;" enterkeyhint="go">
+    <button id="start-btn">Begin</button>
+  `;
+  c.appendChild(nc);
+  wheel.cards.push(nc); wheel.ids.push(null);
+
+  // lesson cards, newest first
+  [...state.lessons].reverse().forEach(l => {
+    const card = document.createElement("div");
+    card.className = "card lesson-card";
+    card.dataset.id = l.id;
+    card.innerHTML = `
+      <div class="card-cat">${esc(l.category || "")}</div>
+      <div class="card-title serif">${esc(l.title)}</div>
+      <div class="card-hint">tap to continue &middot; drag &#9650; for paths</div>
+    `;
+    c.appendChild(card);
+    wheel.cards.push(card); wheel.ids.push(l.id);
+  });
+
+  wheel.pos = Math.min(wheel.pos, wheel.cards.length - 1);
+  layoutWheel(false);
+
+  $("method-toggle").onclick = () => {
+    methodIdx = (methodIdx + 1) % METHODS.length;
+    $("method-toggle").textContent = METHODS[methodIdx].label;
+  };
+  $("start-btn").onclick = startLesson;
+  $("topic-input").addEventListener("keydown", e => { if (e.key === "Enter") startLesson(); });
+}
+
+/* cards sit on a circle coming out of the screen; drag horizontally to spin it */
+function layoutWheel(animate = true) {
+  wheel.cards.forEach((el, i) => {
+    const d = i - wheel.pos;
+    const abs = Math.abs(d);
+    el.style.transition = animate ? "transform 0.35s ease, opacity 0.35s ease" : "none";
+    el.style.transform =
+      `translateX(${d * 175}px) translateZ(${-abs * 175}px) rotateY(${-d * 26}deg)`;
+    el.style.opacity = abs > 2.6 ? 0 : String(1 - abs * 0.22);
+    el.style.zIndex = String(200 - Math.round(abs * 10));
+    el.style.pointerEvents = abs > 2.6 ? "none" : "auto";
+  });
+}
+
+(function wheelGestures() {
+  const area = document.getElementById("carousel-wrap");
+  let down = false, sx = 0, sy = 0, startPos = 0, moved = false, target = null;
+
+  area.addEventListener("pointerdown", e => {
+    if (/^(INPUT|BUTTON|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+    down = true; moved = false;
+    sx = e.clientX; sy = e.clientY; startPos = wheel.pos;
+    target = e.target.closest(".card");
+    area.setPointerCapture(e.pointerId);
+  });
+  area.addEventListener("pointermove", e => {
+    if (!down) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (Math.abs(dx) > 6 || Math.abs(dy) > 6) moved = true;
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      wheel.pos = Math.max(-0.4, Math.min(wheel.cards.length - 0.6, startPos - dx / 175));
+      layoutWheel(false);
+    }
+  });
+  area.addEventListener("pointerup", e => {
+    if (!down) return;
+    down = false;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    const centeredIdx = Math.round(startPos);
+
+    // drag up on the centered lesson card → learning paths (works with mouse too)
+    if (dy < -60 && Math.abs(dx) < 50 && wheel.ids[centeredIdx]) {
+      wheel.pos = centeredIdx; layoutWheel();
+      openPaths(wheel.ids[centeredIdx]);
+      return;
+    }
+    if (!moved && target) {
+      const idx = wheel.cards.indexOf(target);
+      if (idx === Math.round(wheel.pos) && wheel.ids[idx]) { openChat(wheel.ids[idx]); return; } // tap centered → open
+      if (idx >= 0) { wheel.pos = idx; layoutWheel(); return; }                                   // tap side → rotate to it
+    }
+    wheel.pos = Math.max(0, Math.min(wheel.cards.length - 1, Math.round(wheel.pos)));
+    layoutWheel();
+  });
+  area.addEventListener("wheel", e => { // desktop scroll wheel spins it
+    e.preventDefault();
+    const dir = Math.sign(e.deltaY + e.deltaX);
+    wheel.pos = Math.max(0, Math.min(wheel.cards.length - 1, Math.round(wheel.pos) + dir));
+    layoutWheel();
+  }, { passive: false });
+})();
+
+function beginLesson(topic, methodKey, starterText) {
+  if (!state.apiKey) { openSettings(); toast("Add your Anthropic API key first"); return; }
+  const lesson = {
+    id: uid(), topic, method: methodKey,
+    title: topic.length > 40 ? topic.slice(0, 40) + "…" : topic,
+    category: "", messages: [], paths: [],
+  };
+  state.lessons.push(lesson);
+  save();
+  fetchMeta(lesson);
+  if (state.voiceDefault && voiceSupported()) {
+    openChat(lesson.id, true);
+    enterVoice(false);
+    voiceSend(starterText);
+  } else {
+    openChat(lesson.id, true);
+    sendToClaude(lesson, starterText);
+  }
+}
+
+async function startLesson() {
+  const topic = $("topic-input").value.trim();
+  if (!topic) return;
+  const method = METHODS[methodIdx];
+  beginLesson(topic, method.key, method.starter(topic));
+}
+
+// background: title + category via haiku
+async function fetchMeta(lesson) {
+  try {
+    const meta = await jsonCall(
+      "You label lessons for a learning app. Given a topic, return a short elegant lesson title (2-5 words, title case) and a single broad category (one word, e.g. History, Biology, Physics, Technology, Philosophy, Economics, Art, Language, Mathematics, Geography).",
+      `Topic: ${lesson.topic}`,
+      { type: "object", properties: { title: { type: "string" }, category: { type: "string" } },
+        required: ["title", "category"], additionalProperties: false },
+      512, lesson
+    );
+    lesson.title = meta.title; lesson.category = meta.category;
+    save();
+    if (currentLessonId === lesson.id) $("chat-title").textContent = lesson.title;
+    renderHome();
+  } catch (e) { /* non-fatal */ }
+}
+
+/* ================= Learning paths ================= */
+let pathsLessonId = null;
+async function openPaths(id) {
+  const lesson = getLesson(id);
+  if (!lesson) return;
+  pathsLessonId = id;
+  $("sheet-lesson-title").textContent = lesson.title;
+  const row = $("paths-row");
+  $("paths-sheet").classList.add("open");
+
+  if (lesson.paths && lesson.paths.length) { renderPaths(lesson.paths); return; }
+  row.innerHTML = `<div class="path-card loading">finding paths&hellip;</div>`;
+  if (!state.apiKey) { row.innerHTML = `<div class="path-card loading">add your API key in settings</div>`; return; }
+  try {
+    const convo = lesson.messages.map(m => `${m.role}: ${m.content}`).join("\n").slice(-6000);
+    const out = await jsonCall(
+      "You suggest follow-up learning paths for a curiosity-driven learning app. Given a lesson topic and (optionally) its conversation so far, return 5 intriguing follow-up questions a curious student might explore next. Mix directly-related questions with adjacent ones from other fields. Each under 12 words.",
+      `Topic: ${lesson.topic}\n\nConversation so far:\n${convo || "(not started)"}`,
+      { type: "object", properties: { questions: { type: "array", items: { type: "string" } } },
+        required: ["questions"], additionalProperties: false },
+      800, lesson
+    );
+    lesson.paths = out.questions.slice(0, 6);
+    save();
+    renderPaths(lesson.paths);
+  } catch (e) {
+    row.innerHTML = `<div class="path-card loading">${esc(e.message)}</div>`;
+  }
+}
+function renderPaths(paths) {
+  const row = $("paths-row");
+  row.innerHTML = "";
+  paths.forEach(q => {
+    const d = document.createElement("div");
+    d.className = "path-card";
+    d.textContent = q;
+    d.onclick = () => {
+      $("paths-sheet").classList.remove("open");
+      beginLesson(q, "socratic", `Teach me this Socratically: ${q}`);
+    };
+    row.appendChild(d);
+  });
+}
+$("sheet-close").onclick = () => $("paths-sheet").classList.remove("open");
+
+/* ================= Chat ================= */
+function openChat(id, noVoice) {
+  const lesson = getLesson(id);
+  if (!lesson) return;
+  currentLessonId = id;
+  $("chat-title").textContent = lesson.title;
+  const m = METHODS.find(x => x.key === lesson.method);
+  $("chat-method").textContent = m ? m.label : "";
+  updateCostLabel(lesson);
+  const sc = $("chat-scroll");
+  sc.innerHTML = "";
+  lesson.messages.forEach(msg => appendBubble(msg.role, msg.content));
+  show("chat");
+  sc.scrollTop = sc.scrollHeight;
+  if (!noVoice && state.voiceDefault && voiceSupported() && lesson.messages.length) enterVoice();
+}
+function appendBubble(role, content) {
+  const sc = $("chat-scroll");
+  const d = document.createElement("div");
+  d.className = "msg " + role;
+  d.innerHTML = md(content);
+  sc.appendChild(d);
+  sc.scrollTop = sc.scrollHeight;
+  return d;
+}
+
+async function sendToClaude(lesson, userText) {
+  if (streaming) return;
+  streaming = true;
+  $("chat-send").disabled = true;
+
+  lesson.messages.push({ role: "user", content: userText });
+  save();
+  appendBubble("user", userText);
+
+  const thinkingBubble = appendBubble("assistant", "…");
+  thinkingBubble.classList.add("thinking");
+
+  try {
+    const apiMessages = lesson.messages.map(m => ({ role: m.role, content: m.content }));
+    const system = SYSTEM_PROMPTS[lesson.method] || SYSTEM_PROMPTS.socratic;
+    const sc = $("chat-scroll");
+    const { text: full, usage } = await streamChat(system, apiMessages, partial => {
+      thinkingBubble.classList.remove("thinking");
+      thinkingBubble.innerHTML = md(partial);
+      sc.scrollTop = sc.scrollHeight;
+    });
+    lesson.messages.push({ role: "assistant", content: full });
+    lesson.paths = []; // conversation changed → regenerate paths next time
+    addCost(lesson, state.model, usage);
+    save();
+    updateCostLabel(lesson);
+  } catch (e) {
+    thinkingBubble.classList.remove("thinking");
+    thinkingBubble.innerHTML = md("**Hmm, something went wrong:** " + e.message);
+  } finally {
+    streaming = false;
+    $("chat-send").disabled = false;
+  }
+}
+
+$("chat-send").onclick = () => {
+  const input = $("chat-input");
+  const text = input.value.trim();
+  if (!text || streaming) return;
+  input.value = ""; input.style.height = "auto";
+  const lesson = getLesson(currentLessonId);
+  if (lesson) sendToClaude(lesson, text);
+};
+$("chat-input").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("chat-send").click(); }
+});
+$("chat-input").addEventListener("input", function () {
+  this.style.height = "auto"; this.style.height = Math.min(this.scrollHeight, 110) + "px";
+});
+$("chat-back").onclick = () => { renderHome(); show("home"); };
+
+/* ================= Profile ================= */
+function renderProfile() {
+  const scroll = $("profile-scroll");
+  scroll.innerHTML = "";
+  if (!state.lessons.length) {
+    scroll.innerHTML = `<div id="profile-empty">Nothing here yet.<br><br>Start a lesson and your worldview will begin to take shape &mdash; every conversation gets categorized automatically.</div>`;
+    return;
+  }
+  const cats = {};
+  state.lessons.forEach(l => {
+    const c = l.category || "Uncategorized";
+    (cats[c] = cats[c] || []).push(l);
+  });
+  Object.keys(cats).sort().forEach(cat => {
+    const block = document.createElement("div");
+    block.className = "cat-block";
+    block.innerHTML = `<h3><span>${esc(cat)}</span><span>${cats[cat].length}</span></h3>`;
+    cats[cat].forEach(l => {
+      const row = document.createElement("div");
+      row.className = "cat-lesson";
+      const n = Math.floor(l.messages.length / 2);
+      const costStr = l.cost ? ` &middot; ${fmtCost(l.cost)}` : "";
+      row.innerHTML = `<span>${esc(l.title)}</span><span class="n">${n} exchange${n === 1 ? "" : "s"}${costStr}</span>`;
+      row.onclick = () => openChat(l.id);
+      block.appendChild(row);
+    });
+    scroll.appendChild(block);
+  });
+}
+
+/* bottom bar: tap or swipe up → profile; profile bar: tap or swipe down → home */
+function barGesture(el, onActivate, dir) {
+  let sy = 0;
+  el.addEventListener("touchstart", e => { sy = e.touches[0].clientY; }, { passive: true });
+  el.addEventListener("touchend", e => {
+    const dy = e.changedTouches[0].clientY - sy;
+    if ((dir === "up" && dy < -30) || (dir === "down" && dy > 30) || Math.abs(dy) < 10) onActivate();
+  }, { passive: true });
+  el.addEventListener("click", () => { if (!("ontouchstart" in window)) onActivate(); });
+}
+barGesture($("bottom-bar"), () => { renderProfile(); show("profile"); }, "up");
+barGesture($("profile-back"), () => { renderHome(); show("home"); }, "down");
+
+/* ================= Voice mode ================= */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const voice = {
+  active: false, holding: false, listening: false, speaking: false, streamDone: false,
+  pending: "", interim: "", lastSpeechAt: 0, rec: null, silenceTimer: null,
+  queue: [], utter: null, hl: -1, holdStartedAt: 0,
+};
+
+function voiceSupported() { return !!SR && "speechSynthesis" in window; }
+
+/* ---- voice selection: prefer natural/neural system voices ---- */
+let ttsVoices = [];
+function loadTtsVoices() {
+  ttsVoices = speechSynthesis.getVoices() || [];
+  populateVoiceSelect();
+}
+if ("speechSynthesis" in window) {
+  speechSynthesis.onvoiceschanged = loadTtsVoices;
+  loadTtsVoices();
+}
+function voiceScore(v) {
+  let s = 0;
+  if (/natural/i.test(v.name)) s += 8;
+  if (/neural|premium|enhanced/i.test(v.name)) s += 6;
+  if (/aria|jenny|ava|samantha|zoe|siri|emma|libby/i.test(v.name)) s += 3;
+  if (/google/i.test(v.name)) s += 2;
+  if (!v.localService) s += 1; // cloud voices usually sound better
+  return s;
+}
+function pickVoice() {
+  if (!ttsVoices.length) loadTtsVoices();
+  if (state.voiceURI) {
+    const v = ttsVoices.find(v => v.voiceURI === state.voiceURI);
+    if (v) return v;
+  }
+  const lang = (navigator.language || "en").slice(0, 2);
+  const pool = ttsVoices.filter(v => v.lang && v.lang.slice(0, 2) === lang);
+  return [...(pool.length ? pool : ttsVoices)].sort((a, b) => voiceScore(b) - voiceScore(a))[0] || null;
+}
+function populateVoiceSelect() {
+  const sel = $("set-voice");
+  if (!sel) return;
+  const best = pickVoice();
+  sel.innerHTML = `<option value="">Automatic${best ? " (" + best.name.replace(/Microsoft |Google /, "") + ")" : ""}</option>`;
+  const lang = (navigator.language || "en").slice(0, 2);
+  ttsVoices
+    .filter(v => v.lang && v.lang.slice(0, 2) === lang)
+    .sort((a, b) => voiceScore(b) - voiceScore(a))
+    .forEach(v => {
+      const o = document.createElement("option");
+      o.value = v.voiceURI;
+      o.textContent = v.name.replace(/Microsoft |Google /, "") + (v.localService ? "" : " ☁");
+      sel.appendChild(o);
+    });
+  sel.value = state.voiceURI || "";
+}
+function setVoiceStatus(mode) {
+  const dot = $("voice-dot"), txt = $("voice-status-text");
+  dot.className = "";
+  if (mode === "listening") { dot.classList.add("pulse"); txt.textContent = "listening · hold screen to pause"; }
+  else if (mode === "held") { dot.classList.add("held"); txt.textContent = "take your time…"; }
+  else if (mode === "thinking") { txt.textContent = "thinking…"; }
+  else if (mode === "speaking") { dot.classList.add("pulse"); txt.textContent = "speaking · tap to interrupt"; }
+}
+
+function enterVoice(autoListen = true) {
+  if (!voiceSupported()) { toast("Voice isn't supported in this browser — try Safari or Chrome"); return; }
+  const lesson = getLesson(currentLessonId);
+  if (!lesson) return;
+  if (!state.apiKey) { openSettings(); return; }
+  voice.active = true;
+  $("voice-overlay").style.display = "flex";
+  // iOS: speechSynthesis must be unlocked by a user gesture
+  try { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance("")); } catch (e) {}
+  buildVoiceHistory(lesson);
+  if (autoListen) { setVoiceStatus("listening"); startListening(); }
+}
+function exitVoice() {
+  voice.active = false;
+  stopListening();
+  try { speechSynthesis.cancel(); } catch (e) {}
+  voice.queue = []; voice.utter = null; voice.speaking = false;
+  $("voice-overlay").style.display = "none";
+  if (currentLessonId) openChat(currentLessonId, true);
+}
+
+/* ---- conversation rendering inside voice mode ---- */
+function buildVoiceHistory(lesson) {
+  const sc = $("voice-scroll");
+  sc.innerHTML = "";
+  lesson.messages.forEach(m => {
+    const d = document.createElement("div");
+    d.className = "vmsg " + m.role;
+    d.textContent = m.content;
+    sc.appendChild(d);
+  });
+  sc.scrollTop = sc.scrollHeight;
+}
+function voiceAutoScroll() {
+  const sc = $("voice-scroll");
+  // don't fight the user if they scrolled up to reread something
+  if (sc.scrollHeight - sc.scrollTop - sc.clientHeight < 160) sc.scrollTop = sc.scrollHeight;
+}
+
+/* ---- listening ---- */
+function startListening() {
+  if (!voice.active || voice.speaking) return;
+  voice.pending = ""; voice.interim = ""; voice.lastSpeechAt = Date.now();
+  renderVoiceUser("");
+  setVoiceStatus(voice.holding ? "held" : "listening");
+  const rec = new SR();
+  voice.rec = rec;
+  rec.continuous = true; rec.interimResults = true; rec.lang = navigator.language || "en-US";
+  rec.onresult = e => {
+    let interim = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) voice.pending += r[0].transcript + " ";
+      else interim += r[0].transcript;
+    }
+    voice.interim = interim;
+    voice.lastSpeechAt = Date.now();
+    renderVoiceUser((voice.pending + interim).trim());
+  };
+  rec.onend = () => { // iOS ends sessions constantly — keep it alive
+    if (voice.active && voice.listening && voice.rec === rec) {
+      try { rec.start(); } catch (e) {}
+    }
+  };
+  rec.onerror = e => {
+    if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+      toast("Microphone access denied — allow it in browser settings");
+      exitVoice();
+    }
+  };
+  voice.listening = true;
+  try { rec.start(); } catch (e) {}
+  clearInterval(voice.silenceTimer);
+  voice.silenceTimer = setInterval(checkSilence, 250);
+}
+function stopListening() {
+  voice.listening = false;
+  clearInterval(voice.silenceTimer);
+  if (voice.rec) { const r = voice.rec; voice.rec = null; try { r.onend = null; r.stop(); } catch (e) {} }
+}
+function checkSilence() {
+  if (!voice.listening || voice.holding || voice.speaking) return;
+  const text = (voice.pending + voice.interim).trim();
+  if (text && Date.now() - voice.lastSpeechAt > 1500) voiceSend(text);
+}
+
+/* ---- send + spoken reply ---- */
+async function voiceSend(text) {
+  stopListening();
+  const lesson = getLesson(currentLessonId);
+  if (!lesson) return;
+  setVoiceStatus("thinking");
+  finalizeVoiceUser(text);
+  voiceCurrentEl = null; // next assistant reply gets a fresh highlighted block
+  lesson.messages.push({ role: "user", content: text });
+  save();
+  voice.speaking = true; voice.streamDone = false;
+  voice.queue = []; voice.hl = -1;
+  let enqueuedUpTo = 0;
+  try {
+    const system = SYSTEM_PROMPTS[lesson.method] || SYSTEM_PROMPTS.socratic;
+    const apiMessages = lesson.messages.map(m => ({ role: m.role, content: m.content }));
+    const { text: full, usage } = await streamChat(system, apiMessages, partial => {
+      const spoken = stripForSpeech(partial); // keep display & TTS offsets aligned
+      renderVoiceWords(spoken);
+      enqueuedUpTo = enqueueSentences(spoken, enqueuedUpTo, false);
+    });
+    const spokenFull = stripForSpeech(full);
+    renderVoiceWords(spokenFull);
+    enqueuedUpTo = enqueueSentences(spokenFull, enqueuedUpTo, true);
+    voice.streamDone = true;
+    pumpSpeech(); // in case queue already drained
+    lesson.messages.push({ role: "assistant", content: full });
+    lesson.paths = [];
+    addCost(lesson, state.model, usage);
+    save();
+  } catch (e) {
+    toast(e.message);
+    voice.speaking = false; voice.streamDone = true;
+    if (voice.active) startListening();
+  }
+}
+
+// finds newly-completed sentences past `from`, queues them for TTS; returns new offset
+function enqueueSentences(text, from, isFinal) {
+  let i = from;
+  for (;;) {
+    const rest = text.slice(i);
+    const m = rest.match(/[.!?][)"'”]*\s/);
+    if (m) {
+      const end = i + m.index + m[0].length;
+      queueUtterance(text.slice(i, end), i);
+      i = end;
+    } else break;
+  }
+  if (isFinal && i < text.length) {
+    const tail = text.slice(i);
+    if (tail.trim()) queueUtterance(tail, i);
+    i = text.length;
+  }
+  return i;
+}
+function stripForSpeech(s) { // don't read markdown symbols aloud
+  return s.replace(/\*\*?/g, "").replace(/`/g, "").replace(/#+\s/g, "");
+}
+function queueUtterance(text, base) {
+  voice.queue.push({ text, base });
+  pumpSpeech();
+}
+function pumpSpeech() {
+  if (voice.utter || !voice.active) return;
+  if (!voice.queue.length) {
+    if (voice.streamDone && voice.speaking) speakingDone();
+    return;
+  }
+  const item = voice.queue.shift();
+  setVoiceStatus("speaking");
+  const u = new SpeechSynthesisUtterance(item.text);
+  const v = pickVoice();
+  if (v) u.voice = v;
+  u.rate = 1.04;
+  voice.utter = u;
+  let sawBoundary = false;
+  u.onboundary = e => {
+    if (typeof e.charIndex === "number") { sawBoundary = true; highlightAt(item.base + e.charIndex); }
+  };
+  u.onstart = () => { if (!sawBoundary) highlightAt(item.base); };
+  u.onend = () => {
+    markSpokenThrough(item.base + item.text.length);
+    voice.utter = null;
+    pumpSpeech();
+  };
+  u.onerror = u.onend;
+  speechSynthesis.speak(u);
+}
+function speakingDone() {
+  voice.speaking = false;
+  voice.hl = Infinity;
+  refreshWordClasses();
+  if (voice.active) startListening();
+}
+function interruptSpeech() {
+  voice.queue = []; voice.streamDone = true; voice.utter = null;
+  try { speechSynthesis.cancel(); } catch (e) {}
+  speakingDone();
+}
+
+/* ---- rendering ---- */
+let voiceLiveUserEl = null, voiceCurrentEl = null, voiceWordSpans = [];
+
+function renderVoiceUser(text) {
+  const sc = $("voice-scroll");
+  if (!voiceLiveUserEl || !sc.contains(voiceLiveUserEl)) {
+    voiceLiveUserEl = document.createElement("div");
+    voiceLiveUserEl.className = "vmsg user live";
+    sc.appendChild(voiceLiveUserEl);
+  }
+  voiceLiveUserEl.textContent = text || "…";
+  voiceAutoScroll();
+}
+function finalizeVoiceUser(text) {
+  renderVoiceUser(text);
+  if (voiceLiveUserEl) voiceLiveUserEl.classList.remove("live");
+  voiceLiveUserEl = null;
+}
+function renderVoiceWords(fullText) {
+  const sc = $("voice-scroll");
+  if (!voiceCurrentEl || !sc.contains(voiceCurrentEl)) {
+    // dim the previous "current" message down to history styling
+    sc.querySelectorAll(".voice-current").forEach(el => { el.className = "vmsg assistant"; el.textContent = el.textContent; });
+    voiceCurrentEl = document.createElement("div");
+    voiceCurrentEl.className = "voice-current";
+    sc.appendChild(voiceCurrentEl);
+  }
+  const el = voiceCurrentEl;
+  el.innerHTML = "";
+  voiceWordSpans = [];
+  const clean = stripForSpeech(fullText);
+  const re = /\S+/g;
+  let m, frag = document.createDocumentFragment(), last = 0;
+  while ((m = re.exec(clean))) {
+    frag.appendChild(document.createTextNode(clean.slice(last, m.index)));
+    const span = document.createElement("span");
+    span.className = "w";
+    span.textContent = m[0];
+    span.dataset.start = m.index;
+    span.dataset.end = m.index + m[0].length;
+    frag.appendChild(span);
+    voiceWordSpans.push(span);
+    last = m.index + m[0].length;
+  }
+  frag.appendChild(document.createTextNode(clean.slice(last)));
+  el.appendChild(frag);
+  refreshWordClasses();
+}
+function highlightAt(ci) { voice.hl = ci; refreshWordClasses(); }
+function markSpokenThrough(ci) { voice.hl = ci; refreshWordClasses(); }
+function refreshWordClasses() {
+  let currentEl = null;
+  for (const s of voiceWordSpans) {
+    const start = +s.dataset.start, end = +s.dataset.end;
+    if (voice.hl >= end) { s.className = "w spoken"; }
+    else if (voice.hl >= start) { s.className = "w current"; currentEl = s; }
+    else { s.className = "w"; }
+  }
+  if (currentEl) voiceAutoScroll();
+}
+
+/* ---- hold / tap gestures on the overlay ---- */
+(function () {
+  const ov = $("voice-overlay");
+  function down(e) {
+    if (e.target.id === "voice-close") return;
+    voice.holding = true;
+    voice.holdStartedAt = Date.now();
+    if (voice.listening) setVoiceStatus("held");
+  }
+  function up(e) {
+    if (e.target.id === "voice-close") return;
+    const wasShort = Date.now() - voice.holdStartedAt < 300;
+    voice.holding = false;
+    voice.lastSpeechAt = Date.now(); // grace period after releasing
+    if (voice.speaking && wasShort) { interruptSpeech(); return; }
+    if (voice.listening) setVoiceStatus("listening");
+  }
+  ov.addEventListener("touchstart", down, { passive: true });
+  ov.addEventListener("touchend", up, { passive: true });
+  ov.addEventListener("mousedown", down);
+  ov.addEventListener("mouseup", up);
+})();
+$("voice-close").onclick = exitVoice;
+$("chat-mic").onclick = enterVoice;
+
+/* ================= Settings ================= */
+function openSettings() {
+  $("set-key").value = state.apiKey;
+  $("set-model").value = state.model;
+  populateVoiceSelect();
+  $("set-voicedefault").checked = !!state.voiceDefault;
+  $("settings").classList.add("open");
+}
+$("gear").onclick = openSettings;
+$("settings").addEventListener("click", e => { if (e.target === $("settings")) $("settings").classList.remove("open"); });
+$("settings-save").onclick = () => {
+  state.apiKey = $("set-key").value.trim();
+  state.model = $("set-model").value;
+  state.voiceURI = $("set-voice").value;
+  state.voiceDefault = $("set-voicedefault").checked;
+  save();
+  $("settings").classList.remove("open");
+  toast("Saved");
+};
+
+/* ================= boot ================= */
+renderHome();
+if (!state.apiKey) setTimeout(openSettings, 600);
+</script>
+</body>
+</html>
