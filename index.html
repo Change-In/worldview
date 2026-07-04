@@ -64,7 +64,9 @@
 
   #carousel-wrap {
     flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0;
-    perspective: 1100px; touch-action: none; overflow: hidden;
+    /* pan-y lets fingers scroll vertically inside the notes card; cards
+       themselves opt back out so drag/swipe gestures keep working on them */
+    perspective: 1100px; touch-action: pan-y; overflow: hidden;
   }
   #carousel { position: relative; width: 100%; height: calc(var(--cardH, 320px) + 30px); transform-style: preserve-3d; }
 
@@ -81,6 +83,7 @@
     will-change: transform, opacity;
     cursor: grab; user-select: none; -webkit-user-select: none;
     backface-visibility: hidden;
+    touch-action: none;
   }
   .card .card-title { font-size: 21px; line-height: 1.3; font-weight: 600; }
   .card .card-cat {
@@ -99,18 +102,36 @@
     text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px;
     color: var(--accent); cursor: pointer; font-style: italic;
   }
-  .card.new-card input {
+  .card.new-card input, .card.notes-card input {
     width: 100%; padding: 13px 14px; font-size: 16px;
     border: 1.5px solid var(--line); border-radius: 10px;
     background: var(--paper); color: var(--ink); text-align: center;
     outline: none;
   }
-  .card.new-card input::placeholder { color: #9ab0b8; }
+  .card.new-card input::placeholder, .card.notes-card input::placeholder { color: #9ab0b8; }
   .card.new-card button {
     margin-top: 14px; padding: 11px 30px; font-size: 16px;
     background: var(--accent); color: #fff; border: none; border-radius: 10px; cursor: pointer;
   }
   .card.new-card button:disabled { opacity: 0.45; }
+
+  /* notes card — parked ideas, scrollable list, no extra screen */
+  .card.notes-card { justify-content: flex-start; text-align: left; touch-action: pan-y; }
+  .card.notes-card .prompt-line { font-size: 17px; margin-bottom: 12px; line-height: 1.4; align-self: center; }
+  .notes-addrow { display: flex; gap: 8px; width: 100%; margin-bottom: 10px; }
+  .notes-addrow input { flex: 1; text-align: left; padding: 11px 13px; font-size: 15px; }
+  .notes-addrow button {
+    width: 44px; flex: none; border: none; border-radius: 10px;
+    background: var(--accent); color: #fff; font-size: 22px; line-height: 1; cursor: pointer;
+  }
+  #notes-list { flex: 1; width: 100%; overflow-y: auto; min-height: 0; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+  .note-row { display: flex; align-items: center; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .note-row:last-child { border-bottom: none; }
+  .note-text { flex: 1; font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
+  .note-go, .note-x { background: none; border: none; cursor: pointer; padding: 4px 6px; font-size: 16px; }
+  .note-go { color: var(--accent); }
+  .note-x { color: var(--ink-soft); }
+  .note-empty { color: var(--ink-soft); font-size: 13px; line-height: 1.5; padding-top: 10px; text-align: center; }
 
   /* ---------- Learning-paths sheet ---------- */
   #paths-sheet {
@@ -438,7 +459,7 @@
 
 /* ================= state ================= */
 const LS_KEY = "worldview-v1";
-let state = { apiKey: "", model: "claude-sonnet-5", lessons: [], voiceURI: "", voiceDefault: false };
+let state = { apiKey: "", model: "claude-sonnet-5", lessons: [], notes: [], voiceURI: "", voiceDefault: false };
 try { Object.assign(state, JSON.parse(localStorage.getItem(LS_KEY) || "{}")); } catch (e) {}
 const save = () => { try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {} };
 // if config.js supplies a key and none is saved yet, use it — skips the Settings prompt entirely
@@ -449,6 +470,7 @@ if (!state.apiKey && typeof window.WORLDVIEW_API_KEY === "string" && window.WORL
 // if a shared data.js is present, merge its lessons in on boot (cross-browser / cross-device sync)
 if (window.WORLDVIEW_DATA && Array.isArray(window.WORLDVIEW_DATA.lessons)) {
   mergeLessons(window.WORLDVIEW_DATA.lessons);
+  if (Array.isArray(window.WORLDVIEW_DATA.notes)) mergeNotes(window.WORLDVIEW_DATA.notes);
   save();
 }
 // one-time: older saves defaulted to Opus; switch existing users to the cheaper Sonnet 5 default
@@ -629,7 +651,7 @@ async function jsonCall(system, userText, schema, maxTokens = 512, costLesson = 
 }
 
 /* ================= Home / circular wheel ================= */
-const wheel = { pos: 0, cards: [], ids: [], cardW: 262 };
+const wheel = { pos: 1, cards: [], ids: [], cardW: 262 }; // opens centered on the new-lesson card (notes sit at 0, to its left)
 
 /* card size scales with the screen: bigger on laptops, comfortable on phones */
 function updateCardSize() {
@@ -646,7 +668,21 @@ function renderHome() {
   c.innerHTML = "";
   wheel.cards = []; wheel.ids = [];
 
-  // new-lesson card (always index 0)
+  // notes card (index 0, left of center) — ideas parked for later
+  const noc = document.createElement("div");
+  noc.className = "card notes-card";
+  noc.innerHTML = `
+    <div class="prompt-line">for later</div>
+    <div class="notes-addrow">
+      <input id="note-input" type="text" placeholder="jot it down&hellip;" enterkeyhint="done">
+      <button id="note-add" type="button">+</button>
+    </div>
+    <div id="notes-list"></div>
+  `;
+  c.appendChild(noc);
+  wheel.cards.push(noc); wheel.ids.push(null);
+
+  // new-lesson card (index 1 — where the app opens)
   const nc = document.createElement("div");
   nc.className = "card new-card";
   const casual = CASUAL_LINES[Math.floor(Math.random() * CASUAL_LINES.length)];
@@ -687,6 +723,47 @@ function renderHome() {
   });
   $("start-btn").onclick = startLesson;
   $("topic-input").addEventListener("keydown", e => { if (e.key === "Enter") startLesson(); });
+  $("note-add").onclick = addNote;
+  $("note-input").addEventListener("keydown", e => { if (e.key === "Enter") addNote(); });
+  renderNotes();
+}
+
+/* ---- notes: things to learn later, without leaving the carousel ---- */
+function renderNotes() {
+  const list = $("notes-list");
+  if (!list) return;
+  list.innerHTML = "";
+  if (!state.notes.length) {
+    list.innerHTML = `<div class="note-empty">nothing waiting.<br>jot a topic above and it&rsquo;ll keep your place until you have time.</div>`;
+    return;
+  }
+  [...state.notes].reverse().forEach(n => { // newest on top
+    const row = document.createElement("div");
+    row.className = "note-row";
+    const go = document.createElement("button");
+    go.className = "note-go"; go.type = "button"; go.textContent = "▸"; go.title = "start this lesson now";
+    const tx = document.createElement("span");
+    tx.className = "note-text"; tx.textContent = n.text;
+    const x = document.createElement("button");
+    x.className = "note-x"; x.type = "button"; x.textContent = "×"; x.title = "remove";
+    go.onclick = () => { // one tap: note becomes a lesson — no copy-pasting
+      state.notes = state.notes.filter(z => z.id !== n.id);
+      save();
+      beginLesson(n.text, "socratic", `Teach me this: ${n.text}`);
+    };
+    x.onclick = () => { state.notes = state.notes.filter(z => z.id !== n.id); save(); renderNotes(); };
+    row.append(go, tx, x);
+    list.appendChild(row);
+  });
+}
+function addNote() {
+  const inp = $("note-input");
+  const t = inp.value.trim();
+  if (!t) return;
+  state.notes.push({ id: uid(), text: t, addedAt: Date.now() });
+  save();
+  inp.value = "";
+  renderNotes();
 }
 
 /* cards ride a circle whose center is behind the screen, but each card is
@@ -1568,8 +1645,17 @@ function mergeLessons(incoming) {
   }
   state.lessons = [...byId.values()].sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
 }
+// notes travel with lessons: same id never added twice, deletions on this
+// device won't resurrect unless the other file still has the note
+function mergeNotes(incoming) {
+  const have = new Set(state.notes.map(n => n.id));
+  for (const n of incoming) {
+    if (n && n.id && n.text && !have.has(n.id)) state.notes.push(n);
+  }
+  state.notes.sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0));
+}
 function dataFileContent() {
-  const payload = { v: 1, exportedAt: new Date().toISOString(), lessons: state.lessons };
+  const payload = { v: 1, exportedAt: new Date().toISOString(), lessons: state.lessons, notes: state.notes };
   return "// Worldview lessons — auto-loaded when placed next to index.html as data.js\n" +
          "window.WORLDVIEW_DATA = " + JSON.stringify(payload) + ";\n";
 }
@@ -1602,14 +1688,18 @@ function importLessonsFromText(text) {
   if (s < 0 || e < 0) throw new Error("no lesson data found");
   const data = JSON.parse(text.slice(s, e + 1));
   const incoming = (data && data.lessons) || [];
-  if (!incoming.length) { toast("That file had no lessons"); return; }
-  const before = state.lessons.length;
+  const incomingNotes = (data && data.notes) || [];
+  if (!incoming.length && !incomingNotes.length) { toast("That file had no lessons or notes"); return; }
+  const before = state.lessons.length, beforeN = state.notes.length;
   mergeLessons(incoming);
+  mergeNotes(incomingNotes);
   save();
   renderHome();
   if ($("view-profile").classList.contains("active")) renderProfile();
   const added = state.lessons.length - before;
-  toast("Loaded " + incoming.length + " lessons" + (added ? " (" + added + " new)" : " (already had them)"));
+  const addedN = state.notes.length - beforeN;
+  toast("Loaded " + incoming.length + " lessons" + (added ? " (" + added + " new)" : "") +
+        (incomingNotes.length ? " and " + incomingNotes.length + " notes" + (addedN ? " (" + addedN + " new)" : "") : ""));
 }
 $("export-btn").onclick = exportLessons;
 $("import-btn").onclick = () => $("import-file").click();
