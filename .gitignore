@@ -1,0 +1,7 @@
+# personal files — never publish these
+config.js
+data.js
+load/
+# local-only launcher (the website replaces it)
+server.js
+serve.cmd

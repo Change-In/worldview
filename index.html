@@ -34,6 +34,15 @@
   }
   .serif { font-family: Georgia, "Times New Roman", serif; }
 
+  /* shown only when the app is opened as a raw file (voice mic keeps prompting) */
+  #file-warning {
+    display: none; flex: 0 0 auto;
+    background: #7a2e2e; color: #fff; font-size: 12.5px; line-height: 1.45;
+    padding: calc(env(safe-area-inset-top) + 9px) 34px 9px 14px; text-align: center; position: relative;
+  }
+  #file-warning b { text-decoration: underline; }
+  #fw-x { position: absolute; right: 12px; top: calc(env(safe-area-inset-top) + 8px); cursor: pointer; opacity: 0.85; }
+
   /* ---------- Views ---------- */
   .view { flex: 1; display: none; flex-direction: column; min-height: 0; }
   .view.active { display: flex; }
@@ -57,11 +66,12 @@
     flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0;
     perspective: 1100px; touch-action: none; overflow: hidden;
   }
-  #carousel { position: relative; width: 100%; height: 350px; transform-style: preserve-3d; }
+  #carousel { position: relative; width: 100%; height: calc(var(--cardH, 320px) + 30px); transform-style: preserve-3d; }
 
   .card {
     position: absolute; left: 50%; top: 50%;
-    width: 262px; height: 320px; margin: -160px 0 0 -131px;
+    width: var(--cardW, 262px); height: var(--cardH, 320px);
+    margin: calc(var(--cardH, 320px) / -2) 0 0 calc(var(--cardW, 262px) / -2);
     background: var(--card);
     border: 1.5px solid var(--line);
     border-radius: var(--radius);
@@ -157,14 +167,44 @@
   #chat-back { background: none; border: none; font-size: 22px; color: var(--ink); cursor: pointer; padding: 2px 8px; }
   #chat-title { font-size: 16px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #chat-method { font-size: 11px; color: var(--ink-soft); font-style: italic; }
-  #chat-scroll { flex: 1; overflow-y: auto; padding: 18px 16px 10px; -webkit-overflow-scrolling: touch; }
+  /* side breathing room; on wide screens the conversation stays a centered readable column */
+  #chat-scroll { flex: 1; overflow-y: auto; padding: 18px max(24px, calc((100% - 720px) / 2)) 10px; -webkit-overflow-scrolling: touch; }
   .msg { max-width: 88%; margin-bottom: 14px; padding: 12px 15px; border-radius: 14px; font-size: 16px; line-height: 1.55; word-wrap: break-word; }
   .msg.user { margin-left: auto; background: var(--ink); color: #fff; border-bottom-right-radius: 4px; }
   .msg.assistant { margin-right: auto; background: var(--card); border: 1.5px solid var(--line); border-bottom-left-radius: 4px; }
   .msg.assistant.thinking { color: var(--ink-soft); font-style: italic; border-style: dashed; }
   .msg p { margin-bottom: 8px; } .msg p:last-child { margin-bottom: 0; }
+  .session-div {
+    display: flex; align-items: center; gap: 10px; margin: 20px 0 14px;
+    color: var(--ink-soft); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+  }
+  .session-div::before, .session-div::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  #mode-row { display: flex; gap: 8px; justify-content: center; margin: 12px 0 2px; }
+  .mode-pill {
+    padding: 7px 18px; border-radius: 999px; border: 1.5px solid var(--line);
+    background: rgba(22,64,79,0.06); color: var(--ink-soft); font-size: 13px; cursor: pointer;
+  }
+  .mode-pill.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+  #cat-chips { display: flex; flex-wrap: wrap; gap: 10px; padding: 4px 0 16px; }
+  .cat-chip {
+    background: rgba(22,64,79,0.07); border: 1.5px solid var(--line); border-radius: 10px;
+    padding: 10px 14px; font-size: 14px; cursor: pointer; user-select: none;
+  }
+  .cat-chip .n { opacity: 0.5; margin-left: 7px; font-size: 12px; }
+  .cat-chip.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .cat-chip.active .n { opacity: 0.7; }
   .msg code { background: rgba(22,64,79,0.08); padding: 1px 5px; border-radius: 4px; font-size: 14px; }
   .msg.user code { background: rgba(255,255,255,0.2); }
+  .msg .sources {
+    margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(22,64,79,0.25);
+    font-size: 12px; color: var(--ink-soft); cursor: pointer;
+  }
+  .msg .sources .src-list { display: none; margin-top: 6px; }
+  .msg .sources.open .src-list { display: block; }
+  .msg .sources a {
+    color: var(--accent); display: block; margin-top: 4px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   #chat-input-row {
     display: flex; gap: 10px; padding: 10px 14px calc(env(safe-area-inset-bottom) + 12px);
     border-top: 1.5px solid var(--line); background: var(--card);
@@ -229,6 +269,12 @@
     margin-top: 20px; width: 100%; padding: 14px; font-size: 16px;
     background: var(--accent); color: #fff; border: none; border-radius: 12px; cursor: pointer;
   }
+  #settings-panel .row2 { display: flex; gap: 10px; }
+  #settings-panel .row2 button {
+    flex: 1; padding: 12px; font-size: 15px;
+    background: var(--card); color: var(--ink);
+    border: 1.5px solid var(--line); border-radius: 10px; cursor: pointer;
+  }
 
   #toast {
     position: fixed; top: calc(env(safe-area-inset-top) + 14px); left: 50%; transform: translateX(-50%);
@@ -256,7 +302,7 @@
     padding: 8px; z-index: 2;
   }
   #voice-scroll {
-    flex: 1; overflow-y: auto; padding: 60px 20px 24px;
+    flex: 1; overflow-y: auto; padding: 60px max(28px, calc((100% - 720px) / 2)) 24px;
     -webkit-overflow-scrolling: touch;
   }
   .vmsg { max-width: 90%; margin-bottom: 14px; font-size: 16px; line-height: 1.55; opacity: 0.55; }
@@ -282,6 +328,12 @@
 </style>
 </head>
 <body>
+
+<div id="file-warning">
+  &#9888; You opened the app as a <b>file</b>, so voice mode will keep asking for the microphone.
+  To fix it, close this and launch with <b>serve.cmd</b> instead.
+  <span id="fw-x" title="Dismiss">&#10005;</span>
+</div>
 
 <!-- ============ HOME ============ -->
 <div id="view-home" class="view active">
@@ -347,12 +399,12 @@
     <h3>Settings</h3>
     <label>Anthropic API key</label>
     <input id="set-key" type="password" placeholder="sk-ant-..." autocomplete="off">
-    <div class="hint">Stored only on this device (localStorage). Get a key at console.anthropic.com.</div>
+    <div class="hint">Saved on this device &mdash; enter it once per device (phone, laptop) and it stays until you clear browser data. Get a key at console.anthropic.com.</div>
     <label>Model</label>
     <select id="set-model">
-      <option value="claude-opus-4-8">Claude Opus 4.8 (best)</option>
-      <option value="claude-sonnet-5">Claude Sonnet 5 (balanced)</option>
-      <option value="claude-haiku-4-5">Claude Haiku 4.5 (fastest)</option>
+      <option value="claude-sonnet-5">Claude Sonnet 5 (default &mdash; smart &amp; affordable)</option>
+      <option value="claude-opus-4-8">Claude Opus 4.8 (max quality, pricier)</option>
+      <option value="claude-haiku-4-5">Claude Haiku 4.5 (fastest, cheapest)</option>
     </select>
     <label>Voice</label>
     <select id="set-voice"></select>
@@ -360,25 +412,56 @@
       <input id="set-voicedefault" type="checkbox" style="width:auto;accent-color:var(--accent);transform:scale(1.3);">
       Start lessons in voice mode
     </label>
+    <label>Backup &amp; sync (across browsers / phone)</label>
+    <div class="row2">
+      <button id="export-btn" type="button">&#8681; Save lessons</button>
+      <button id="import-btn" type="button">&#8679; Load lessons</button>
+    </div>
+    <input id="import-file" type="file" accept=".js,.json,application/json,text/javascript" style="display:none">
+    <div class="hint">Save all your lessons (and their paid research) to a file, then Load it in another browser or on your phone so nothing is lost.</div>
     <button id="settings-save">Save</button>
   </div>
 </div>
 
 <div id="toast"></div>
 
+<!-- optional: config.js can pre-fill your API key so you never retype it (see that file) -->
+<script src="config.js"></script>
+<!-- optional: data.js is a shared lessons file — auto-loaded so browsers/devices stay in sync -->
+<script src="data.js"></script>
 <script>
 "use strict";
 
 /* ================= state ================= */
 const LS_KEY = "worldview-v1";
-let state = { apiKey: "", model: "claude-opus-4-8", lessons: [], voiceURI: "", voiceDefault: false };
+let state = { apiKey: "", model: "claude-sonnet-5", lessons: [], voiceURI: "", voiceDefault: false };
 try { Object.assign(state, JSON.parse(localStorage.getItem(LS_KEY) || "{}")); } catch (e) {}
-const save = () => localStorage.setItem(LS_KEY, JSON.stringify(state));
+const save = () => { try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {} };
+// if config.js supplies a key and none is saved yet, use it — skips the Settings prompt entirely
+if (!state.apiKey && typeof window.WORLDVIEW_API_KEY === "string" && window.WORLDVIEW_API_KEY) {
+  state.apiKey = window.WORLDVIEW_API_KEY;
+  save();
+}
+// if a shared data.js is present, merge its lessons in on boot (cross-browser / cross-device sync)
+if (window.WORLDVIEW_DATA && Array.isArray(window.WORLDVIEW_DATA.lessons)) {
+  mergeLessons(window.WORLDVIEW_DATA.lessons);
+  save();
+}
+// one-time: older saves defaulted to Opus; switch existing users to the cheaper Sonnet 5 default
+if (!state.modelV2) { state.model = "claude-sonnet-5"; state.modelV2 = true; save(); }
 
+// the technique behind each mode is the app's secret sauce — nothing user-visible
+// names it, and METHOD_NOTE below keeps Claude from naming it either
 const METHODS = [
-  { key: "socratic", label: "Socratically", starter: t => `Teach me ${t} Socratically.` },
-  { key: "feynman",  label: "through the Feynman Technique", starter: t => `Teach me ${t} through the Feynman Technique.` },
-  { key: "quiz",     label: "with a quiz", starter: t => `Quiz me on ${t}.` },
+  { key: "socratic", label: "learn", verb: "Teach me", tag: "lesson", starter: t => `Teach me ${t}.` },
+  { key: "quiz",     label: "quiz me", verb: "Quiz me on", tag: "quiz", starter: t => `Quiz me on ${t}.` },
+];
+// easygoing openers for the new-lesson card — one is picked at random
+const CASUAL_LINES = [
+  "so… what are you curious about?",
+  "anything on your mind?",
+  "what should we get into?",
+  "pick anything — big or small",
 ];
 let methodIdx = 0;
 let currentLessonId = null;
@@ -389,6 +472,16 @@ const SYSTEM_PROMPTS = {
   feynman: `You are a tutor using the Feynman Technique inside a minimal mobile learning app called Worldview. First give the student a brief, plain-language pass over the topic (a few sentences, no jargon). Then ask them to explain it back to you as if teaching a 12-year-old. Listen for gaps, oversimplifications, or borrowed jargon in their explanation, point out exactly where their explanation broke down, re-explain just that piece more simply, and have them try again. Keep replies short and focused on one gap at a time.`,
   quiz: `You are a quizmaster inside a minimal mobile learning app called Worldview. Quiz the student on the topic, one question at a time, starting easy and getting harder based on their performance. After each answer, tell them if they were right, give a one-or-two-sentence explanation, and then ask the next question. Mix formats: recall, multiple choice, and "explain why". Keep score casually and mention it every few questions.`,
 };
+
+// keep the pedagogy invisible: the method itself is never revealed to the student
+const METHOD_NOTE = `Never name or describe the teaching technique or methodology you are using — no method names, no pedagogy terms, no educator names, even if the student asks directly. If they ask how you teach, say only that you guide them with questions and adapt to their answers.`;
+Object.keys(SYSTEM_PROMPTS).forEach(k => SYSTEM_PROMPTS[k] += "\n\n" + METHOD_NOTE);
+
+// appended to every request: research the topic before teaching it
+const RESEARCH_NOTE = `You have a web_search tool. When a lesson begins, quietly run one or two quick searches to ground yourself in accurate, current information before teaching — especially for factual, historical, scientific, or recent topics. Never invent facts; if you become unsure mid-lesson, search again. Don't narrate your searching or read out URLs — just teach from what you verified.`;
+
+// appended in voice mode: write for the ear, not the eye
+const VOICE_NOTE = `Your reply will be spoken aloud by text-to-speech. Write exactly like natural, warm speech: use contractions, short flowing sentences, and a conversational rhythm. No markdown, no bullet points, no headings, no emojis, no parenthetical asides. Spell things the way they should be pronounced.`;
 
 /* ================= tiny helpers ================= */
 const $ = id => document.getElementById(id);
@@ -404,6 +497,8 @@ function toast(msg, ms = 3500) {
   const t = $("toast"); t.textContent = msg; t.style.display = "block";
   clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", ms);
 }
+// if anything crashes, say so on screen instead of silently showing a dead page
+window.addEventListener("error", e => { try { toast("App error: " + e.message, 8000); } catch (x) {} });
 function show(view) {
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
   $("view-" + view).classList.add("active");
@@ -422,10 +517,22 @@ function headers() {
   };
 }
 
-async function streamChat(system, messages, onText) {
+// web search tool: lets Claude research a topic before teaching it (fewer hallucinations).
+// The newest variant needs a 4.6+ model; Haiku 4.5 only supports the basic one.
+function searchToolFor(model) {
+  return model === "claude-haiku-4-5"
+    ? { type: "web_search_20250305", name: "web_search", max_uses: 3 }
+    : { type: "web_search_20260209", name: "web_search", max_uses: 3 };
+}
+
+async function streamChat(system, messages, onText, onSearch) {
   const res = await fetch(API_URL, {
     method: "POST", headers: headers(),
-    body: JSON.stringify({ model: state.model, max_tokens: 8000, stream: true, system, messages }),
+    body: JSON.stringify({
+      model: state.model, max_tokens: 8000, stream: true, system, messages,
+      tools: [searchToolFor(state.model)],
+      cache_control: { type: "ephemeral" }, // cache the conversation prefix between turns
+    }),
   });
   if (!res.ok) {
     let msg = `API error ${res.status}`;
@@ -435,7 +542,8 @@ async function streamChat(system, messages, onText) {
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = "", full = "";
-  const usage = { input: 0, output: 0 };
+  const usage = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0, searches: 0 };
+  const sources = []; // pages the model actually consulted, saved with the reply
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -448,8 +556,19 @@ async function streamChat(system, messages, onText) {
         let ev; try { ev = JSON.parse(line.slice(6)); } catch (e) { continue; }
         if (ev.type === "content_block_delta" && ev.delta && ev.delta.type === "text_delta") {
           full += ev.delta.text; onText(full);
+        } else if (ev.type === "content_block_start" && ev.content_block && ev.content_block.type === "server_tool_use") {
+          usage.searches++;
+          if (onSearch) onSearch(usage.searches);
+        } else if (ev.type === "content_block_start" && ev.content_block &&
+                   ev.content_block.type === "web_search_tool_result" && Array.isArray(ev.content_block.content)) {
+          for (const r of ev.content_block.content) {
+            if (r && r.url && !sources.some(s => s.url === r.url)) sources.push({ title: r.title || r.url, url: r.url });
+          }
         } else if (ev.type === "message_start" && ev.message && ev.message.usage) {
-          usage.input = ev.message.usage.input_tokens || 0;
+          const u = ev.message.usage;
+          usage.input = u.input_tokens || 0;
+          usage.cacheWrite = u.cache_creation_input_tokens || 0;
+          usage.cacheRead = u.cache_read_input_tokens || 0;
         } else if (ev.type === "message_delta" && ev.usage) {
           usage.output = ev.usage.output_tokens || 0;
         } else if (ev.type === "error") {
@@ -458,7 +577,7 @@ async function streamChat(system, messages, onText) {
       }
     }
   }
-  return { text: full, usage };
+  return { text: full, usage, sources };
 }
 
 /* ---- cost tracking ($/MTok input, output) ---- */
@@ -469,8 +588,13 @@ const PRICES = {
 };
 function addCost(lesson, model, usage) {
   if (!lesson || !usage) return;
-  const p = PRICES[model] || [5, 25];
-  lesson.cost = (lesson.cost || 0) + (usage.input * p[0] + usage.output * p[1]) / 1e6;
+  const p = PRICES[model] || [3, 15];
+  lesson.cost = (lesson.cost || 0)
+    + (usage.input * p[0]
+       + (usage.cacheWrite || 0) * p[0] * 1.25   // cache writes cost 1.25x
+       + (usage.cacheRead || 0) * p[0] * 0.1     // cache reads cost 0.1x — the savings
+       + usage.output * p[1]) / 1e6
+    + (usage.searches || 0) * 0.01;              // web search: $10 per 1000 searches
 }
 function fmtCost(c) {
   if (!c) return "";
@@ -501,7 +625,17 @@ async function jsonCall(system, userText, schema, maxTokens = 512, costLesson = 
 }
 
 /* ================= Home / circular wheel ================= */
-const wheel = { pos: 0, cards: [], ids: [] };
+const wheel = { pos: 0, cards: [], ids: [], cardW: 262 };
+
+/* card size scales with the screen: bigger on laptops, comfortable on phones */
+function updateCardSize() {
+  const w = Math.round(Math.min(Math.max(innerWidth * (innerWidth > 700 ? 0.30 : 0.66), 240), 430));
+  const h = Math.round(Math.min(w * 1.22, innerHeight * 0.52));
+  wheel.cardW = w;
+  document.documentElement.style.setProperty("--cardW", w + "px");
+  document.documentElement.style.setProperty("--cardH", h + "px");
+}
+window.addEventListener("resize", () => { updateCardSize(); layoutWheel(false); });
 
 function renderHome() {
   const c = $("carousel");
@@ -511,9 +645,14 @@ function renderHome() {
   // new-lesson card (always index 0)
   const nc = document.createElement("div");
   nc.className = "card new-card";
+  const casual = CASUAL_LINES[Math.floor(Math.random() * CASUAL_LINES.length)];
   nc.innerHTML = `
-    <div class="prompt-line">Teach me <span style="opacity:.5">____</span><br><span class="method" id="method-toggle">${METHODS[methodIdx].label}</span></div>
-    <input id="topic-input" type="text" placeholder="the steam engine, fungi, anything&hellip;" enterkeyhint="go">
+    <div class="prompt-line">${casual}</div>
+    <input id="topic-input" type="text" placeholder="type here" enterkeyhint="go">
+    <div id="mode-row">
+      <button class="mode-pill${methodIdx === 0 ? " active" : ""}" data-m="0" type="button">learn</button>
+      <button class="mode-pill${methodIdx === 1 ? " active" : ""}" data-m="1" type="button">quiz me</button>
+    </div>
     <button id="start-btn">Begin</button>
   `;
   c.appendChild(nc);
@@ -536,36 +675,65 @@ function renderHome() {
   wheel.pos = Math.min(wheel.pos, wheel.cards.length - 1);
   layoutWheel(false);
 
-  $("method-toggle").onclick = () => {
-    methodIdx = (methodIdx + 1) % METHODS.length;
-    $("method-toggle").textContent = METHODS[methodIdx].label;
-  };
+  nc.querySelectorAll(".mode-pill").forEach(p => {
+    p.onclick = () => {
+      methodIdx = +p.dataset.m;
+      nc.querySelectorAll(".mode-pill").forEach(x => x.classList.toggle("active", x === p));
+    };
+  });
   $("start-btn").onclick = startLesson;
   $("topic-input").addEventListener("keydown", e => { if (e.key === "Enter") startLesson(); });
 }
 
-/* cards sit on a circle coming out of the screen; drag horizontally to spin it */
+/* cards ride a circle whose center is behind the screen, but each card is
+   counter-rotated so its face always stays flat toward you — the ring curves
+   away into depth while every panel remains readable. */
 function layoutWheel(animate = true) {
+  const n = wheel.cards.length;
+  const step = 360 / Math.max(n, 10);                       // degrees between cards on the circle
+  const rad = step * Math.PI / 180;
+  const R = Math.round((wheel.cardW * 0.78) / Math.sin(rad)); // radius so neighbors sit ~78% of a card apart
   wheel.cards.forEach((el, i) => {
-    const d = i - wheel.pos;
+    const d = i - wheel.pos;                                // distance from center, in cards
     const abs = Math.abs(d);
+    const ang = d * step;
     el.style.transition = animate ? "transform 0.35s ease, opacity 0.35s ease" : "none";
-    el.style.transform =
-      `translateX(${d * 175}px) translateZ(${-abs * 175}px) rotateY(${-d * 26}deg)`;
-    el.style.opacity = abs > 2.6 ? 0 : String(1 - abs * 0.22);
-    el.style.zIndex = String(200 - Math.round(abs * 10));
-    el.style.pointerEvents = abs > 2.6 ? "none" : "auto";
+    // to circle center → around the ring → out to the rim → un-rotate to face the screen
+    el.style.transform = `translateZ(${-R}px) rotateY(${ang}deg) translateZ(${R}px) rotateY(${-ang}deg)`;
+    el.style.opacity = abs > 4 ? 0 : String(Math.max(0, 1 - abs * 0.18));
+    el.style.zIndex = String(300 - Math.round(abs * 10));
+    el.style.pointerEvents = abs > 3.5 ? "none" : "auto";
   });
 }
 
 (function wheelGestures() {
   const area = document.getElementById("carousel-wrap");
   let down = false, sx = 0, sy = 0, startPos = 0, moved = false, target = null;
+  let vel = 0, lastX = 0, lastT = 0, momId = 0;
+
+  // free-spinning ring: no snapping to cards — a flick glides with momentum
+  // and settles wherever friction stops it
+  function momentum() {
+    cancelAnimationFrame(momId);
+    const tick = () => {
+      wheel.pos -= vel;
+      vel *= 0.94;
+      if (wheel.pos < 0 || wheel.pos > wheel.cards.length - 1) {
+        wheel.pos = Math.max(0, Math.min(wheel.cards.length - 1, wheel.pos));
+        vel = 0;
+      }
+      layoutWheel(false);
+      if (Math.abs(vel) > 0.0015) momId = requestAnimationFrame(tick);
+    };
+    momId = requestAnimationFrame(tick);
+  }
 
   area.addEventListener("pointerdown", e => {
     if (/^(INPUT|BUTTON|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+    cancelAnimationFrame(momId); vel = 0;
     down = true; moved = false;
     sx = e.clientX; sy = e.clientY; startPos = wheel.pos;
+    lastX = e.clientX; lastT = performance.now();
     target = e.target.closest(".card");
     area.setPointerCapture(e.pointerId);
   });
@@ -574,15 +742,21 @@ function layoutWheel(animate = true) {
     const dx = e.clientX - sx, dy = e.clientY - sy;
     if (Math.abs(dx) > 6 || Math.abs(dy) > 6) moved = true;
     if (Math.abs(dx) >= Math.abs(dy)) {
-      wheel.pos = Math.max(-0.4, Math.min(wheel.cards.length - 0.6, startPos - dx / 175));
+      // normal-app feel: the ring follows the finger about 1:1 with card spacing
+      wheel.pos = Math.max(-0.4, Math.min(wheel.cards.length - 0.6, startPos - dx / (wheel.cardW * 0.8)));
       layoutWheel(false);
+    }
+    const now = performance.now();
+    if (now > lastT) {
+      vel = (e.clientX - lastX) / (now - lastT) * 16 / (wheel.cardW * 0.8);
+      lastX = e.clientX; lastT = now;
     }
   });
   area.addEventListener("pointerup", e => {
     if (!down) return;
     down = false;
     const dx = e.clientX - sx, dy = e.clientY - sy;
-    const centeredIdx = Math.round(startPos);
+    const centeredIdx = Math.round(wheel.pos);
 
     // drag up on the centered lesson card → learning paths (works with mouse too)
     if (dy < -60 && Math.abs(dx) < 50 && wheel.ids[centeredIdx]) {
@@ -595,14 +769,15 @@ function layoutWheel(animate = true) {
       if (idx === Math.round(wheel.pos) && wheel.ids[idx]) { openChat(wheel.ids[idx]); return; } // tap centered → open
       if (idx >= 0) { wheel.pos = idx; layoutWheel(); return; }                                   // tap side → rotate to it
     }
-    wheel.pos = Math.max(0, Math.min(wheel.cards.length - 1, Math.round(wheel.pos)));
-    layoutWheel();
+    wheel.pos = Math.max(0, Math.min(wheel.cards.length - 1, wheel.pos));
+    layoutWheel(false);
+    if (Math.abs(vel) > 0.003) momentum();
   });
-  area.addEventListener("wheel", e => { // desktop scroll wheel spins it
+  area.addEventListener("wheel", e => {
     e.preventDefault();
-    const dir = Math.sign(e.deltaY + e.deltaX);
-    wheel.pos = Math.max(0, Math.min(wheel.cards.length - 1, Math.round(wheel.pos) + dir));
-    layoutWheel();
+    // desktop scroll spins the ring continuously — no stepping card to card
+    wheel.pos = Math.max(0, Math.min(wheel.cards.length - 1, wheel.pos + (e.deltaY + e.deltaX) / 420));
+    layoutWheel(false);
   }, { passive: false });
 })();
 
@@ -611,7 +786,7 @@ function beginLesson(topic, methodKey, starterText) {
   const lesson = {
     id: uid(), topic, method: methodKey,
     title: topic.length > 40 ? topic.slice(0, 40) + "…" : topic,
-    category: "", messages: [], paths: [],
+    category: "", messages: [], paths: [], updatedAt: Date.now(),
   };
   state.lessons.push(lesson);
   save();
@@ -688,7 +863,7 @@ function renderPaths(paths) {
     d.textContent = q;
     d.onclick = () => {
       $("paths-sheet").classList.remove("open");
-      beginLesson(q, "socratic", `Teach me this Socratically: ${q}`);
+      beginLesson(q, "socratic", `Teach me this: ${q}`);
     };
     row.appendChild(d);
   });
@@ -702,23 +877,112 @@ function openChat(id, noVoice) {
   currentLessonId = id;
   $("chat-title").textContent = lesson.title;
   const m = METHODS.find(x => x.key === lesson.method);
-  $("chat-method").textContent = m ? m.label : "";
+  $("chat-method").textContent = m ? m.tag : "";
   updateCostLabel(lesson);
   const sc = $("chat-scroll");
   sc.innerHTML = "";
-  lesson.messages.forEach(msg => appendBubble(msg.role, msg.content));
+  lesson.messages.forEach(msg => {
+    if (msg.reentry) appendDivider();
+    appendBubble(msg.role, msg.content, msg.sources);
+  });
   show("chat");
-  sc.scrollTop = sc.scrollHeight;
-  if (!noVoice && state.voiceDefault && voiceSupported() && lesson.messages.length) enterVoice();
+  const lastMsg = lesson.messages[lesson.messages.length - 1];
+  if (lastMsg && lastMsg.reentry) {
+    scrollToNewSession(); // fresh sitting reads top-down; scroll up for the past
+  } else {
+    sc.scrollTop = sc.scrollHeight;
+    // browsers sometimes report the wrong scrollHeight until after layout — jump to the latest message for real
+    requestAnimationFrame(() => { sc.scrollTop = sc.scrollHeight; });
+  }
+  const due = reentryDue(lesson);
+  if (!noVoice && state.voiceDefault && voiceSupported() && lesson.messages.length) {
+    enterVoice(!due); // when a welcome-back is due, Claude speaks first — don't open the mic yet
+    if (due && voice.active) { voiceReenter(lesson); return; }
+  }
+  if (due && !voice.active) reenterCheck(lesson);
 }
-function appendBubble(role, content) {
+
+/* ---- Socratic re-entry: coming back after time away, Claude opens by
+   checking what you still remember instead of resuming mid-thought ---- */
+const REENTRY_AFTER_MS = 30 * 60 * 1000; // treat 30+ min away as a fresh sitting
+const REENTRY_PROMPT = "[The learner just returned to this lesson after time away. In a couple of warm sentences, welcome them back, then ask ONE focused probing question that checks whether they still remember the most important idea from this conversation. You choose what's most worth checking. Do not re-explain anything yet — let their answer show what needs review. Do not use web search; everything you need is already in this conversation.]";
+function reentryDue(lesson) {
+  if (!state.apiKey || streaming) return false;
+  if (lesson.messages.length < 2) return false;
+  const last = lesson.messages[lesson.messages.length - 1];
+  if (last.reentry && last.role === "assistant") return false; // its question is still waiting for an answer
+  return Date.now() - (lesson.updatedAt || 0) > REENTRY_AFTER_MS;
+}
+function appendDivider() {
+  const sc = $("chat-scroll");
+  const d = document.createElement("div");
+  d.className = "session-div";
+  d.textContent = "picking back up";
+  sc.appendChild(d);
+}
+// put the latest "picking back up" divider at the top of the viewport, so the
+// new sitting reads top-down like a fresh chat; the past sits above, one scroll away
+function scrollToNewSession() {
+  const sc = $("chat-scroll");
+  const divs = sc.querySelectorAll(".session-div");
+  const d = divs[divs.length - 1];
+  if (!d) return;
+  requestAnimationFrame(() => {
+    sc.scrollTop = d.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 6;
+  });
+}
+async function reenterCheck(lesson) {
+  streaming = true;
+  $("chat-send").disabled = true;
+  appendDivider();
+  const thinkingBubble = appendBubble("assistant", "…");
+  thinkingBubble.classList.add("thinking");
+  try {
+    const apiMessages = lesson.messages.map(m => ({ role: m.role, content: m.content }));
+    apiMessages.push({ role: "user", content: REENTRY_PROMPT });
+    const system = (SYSTEM_PROMPTS[lesson.method] || SYSTEM_PROMPTS.socratic) + "\n\n" + RESEARCH_NOTE;
+    scrollToNewSession();
+    const { text: full, usage } = await streamChat(system, apiMessages, partial => {
+      thinkingBubble.classList.remove("thinking");
+      thinkingBubble.innerHTML = md(partial);
+      // no auto-scroll: the view stays locked at the divider while text fills downward
+    }, () => {});
+    lesson.messages.push({ role: "assistant", content: full, reentry: true });
+    lesson.updatedAt = Date.now();
+    addCost(lesson, state.model, usage);
+    save();
+    updateCostLabel(lesson);
+  } catch (e) {
+    thinkingBubble.remove(); // quiet failure — the lesson still opens normally
+  } finally {
+    streaming = false;
+    $("chat-send").disabled = false;
+  }
+}
+function appendBubble(role, content, sources) {
   const sc = $("chat-scroll");
   const d = document.createElement("div");
   d.className = "msg " + role;
   d.innerHTML = md(content);
+  if (sources && sources.length) attachSources(d, sources);
   sc.appendChild(d);
   sc.scrollTop = sc.scrollHeight;
   return d;
+}
+/* small "researched N sources" line under a reply — tap to see the actual pages */
+function attachSources(bubble, sources) {
+  const s = document.createElement("div");
+  s.className = "sources";
+  s.innerHTML = `&#128269; researched ${sources.length} source${sources.length === 1 ? "" : "s"} &middot; tap to view<div class="src-list"></div>`;
+  const list = s.querySelector(".src-list");
+  sources.forEach(x => {
+    const a = document.createElement("a");
+    a.href = x.url; a.target = "_blank"; a.rel = "noopener";
+    a.textContent = x.title;
+    list.appendChild(a);
+  });
+  s.addEventListener("click", e => { if (e.target.tagName !== "A") s.classList.toggle("open"); });
+  bubble.appendChild(s);
 }
 
 async function sendToClaude(lesson, userText) {
@@ -735,15 +999,19 @@ async function sendToClaude(lesson, userText) {
 
   try {
     const apiMessages = lesson.messages.map(m => ({ role: m.role, content: m.content }));
-    const system = SYSTEM_PROMPTS[lesson.method] || SYSTEM_PROMPTS.socratic;
+    const system = (SYSTEM_PROMPTS[lesson.method] || SYSTEM_PROMPTS.socratic) + "\n\n" + RESEARCH_NOTE;
     const sc = $("chat-scroll");
-    const { text: full, usage } = await streamChat(system, apiMessages, partial => {
+    const { text: full, usage, sources } = await streamChat(system, apiMessages, partial => {
       thinkingBubble.classList.remove("thinking");
       thinkingBubble.innerHTML = md(partial);
       sc.scrollTop = sc.scrollHeight;
+    }, () => {
+      if (thinkingBubble.classList.contains("thinking")) thinkingBubble.innerHTML = md("*researching the topic…*");
     });
-    lesson.messages.push({ role: "assistant", content: full });
+    if (sources.length) attachSources(thinkingBubble, sources);
+    lesson.messages.push({ role: "assistant", content: full, sources: sources.length ? sources : undefined });
     lesson.paths = []; // conversation changed → regenerate paths next time
+    lesson.updatedAt = Date.now();
     addCost(lesson, state.model, usage);
     save();
     updateCostLabel(lesson);
@@ -785,32 +1053,52 @@ function renderProfile() {
     const c = l.category || "Uncategorized";
     (cats[c] = cats[c] || []).push(l);
   });
+  // categories as tappable boxes in a row; tapping one expands its lessons below
+  const chipRow = document.createElement("div");
+  chipRow.id = "cat-chips";
+  const detail = document.createElement("div");
+  detail.id = "cat-detail";
   Object.keys(cats).sort().forEach(cat => {
-    const block = document.createElement("div");
-    block.className = "cat-block";
-    block.innerHTML = `<h3><span>${esc(cat)}</span><span>${cats[cat].length}</span></h3>`;
-    cats[cat].forEach(l => {
-      const row = document.createElement("div");
-      row.className = "cat-lesson";
-      const n = Math.floor(l.messages.length / 2);
-      const costStr = l.cost ? ` &middot; ${fmtCost(l.cost)}` : "";
-      row.innerHTML = `<span>${esc(l.title)}</span><span class="n">${n} exchange${n === 1 ? "" : "s"}${costStr}</span>`;
-      row.onclick = () => openChat(l.id);
-      block.appendChild(row);
-    });
-    scroll.appendChild(block);
+    const chip = document.createElement("div");
+    chip.className = "cat-chip";
+    chip.innerHTML = `${esc(cat)}<span class="n">${cats[cat].length}</span>`;
+    chip.onclick = () => {
+      const wasOpen = chip.classList.contains("active");
+      chipRow.querySelectorAll(".cat-chip").forEach(c => c.classList.remove("active"));
+      detail.innerHTML = "";
+      if (wasOpen) return; // tap again to collapse
+      chip.classList.add("active");
+      cats[cat].forEach(l => {
+        const row = document.createElement("div");
+        row.className = "cat-lesson";
+        const n = Math.floor(l.messages.length / 2);
+        const costStr = l.cost ? ` &middot; ${fmtCost(l.cost)}` : "";
+        row.innerHTML = `<span>${esc(l.title)}</span><span class="n">${n} exchange${n === 1 ? "" : "s"}${costStr}</span>`;
+        row.onclick = () => openChat(l.id);
+        detail.appendChild(row);
+      });
+    };
+    chipRow.appendChild(chip);
   });
+  scroll.appendChild(chipRow);
+  scroll.appendChild(detail);
 }
 
-/* bottom bar: tap or swipe up → profile; profile bar: tap or swipe down → home */
+/* bottom bar: tap or swipe up → profile; profile bar: tap or swipe down → home.
+   Pointer events cover mouse, trackpad, and touch alike (touch-only events broke on laptops). */
 function barGesture(el, onActivate, dir) {
-  let sy = 0;
-  el.addEventListener("touchstart", e => { sy = e.touches[0].clientY; }, { passive: true });
-  el.addEventListener("touchend", e => {
-    const dy = e.changedTouches[0].clientY - sy;
+  let sy = 0, active = false;
+  el.addEventListener("pointerdown", e => {
+    active = true; sy = e.clientY;
+    try { el.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  el.addEventListener("pointerup", e => {
+    if (!active) return;
+    active = false;
+    const dy = e.clientY - sy;
     if ((dir === "up" && dy < -30) || (dir === "down" && dy > 30) || Math.abs(dy) < 10) onActivate();
-  }, { passive: true });
-  el.addEventListener("click", () => { if (!("ontouchstart" in window)) onActivate(); });
+  });
+  el.addEventListener("pointercancel", () => { active = false; });
 }
 barGesture($("bottom-bar"), () => { renderProfile(); show("profile"); }, "up");
 barGesture($("profile-back"), () => { renderHome(); show("home"); }, "down");
@@ -820,7 +1108,7 @@ const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const voice = {
   active: false, holding: false, listening: false, speaking: false, streamDone: false,
   pending: "", interim: "", lastSpeechAt: 0, rec: null, silenceTimer: null,
-  queue: [], utter: null, hl: -1, holdStartedAt: 0,
+  queue: [], utter: null, hl: -1, holdStartedAt: 0, keepAlive: null, ttsErrShown: false, forceLocal: false,
 };
 
 function voiceSupported() { return !!SR && "speechSynthesis" in window; }
@@ -845,14 +1133,23 @@ function voiceScore(v) {
   return s;
 }
 function pickVoice() {
-  if (!ttsVoices.length) loadTtsVoices();
+  // re-read directly — calling loadTtsVoices() here recursed forever when the
+  // browser reports no voices yet (fresh launch), killing the whole app
+  if (!ttsVoices.length) ttsVoices = speechSynthesis.getVoices() || [];
+  // once a cloud voice has failed to play this session, prefer local voices
+  // (they always produce audio); a local voice YOU chose is always honored
+  let all = ttsVoices;
+  if (voice.forceLocal) {
+    const local = ttsVoices.filter(v => v.localService);
+    if (local.length) all = local;
+  }
   if (state.voiceURI) {
     const v = ttsVoices.find(v => v.voiceURI === state.voiceURI);
-    if (v) return v;
+    if (v && !(voice.forceLocal && !v.localService)) return v;
   }
   const lang = (navigator.language || "en").slice(0, 2);
-  const pool = ttsVoices.filter(v => v.lang && v.lang.slice(0, 2) === lang);
-  return [...(pool.length ? pool : ttsVoices)].sort((a, b) => voiceScore(b) - voiceScore(a))[0] || null;
+  const pool = all.filter(v => v.lang && v.lang.slice(0, 2) === lang);
+  return [...(pool.length ? pool : all)].sort((a, b) => voiceScore(b) - voiceScore(a))[0] || null;
 }
 function populateVoiceSelect() {
   const sel = $("set-voice");
@@ -881,19 +1178,22 @@ function setVoiceStatus(mode) {
 }
 
 function enterVoice(autoListen = true) {
-  if (!voiceSupported()) { toast("Voice isn't supported in this browser — try Safari or Chrome"); return; }
+  if (!voiceSupported()) { toast("Voice needs Chrome, Edge, or Safari — Firefox doesn't support speech recognition yet"); return; }
   const lesson = getLesson(currentLessonId);
   if (!lesson) return;
   if (!state.apiKey) { openSettings(); return; }
   voice.active = true;
+  voice.ttsErrShown = false;
+  voice.forceLocal = false; // give the better (cloud) voices a fresh chance every session
   $("voice-overlay").style.display = "flex";
-  // iOS: speechSynthesis must be unlocked by a user gesture
-  try { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance("")); } catch (e) {}
+  // unlock speech synthesis with a silent utterance (needed on iOS; harmless elsewhere)
+  try { speechSynthesis.cancel(); const un = new SpeechSynthesisUtterance(" "); un.volume = 0; speechSynthesis.speak(un); } catch (e) {}
   buildVoiceHistory(lesson);
   if (autoListen) { setVoiceStatus("listening"); startListening(); }
 }
 function exitVoice() {
   voice.active = false;
+  clearInterval(voice.keepAlive);
   stopListening();
   try { speechSynthesis.cancel(); } catch (e) {}
   voice.queue = []; voice.utter = null; voice.speaking = false;
@@ -976,24 +1276,67 @@ async function voiceSend(text) {
   voiceCurrentEl = null; // next assistant reply gets a fresh highlighted block
   lesson.messages.push({ role: "user", content: text });
   save();
+  try { speechSynthesis.cancel(); } catch (e) {} // clear any stuck/paused speech from the last turn
   voice.speaking = true; voice.streamDone = false;
   voice.queue = []; voice.hl = -1;
+  // Chrome/Edge silently pause long speech after ~15s — nudge it to keep going
+  clearInterval(voice.keepAlive);
+  voice.keepAlive = setInterval(() => { try { if (speechSynthesis.speaking) speechSynthesis.resume(); } catch (e) {} }, 5000);
   let enqueuedUpTo = 0;
   try {
-    const system = SYSTEM_PROMPTS[lesson.method] || SYSTEM_PROMPTS.socratic;
+    const system = (SYSTEM_PROMPTS[lesson.method] || SYSTEM_PROMPTS.socratic) + "\n\n" + RESEARCH_NOTE + "\n\n" + VOICE_NOTE;
     const apiMessages = lesson.messages.map(m => ({ role: m.role, content: m.content }));
-    const { text: full, usage } = await streamChat(system, apiMessages, partial => {
+    const { text: full, usage, sources } = await streamChat(system, apiMessages, partial => {
       const spoken = stripForSpeech(partial); // keep display & TTS offsets aligned
       renderVoiceWords(spoken);
       enqueuedUpTo = enqueueSentences(spoken, enqueuedUpTo, false);
+    }, () => {
+      if (!voice.queue.length && !voice.utter) $("voice-status-text").textContent = "researching…";
     });
     const spokenFull = stripForSpeech(full);
     renderVoiceWords(spokenFull);
     enqueuedUpTo = enqueueSentences(spokenFull, enqueuedUpTo, true);
     voice.streamDone = true;
     pumpSpeech(); // in case queue already drained
-    lesson.messages.push({ role: "assistant", content: full });
+    lesson.messages.push({ role: "assistant", content: full, sources: sources.length ? sources : undefined });
     lesson.paths = [];
+    lesson.updatedAt = Date.now();
+    addCost(lesson, state.model, usage);
+    save();
+  } catch (e) {
+    toast(e.message);
+    voice.speaking = false; voice.streamDone = true;
+    if (voice.active) startListening();
+  }
+}
+
+// spoken welcome-back: same as voiceSend, but Claude opens the sitting itself
+async function voiceReenter(lesson) {
+  stopListening();
+  setVoiceStatus("thinking");
+  voiceCurrentEl = null;
+  try { speechSynthesis.cancel(); } catch (e) {}
+  voice.speaking = true; voice.streamDone = false;
+  voice.queue = []; voice.hl = -1;
+  clearInterval(voice.keepAlive);
+  voice.keepAlive = setInterval(() => { try { if (speechSynthesis.speaking) speechSynthesis.resume(); } catch (e) {} }, 5000);
+  let enqueuedUpTo = 0;
+  try {
+    const system = (SYSTEM_PROMPTS[lesson.method] || SYSTEM_PROMPTS.socratic) + "\n\n" + RESEARCH_NOTE + "\n\n" + VOICE_NOTE;
+    const apiMessages = lesson.messages.map(m => ({ role: m.role, content: m.content }));
+    apiMessages.push({ role: "user", content: REENTRY_PROMPT });
+    const { text: full, usage } = await streamChat(system, apiMessages, partial => {
+      const spoken = stripForSpeech(partial);
+      renderVoiceWords(spoken);
+      enqueuedUpTo = enqueueSentences(spoken, enqueuedUpTo, false);
+    }, () => {});
+    const spokenFull = stripForSpeech(full);
+    renderVoiceWords(spokenFull);
+    enqueuedUpTo = enqueueSentences(spokenFull, enqueuedUpTo, true);
+    voice.streamDone = true;
+    pumpSpeech();
+    lesson.messages.push({ role: "assistant", content: full, reentry: true });
+    lesson.updatedAt = Date.now();
     addCost(lesson, state.model, usage);
     save();
   } catch (e) {
@@ -1036,6 +1379,12 @@ function pumpSpeech() {
     return;
   }
   const item = voice.queue.shift();
+  // merge adjacent queued sentences into one utterance (~250 chars) — fewer
+  // robotic pauses between sentences, while the first sentence still starts fast
+  while (voice.queue.length && item.text.length < 250 &&
+         voice.queue[0].base === item.base + item.text.length) {
+    item.text += voice.queue.shift().text;
+  }
   setVoiceStatus("speaking");
   const u = new SpeechSynthesisUtterance(item.text);
   const v = pickVoice();
@@ -1052,10 +1401,32 @@ function pumpSpeech() {
     voice.utter = null;
     pumpSpeech();
   };
-  u.onerror = u.onend;
+  u.onerror = e => {
+    const reason = e && e.error;
+    voice.utter = null;
+    // "interrupted"/"canceled" are our own cancel() calls — not real failures
+    if (reason && reason !== "interrupted" && reason !== "canceled") {
+      // first real failure while on a cloud voice: switch to a local voice
+      // (always audible) and replay this same sentence — self-heals silent TTS
+      if (!voice.forceLocal && v && !v.localService) {
+        voice.forceLocal = true;
+        toast("That voice couldn't play — using a basic one for now. It'll retry next voice session.", 5000);
+        voice.queue.unshift(item);
+        pumpSpeech();
+        return;
+      }
+      if (!voice.ttsErrShown) {
+        voice.ttsErrShown = true;
+        toast("Voice couldn't play (" + reason + "). In Settings, pick a Voice without the ☁ cloud symbol.", 7000);
+      }
+    }
+    markSpokenThrough(item.base + item.text.length);
+    pumpSpeech();
+  };
   speechSynthesis.speak(u);
 }
 function speakingDone() {
+  clearInterval(voice.keepAlive);
   voice.speaking = false;
   voice.hl = Infinity;
   refreshWordClasses();
@@ -1128,30 +1499,121 @@ function refreshWordClasses() {
   if (currentEl) voiceAutoScroll();
 }
 
-/* ---- hold / tap gestures on the overlay ---- */
+/* ---- hold / tap gestures on the overlay ----
+   scrolling to reread the transcript must never pause listening or cut off
+   the reading — once the finger travels, it's a scroll, not a hold or a tap */
 (function () {
   const ov = $("voice-overlay");
+  let sx = 0, sy = 0, isDown = false, movedAway = false;
+  const pt = e => (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
   function down(e) {
     if (e.target.id === "voice-close") return;
+    const p = pt(e);
+    sx = p.clientX; sy = p.clientY; isDown = true; movedAway = false;
     voice.holding = true;
     voice.holdStartedAt = Date.now();
     if (voice.listening) setVoiceStatus("held");
   }
+  function move(e) {
+    if (!isDown || movedAway) return;
+    const p = pt(e);
+    if (Math.abs(p.clientX - sx) > 12 || Math.abs(p.clientY - sy) > 12) {
+      movedAway = true; // it's a scroll — release the hold, change nothing else
+      voice.holding = false;
+      voice.lastSpeechAt = Date.now();
+      if (voice.speaking) setVoiceStatus("speaking");
+      else if (voice.listening) setVoiceStatus("listening");
+    }
+  }
   function up(e) {
     if (e.target.id === "voice-close") return;
+    if (!isDown) return;
+    isDown = false;
     const wasShort = Date.now() - voice.holdStartedAt < 300;
     voice.holding = false;
     voice.lastSpeechAt = Date.now(); // grace period after releasing
+    if (movedAway) return; // they were reading, not tapping — keep speaking
     if (voice.speaking && wasShort) { interruptSpeech(); return; }
     if (voice.listening) setVoiceStatus("listening");
   }
   ov.addEventListener("touchstart", down, { passive: true });
+  ov.addEventListener("touchmove", move, { passive: true });
   ov.addEventListener("touchend", up, { passive: true });
+  ov.addEventListener("touchcancel", () => { isDown = false; voice.holding = false; }, { passive: true });
   ov.addEventListener("mousedown", down);
+  ov.addEventListener("mousemove", move);
   ov.addEventListener("mouseup", up);
 })();
 $("voice-close").onclick = exitVoice;
 $("chat-mic").onclick = enterVoice;
+
+/* ================= Backup / cross-browser sync ================= */
+// merge incoming lessons into state: same id → keep the one with the longer
+// conversation (more research); ties broken by most-recently-updated.
+function mergeLessons(incoming) {
+  const byId = new Map();
+  for (const l of state.lessons) byId.set(l.id, l);
+  for (const inc of incoming) {
+    if (!inc || !inc.id) continue;
+    const cur = byId.get(inc.id);
+    if (!cur) { byId.set(inc.id, inc); continue; }
+    const incMsgs = (inc.messages || []).length, curMsgs = (cur.messages || []).length;
+    const incBetter = incMsgs > curMsgs ||
+      (incMsgs === curMsgs && (inc.updatedAt || 0) > (cur.updatedAt || 0));
+    if (incBetter) byId.set(inc.id, inc);
+  }
+  state.lessons = [...byId.values()].sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
+}
+function dataFileContent() {
+  const payload = { v: 1, exportedAt: new Date().toISOString(), lessons: state.lessons };
+  return "// Worldview lessons — auto-loaded when placed next to index.html as data.js\n" +
+         "window.WORLDVIEW_DATA = " + JSON.stringify(payload) + ";\n";
+}
+async function exportLessons() {
+  if (!state.lessons.length) { toast("No lessons to save yet"); return; }
+  const content = dataFileContent();
+  // Edge/Chrome: write straight to a file you pick (ideally data.js in this folder)
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: "data.js",
+        types: [{ description: "Worldview lessons", accept: { "text/javascript": [".js"] } }],
+      });
+      const w = await handle.createWritable();
+      await w.write(content); await w.close();
+      toast("Saved " + state.lessons.length + " lessons");
+      return;
+    } catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  // Firefox and others: download the file
+  const blob = new Blob([content], { type: "text/javascript" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "data.js";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast("Downloaded data.js — load it in the other browser, or drop it in this folder");
+}
+function importLessonsFromText(text) {
+  const s = text.indexOf("{"), e = text.lastIndexOf("}");
+  if (s < 0 || e < 0) throw new Error("no lesson data found");
+  const data = JSON.parse(text.slice(s, e + 1));
+  const incoming = (data && data.lessons) || [];
+  if (!incoming.length) { toast("That file had no lessons"); return; }
+  const before = state.lessons.length;
+  mergeLessons(incoming);
+  save();
+  renderHome();
+  if ($("view-profile").classList.contains("active")) renderProfile();
+  const added = state.lessons.length - before;
+  toast("Loaded " + incoming.length + " lessons" + (added ? " (" + added + " new)" : " (already had them)"));
+}
+$("export-btn").onclick = exportLessons;
+$("import-btn").onclick = () => $("import-file").click();
+$("import-file").addEventListener("change", async e => {
+  const f = e.target.files[0];
+  if (f) { try { importLessonsFromText(await f.text()); } catch (err) { toast("Couldn't read that file: " + err.message); } }
+  e.target.value = "";
+});
 
 /* ================= Settings ================= */
 function openSettings() {
@@ -1162,18 +1624,67 @@ function openSettings() {
   $("settings").classList.add("open");
 }
 $("gear").onclick = openSettings;
-$("settings").addEventListener("click", e => { if (e.target === $("settings")) $("settings").classList.remove("open"); });
-$("settings-save").onclick = () => {
+function settingsDirty() {
+  return $("set-key").value.trim() !== (state.apiKey || "") ||
+    $("set-model").value !== state.model ||
+    $("set-voice").value !== (state.voiceURI || "") ||
+    $("set-voicedefault").checked !== !!state.voiceDefault;
+}
+function applySettings() {
   state.apiKey = $("set-key").value.trim();
   state.model = $("set-model").value;
   state.voiceURI = $("set-voice").value;
   state.voiceDefault = $("set-voicedefault").checked;
+  voice.forceLocal = false; // a new voice choice clears any local-only fallback
   save();
+}
+// leaving without the Save button (backdrop tap or swipe-down) offers to keep changes
+function closeSettings(askSave) {
+  if (askSave && settingsDirty() && confirm("Save your changes?")) {
+    applySettings();
+    toast("Saved");
+  }
+  $("settings").classList.remove("open");
+}
+$("settings").addEventListener("click", e => { if (e.target === $("settings")) closeSettings(true); });
+(function settingsSwipe() { // mobile: swipe down on the panel to leave settings
+  const panel = $("settings-panel");
+  let sx = 0, sy = 0, atTop = true;
+  panel.addEventListener("touchstart", e => {
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+    atTop = panel.scrollTop <= 0;
+  }, { passive: true });
+  panel.addEventListener("touchend", e => {
+    const t = e.changedTouches[0];
+    if (!atTop || panel.scrollTop > 0) return; // they were scrolling the panel's content
+    if (t.clientY - sy > 90 && Math.abs(t.clientX - sx) < 70) closeSettings(true);
+  }, { passive: true });
+})();
+// picking a voice speaks a short sample right away, so you hear the change immediately
+$("set-voice").addEventListener("change", () => {
+  voice.forceLocal = false;
+  const uri = $("set-voice").value;
+  const v = ttsVoices.find(x => x.voiceURI === uri) || (uri ? null : pickVoice());
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance("Hi! This is how I'll sound.");
+    if (v) u.voice = v;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+});
+$("settings-save").onclick = () => {
+  applySettings();
   $("settings").classList.remove("open");
   toast("Saved");
 };
 
 /* ================= boot ================= */
+// warn if opened as a raw file — that's why the mic keeps prompting in voice mode
+if (location.protocol === "file:") {
+  $("file-warning").style.display = "block";
+  $("fw-x").onclick = () => { $("file-warning").style.display = "none"; };
+}
+updateCardSize();
 renderHome();
 if (!state.apiKey) setTimeout(openSettings, 600);
 </script>
