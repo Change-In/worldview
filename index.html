@@ -257,6 +257,10 @@
   #settings-panel {
     background: var(--card); width: 100%; border-radius: 18px 18px 0 0;
     padding: 24px 24px calc(env(safe-area-inset-bottom) + 28px);
+    /* never taller than the screen — the panel scrolls inside itself so the
+       top fields (API key) are always reachable on small phones */
+    max-height: 86vh; max-height: 86dvh; overflow-y: auto;
+    -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
   }
   #settings-panel h3 { font-size: 16px; margin-bottom: 16px; }
   #settings-panel label { display: block; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 14px 0 6px; }
@@ -1622,14 +1626,18 @@ function openSettings() {
   populateVoiceSelect();
   $("set-voicedefault").checked = !!state.voiceDefault;
   $("settings").classList.add("open");
+  $("settings-panel").scrollTop = 0; // always open showing the top (API key first)
+  settingsSnap = settingsFields();
 }
 $("gear").onclick = openSettings;
-function settingsDirty() {
-  return $("set-key").value.trim() !== (state.apiKey || "") ||
-    $("set-model").value !== state.model ||
-    $("set-voice").value !== (state.voiceURI || "") ||
-    $("set-voicedefault").checked !== !!state.voiceDefault;
+// dirty = fields changed since the panel was OPENED (comparing against saved
+// state broke on the phone: a laptop-chosen voice doesn't exist in the phone's
+// voice list, which made every close look like an unsaved change)
+let settingsSnap = "";
+function settingsFields() {
+  return JSON.stringify([$("set-key").value.trim(), $("set-model").value, $("set-voice").value, $("set-voicedefault").checked]);
 }
+function settingsDirty() { return settingsFields() !== settingsSnap; }
 function applySettings() {
   state.apiKey = $("set-key").value.trim();
   state.model = $("set-model").value;
@@ -1657,7 +1665,7 @@ $("settings").addEventListener("click", e => { if (e.target === $("settings")) c
   panel.addEventListener("touchend", e => {
     const t = e.changedTouches[0];
     if (!atTop || panel.scrollTop > 0) return; // they were scrolling the panel's content
-    if (t.clientY - sy > 90 && Math.abs(t.clientX - sx) < 70) closeSettings(true);
+    if (t.clientY - sy > 130 && Math.abs(t.clientX - sx) < 70) closeSettings(true);
   }, { passive: true });
 })();
 // picking a voice speaks a short sample right away, so you hear the change immediately
