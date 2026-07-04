@@ -22,7 +22,9 @@
     --radius: 14px;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { height: 100%; overscroll-behavior: none; }
+  /* manipulation kills the browser's double-tap-zoom gesture, which was
+     swallowing single taps on lesson cards (phone tapped, nothing opened) */
+  html, body { height: 100%; overscroll-behavior: none; touch-action: manipulation; overflow: hidden; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: var(--paper);
@@ -708,6 +710,14 @@ function renderHome() {
       <div class="card-title serif">${esc(l.title)}</div>
       <div class="card-hint">tap to continue &middot; drag &#9650; for paths</div>
     `;
+    // click fallback: some phones eat the pointer events for taps (gesture
+    // detection), but a plain click still arrives — openChat dedupes the two
+    card.addEventListener("click", () => {
+      if (Date.now() - (wheel.lastDragAt || 0) < 300) return; // that was a drag, not a tap
+      const idx = wheel.cards.indexOf(card);
+      if (Math.abs(idx - wheel.pos) < 0.6) openChat(l.id);
+      else { wheel.pos = idx; layoutWheel(); }
+    });
     c.appendChild(card);
     wheel.cards.push(card); wheel.ids.push(l.id);
   });
@@ -845,10 +855,11 @@ function layoutWheel(animate = true) {
       openPaths(wheel.ids[centeredIdx]);
       return;
     }
+    if (moved) wheel.lastDragAt = Date.now();
     if (!moved && target) {
       const idx = wheel.cards.indexOf(target);
-      if (idx === Math.round(wheel.pos) && wheel.ids[idx]) { openChat(wheel.ids[idx]); return; } // tap centered → open
-      if (idx >= 0) { wheel.pos = idx; layoutWheel(); return; }                                   // tap side → rotate to it
+      if (Math.abs(idx - wheel.pos) < 0.6 && wheel.ids[idx]) { openChat(wheel.ids[idx]); return; } // tap centered → open
+      if (idx >= 0) { wheel.pos = idx; layoutWheel(); return; }                                    // tap side → rotate to it
     }
     wheel.pos = Math.max(0, Math.min(wheel.cards.length - 1, wheel.pos));
     layoutWheel(false);
@@ -955,6 +966,9 @@ $("sheet-close").onclick = () => $("paths-sheet").classList.remove("open");
 function openChat(id, noVoice) {
   const lesson = getLesson(id);
   if (!lesson) return;
+  // pointerup and the click fallback can both fire for one tap — take the first only
+  if (openChat._last === id && Date.now() - (openChat._t || 0) < 800 && !noVoice) return;
+  openChat._last = id; openChat._t = Date.now();
   currentLessonId = id;
   $("chat-title").textContent = lesson.title;
   const m = METHODS.find(x => x.key === lesson.method);
@@ -985,7 +999,7 @@ function openChat(id, noVoice) {
 
 /* ---- Socratic re-entry: coming back after time away, Claude opens by
    checking what you still remember instead of resuming mid-thought ---- */
-const REENTRY_AFTER_MS = 30 * 60 * 1000; // treat 30+ min away as a fresh sitting
+const REENTRY_AFTER_MS = 90 * 1000; // Claude opens every sitting; the short gap only stops double-greetings on quick in-and-out
 const REENTRY_PROMPT = "[The learner just returned to this lesson after time away. In a couple of warm sentences, welcome them back, then ask ONE focused probing question that checks whether they still remember the most important idea from this conversation. You choose what's most worth checking. Do not re-explain anything yet — let their answer show what needs review. Do not use web search; everything you need is already in this conversation.]";
 function reentryDue(lesson) {
   if (!state.apiKey || streaming) return false;
@@ -1208,9 +1222,12 @@ function voiceScore(v) {
   let s = 0;
   if (/natural/i.test(v.name)) s += 8;
   if (/neural|premium|enhanced/i.test(v.name)) s += 6;
-  if (/aria|jenny|ava|samantha|zoe|siri|emma|libby/i.test(v.name)) s += 3;
+  if (/siri/i.test(v.name)) s += 4;
+  if (/aria|jenny|ava|samantha|zoe|emma|libby/i.test(v.name)) s += 3;
   if (/google/i.test(v.name)) s += 2;
   if (!v.localService) s += 1; // cloud voices usually sound better
+  // the notoriously robotic engines — only picked if nothing else exists
+  if (/espeak|eloquence|compact|fred|zarvox|albert|junior|kathy|ralph|trinoids|whisper|bells|boing|bubbles|cellos|organ/i.test(v.name)) s -= 12;
   return s;
 }
 function pickVoice() {
