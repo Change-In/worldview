@@ -461,7 +461,7 @@
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v5 · Jul 4"; // bump on every deploy — the auto-updater compares this against the server
+const BUILD = "v6 · Jul 5"; // bump on every deploy — the auto-updater compares this against the server
 const LS_KEY = "worldview-v1";
 let state = { apiKey: "", model: "claude-sonnet-5", lessons: [], notes: [], voiceURI: "", voiceDefault: false };
 try { Object.assign(state, JSON.parse(localStorage.getItem(LS_KEY) || "{}")); } catch (e) {}
@@ -716,9 +716,9 @@ function renderHome() {
     // detection), but a plain click still arrives — openChat dedupes the two
     card.addEventListener("click", () => {
       if (Date.now() - (wheel.lastDragAt || 0) < 300) return; // that was a drag, not a tap
-      const idx = wheel.cards.indexOf(card);
-      if (Math.abs(idx - wheel.pos) < 0.6) openChat(l.id);
-      else { wheel.pos = idx; layoutWheel(); }
+      wheel.pos = wheel.cards.indexOf(card);
+      layoutWheel();
+      openChat(l.id); // any tap opens — openChat dedupes if pointerup already did
     });
     c.appendChild(card);
     wheel.cards.push(card); wheel.ids.push(l.id);
@@ -860,8 +860,10 @@ function layoutWheel(animate = true) {
     if (moved) wheel.lastDragAt = Date.now();
     if (!moved && target) {
       const idx = wheel.cards.indexOf(target);
-      if (Math.abs(idx - wheel.pos) < 0.6 && wheel.ids[idx]) { openChat(wheel.ids[idx]); return; } // tap centered → open
-      if (idx >= 0) { wheel.pos = idx; layoutWheel(); return; }                                    // tap side → rotate to it
+      // tapping ANY lesson card opens it — no centering requirement; off-center
+      // taps were silently failing on phones and that's worse than any polish
+      if (idx >= 0 && wheel.ids[idx]) { wheel.pos = idx; layoutWheel(); openChat(wheel.ids[idx]); return; }
+      if (idx >= 0) { wheel.pos = idx; layoutWheel(); return; } // notes / new-lesson card: just center it
     }
     wheel.pos = Math.max(0, Math.min(wheel.cards.length - 1, wheel.pos));
     layoutWheel(false);
