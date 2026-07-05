@@ -504,7 +504,7 @@
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v7 · Jul 5"; // bump on every deploy — the auto-updater compares this against the server
+const BUILD = "v8 · Jul 5"; // bump on every deploy — the auto-updater compares this against the server
 const LS_KEY = "worldview-v1";
 let state = { apiKey: "", model: "claude-sonnet-5", lessons: [], notes: [], voiceURI: "", voiceDefault: false, elKey: "" };
 try { Object.assign(state, JSON.parse(localStorage.getItem(LS_KEY) || "{}")); } catch (e) {}
@@ -518,6 +518,19 @@ if (!state.elKey && typeof window.WORLDVIEW_TTS_KEY === "string" && window.WORLD
   state.elKey = window.WORLDVIEW_TTS_KEY;
   save();
 }
+// one-tap setup link: open the site once with ?key=...&elkey=... and both keys
+// save to this device permanently — no typing, no pasting. Works because the
+// installed home-screen icon shares the same localStorage as this tab.
+(function keyFromLink() {
+  const params = new URLSearchParams(location.search);
+  const k = params.get("key"), ek = params.get("elkey");
+  if (!k && !ek) return;
+  if (k) state.apiKey = k;
+  if (ek) state.elKey = ek;
+  save();
+  history.replaceState(null, "", location.pathname); // don't leave the key sitting in the address bar
+  setTimeout(() => toast("Set up on this device — you won't need to enter a key again.", 4500), 400);
+})();
 // if a shared data.js is present, merge its lessons in on boot (cross-browser / cross-device sync)
 if (window.WORLDVIEW_DATA && Array.isArray(window.WORLDVIEW_DATA.lessons)) {
   mergeLessons(window.WORLDVIEW_DATA.lessons);
