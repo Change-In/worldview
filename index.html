@@ -71,6 +71,15 @@
     perspective: 1100px; touch-action: pan-y; overflow: hidden;
   }
   #carousel { position: relative; width: 100%; height: calc(var(--cardH, 320px) + 30px); transform-style: preserve-3d; }
+  /* fills as you keep swiping up on the trackpad — paths open only when full,
+     so a stray scroll can't trigger them by accident */
+  #paths-ring {
+    position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+    display: none; flex-direction: column; align-items: center; gap: 2px;
+    color: var(--ink-soft); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    pointer-events: none;
+  }
+  #paths-ring.show { display: flex; }
 
   .card {
     position: absolute; left: 50%; top: 50%;
@@ -104,36 +113,43 @@
     text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px;
     color: var(--accent); cursor: pointer; font-style: italic;
   }
-  .card.new-card input, .card.notes-card input {
+  .card.new-card input {
     width: 100%; padding: 13px 14px; font-size: 16px;
     border: 1.5px solid var(--line); border-radius: 10px;
     background: var(--paper); color: var(--ink); text-align: center;
     outline: none;
   }
-  .card.new-card input::placeholder, .card.notes-card input::placeholder { color: #9ab0b8; }
+  .card.new-card input::placeholder { color: #9ab0b8; }
   .card.new-card button {
     margin-top: 14px; padding: 11px 30px; font-size: 16px;
     background: var(--accent); color: #fff; border: none; border-radius: 10px; cursor: pointer;
   }
   .card.new-card button:disabled { opacity: 0.45; }
 
-  /* notes card — parked ideas, scrollable list, no extra screen */
-  .card.notes-card { justify-content: flex-start; text-align: left; touch-action: pan-y; }
-  .card.notes-card .prompt-line { font-size: 17px; margin-bottom: 12px; line-height: 1.4; align-self: center; }
-  .notes-addrow { display: flex; gap: 8px; width: 100%; margin-bottom: 10px; }
-  .notes-addrow input { flex: 1; text-align: left; padding: 11px 13px; font-size: 15px; }
+  /* notes view — a plain list; tap a note to start that lesson */
+  #notes-header {
+    padding: calc(env(safe-area-inset-top) + 22px) 24px 12px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  #notes-header h2 { font-size: 19px; letter-spacing: 0.1em; text-transform: uppercase; }
+  #notes-back { background: none; border: none; font-size: 22px; color: var(--ink); cursor: pointer; padding: 2px 6px; }
+  #notes-body { flex: 1; overflow-y: auto; padding: 6px max(24px, calc((100% - 640px) / 2)) 24px; }
+  .notes-addrow { display: flex; gap: 8px; margin-bottom: 14px; }
+  .notes-addrow input {
+    flex: 1; padding: 12px 14px; font-size: 16px; border: 1.5px solid var(--line);
+    border-radius: 10px; background: var(--card); color: var(--ink); outline: none;
+  }
   .notes-addrow button {
-    width: 44px; flex: none; border: none; border-radius: 10px;
+    width: 46px; flex: none; border: none; border-radius: 10px;
     background: var(--accent); color: #fff; font-size: 22px; line-height: 1; cursor: pointer;
   }
-  #notes-list { flex: 1; width: 100%; overflow-y: auto; min-height: 0; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
-  .note-row { display: flex; align-items: center; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--line); }
-  .note-row:last-child { border-bottom: none; }
-  .note-text { flex: 1; font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
-  .note-go, .note-x { background: none; border: none; cursor: pointer; padding: 4px 6px; font-size: 16px; }
-  .note-go { color: var(--accent); }
-  .note-x { color: var(--ink-soft); }
-  .note-empty { color: var(--ink-soft); font-size: 13px; line-height: 1.5; padding-top: 10px; text-align: center; }
+  .note-row {
+    display: flex; align-items: center; gap: 6px; padding: 13px 4px;
+    border-bottom: 1px solid var(--line); cursor: pointer;
+  }
+  .note-text { flex: 1; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+  .note-x { background: none; border: none; cursor: pointer; padding: 4px 8px; font-size: 17px; color: var(--ink-soft); }
+  .note-empty { color: var(--ink-soft); font-size: 14px; line-height: 1.6; padding-top: 14px; text-align: center; }
 
   /* ---------- Learning-paths sheet ---------- */
   #paths-sheet {
@@ -372,6 +388,15 @@
 
   <div id="carousel-wrap">
     <div id="carousel"></div>
+    <div id="paths-ring">
+      <svg viewBox="0 0 40 40" width="40" height="40">
+        <circle cx="20" cy="20" r="16" fill="none" stroke="var(--line)" stroke-width="3"></circle>
+        <circle id="paths-ring-fill" cx="20" cy="20" r="16" fill="none" stroke="var(--accent)" stroke-width="3"
+                stroke-linecap="round" stroke-dasharray="100.5" stroke-dashoffset="100.5"
+                transform="rotate(-90 20 20)"></circle>
+      </svg>
+      <span>paths</span>
+    </div>
   </div>
 
   <div id="bottom-bar">&#9650;&nbsp;&nbsp;profile</div>
@@ -405,6 +430,21 @@
   <div id="profile-back">&#9660;&nbsp;&nbsp;lessons</div>
 </div>
 
+<!-- ============ NOTES ============ -->
+<div id="view-notes" class="view">
+  <div id="notes-header">
+    <button id="notes-back">&#8592;</button>
+    <h2 class="serif">Notes</h2>
+  </div>
+  <div id="notes-body">
+    <div class="notes-addrow">
+      <input id="note-input" type="text" placeholder="add a topic for later" enterkeyhint="done">
+      <button id="note-add" type="button">+</button>
+    </div>
+    <div id="notes-view-list"></div>
+  </div>
+</div>
+
 <!-- ============ Learning paths sheet ============ -->
 <div id="paths-sheet">
   <h3>Possible learning paths</h3>
@@ -435,6 +475,9 @@
     </select>
     <label>Voice</label>
     <select id="set-voice"></select>
+    <label>Premium voice key (ElevenLabs, optional)</label>
+    <input id="set-elkey" type="password" placeholder="sk_..." autocomplete="off">
+    <div class="hint">With a key, voice mode speaks with a natural ElevenLabs voice; without one it uses this device&rsquo;s built-in voices.</div>
     <label style="display:flex;align-items:center;gap:10px;text-transform:none;font-size:15px;letter-spacing:0;color:var(--ink);margin-top:18px;">
       <input id="set-voicedefault" type="checkbox" style="width:auto;accent-color:var(--accent);transform:scale(1.3);">
       Start lessons in voice mode
@@ -461,14 +504,18 @@
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v6 · Jul 5"; // bump on every deploy — the auto-updater compares this against the server
+const BUILD = "v7 · Jul 5"; // bump on every deploy — the auto-updater compares this against the server
 const LS_KEY = "worldview-v1";
-let state = { apiKey: "", model: "claude-sonnet-5", lessons: [], notes: [], voiceURI: "", voiceDefault: false };
+let state = { apiKey: "", model: "claude-sonnet-5", lessons: [], notes: [], voiceURI: "", voiceDefault: false, elKey: "" };
 try { Object.assign(state, JSON.parse(localStorage.getItem(LS_KEY) || "{}")); } catch (e) {}
 const save = () => { try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {} };
 // if config.js supplies a key and none is saved yet, use it — skips the Settings prompt entirely
 if (!state.apiKey && typeof window.WORLDVIEW_API_KEY === "string" && window.WORLDVIEW_API_KEY) {
   state.apiKey = window.WORLDVIEW_API_KEY;
+  save();
+}
+if (!state.elKey && typeof window.WORLDVIEW_TTS_KEY === "string" && window.WORLDVIEW_TTS_KEY) {
+  state.elKey = window.WORLDVIEW_TTS_KEY;
   save();
 }
 // if a shared data.js is present, merge its lessons in on boot (cross-browser / cross-device sync)
@@ -486,14 +533,7 @@ const METHODS = [
   { key: "socratic", label: "learn", verb: "Teach me", tag: "lesson", starter: t => `Teach me ${t}.` },
   { key: "quiz",     label: "quiz me", verb: "Quiz me on", tag: "quiz", starter: t => `Quiz me on ${t}.` },
 ];
-// easygoing openers for the new-lesson card — one is picked at random
-const CASUAL_LINES = [
-  "so… what are you curious about?",
-  "anything on your mind?",
-  "what should we get into?",
-  "pick anything — big or small",
-];
-let methodIdx = 0;
+let methodIdx = 0; // socratic — the only visible mode; quizzes happen by asking in-conversation
 let currentLessonId = null;
 let streaming = false;
 
@@ -507,8 +547,9 @@ const SYSTEM_PROMPTS = {
 const METHOD_NOTE = `Never name or describe the teaching technique or methodology you are using — no method names, no pedagogy terms, no educator names, even if the student asks directly. If they ask how you teach, say only that you guide them with questions and adapt to their answers.`;
 Object.keys(SYSTEM_PROMPTS).forEach(k => SYSTEM_PROMPTS[k] += "\n\n" + METHOD_NOTE);
 
-// appended to every request: research the topic before teaching it
-const RESEARCH_NOTE = `You have a web_search tool. When a lesson begins, quietly run one or two quick searches to ground yourself in accurate, current information before teaching — especially for factual, historical, scientific, or recent topics. Never invent facts; if you become unsure mid-lesson, search again. Don't narrate your searching or read out URLs — just teach from what you verified.`;
+// appended to every request: research at the START of a topic, stay out of the
+// way mid-conversation — mid-lesson searches were causing long silent stalls
+const RESEARCH_NOTE = `You have a web_search tool. When a NEW topic begins, run one quick search to ground yourself before teaching — especially for factual, historical, scientific, or recent topics. Mid-conversation, strongly prefer answering from what you already know and what you verified earlier; search again only if the student brings up something genuinely new or very recent, or you would otherwise have to guess. Never invent facts. If you do search mid-conversation, first say one short natural sentence (like "Let me double-check that.") BEFORE the search, so the student isn't left in silence — then continue teaching. Never read out URLs.`;
 
 // appended in voice mode: write for the ear, not the eye
 const VOICE_NOTE = `Your reply will be spoken aloud by text-to-speech. Write exactly like natural, warm speech: use contractions, short flowing sentences, and a conversational rhythm. No markdown, no bullet points, no headings, no emojis, no parenthetical asides. Spell things the way they should be pronounced.`;
@@ -551,8 +592,8 @@ function headers() {
 // The newest variant needs a 4.6+ model; Haiku 4.5 only supports the basic one.
 function searchToolFor(model) {
   return model === "claude-haiku-4-5"
-    ? { type: "web_search_20250305", name: "web_search", max_uses: 3 }
-    : { type: "web_search_20260209", name: "web_search", max_uses: 3 };
+    ? { type: "web_search_20250305", name: "web_search", max_uses: 2 }
+    : { type: "web_search_20260209", name: "web_search", max_uses: 2 };
 }
 
 async function streamChat(system, messages, onText, onSearch) {
@@ -672,31 +713,27 @@ function renderHome() {
   c.innerHTML = "";
   wheel.cards = []; wheel.ids = [];
 
-  // notes card (index 0, left of center) — ideas parked for later
+  // notes card (index 0, left of center) — a plain title card, like a lesson
   const noc = document.createElement("div");
   noc.className = "card notes-card";
+  noc.dataset.kind = "notes";
   noc.innerHTML = `
-    <div class="prompt-line">for later</div>
-    <div class="notes-addrow">
-      <input id="note-input" type="text" placeholder="jot it down&hellip;" enterkeyhint="done">
-      <button id="note-add" type="button">+</button>
-    </div>
-    <div id="notes-list"></div>
+    <div class="card-cat">${state.notes.length ? state.notes.length + " saved" : "for later"}</div>
+    <div class="card-title serif">Notes</div>
+    <div class="card-hint">tap to open</div>
   `;
+  noc.addEventListener("click", () => {
+    if (Date.now() - (wheel.lastDragAt || 0) < 300) return;
+    showNotes();
+  });
   c.appendChild(noc);
   wheel.cards.push(noc); wheel.ids.push(null);
 
   // new-lesson card (index 1 — where the app opens)
   const nc = document.createElement("div");
   nc.className = "card new-card";
-  const casual = CASUAL_LINES[Math.floor(Math.random() * CASUAL_LINES.length)];
   nc.innerHTML = `
-    <div class="prompt-line">${casual}</div>
     <input id="topic-input" type="text" placeholder="type here" enterkeyhint="go">
-    <div id="mode-row">
-      <button class="mode-pill${methodIdx === 0 ? " active" : ""}" data-m="0" type="button">learn</button>
-      <button class="mode-pill${methodIdx === 1 ? " active" : ""}" data-m="1" type="button">quiz me</button>
-    </div>
     <button id="start-btn">Begin</button>
   `;
   c.appendChild(nc);
@@ -727,44 +764,36 @@ function renderHome() {
   wheel.pos = Math.min(wheel.pos, wheel.cards.length - 1);
   layoutWheel(false);
 
-  nc.querySelectorAll(".mode-pill").forEach(p => {
-    p.onclick = () => {
-      methodIdx = +p.dataset.m;
-      nc.querySelectorAll(".mode-pill").forEach(x => x.classList.toggle("active", x === p));
-    };
-  });
   $("start-btn").onclick = startLesson;
   $("topic-input").addEventListener("keydown", e => { if (e.key === "Enter") startLesson(); });
-  $("note-add").onclick = addNote;
-  $("note-input").addEventListener("keydown", e => { if (e.key === "Enter") addNote(); });
-  renderNotes();
 }
 
-/* ---- notes: things to learn later, without leaving the carousel ---- */
-function renderNotes() {
-  const list = $("notes-list");
-  if (!list) return;
+/* ---- notes view: parked topics; tapping a note starts that lesson ---- */
+function showNotes() {
+  renderNotesList();
+  show("notes");
+}
+function renderNotesList() {
+  const list = $("notes-view-list");
   list.innerHTML = "";
   if (!state.notes.length) {
-    list.innerHTML = `<div class="note-empty">nothing waiting.<br>jot a topic above and it&rsquo;ll keep your place until you have time.</div>`;
+    list.innerHTML = `<div class="note-empty">Nothing saved yet.</div>`;
     return;
   }
   [...state.notes].reverse().forEach(n => { // newest on top
     const row = document.createElement("div");
     row.className = "note-row";
-    const go = document.createElement("button");
-    go.className = "note-go"; go.type = "button"; go.textContent = "▸"; go.title = "start this lesson now";
     const tx = document.createElement("span");
     tx.className = "note-text"; tx.textContent = n.text;
     const x = document.createElement("button");
     x.className = "note-x"; x.type = "button"; x.textContent = "×"; x.title = "remove";
-    go.onclick = () => { // one tap: note becomes a lesson — no copy-pasting
+    row.onclick = () => { // the note itself is the button — tap it, lesson starts
       state.notes = state.notes.filter(z => z.id !== n.id);
       save();
       beginLesson(n.text, "socratic", `Teach me this: ${n.text}`);
     };
-    x.onclick = () => { state.notes = state.notes.filter(z => z.id !== n.id); save(); renderNotes(); };
-    row.append(go, tx, x);
+    x.onclick = e => { e.stopPropagation(); state.notes = state.notes.filter(z => z.id !== n.id); save(); renderNotesList(); };
+    row.append(tx, x);
     list.appendChild(row);
   });
 }
@@ -775,8 +804,11 @@ function addNote() {
   state.notes.push({ id: uid(), text: t, addedAt: Date.now() });
   save();
   inp.value = "";
-  renderNotes();
+  renderNotesList();
 }
+$("notes-back").onclick = () => { renderHome(); show("home"); };
+$("note-add").onclick = addNote;
+$("note-input").addEventListener("keydown", e => { if (e.key === "Enter") addNote(); });
 
 /* cards ride a circle whose center is behind the screen, but each card is
    counter-rotated so its face always stays flat toward you — the ring curves
@@ -857,6 +889,15 @@ function layoutWheel(animate = true) {
       openPaths(wheel.ids[centeredIdx]);
       return;
     }
+    // drag down → revisit paths this lesson already generated (free, instant)
+    if (dy > 60 && Math.abs(dx) < 50 && wheel.ids[centeredIdx]) {
+      const dl = getLesson(wheel.ids[centeredIdx]);
+      if (dl && dl.paths && dl.paths.length) {
+        wheel.pos = centeredIdx; layoutWheel();
+        openPaths(wheel.ids[centeredIdx]);
+        return;
+      }
+    }
     if (moved) wheel.lastDragAt = Date.now();
     if (!moved && target) {
       const idx = wheel.cards.indexOf(target);
@@ -869,8 +910,30 @@ function layoutWheel(animate = true) {
     layoutWheel(false);
     if (Math.abs(vel) > 0.003) momentum();
   });
+  // trackpad: two-finger swipe UP over a centered lesson charges the paths
+  // ring; it only fires when the circle fills, so no accidental triggers.
+  // Anything else (horizontal, or scroll down) spins the carousel as usual.
+  let pathCharge = 0, pathChargeTimer = 0;
+  function resetPathRing() { pathCharge = 0; $("paths-ring").classList.remove("show"); }
   area.addEventListener("wheel", e => {
     e.preventDefault();
+    const cIdx = Math.round(wheel.pos);
+    const lessonId = wheel.ids[cIdx];
+    if (lessonId && e.deltaY < 0 && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      pathCharge = Math.min(1, pathCharge + (-e.deltaY) / 900);
+      const ring = $("paths-ring");
+      ring.classList.add("show");
+      $("paths-ring-fill").style.strokeDashoffset = String(100.5 * (1 - pathCharge));
+      clearTimeout(pathChargeTimer);
+      pathChargeTimer = setTimeout(resetPathRing, 700); // stop swiping → it drains away
+      if (pathCharge >= 1) {
+        resetPathRing();
+        wheel.pos = cIdx; layoutWheel();
+        openPaths(lessonId);
+      }
+      return;
+    }
+    resetPathRing();
     // desktop scroll spins the ring continuously — no stepping card to card
     wheel.pos = Math.max(0, Math.min(wheel.cards.length - 1, wheel.pos + (e.deltaY + e.deltaX) / 420));
     layoutWheel(false);
@@ -1287,9 +1350,12 @@ function enterVoice(autoListen = true) {
   voice.active = true;
   voice.ttsErrShown = false;
   voice.forceLocal = false; // give the better (cloud) voices a fresh chance every session
+  elBroken = false;         // and the premium voice too
   $("voice-overlay").style.display = "flex";
   // unlock speech synthesis with a silent utterance (needed on iOS; harmless elsewhere)
   try { speechSynthesis.cancel(); const un = new SpeechSynthesisUtterance(" "); un.volume = 0; speechSynthesis.speak(un); } catch (e) {}
+  // unlock the audio element too — iOS only allows play() begun in a user gesture
+  try { ttsAudio.src = SILENT_WAV; ttsAudio.play().catch(() => {}); } catch (e) {}
   buildVoiceHistory(lesson);
   if (autoListen) { setVoiceStatus("listening"); startListening(); }
 }
@@ -1298,6 +1364,7 @@ function exitVoice() {
   clearInterval(voice.keepAlive);
   stopListening();
   try { speechSynthesis.cancel(); } catch (e) {}
+  try { ttsAudio.pause(); ttsAudio.onended = null; ttsAudio.src = ""; } catch (e) {}
   voice.queue = []; voice.utter = null; voice.speaking = false;
   $("voice-overlay").style.display = "none";
   if (currentLessonId) openChat(currentLessonId, true);
@@ -1393,7 +1460,10 @@ async function voiceSend(text) {
       renderVoiceWords(spoken);
       enqueuedUpTo = enqueueSentences(spoken, enqueuedUpTo, false);
     }, () => {
-      if (!voice.queue.length && !voice.utter) $("voice-status-text").textContent = "researching…";
+      if (!voice.queue.length && !voice.utter) {
+        $("voice-status-text").textContent = "researching…";
+        sayFiller(); // break the silence the way a person would
+      }
     });
     const spokenFull = stripForSpeech(full);
     renderVoiceWords(spokenFull);
@@ -1474,6 +1544,67 @@ function queueUtterance(text, base) {
   voice.queue.push({ text, base });
   pumpSpeech();
 }
+/* while a search runs before any reply text exists, say a short line instead
+   of sitting silent — same trick the Claude app uses to feel fast */
+let lastFillerAt = 0;
+function sayFiller() {
+  if (Date.now() - lastFillerAt < 15000) return; // at most once per stretch
+  lastFillerAt = Date.now();
+  const lines = [
+    "Let me look that up real quick.",
+    "One moment — I'm checking that.",
+    "Give me a second to make sure I have this right.",
+  ];
+  try {
+    const u = new SpeechSynthesisUtterance(lines[Math.floor(Math.random() * lines.length)]);
+    const v = pickVoice();
+    if (v) u.voice = v;
+    u.rate = 1.05;
+    speechSynthesis.speak(u); // device voice on purpose: instant and free
+  } catch (e) {}
+}
+
+/* ---- premium voice (ElevenLabs) — natural speech when a key is set ---- */
+const EL_VOICE = "21m00Tcm4TlvDq8ikWAM"; // Rachel: warm, natural narrator
+let elBroken = false;                      // one failure → device voices for the session
+const ttsAudio = new Audio();
+const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+function elEnabled() { return !!state.elKey && !elBroken; }
+async function elFetch(text) {
+  const r = await fetch("https://api.elevenlabs.io/v1/text-to-speech/" + EL_VOICE + "?output_format=mp3_44100_64", {
+    method: "POST",
+    headers: { "xi-api-key": state.elKey, "content-type": "application/json" },
+    body: JSON.stringify({ text, model_id: "eleven_flash_v2_5" }),
+  });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return URL.createObjectURL(await r.blob());
+}
+async function pumpEl(item) {
+  voice.utter = item; // hold the speaking slot while we fetch + play
+  try {
+    const url = await elFetch(item.text);
+    if (!voice.active || voice.utter !== item) { URL.revokeObjectURL(url); return; } // interrupted meanwhile
+    try { speechSynthesis.cancel(); } catch (e) {} // stop any spoken filler line
+    highlightAt(item.base);
+    ttsAudio.src = url;
+    ttsAudio.onended = () => {
+      URL.revokeObjectURL(url);
+      markSpokenThrough(item.base + item.text.length);
+      if (voice.utter === item) { voice.utter = null; pumpSpeech(); }
+    };
+    ttsAudio.onerror = ttsAudio.onended;
+    await ttsAudio.play();
+  } catch (e) {
+    elBroken = true;
+    toast("Premium voice unavailable (" + e.message + ") — using this device's voice for now.", 5000);
+    if (voice.utter === item) {
+      voice.utter = null;
+      voice.queue.unshift(item);
+      pumpSpeech();
+    }
+  }
+}
+
 function pumpSpeech() {
   if (voice.utter || !voice.active) return;
   if (!voice.queue.length) {
@@ -1488,6 +1619,7 @@ function pumpSpeech() {
     item.text += voice.queue.shift().text;
   }
   setVoiceStatus("speaking");
+  if (elEnabled()) { pumpEl(item); return; }
   const u = new SpeechSynthesisUtterance(item.text);
   const v = pickVoice();
   if (v) u.voice = v;
@@ -1537,6 +1669,7 @@ function speakingDone() {
 function interruptSpeech() {
   voice.queue = []; voice.streamDone = true; voice.utter = null;
   try { speechSynthesis.cancel(); } catch (e) {}
+  try { ttsAudio.pause(); ttsAudio.onended = null; ttsAudio.src = ""; } catch (e) {}
   speakingDone();
 }
 
@@ -1733,6 +1866,7 @@ $("import-file").addEventListener("change", async e => {
 /* ================= Settings ================= */
 function openSettings() {
   $("set-key").value = state.apiKey;
+  $("set-elkey").value = state.elKey || "";
   $("set-model").value = state.model;
   populateVoiceSelect();
   $("set-voicedefault").checked = !!state.voiceDefault;
@@ -1746,11 +1880,13 @@ $("gear").onclick = openSettings;
 // voice list, which made every close look like an unsaved change)
 let settingsSnap = "";
 function settingsFields() {
-  return JSON.stringify([$("set-key").value.trim(), $("set-model").value, $("set-voice").value, $("set-voicedefault").checked]);
+  return JSON.stringify([$("set-key").value.trim(), $("set-elkey").value.trim(), $("set-model").value, $("set-voice").value, $("set-voicedefault").checked]);
 }
 function settingsDirty() { return settingsFields() !== settingsSnap; }
 function applySettings() {
   state.apiKey = $("set-key").value.trim();
+  state.elKey = $("set-elkey").value.trim();
+  elBroken = false; // new key → give the premium voice a fresh chance
   state.model = $("set-model").value;
   state.voiceURI = $("set-voice").value;
   state.voiceDefault = $("set-voicedefault").checked;
