@@ -475,9 +475,12 @@
     </select>
     <label>Voice</label>
     <select id="set-voice"></select>
+    <label>Premium voice key (Cartesia, free &amp; fastest)</label>
+    <input id="set-cartkey" type="password" placeholder="sk_car_..." autocomplete="off">
+    <div class="hint">Cartesia has a real free tier and the lowest latency of any option tested. Get a key at play.cartesia.ai (Settings &rarr; API Keys).</div>
     <label>Premium voice key (ElevenLabs, optional)</label>
     <input id="set-elkey" type="password" placeholder="sk_..." autocomplete="off">
-    <div class="hint">With a key, voice mode speaks with a natural ElevenLabs voice; without one it uses this device&rsquo;s built-in voices.</div>
+    <div class="hint">Needs the $6/mo Starter plan or higher to work at all via API. Used only if no Cartesia key is set above. Without either key, voice mode uses this device&rsquo;s built-in voices.</div>
     <label style="display:flex;align-items:center;gap:10px;text-transform:none;font-size:15px;letter-spacing:0;color:var(--ink);margin-top:18px;">
       <input id="set-voicedefault" type="checkbox" style="width:auto;accent-color:var(--accent);transform:scale(1.3);">
       Start lessons in voice mode
@@ -504,9 +507,9 @@
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v8 · Jul 5"; // bump on every deploy — the auto-updater compares this against the server
+const BUILD = "v9 · Jul 8"; // bump on every deploy — the auto-updater compares this against the server
 const LS_KEY = "worldview-v1";
-let state = { apiKey: "", model: "claude-sonnet-5", lessons: [], notes: [], voiceURI: "", voiceDefault: false, elKey: "" };
+let state = { apiKey: "", model: "claude-sonnet-5", lessons: [], notes: [], voiceURI: "", voiceDefault: false, elKey: "", cartKey: "" };
 try { Object.assign(state, JSON.parse(localStorage.getItem(LS_KEY) || "{}")); } catch (e) {}
 const save = () => { try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {} };
 // if config.js supplies a key and none is saved yet, use it — skips the Settings prompt entirely
@@ -518,15 +521,20 @@ if (!state.elKey && typeof window.WORLDVIEW_TTS_KEY === "string" && window.WORLD
   state.elKey = window.WORLDVIEW_TTS_KEY;
   save();
 }
+if (!state.cartKey && typeof window.WORLDVIEW_CARTESIA_KEY === "string" && window.WORLDVIEW_CARTESIA_KEY) {
+  state.cartKey = window.WORLDVIEW_CARTESIA_KEY;
+  save();
+}
 // one-tap setup link: open the site once with ?key=...&elkey=... and both keys
 // save to this device permanently — no typing, no pasting. Works because the
 // installed home-screen icon shares the same localStorage as this tab.
 (function keyFromLink() {
   const params = new URLSearchParams(location.search);
-  const k = params.get("key"), ek = params.get("elkey");
-  if (!k && !ek) return;
+  const k = params.get("key"), ek = params.get("elkey"), ck = params.get("cartkey");
+  if (!k && !ek && !ck) return;
   if (k) state.apiKey = k;
   if (ek) state.elKey = ek;
+  if (ck) state.cartKey = ck;
   save();
   history.replaceState(null, "", location.pathname); // don't leave the key sitting in the address bar
   setTimeout(() => toast("Set up on this device — you won't need to enter a key again.", 4500), 400);
@@ -560,12 +568,50 @@ const SYSTEM_PROMPTS = {
 const METHOD_NOTE = `Never name or describe the teaching technique or methodology you are using — no method names, no pedagogy terms, no educator names, even if the student asks directly. If they ask how you teach, say only that you guide them with questions and adapt to their answers.`;
 Object.keys(SYSTEM_PROMPTS).forEach(k => SYSTEM_PROMPTS[k] += "\n\n" + METHOD_NOTE);
 
-// appended to every request: research at the START of a topic, stay out of the
-// way mid-conversation — mid-lesson searches were causing long silent stalls
-const RESEARCH_NOTE = `You have a web_search tool. When a NEW topic begins, run one quick search to ground yourself before teaching — especially for factual, historical, scientific, or recent topics. Mid-conversation, strongly prefer answering from what you already know and what you verified earlier; search again only if the student brings up something genuinely new or very recent, or you would otherwise have to guess. Never invent facts. If you do search mid-conversation, first say one short natural sentence (like "Let me double-check that.") BEFORE the search, so the student isn't left in silence — then continue teaching. Never read out URLs.`;
+// zero-latency mitigation for imperfect browser speech-to-text: let the model
+// silently read past likely mis-hearings instead of the student having to
+// notice and correct them (a real STT upgrade is a bigger, separate project —
+// see the report for that)
+const TRANSCRIPT_NOTE = `[Note: this message came from live speech-to-text and may contain misheard words, wrong homophones, or missing punctuation. Silently interpret the student's likely intent from context — don't point out transcription errors unless truly ambiguous.]`;
 
-// appended in voice mode: write for the ear, not the eye
-const VOICE_NOTE = `Your reply will be spoken aloud by text-to-speech. Write exactly like natural, warm speech: use contractions, short flowing sentences, and a conversational rhythm. No markdown, no bullet points, no headings, no emojis, no parenthetical asides. Spell things the way they should be pronounced.`;
+// appended to every request: research at the START of a topic, stay out of the
+// way mid-conversation — mid-lesson searches were causing long silent stalls.
+// When a background briefing (see startBriefing below) is available, lean on
+// it instead of searching live — that's what actually kills the dead air.
+const RESEARCH_NOTE = `You have a web_search tool. If a background research briefing is provided below, treat it as already-verified grounding — rely on it and do not search again unless the student asks about something it doesn't cover or something very recent. If NO briefing is provided yet (this is the very first reply of a brand-new lesson), do NOT search before replying — just open with a Socratic question about what the student already knows; there is nothing to fact-check yet since you haven't stated anything. Only search immediately, without a briefing, if you are about to state a specific fact you're unsure of and can't avoid it. Mid-conversation, strongly prefer answering from what you already know and what's already verified; search again only if the student brings up something genuinely new, very recent, or not covered. Never invent facts. If you do search mid-conversation, first say one short natural sentence (like "Let me double-check that.") BEFORE the search, so the student isn't left in silence — then continue teaching. Never read out URLs.`;
+
+// appended in voice mode: write for the ear, not the eye. Kept OUT of the
+// system prompt on purpose — system must stay byte-identical between text and
+// voice turns for the same lesson, or every mode switch blows the prompt
+// cache and the whole conversation re-processes at full price/latency.
+const VOICE_NOTE = `[Your reply will be spoken aloud by text-to-speech. Write exactly like natural, warm speech: use contractions, short flowing sentences, and a conversational rhythm. No markdown, no bullet points, no headings, no emojis, no parenthetical asides. Spell things the way they should be pronounced.]`;
+
+// system prompt for a lesson: identical for text and voice turns (see VOICE_NOTE
+// comment) — includes the background briefing once it's ready, so the live model
+// rarely needs to search live at all
+function buildSystem(lesson) {
+  const base = SYSTEM_PROMPTS[lesson.method] || SYSTEM_PROMPTS.socratic;
+  const briefing = lesson.briefing
+    ? "\n\n--- Background research already gathered for this topic (rely on this; don't re-search it) ---\n" + lesson.briefing
+    : "";
+  return base + "\n\n" + RESEARCH_NOTE + briefing;
+}
+// kick off a quiet background search the moment a lesson starts, so research
+// never blocks the tutor's first question — by the time the student has
+// answered it, the grounding is usually already sitting in lesson.briefing
+async function startBriefing(lesson) {
+  if (!state.apiKey) return;
+  try {
+    const system = "You are a research assistant preparing background notes for a tutor. Use web_search to gather 5-10 concise, accurate, well-organized factual points on the given topic — the kind of grounding a good tutor would want before teaching it. Write for the tutor, not the student: plain, dense, no fluff, no headers.";
+    const { text, usage } = await streamChat(system, [{ role: "user", content: "Topic: " + lesson.topic }], () => {}, () => {}, "claude-haiku-4-5", 1024);
+    const l = getLesson(lesson.id);
+    if (l) {
+      if (text && text.trim()) l.briefing = text.trim();
+      addCost(l, "claude-haiku-4-5", usage);
+      save();
+    }
+  } catch (e) { /* non-fatal — the live model can still search on its own if needed */ }
+}
 
 /* ================= tiny helpers ================= */
 const $ = id => document.getElementById(id);
@@ -609,13 +655,16 @@ function searchToolFor(model) {
     : { type: "web_search_20260209", name: "web_search", max_uses: 2 };
 }
 
-async function streamChat(system, messages, onText, onSearch) {
+async function streamChat(system, messages, onText, onSearch, modelOverride, maxTokens) {
+  const model = modelOverride || state.model;
   const res = await fetch(API_URL, {
     method: "POST", headers: headers(),
     body: JSON.stringify({
-      model: state.model, max_tokens: 8000, stream: true, system, messages,
-      tools: [searchToolFor(state.model)],
-      cache_control: { type: "ephemeral" }, // cache the conversation prefix between turns
+      model, max_tokens: maxTokens || 8000, stream: true, system, messages,
+      tools: [searchToolFor(model)],
+      // cache the conversation prefix between turns; 1h TTL survives normal
+      // thinking/typing pauses (5-min default was getting missed constantly)
+      cache_control: { type: "ephemeral", ttl: "1h" },
     }),
   });
   if (!res.ok) {
@@ -963,6 +1012,7 @@ function beginLesson(topic, methodKey, starterText) {
   state.lessons.push(lesson);
   save();
   fetchMeta(lesson);
+  startBriefing(lesson); // quietly researches in the background — never blocks the first question
   if (state.voiceDefault && voiceSupported()) {
     openChat(lesson.id, true);
     enterVoice(false);
@@ -1057,6 +1107,7 @@ function openChat(id, noVoice) {
   const sc = $("chat-scroll");
   sc.innerHTML = "";
   lesson.messages.forEach(msg => {
+    if (msg.synthetic) return; // hidden bookkeeping turn, not part of the visible conversation
     if (msg.reentry) appendDivider();
     appendBubble(msg.role, msg.content, msg.sources);
   });
@@ -1115,13 +1166,18 @@ async function reenterCheck(lesson) {
   try {
     const apiMessages = lesson.messages.map(m => ({ role: m.role, content: m.content }));
     apiMessages.push({ role: "user", content: REENTRY_PROMPT });
-    const system = (SYSTEM_PROMPTS[lesson.method] || SYSTEM_PROMPTS.socratic) + "\n\n" + RESEARCH_NOTE;
+    const system = buildSystem(lesson);
     scrollToNewSession();
     const { text: full, usage } = await streamChat(system, apiMessages, partial => {
       thinkingBubble.classList.remove("thinking");
       thinkingBubble.innerHTML = md(partial);
       // no auto-scroll: the view stays locked at the divider while text fills downward
     }, () => {});
+    // store the synthetic prompt too (hidden from the UI, see render-loop skip
+    // above) so the array keeps alternating user/assistant — without it, a
+    // lesson that last ended on a reply got two assistant turns in a row here,
+    // which the API rejects on every subsequent message in that lesson
+    lesson.messages.push({ role: "user", content: REENTRY_PROMPT, synthetic: true });
     lesson.messages.push({ role: "assistant", content: full, reentry: true });
     lesson.updatedAt = Date.now();
     addCost(lesson, state.model, usage);
@@ -1174,7 +1230,7 @@ async function sendToClaude(lesson, userText) {
 
   try {
     const apiMessages = lesson.messages.map(m => ({ role: m.role, content: m.content }));
-    const system = (SYSTEM_PROMPTS[lesson.method] || SYSTEM_PROMPTS.socratic) + "\n\n" + RESEARCH_NOTE;
+    const system = buildSystem(lesson);
     const sc = $("chat-scroll");
     const { text: full, usage, sources } = await streamChat(system, apiMessages, partial => {
       thinkingBubble.classList.remove("thinking");
@@ -1182,7 +1238,7 @@ async function sendToClaude(lesson, userText) {
       sc.scrollTop = sc.scrollHeight;
     }, () => {
       if (thinkingBubble.classList.contains("thinking")) thinkingBubble.innerHTML = md("*researching the topic…*");
-    });
+    }, undefined, 2048);
     if (sources.length) attachSources(thinkingBubble, sources);
     lesson.messages.push({ role: "assistant", content: full, sources: sources.length ? sources : undefined });
     lesson.paths = []; // conversation changed → regenerate paths next time
@@ -1363,7 +1419,7 @@ function enterVoice(autoListen = true) {
   voice.active = true;
   voice.ttsErrShown = false;
   voice.forceLocal = false; // give the better (cloud) voices a fresh chance every session
-  elBroken = false;         // and the premium voice too
+  elBroken = false; cartBroken = false; // and the premium voices too
   $("voice-overlay").style.display = "flex";
   // unlock speech synthesis with a silent utterance (needed on iOS; harmless elsewhere)
   try { speechSynthesis.cancel(); const un = new SpeechSynthesisUtterance(" "); un.volume = 0; speechSynthesis.speak(un); } catch (e) {}
@@ -1388,6 +1444,7 @@ function buildVoiceHistory(lesson) {
   const sc = $("voice-scroll");
   sc.innerHTML = "";
   lesson.messages.forEach(m => {
+    if (m.synthetic) return; // hidden bookkeeping turn, not part of the visible conversation
     const d = document.createElement("div");
     d.className = "vmsg " + m.role;
     d.textContent = m.content;
@@ -1466,8 +1523,13 @@ async function voiceSend(text) {
   voice.keepAlive = setInterval(() => { try { if (speechSynthesis.speaking) speechSynthesis.resume(); } catch (e) {} }, 5000);
   let enqueuedUpTo = 0;
   try {
-    const system = (SYSTEM_PROMPTS[lesson.method] || SYSTEM_PROMPTS.socratic) + "\n\n" + RESEARCH_NOTE + "\n\n" + VOICE_NOTE;
+    const system = buildSystem(lesson);
     const apiMessages = lesson.messages.map(m => ({ role: m.role, content: m.content }));
+    // VOICE_NOTE + TRANSCRIPT_NOTE ride on the last message only (not system)
+    // so the cached system+history prefix stays byte-identical whether this
+    // lesson is being driven by voice or text — switching modes used to blow
+    // the entire cache
+    apiMessages[apiMessages.length - 1].content += "\n\n" + TRANSCRIPT_NOTE + "\n\n" + VOICE_NOTE;
     const { text: full, usage, sources } = await streamChat(system, apiMessages, partial => {
       const spoken = stripForSpeech(partial); // keep display & TTS offsets aligned
       renderVoiceWords(spoken);
@@ -1477,7 +1539,7 @@ async function voiceSend(text) {
         $("voice-status-text").textContent = "researching…";
         sayFiller(); // break the silence the way a person would
       }
-    });
+    }, undefined, 1024);
     const spokenFull = stripForSpeech(full);
     renderVoiceWords(spokenFull);
     enqueuedUpTo = enqueueSentences(spokenFull, enqueuedUpTo, true);
@@ -1507,19 +1569,22 @@ async function voiceReenter(lesson) {
   voice.keepAlive = setInterval(() => { try { if (speechSynthesis.speaking) speechSynthesis.resume(); } catch (e) {} }, 5000);
   let enqueuedUpTo = 0;
   try {
-    const system = (SYSTEM_PROMPTS[lesson.method] || SYSTEM_PROMPTS.socratic) + "\n\n" + RESEARCH_NOTE + "\n\n" + VOICE_NOTE;
+    const system = buildSystem(lesson);
     const apiMessages = lesson.messages.map(m => ({ role: m.role, content: m.content }));
-    apiMessages.push({ role: "user", content: REENTRY_PROMPT });
+    apiMessages.push({ role: "user", content: REENTRY_PROMPT + "\n\n" + VOICE_NOTE });
     const { text: full, usage } = await streamChat(system, apiMessages, partial => {
       const spoken = stripForSpeech(partial);
       renderVoiceWords(spoken);
       enqueuedUpTo = enqueueSentences(spoken, enqueuedUpTo, false);
-    }, () => {});
+    }, () => {}, undefined, 1024);
     const spokenFull = stripForSpeech(full);
     renderVoiceWords(spokenFull);
     enqueuedUpTo = enqueueSentences(spokenFull, enqueuedUpTo, true);
     voice.streamDone = true;
     pumpSpeech();
+    // store the synthetic prompt too (hidden from the UI) so the array keeps
+    // alternating user/assistant — see the matching fix in reenterCheck
+    lesson.messages.push({ role: "user", content: REENTRY_PROMPT, synthetic: true });
     lesson.messages.push({ role: "assistant", content: full, reentry: true });
     lesson.updatedAt = Date.now();
     addCost(lesson, state.model, usage);
@@ -1577,39 +1642,135 @@ function sayFiller() {
   } catch (e) {}
 }
 
-/* ---- premium voice (ElevenLabs) — natural speech when a key is set ---- */
-const EL_VOICE = "21m00Tcm4TlvDq8ikWAM"; // Rachel: warm, natural narrator
-let elBroken = false;                      // one failure → device voices for the session
+/* ---- premium voices — natural speech when a key is set ----
+   Provider priority: Cartesia (free, lowest measured latency) > ElevenLabs
+   (needs a paid plan to speak at all) > this device's built-in voice. */
 const ttsAudio = new Audio();
 const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
-function elEnabled() { return !!state.elKey && !elBroken; }
-async function elFetch(text) {
-  const r = await fetch("https://api.elevenlabs.io/v1/text-to-speech/" + EL_VOICE + "?output_format=mp3_44100_64", {
+let elBroken = false, cartBroken = false; // one failure → fall back for the session
+function ttsProvider() {
+  if (state.cartKey && !cartBroken) return "cartesia";
+  if (state.elKey && !elBroken) return "elevenlabs";
+  return "device";
+}
+
+/* Cartesia: simple buffered request — their model is fast enough (~40-190ms
+   to synthesize) that a plain fetch-then-play is already snappy; no need for
+   the extra complexity of progressive streaming here. */
+const CARTESIA_VOICE = "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4"; // a default Cartesia library voice
+async function cartFetch(text) {
+  const r = await fetch("https://api.cartesia.ai/tts/bytes", {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + state.cartKey, "Cartesia-Version": "2026-03-01", "content-type": "application/json" },
+    body: JSON.stringify({
+      model_id: "sonic-3.5", transcript: text,
+      voice: { mode: "id", id: CARTESIA_VOICE },
+      output_format: { container: "mp3", sample_rate: 44100, bit_rate: 64000 },
+    }),
+  });
+  if (!r.ok) {
+    let msg = "HTTP " + r.status;
+    try { const j = await r.json(); msg = j.message || (j.error && j.error.message) || msg; } catch (e) {}
+    throw new Error(msg);
+  }
+  return URL.createObjectURL(await r.blob());
+}
+async function pumpCart(item) {
+  voice.utter = item;
+  try {
+    const url = await cartFetch(item.text);
+    if (!voice.active || voice.utter !== item) { URL.revokeObjectURL(url); return; }
+    try { speechSynthesis.cancel(); } catch (e) {}
+    highlightAt(item.base);
+    await playBlobUrl(url, item);
+  } catch (e) {
+    cartBroken = true;
+    toast("Cartesia voice unavailable (" + e.message + ") — trying the next option.", 6000);
+    if (voice.utter === item) { voice.utter = null; voice.queue.unshift(item); pumpSpeech(); }
+  }
+}
+
+/* ElevenLabs: streamed and played progressively via MediaSource where the
+   browser supports it (Chrome/Edge/Android) — this starts audio as soon as
+   the first chunk of the mp3 arrives instead of waiting for the whole clip.
+   Falls back to buffer-then-play where MSE/mp3 isn't supported (Safari/iOS). */
+const EL_VOICE = "21m00Tcm4TlvDq8ikWAM"; // Rachel: warm, natural narrator
+const EL_LATENCY_OPT = 2; // 0-4; higher trims more latency at some quality cost (4 disables text normalization)
+const MSE_OK = typeof MediaSource !== "undefined" && MediaSource.isTypeSupported && MediaSource.isTypeSupported("audio/mpeg");
+async function elStream(text) {
+  const url = "https://api.elevenlabs.io/v1/text-to-speech/" + EL_VOICE + "/stream?output_format=mp3_44100_64&optimize_streaming_latency=" + EL_LATENCY_OPT;
+  const r = await fetch(url, {
     method: "POST",
     headers: { "xi-api-key": state.elKey, "content-type": "application/json" },
     body: JSON.stringify({ text, model_id: "eleven_flash_v2_5" }),
   });
-  if (!r.ok) throw new Error("HTTP " + r.status);
-  return URL.createObjectURL(await r.blob());
+  if (!r.ok) {
+    let msg = "HTTP " + r.status;
+    try { const j = await r.json(); msg = (j.detail && j.detail.message) || msg; } catch (e) {}
+    throw new Error(msg);
+  }
+  return r;
 }
-async function pumpEl(item) {
-  voice.utter = item; // hold the speaking slot while we fetch + play
-  try {
-    const url = await elFetch(item.text);
-    if (!voice.active || voice.utter !== item) { URL.revokeObjectURL(url); return; } // interrupted meanwhile
-    try { speechSynthesis.cancel(); } catch (e) {} // stop any spoken filler line
-    highlightAt(item.base);
+function playBlobUrl(url, item) {
+  return new Promise((resolve, reject) => {
     ttsAudio.src = url;
     ttsAudio.onended = () => {
       URL.revokeObjectURL(url);
       markSpokenThrough(item.base + item.text.length);
       if (voice.utter === item) { voice.utter = null; pumpSpeech(); }
+      resolve();
     };
-    ttsAudio.onerror = ttsAudio.onended;
-    await ttsAudio.play();
+    ttsAudio.onerror = () => { URL.revokeObjectURL(url); reject(new Error("playback failed")); };
+    ttsAudio.play().catch(reject);
+  });
+}
+function playViaMediaSource(res, item) {
+  return new Promise((resolve, reject) => {
+    const ms = new MediaSource();
+    const url = URL.createObjectURL(ms);
+    ttsAudio.src = url;
+    let settled = false;
+    const finish = (fn, arg) => { if (settled) return; settled = true; try { URL.revokeObjectURL(url); } catch (e) {} fn(arg); };
+    ttsAudio.onended = () => {
+      markSpokenThrough(item.base + item.text.length);
+      if (voice.utter === item) { voice.utter = null; pumpSpeech(); }
+      finish(resolve);
+    };
+    ttsAudio.onerror = () => finish(reject, new Error("playback failed"));
+    ms.addEventListener("sourceopen", async () => {
+      let sb;
+      try { sb = ms.addSourceBuffer("audio/mpeg"); } catch (e) { finish(reject, e); return; }
+      const queue = [];
+      let started = false, readerDone = false;
+      const tryEnd = () => { if (readerDone && !queue.length && !sb.updating) { try { if (ms.readyState === "open") ms.endOfStream(); } catch (e) {} } };
+      const pump = () => { if (queue.length && !sb.updating) sb.appendBuffer(queue.shift()); };
+      sb.addEventListener("updateend", () => { pump(); tryEnd(); });
+      try {
+        const reader = res.body.getReader();
+        for (;;) {
+          if (voice.utter !== item) { try { reader.cancel(); } catch (e) {} finish(resolve); break; } // interrupted
+          const { done, value } = await reader.read();
+          if (done) { readerDone = true; tryEnd(); break; }
+          queue.push(value);
+          if (!started) { started = true; ttsAudio.play().catch(() => {}); }
+          pump();
+        }
+      } catch (e) { finish(reject, e); }
+    }, { once: true });
+  });
+}
+async function pumpEl(item) {
+  voice.utter = item; // hold the speaking slot while we fetch + play
+  try {
+    const res = await elStream(item.text);
+    if (!voice.active || voice.utter !== item) { try { res.body.cancel(); } catch (e) {} return; } // interrupted meanwhile
+    try { speechSynthesis.cancel(); } catch (e) {} // stop any spoken filler line
+    highlightAt(item.base);
+    if (MSE_OK) await playViaMediaSource(res, item);
+    else await playBlobUrl(URL.createObjectURL(await res.blob()), item);
   } catch (e) {
     elBroken = true;
-    toast("Premium voice unavailable (" + e.message + ") — using this device's voice for now.", 5000);
+    toast("ElevenLabs voice unavailable (" + e.message + ") — using this device's voice for now.", 7000);
     if (voice.utter === item) {
       voice.utter = null;
       voice.queue.unshift(item);
@@ -1632,7 +1793,9 @@ function pumpSpeech() {
     item.text += voice.queue.shift().text;
   }
   setVoiceStatus("speaking");
-  if (elEnabled()) { pumpEl(item); return; }
+  const provider = ttsProvider();
+  if (provider === "cartesia") { pumpCart(item); return; }
+  if (provider === "elevenlabs") { pumpEl(item); return; }
   const u = new SpeechSynthesisUtterance(item.text);
   const v = pickVoice();
   if (v) u.voice = v;
@@ -1880,6 +2043,7 @@ $("import-file").addEventListener("change", async e => {
 function openSettings() {
   $("set-key").value = state.apiKey;
   $("set-elkey").value = state.elKey || "";
+  $("set-cartkey").value = state.cartKey || "";
   $("set-model").value = state.model;
   populateVoiceSelect();
   $("set-voicedefault").checked = !!state.voiceDefault;
@@ -1893,13 +2057,14 @@ $("gear").onclick = openSettings;
 // voice list, which made every close look like an unsaved change)
 let settingsSnap = "";
 function settingsFields() {
-  return JSON.stringify([$("set-key").value.trim(), $("set-elkey").value.trim(), $("set-model").value, $("set-voice").value, $("set-voicedefault").checked]);
+  return JSON.stringify([$("set-key").value.trim(), $("set-elkey").value.trim(), $("set-cartkey").value.trim(), $("set-model").value, $("set-voice").value, $("set-voicedefault").checked]);
 }
 function settingsDirty() { return settingsFields() !== settingsSnap; }
 function applySettings() {
   state.apiKey = $("set-key").value.trim();
   state.elKey = $("set-elkey").value.trim();
-  elBroken = false; // new key → give the premium voice a fresh chance
+  state.cartKey = $("set-cartkey").value.trim();
+  elBroken = false; cartBroken = false; // new keys → give the premium voices a fresh chance
   state.model = $("set-model").value;
   state.voiceURI = $("set-voice").value;
   state.voiceDefault = $("set-voicedefault").checked;
