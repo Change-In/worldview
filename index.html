@@ -45,6 +45,31 @@
   #file-warning b { text-decoration: underline; }
   #fw-x { position: absolute; right: 12px; top: calc(env(safe-area-inset-top) + 8px); cursor: pointer; opacity: 0.85; }
 
+  #update-banner {
+    display: none; flex: 0 0 auto; align-items: center; gap: 10px;
+    background: var(--ink); color: #fff; font-size: 13px;
+    padding: calc(env(safe-area-inset-top) + 9px) 14px 9px; position: relative;
+  }
+  #update-banner.show { display: flex; }
+  #update-banner span { flex: 1; }
+  #update-refresh {
+    background: #fff; color: var(--ink); border: none; border-radius: 8px;
+    padding: 6px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  }
+  #update-x { cursor: pointer; opacity: 0.7; padding: 4px; }
+
+  /* first launch of a new version: a full-screen green flash, visible from
+     across the room, that dissolves to reveal what's new */
+  #splash {
+    position: fixed; inset: 0; z-index: 200; background: #2f8f5b;
+    display: none; align-items: center; justify-content: center;
+    transition: opacity 0.5s ease;
+  }
+  #splash.show { display: flex; }
+  #splash.fading { opacity: 0; }
+  #splash-mark { width: 64px; height: 64px; }
+  #splash-mark path { stroke: #fff; stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
   /* ---------- Views ---------- */
   .view { flex: 1; display: none; flex-direction: column; min-height: 0; }
   .view.active { display: flex; }
@@ -126,14 +151,14 @@
   }
   .card.new-card button:disabled { opacity: 0.45; }
 
-  /* notes view — a plain list; tap a note to start that lesson */
-  #notes-header {
+  /* notes + what's-new views — a plain list; shared header style */
+  .view-header {
     padding: calc(env(safe-area-inset-top) + 22px) 24px 12px;
     display: flex; align-items: center; gap: 14px;
   }
-  #notes-header h2 { font-size: 19px; letter-spacing: 0.1em; text-transform: uppercase; }
-  #notes-back { background: none; border: none; font-size: 22px; color: var(--ink); cursor: pointer; padding: 2px 6px; }
-  #notes-body { flex: 1; overflow-y: auto; padding: 6px max(24px, calc((100% - 640px) / 2)) 24px; }
+  .view-header h2 { font-size: 19px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .view-header button { background: none; border: none; font-size: 22px; color: var(--ink); cursor: pointer; padding: 2px 6px; }
+  #notes-body, #whatsnew-body { flex: 1; overflow-y: auto; padding: 6px max(24px, calc((100% - 640px) / 2)) 24px; }
   .notes-addrow { display: flex; gap: 8px; margin-bottom: 14px; }
   .notes-addrow input {
     flex: 1; padding: 12px 14px; font-size: 16px; border: 1.5px solid var(--line);
@@ -150,6 +175,17 @@
   .note-text { flex: 1; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
   .note-x { background: none; border: none; cursor: pointer; padding: 4px 8px; font-size: 17px; color: var(--ink-soft); }
   .note-empty { color: var(--ink-soft); font-size: 14px; line-height: 1.6; padding-top: 14px; text-align: center; }
+
+  /* what's-new: one card per version, newest first, plain scroll between them */
+  .ver-card { border-bottom: 1px solid var(--line); padding: 20px 0; }
+  .ver-card:first-child { padding-top: 8px; }
+  .ver-card:last-child { border-bottom: none; }
+  .ver-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .ver-tag { font-family: Georgia, serif; font-size: 20px; color: var(--ink); }
+  .ver-date { font-size: 12px; color: var(--ink-soft); }
+  .ver-card ul { margin: 0; padding-left: 18px; }
+  .ver-card li { font-size: 14.5px; line-height: 1.55; margin-bottom: 6px; color: var(--ink); }
+  .ver-card li:last-child { margin-bottom: 0; }
 
   /* ---------- Learning-paths sheet ---------- */
   #paths-sheet {
@@ -378,6 +414,16 @@
   <span id="fw-x" title="Dismiss">&#10005;</span>
 </div>
 
+<div id="update-banner">
+  <span>A new version is ready.</span>
+  <button id="update-refresh" type="button">Refresh</button>
+  <span id="update-x" title="Later">&#10005;</span>
+</div>
+
+<div id="splash">
+  <svg id="splash-mark" viewBox="0 0 24 24"><path d="M4 13l5 5L20 6"/></svg>
+</div>
+
 <!-- ============ HOME ============ -->
 <div id="view-home" class="view active">
   <div id="home-header">
@@ -432,7 +478,7 @@
 
 <!-- ============ NOTES ============ -->
 <div id="view-notes" class="view">
-  <div id="notes-header">
+  <div class="view-header">
     <button id="notes-back">&#8592;</button>
     <h2 class="serif">Notes</h2>
   </div>
@@ -443,6 +489,15 @@
     </div>
     <div id="notes-view-list"></div>
   </div>
+</div>
+
+<!-- ============ WHAT'S NEW ============ -->
+<div id="view-whatsnew" class="view">
+  <div class="view-header">
+    <button id="whatsnew-back">&#8592;</button>
+    <h2 class="serif">What&rsquo;s New</h2>
+  </div>
+  <div id="whatsnew-body"></div>
 </div>
 
 <!-- ============ Learning paths sheet ============ -->
@@ -478,6 +533,9 @@
     <label>Premium voice key (Cartesia, free &amp; fastest)</label>
     <input id="set-cartkey" type="password" placeholder="sk_car_..." autocomplete="off">
     <div class="hint">Cartesia has a real free tier and the lowest latency of any option tested. Get a key at play.cartesia.ai (Settings &rarr; API Keys).</div>
+    <label>Cartesia voice ID (optional)</label>
+    <input id="set-cartvoice" type="text" placeholder="defaults to a preset voice" autocomplete="off">
+    <div class="hint">Browse voices at cartesia.ai/voices (or your dashboard's Voice Library once signed in) and paste one's ID here — e.g. to use a voice named "Daniel" if one exists in the library.</div>
     <label>Premium voice key (ElevenLabs, optional)</label>
     <input id="set-elkey" type="password" placeholder="sk_..." autocomplete="off">
     <div class="hint">Needs the $6/mo Starter plan or higher to work at all via API. Used only if no Cartesia key is set above. Without either key, voice mode uses this device&rsquo;s built-in voices.</div>
@@ -493,7 +551,7 @@
     <input id="import-file" type="file" accept=".js,.json,application/json,text/javascript" style="display:none">
     <div class="hint">Save all your lessons (and their paid research) to a file, then Load it in another browser or on your phone so nothing is lost.</div>
     <button id="settings-save">Save</button>
-    <div class="hint" style="text-align:center;margin-top:14px">Version <span id="build-tag"></span> &middot; updates itself when a new one is out</div>
+    <div class="hint" style="text-align:center;margin-top:14px">Version <span id="build-tag" style="text-decoration:underline;cursor:pointer">&nbsp;</span> &middot; tap to see what's new</div>
   </div>
 </div>
 
@@ -507,9 +565,42 @@
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v9 · Jul 8"; // bump on every deploy — the auto-updater compares this against the server
+const BUILD = "v10 · Jul 9"; // bump on every deploy — the auto-updater compares this against the server, and the tag below must match
+
+// one card per version in the "What's New" page — newest first. Add an entry
+// here whenever BUILD changes so the app can always explain itself.
+const VERSIONS = [
+  { tag: "v10", date: "Jul 9", changes: [
+    "Tapping any card now works no matter how it's aligned — rebuilt card-tap detection from scratch using each card's real measured position instead of trusting the browser to figure out what you tapped, which was unreliable on phones.",
+    "Fixed: holding to pause during voice mode was broken by an earlier fix — it now only reacts to scrolling inside the transcript, so a still finger holding elsewhere is never mistaken for a scroll.",
+    "New: an update banner instead of a silent auto-refresh — reloading in the background could be exactly what was resetting your microphone permission on iPhone. Now you choose when to refresh.",
+    "New: this What's New page — tap the version number in Settings any time to see what changed, in any past version.",
+    "Research now starts the moment a lesson begins, quietly, so the tutor's first question never waits on it — see the full write-up for why this beats racing two models against each other.",
+  ]},
+  { tag: "v9", date: "Jul 8", changes: [
+    "Lessons open faster: background research now starts the instant a lesson begins instead of blocking the tutor's first question.",
+    "Fixed a caching bug where switching between voice and text mode was silently forcing Claude to reprocess the entire conversation from scratch.",
+    "Fixed a bug where replying after a \"welcome back\" greeting could silently fail.",
+    "Added Cartesia as a free, low-latency voice option alongside ElevenLabs.",
+    "Speech-to-text mistakes are now read past instead of confusing the tutor.",
+  ]},
+  { tag: "v8", date: "Jul 5", changes: [
+    "One-tap setup link: open a link once and your API keys save to that device — no typing, ever again.",
+  ]},
+  { tag: "v7", date: "Jul 5", changes: [
+    "Added ElevenLabs as a premium voice option.",
+    "Simplified the new-lesson and notes cards.",
+    "Research now waits for a new topic to begin, and speaks a short filler line before searching mid-conversation instead of leaving you in silence.",
+  ]},
+  { tag: "v6", date: "Jul 5", changes: [
+    "First attempt at fixing off-center taps on lesson cards.",
+  ]},
+  { tag: "v5", date: "Jul 4", changes: [
+    "The app now checks for and applies its own updates, with a version number visible in Settings.",
+  ]},
+];
 const LS_KEY = "worldview-v1";
-let state = { apiKey: "", model: "claude-sonnet-5", lessons: [], notes: [], voiceURI: "", voiceDefault: false, elKey: "", cartKey: "" };
+let state = { apiKey: "", model: "claude-sonnet-5", lessons: [], notes: [], voiceURI: "", voiceDefault: false, elKey: "", cartKey: "", cartVoice: "", cardScale: 1 };
 try { Object.assign(state, JSON.parse(localStorage.getItem(LS_KEY) || "{}")); } catch (e) {}
 const save = () => { try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {} };
 // if config.js supplies a key and none is saved yet, use it — skips the Settings prompt entirely
@@ -762,7 +853,8 @@ const wheel = { pos: 1, cards: [], ids: [], cardW: 262 }; // opens centered on t
 
 /* card size scales with the screen: bigger on laptops, comfortable on phones */
 function updateCardSize() {
-  const w = Math.round(Math.min(Math.max(innerWidth * (innerWidth > 700 ? 0.30 : 0.66), 240), 430));
+  const scale = state.cardScale || 1; // pinch-to-zoom on the carousel adjusts this
+  const w = Math.round(Math.min(Math.max(innerWidth * (innerWidth > 700 ? 0.30 : 0.66), 240), 430) * scale);
   const h = Math.round(Math.min(w * 1.22, innerHeight * 0.52));
   wheel.cardW = w;
   document.documentElement.style.setProperty("--cardW", w + "px");
@@ -784,10 +876,6 @@ function renderHome() {
     <div class="card-title serif">Notes</div>
     <div class="card-hint">tap to open</div>
   `;
-  noc.addEventListener("click", () => {
-    if (Date.now() - (wheel.lastDragAt || 0) < 300) return;
-    showNotes();
-  });
   c.appendChild(noc);
   wheel.cards.push(noc); wheel.ids.push(null);
 
@@ -811,14 +899,6 @@ function renderHome() {
       <div class="card-title serif">${esc(l.title)}</div>
       <div class="card-hint">tap to continue &middot; drag &#9650; for paths</div>
     `;
-    // click fallback: some phones eat the pointer events for taps (gesture
-    // detection), but a plain click still arrives — openChat dedupes the two
-    card.addEventListener("click", () => {
-      if (Date.now() - (wheel.lastDragAt || 0) < 300) return; // that was a drag, not a tap
-      wheel.pos = wheel.cards.indexOf(card);
-      layoutWheel();
-      openChat(l.id); // any tap opens — openChat dedupes if pointerup already did
-    });
     c.appendChild(card);
     wheel.cards.push(card); wheel.ids.push(l.id);
   });
@@ -893,10 +973,36 @@ function layoutWheel(animate = true) {
   });
 }
 
+// Which card sits under a screen point — measured directly via each card's
+// actual rendered box, NOT via the browser's native elementFromPoint/e.target
+// hit-testing. Cards overlap inside a 3D perspective stack (nearer cards
+// visually cover part of farther ones), and on mobile WebKit that native
+// hit-testing can route a tap to the wrong card — or to none at all — unless
+// the tap lands in the sliver that isn't covered. Measuring rects ourselves
+// sidesteps that entirely: whichever card's real on-screen box contains the
+// point wins, picking the frontmost (highest z-index) if more than one does.
+function cardAtPoint(x, y) {
+  let best = -1, bestZ = -Infinity;
+  wheel.cards.forEach((el, idx) => {
+    const r = el.getBoundingClientRect();
+    if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+      const z = parseInt(el.style.zIndex || "0", 10);
+      if (z > bestZ) { bestZ = z; best = idx; }
+    }
+  });
+  return best;
+}
+
 (function wheelGestures() {
   const area = document.getElementById("carousel-wrap");
-  let down = false, sx = 0, sy = 0, startPos = 0, moved = false, target = null;
+  let down = false, sx = 0, sy = 0, startPos = 0, moved = false, target = -1;
   let vel = 0, lastX = 0, lastT = 0, momId = 0;
+
+  // pinch-to-resize the cards — tracked independently of the single-finger
+  // drag/tap logic below; two fingers down suspends dragging until they lift
+  const activePointers = new Map();
+  let pinching = false, pinchStartDist = 0, pinchStartScale = 1;
+  const dist2 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
   // free-spinning ring: no snapping to cards — a flick glides with momentum
   // and settles wherever friction stops it
@@ -916,15 +1022,43 @@ function layoutWheel(animate = true) {
   }
 
   area.addEventListener("pointerdown", e => {
-    if (/^(INPUT|BUTTON|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (activePointers.size === 2) {
+      pinching = true; down = false; // a second finger cancels any single-finger drag/tap in progress
+      const pts = [...activePointers.values()];
+      pinchStartDist = dist2(pts[0], pts[1]);
+      pinchStartScale = state.cardScale || 1;
+      return;
+    }
+    if (activePointers.size > 2 || pinching) return; // ignore extra fingers / mid-pinch teardown
+    target = cardAtPoint(e.clientX, e.clientY);
+    // if the tap lands precisely on the new-lesson card's text input, let it
+    // focus natively instead of starting a drag — resolved by coordinates
+    // against the input's real rect, not by asking the browser what element
+    // it thinks was hit (the same native lookup that was misrouting taps
+    // elsewhere in this carousel)
+    if (target >= 0 && wheel.cards[target].classList.contains("new-card")) {
+      const input = $("topic-input");
+      const r = input && input.getBoundingClientRect();
+      if (r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) return;
+    }
     cancelAnimationFrame(momId); vel = 0;
     down = true; moved = false;
     sx = e.clientX; sy = e.clientY; startPos = wheel.pos;
     lastX = e.clientX; lastT = performance.now();
-    target = e.target.closest(".card");
     area.setPointerCapture(e.pointerId);
   });
   area.addEventListener("pointermove", e => {
+    if (activePointers.has(e.pointerId)) activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinching) {
+      if (activePointers.size !== 2) return; // waiting for the lifted finger to fully release
+      const pts = [...activePointers.values()];
+      const d = dist2(pts[0], pts[1]);
+      state.cardScale = Math.max(0.65, Math.min(1.35, pinchStartScale * (d / pinchStartDist)));
+      updateCardSize();
+      layoutWheel(false);
+      return;
+    }
     if (!down) return;
     const dx = e.clientX - sx, dy = e.clientY - sy;
     if (Math.abs(dx) > 6 || Math.abs(dy) > 6) moved = true;
@@ -940,6 +1074,11 @@ function layoutWheel(animate = true) {
     }
   });
   area.addEventListener("pointerup", e => {
+    activePointers.delete(e.pointerId);
+    if (pinching) {
+      if (activePointers.size < 2) { pinching = false; save(); } // remember the chosen size
+      return;
+    }
     if (!down) return;
     down = false;
     const dx = e.clientX - sx, dy = e.clientY - sy;
@@ -961,16 +1100,35 @@ function layoutWheel(animate = true) {
       }
     }
     if (moved) wheel.lastDragAt = Date.now();
-    if (!moved && target) {
-      const idx = wheel.cards.indexOf(target);
-      // tapping ANY lesson card opens it — no centering requirement; off-center
-      // taps were silently failing on phones and that's worse than any polish
-      if (idx >= 0 && wheel.ids[idx]) { wheel.pos = idx; layoutWheel(); openChat(wheel.ids[idx]); return; }
-      if (idx >= 0) { wheel.pos = idx; layoutWheel(); return; } // notes / new-lesson card: just center it
+    if (!moved) {
+      // re-measure at release too — cheap, and covers the rare case where a
+      // near-zero-movement tap still shifted the layout slightly since press.
+      // Every kind of card is resolved the same way: by coordinates against
+      // real measured rects, never by asking the browser what it thinks the
+      // tap landed on — that native lookup is what was unreliable.
+      const idx = target >= 0 ? target : cardAtPoint(e.clientX, e.clientY);
+      if (idx >= 0) {
+        const el = wheel.cards[idx];
+        if (el.classList.contains("new-card")) {
+          wheel.pos = idx; layoutWheel();
+          const btn = $("start-btn");
+          const r = btn && btn.getBoundingClientRect();
+          if (r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) startLesson();
+          return;
+        }
+        if (el.dataset.kind === "notes") { wheel.pos = idx; layoutWheel(); showNotes(); return; }
+        if (wheel.ids[idx]) { wheel.pos = idx; layoutWheel(); openChat(wheel.ids[idx]); return; }
+        wheel.pos = idx; layoutWheel(); return;
+      }
     }
     wheel.pos = Math.max(0, Math.min(wheel.cards.length - 1, wheel.pos));
     layoutWheel(false);
     if (Math.abs(vel) > 0.003) momentum();
+  });
+  area.addEventListener("pointercancel", e => {
+    activePointers.delete(e.pointerId);
+    if (activePointers.size < 2) { if (pinching) save(); pinching = false; }
+    down = false;
   });
   // trackpad: two-finger swipe UP over a centered lesson charges the paths
   // ring; it only fires when the circle fills, so no accidental triggers.
@@ -1024,6 +1182,11 @@ function beginLesson(topic, methodKey, starterText) {
 }
 
 async function startLesson() {
+  // guards against a double-call: the native button "onclick" and the
+  // coordinate-based tap resolution in wheelGestures can both fire for the
+  // same tap depending on the browser's pointer-capture behavior
+  if (Date.now() - (startLesson._t || 0) < 500) return;
+  startLesson._t = Date.now();
   const topic = $("topic-input").value.trim();
   if (!topic) return;
   const method = METHODS[methodIdx];
@@ -1502,7 +1665,9 @@ function stopListening() {
 function checkSilence() {
   if (!voice.listening || voice.holding || voice.speaking) return;
   const text = (voice.pending + voice.interim).trim();
-  if (text && Date.now() - voice.lastSpeechAt > 1500) voiceSend(text);
+  // a bit more thinking room than before — 1.5s was cutting people off
+  // mid-thought before they'd finished composing what they wanted to say
+  if (text && Date.now() - voice.lastSpeechAt > 2200) voiceSend(text);
 }
 
 /* ---- send + spoken reply ---- */
@@ -1648,6 +1813,7 @@ function sayFiller() {
 const ttsAudio = new Audio();
 const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
 let elBroken = false, cartBroken = false; // one failure → fall back for the session
+let usedAudioElThisTurn = false; // set whenever a premium voice actually plays through <audio> — see speakingDone
 function ttsProvider() {
   if (state.cartKey && !cartBroken) return "cartesia";
   if (state.elKey && !elBroken) return "elevenlabs";
@@ -1657,14 +1823,14 @@ function ttsProvider() {
 /* Cartesia: simple buffered request — their model is fast enough (~40-190ms
    to synthesize) that a plain fetch-then-play is already snappy; no need for
    the extra complexity of progressive streaming here. */
-const CARTESIA_VOICE = "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4"; // a default Cartesia library voice
+const CARTESIA_VOICE_DEFAULT = "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4"; // a default Cartesia library voice
 async function cartFetch(text) {
   const r = await fetch("https://api.cartesia.ai/tts/bytes", {
     method: "POST",
     headers: { "Authorization": "Bearer " + state.cartKey, "Cartesia-Version": "2026-03-01", "content-type": "application/json" },
     body: JSON.stringify({
       model_id: "sonic-3.5", transcript: text,
-      voice: { mode: "id", id: CARTESIA_VOICE },
+      voice: { mode: "id", id: state.cartVoice || CARTESIA_VOICE_DEFAULT },
       output_format: { container: "mp3", sample_rate: 44100, bit_rate: 64000 },
     }),
   });
@@ -1712,6 +1878,7 @@ async function elStream(text) {
   return r;
 }
 function playBlobUrl(url, item) {
+  usedAudioElThisTurn = true;
   return new Promise((resolve, reject) => {
     ttsAudio.src = url;
     ttsAudio.onended = () => {
@@ -1725,6 +1892,7 @@ function playBlobUrl(url, item) {
   });
 }
 function playViaMediaSource(res, item) {
+  usedAudioElThisTurn = true;
   return new Promise((resolve, reject) => {
     const ms = new MediaSource();
     const url = URL.createObjectURL(ms);
@@ -1840,7 +2008,18 @@ function speakingDone() {
   voice.speaking = false;
   voice.hl = Infinity;
   refreshWordClasses();
-  if (voice.active) startListening();
+  if (!voice.active) return;
+  if (usedAudioElThisTurn) {
+    // Safari/iOS: playing an <audio> element can leave SpeechRecognition deaf
+    // to the mic until the audio session is fully released and recognition
+    // is (re)started after a short beat — starting it the instant playback
+    // ends isn't enough; this is a documented WebKit interaction, not a guess
+    usedAudioElThisTurn = false;
+    try { ttsAudio.pause(); ttsAudio.removeAttribute("src"); ttsAudio.load(); } catch (e) {}
+    setTimeout(() => { if (voice.active) startListening(); }, 350);
+  } else {
+    startListening();
+  }
 }
 function interruptSpeech() {
   voice.queue = []; voice.streamDone = true; voice.utter = null;
@@ -1911,48 +2090,37 @@ function refreshWordClasses() {
 }
 
 /* ---- hold / tap gestures on the overlay ----
-   scrolling to reread the transcript must never pause listening or cut off
-   the reading — once the finger travels, it's a scroll, not a hold or a tap */
+   Split by ZONE, not by how far the finger travels: a touch that starts
+   inside the transcript (#voice-scroll) is always a scroll and never touches
+   hold/interrupt state at all; a touch starting anywhere else on the overlay
+   is a hold/tap gesture and is never cancelled by ordinary finger drift
+   (a still finger moves more than a few px on real hardware — a distance
+   threshold here was silently breaking every genuine hold). */
 (function () {
   const ov = $("voice-overlay");
-  let sx = 0, sy = 0, isDown = false, movedAway = false;
+  let isDown = false, holdStartedAt = 0;
   const pt = e => (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
+  function inScroll(e) { return !!(e.target && e.target.closest && e.target.closest("#voice-scroll")); }
   function down(e) {
-    if (e.target.id === "voice-close") return;
-    const p = pt(e);
-    sx = p.clientX; sy = p.clientY; isDown = true; movedAway = false;
+    if (e.target.id === "voice-close" || inScroll(e)) return; // let the transcript scroll natively, untouched
+    isDown = true;
+    holdStartedAt = Date.now();
     voice.holding = true;
-    voice.holdStartedAt = Date.now();
     if (voice.listening) setVoiceStatus("held");
   }
-  function move(e) {
-    if (!isDown || movedAway) return;
-    const p = pt(e);
-    if (Math.abs(p.clientX - sx) > 12 || Math.abs(p.clientY - sy) > 12) {
-      movedAway = true; // it's a scroll — release the hold, change nothing else
-      voice.holding = false;
-      voice.lastSpeechAt = Date.now();
-      if (voice.speaking) setVoiceStatus("speaking");
-      else if (voice.listening) setVoiceStatus("listening");
-    }
-  }
   function up(e) {
-    if (e.target.id === "voice-close") return;
     if (!isDown) return;
     isDown = false;
-    const wasShort = Date.now() - voice.holdStartedAt < 300;
+    const wasShort = Date.now() - holdStartedAt < 300;
     voice.holding = false;
     voice.lastSpeechAt = Date.now(); // grace period after releasing
-    if (movedAway) return; // they were reading, not tapping — keep speaking
     if (voice.speaking && wasShort) { interruptSpeech(); return; }
     if (voice.listening) setVoiceStatus("listening");
   }
   ov.addEventListener("touchstart", down, { passive: true });
-  ov.addEventListener("touchmove", move, { passive: true });
   ov.addEventListener("touchend", up, { passive: true });
   ov.addEventListener("touchcancel", () => { isDown = false; voice.holding = false; }, { passive: true });
   ov.addEventListener("mousedown", down);
-  ov.addEventListener("mousemove", move);
   ov.addEventListener("mouseup", up);
 })();
 $("voice-close").onclick = exitVoice;
@@ -2044,6 +2212,7 @@ function openSettings() {
   $("set-key").value = state.apiKey;
   $("set-elkey").value = state.elKey || "";
   $("set-cartkey").value = state.cartKey || "";
+  $("set-cartvoice").value = state.cartVoice || "";
   $("set-model").value = state.model;
   populateVoiceSelect();
   $("set-voicedefault").checked = !!state.voiceDefault;
@@ -2057,13 +2226,14 @@ $("gear").onclick = openSettings;
 // voice list, which made every close look like an unsaved change)
 let settingsSnap = "";
 function settingsFields() {
-  return JSON.stringify([$("set-key").value.trim(), $("set-elkey").value.trim(), $("set-cartkey").value.trim(), $("set-model").value, $("set-voice").value, $("set-voicedefault").checked]);
+  return JSON.stringify([$("set-key").value.trim(), $("set-elkey").value.trim(), $("set-cartkey").value.trim(), $("set-cartvoice").value.trim(), $("set-model").value, $("set-voice").value, $("set-voicedefault").checked]);
 }
 function settingsDirty() { return settingsFields() !== settingsSnap; }
 function applySettings() {
   state.apiKey = $("set-key").value.trim();
   state.elKey = $("set-elkey").value.trim();
   state.cartKey = $("set-cartkey").value.trim();
+  state.cartVoice = $("set-cartvoice").value.trim();
   elBroken = false; cartBroken = false; // new keys → give the premium voices a fresh chance
   state.model = $("set-model").value;
   state.voiceURI = $("set-voice").value;
@@ -2120,21 +2290,55 @@ if (location.protocol === "file:") {
 updateCardSize();
 renderHome();
 $("build-tag").textContent = BUILD;
-// the home-screen app resumes an old copy instead of reloading — so whenever it
-// comes back to the foreground, ask the server if a newer build exists and refresh
+
+/* ---- What's New ---- */
+function renderChangelog() {
+  const body = $("whatsnew-body");
+  body.innerHTML = VERSIONS.map(v => `
+    <div class="ver-card">
+      <div class="ver-head"><span class="ver-tag">${esc(v.tag)}</span><span class="ver-date">${esc(v.date)}</span></div>
+      <ul>${v.changes.map(c => `<li>${esc(c)}</li>`).join("")}</ul>
+    </div>
+  `).join("");
+}
+function openWhatsNew() { renderChangelog(); show("whatsnew"); $("whatsnew-body").scrollTop = 0; }
+$("whatsnew-back").onclick = () => { renderHome(); show("home"); };
+$("build-tag").onclick = () => { $("settings").classList.remove("open"); openWhatsNew(); };
+
+/* ---- first launch of a new version: a full-screen green flash, then reveal
+   What's New. Skipped on a brand-new install — there's nothing to catch up on. */
+if (state.lastSeenBuild && state.lastSeenBuild !== BUILD) {
+  $("splash").classList.add("show");
+  setTimeout(() => {
+    $("splash").classList.add("fading");
+    setTimeout(() => {
+      $("splash").classList.remove("show", "fading");
+      openWhatsNew();
+    }, 550);
+  }, 700);
+}
+state.lastSeenBuild = BUILD;
+save();
+
+/* ---- updates: the home-screen app resumes an old copy instead of reloading,
+   so check whenever it comes back to the foreground. A silent auto-reload
+   used to fire here — removed because a background reload while the app is
+   installed as an iOS home-screen icon can reset the microphone permission,
+   which is exactly the interruption this was supposed to prevent. Now it's a
+   banner the user dismisses or acts on, so a refresh only ever happens when
+   they choose it (e.g. never mid-conversation). */
 async function checkForUpdate() {
   try {
     const r = await fetch("index.html", { cache: "no-store" });
     const txt = await r.text();
     const m = txt.match(/const BUILD = "([^"]+)"/);
-    if (m && m[1] !== BUILD && !streaming && !voice.active) {
-      toast("Updating to the newest version…", 2500);
-      setTimeout(() => location.reload(), 1200);
-    }
+    if (m && m[1] !== BUILD && !streaming && !voice.active) $("update-banner").classList.add("show");
   } catch (e) {} // offline — try again next time
 }
-document.addEventListener("visibilitychange", () => { if (!document.hidden) checkForUpdate(); });
-setInterval(checkForUpdate, 5 * 60 * 1000);
+$("update-refresh").onclick = () => location.reload();
+$("update-x").onclick = () => { $("update-banner").classList.remove("show"); };
+document.addEventListener("visibilitychange", () => { if (!document.hidden && !voice.active) checkForUpdate(); });
+setInterval(checkForUpdate, 20 * 60 * 1000);
 setTimeout(checkForUpdate, 4000);
 if (!state.apiKey) setTimeout(openSettings, 600);
 </script>
