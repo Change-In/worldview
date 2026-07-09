@@ -146,14 +146,18 @@
     color: var(--accent); cursor: pointer; font-style: italic;
   }
   .card.new-card input {
-    width: 100%; padding: 13px 14px; font-size: max(16px, calc(var(--cardW, 262px) * 0.061));
+    width: 100%;
+    padding: max(8px, calc(var(--cardW, 262px) * 0.05)) max(10px, calc(var(--cardW, 262px) * 0.053));
+    font-size: max(16px, calc(var(--cardW, 262px) * 0.061));
     border: 1.5px solid var(--line); border-radius: 10px;
     background: var(--paper); color: var(--ink); text-align: center;
     outline: none;
   }
   .card.new-card input::placeholder { color: #9ab0b8; }
   .card.new-card button {
-    margin-top: 14px; padding: 11px 30px; font-size: max(9px, calc(var(--cardW, 262px) * 0.061));
+    margin-top: 14px;
+    padding: max(6px, calc(var(--cardW, 262px) * 0.042)) max(16px, calc(var(--cardW, 262px) * 0.114));
+    font-size: max(9px, calc(var(--cardW, 262px) * 0.061));
     background: var(--accent); color: #fff; border: none; border-radius: 10px; cursor: pointer;
   }
   .card.new-card button:disabled { opacity: 0.45; }
@@ -575,11 +579,16 @@
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v11 · Jul 9"; // bump on every deploy — the auto-updater compares this against the server, and the tag below must match
+const BUILD = "v12 · Jul 9"; // bump on every deploy — the auto-updater compares this against the server, and the tag below must match
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v12", date: "Jul 9", changes: [
+    "Fixed: with a premium voice on (Cartesia/ElevenLabs), the transcript used to freeze on the first word of a chunk and jump straight to \"fully spoken\" only when that chunk finished — it now tracks along with actual audio playback.",
+    "Fixed: if the mic stopped listening mid-conversation (a known Android/iOS speech-recognition restart failure), it could go silently dead with nothing said or transcribed and no way to recover — it now retries with backoff and rebuilds itself if needed. Could not be confirmed on-device this round; if the mic still seems to go unresponsive, that's the next thing to chase.",
+    "Fixed: pinching to zoom the cards now also resizes the Begin button and the topic textbox, not just their text — previously the fixed padding around them barely moved.",
+  ]},
   { tag: "v11", date: "Jul 9", changes: [
     "Fixed: hold-to-pause only worked when pressing exactly on the \"listening\" label — it now works anywhere on screen, including over the transcript, while still telling a still press apart from a scroll.",
     "Fixed: releasing a hold used to reset a multi-second silence timer, which could make it seem like what you said while holding was never heard. Releasing now reacts quickly instead.",
@@ -1573,6 +1582,7 @@ const voice = {
   active: false, holding: false, listening: false, speaking: false, streamDone: false,
   pending: "", interim: "", lastSpeechAt: 0, rec: null, silenceTimer: null,
   queue: [], utter: null, hl: -1, holdStartedAt: 0, keepAlive: null, ttsErrShown: false, forceLocal: false,
+  recFailStreak: 0,
 };
 
 function voiceSupported() { return !!SR && "speechSynthesis" in window; }
@@ -1707,6 +1717,7 @@ function startListening() {
   voice.rec = rec;
   rec.continuous = true; rec.interimResults = true; rec.lang = navigator.language || "en-US";
   rec.onresult = e => {
+    voice.recFailStreak = 0; // real results prove the mic pipeline is actually alive
     let interim = "";
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const r = e.results[i];
@@ -1717,21 +1728,43 @@ function startListening() {
     voice.lastSpeechAt = Date.now();
     renderVoiceUser((voice.pending + interim).trim());
   };
-  rec.onend = () => { // iOS ends sessions constantly — keep it alive
-    if (voice.active && voice.listening && voice.rec === rec) {
-      try { rec.start(); } catch (e) {}
-    }
+  rec.onstart = () => { voice.recFailStreak = 0; };
+  // iOS/Android end recognition sessions constantly, including silently after
+  // benign errors — restart to keep listening alive. Some browsers fire only
+  // onerror (no onend after), some fire both for the same failure, so both
+  // handlers can trigger a restart; rec._restarting guards against doing it twice.
+  rec.onend = () => {
+    if (voice.active && voice.listening && voice.rec === rec && !rec._restarting) restartRecognition(rec);
   };
   rec.onerror = e => {
     if (e.error === "not-allowed" || e.error === "service-not-allowed") {
       toast("Microphone access denied — allow it in browser settings");
       exitVoice();
+      return;
     }
+    if (voice.active && voice.listening && voice.rec === rec && !rec._restarting) restartRecognition(rec);
   };
   voice.listening = true;
   try { rec.start(); } catch (e) {}
   clearInterval(voice.silenceTimer);
   voice.silenceTimer = setInterval(checkSilence, 250);
+}
+function restartRecognition(deadRec) {
+  // starting a new session the instant the old one ends can throw
+  // InvalidStateError on Android Chrome (previous session not fully torn
+  // down yet) — that throw used to be swallowed silently with no retry,
+  // which is the most likely cause of listening going dead mid-conversation
+  // with no error shown. Backs off up to 2s and always eventually rebuilds
+  // a fresh recognition object rather than giving up on the same one forever.
+  deadRec._restarting = true;
+  const delay = Math.min(2000, 250 * Math.pow(2, voice.recFailStreak || 0));
+  setTimeout(() => {
+    if (!(voice.active && voice.listening && voice.rec === deadRec)) return; // superseded already
+    try { deadRec.start(); voice.recFailStreak = 0; return; } catch (e) {}
+    voice.recFailStreak = (voice.recFailStreak || 0) + 1;
+    if (voice.recFailStreak === 4) toast("Having trouble hearing you — still trying to reconnect the mic…", 5000);
+    startListening(); // the old instance may be permanently wedged; rebuild from scratch
+  }, delay);
 }
 function stopListening() {
   voice.listening = false;
@@ -1906,6 +1939,35 @@ const ttsAudio = new Audio();
 const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
 let elBroken = false, cartBroken = false; // one failure → fall back for the session
 let usedAudioElThisTurn = false; // set whenever a premium voice actually plays through <audio> — see speakingDone
+
+/* ---- word-sync during premium-voice playback ----
+   speechSynthesis fires real onboundary events per word; Cartesia/ElevenLabs
+   play back through a plain <audio> element with no equivalent, so the
+   transcript used to sit frozen on the first word of a chunk (chunks can run
+   up to ~250 chars, several sentences) and then jump straight to "fully
+   spoken" the instant the whole chunk finished — read as "the text isn't
+   lining up" / "it freezes". This estimates progress from actual audio
+   playback position (falling back to elapsed-time while duration is still
+   unknown, e.g. early into a MediaSource stream) instead of jumping. */
+let wordSyncRAF = 0;
+function stopWordSync() { if (wordSyncRAF) cancelAnimationFrame(wordSyncRAF); wordSyncRAF = 0; }
+function startWordSync(item) {
+  stopWordSync();
+  const t0 = performance.now();
+  const estSecs = Math.max(1, item.text.length / 15); // ~15 chars/sec, only used until real duration is known
+  const tick = () => {
+    if (voice.utter !== item) { wordSyncRAF = 0; return; }
+    const dur = ttsAudio.duration;
+    const frac = isFinite(dur) && dur > 0
+      ? ttsAudio.currentTime / dur
+      : (performance.now() - t0) / 1000 / estSecs;
+    // capped below 1 so this never claims "fully spoken" a beat before
+    // onended legitimately does via markSpokenThrough
+    highlightAt(item.base + Math.floor(item.text.length * Math.max(0, Math.min(0.98, frac))));
+    wordSyncRAF = requestAnimationFrame(tick);
+  };
+  wordSyncRAF = requestAnimationFrame(tick);
+}
 function ttsProvider() {
   if (state.cartKey && !cartBroken) return "cartesia";
   if (state.elKey && !elBroken) return "elevenlabs";
@@ -1974,13 +2036,14 @@ function playBlobUrl(url, item) {
   return new Promise((resolve, reject) => {
     ttsAudio.src = url;
     ttsAudio.onended = () => {
+      stopWordSync();
       URL.revokeObjectURL(url);
       markSpokenThrough(item.base + item.text.length);
       if (voice.utter === item) { voice.utter = null; pumpSpeech(); }
       resolve();
     };
-    ttsAudio.onerror = () => { URL.revokeObjectURL(url); reject(new Error("playback failed")); };
-    ttsAudio.play().catch(reject);
+    ttsAudio.onerror = () => { stopWordSync(); URL.revokeObjectURL(url); reject(new Error("playback failed")); };
+    ttsAudio.play().then(() => startWordSync(item)).catch(reject);
   });
 }
 function playViaMediaSource(res, item) {
@@ -1992,11 +2055,12 @@ function playViaMediaSource(res, item) {
     let settled = false;
     const finish = (fn, arg) => { if (settled) return; settled = true; try { URL.revokeObjectURL(url); } catch (e) {} fn(arg); };
     ttsAudio.onended = () => {
+      stopWordSync();
       markSpokenThrough(item.base + item.text.length);
       if (voice.utter === item) { voice.utter = null; pumpSpeech(); }
       finish(resolve);
     };
-    ttsAudio.onerror = () => finish(reject, new Error("playback failed"));
+    ttsAudio.onerror = () => { stopWordSync(); finish(reject, new Error("playback failed")); };
     ms.addEventListener("sourceopen", async () => {
       let sb;
       try { sb = ms.addSourceBuffer("audio/mpeg"); } catch (e) { finish(reject, e); return; }
@@ -2012,7 +2076,7 @@ function playViaMediaSource(res, item) {
           const { done, value } = await reader.read();
           if (done) { readerDone = true; tryEnd(); break; }
           queue.push(value);
-          if (!started) { started = true; ttsAudio.play().catch(() => {}); }
+          if (!started) { started = true; ttsAudio.play().then(() => startWordSync(item)).catch(() => {}); }
           pump();
         }
       } catch (e) { finish(reject, e); }
@@ -2115,6 +2179,7 @@ function speakingDone() {
 }
 function interruptSpeech() {
   voice.queue = []; voice.streamDone = true; voice.utter = null;
+  stopWordSync();
   try { speechSynthesis.cancel(); } catch (e) {}
   try { ttsAudio.pause(); ttsAudio.onended = null; ttsAudio.src = ""; } catch (e) {}
   speakingDone();
