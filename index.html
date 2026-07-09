@@ -105,6 +105,11 @@
     pointer-events: none;
   }
   #paths-ring.show { display: flex; }
+  #zoom-btn {
+    position: absolute; bottom: 12px; right: 16px;
+    background: rgba(22,64,79,0.07); border: 1px solid var(--line); color: var(--ink-soft);
+    font-size: 11px; letter-spacing: 0.04em; padding: 6px 12px; border-radius: 999px; cursor: pointer;
+  }
 
   .card {
     position: absolute; left: 50%; top: 50%;
@@ -121,32 +126,34 @@
     backface-visibility: hidden;
     touch-action: none;
   }
-  .card .card-title { font-size: 21px; line-height: 1.3; font-weight: 600; }
+  /* text scales with the card itself — pinch-zoom shrinks the words along
+     with the card, not just the box around them */
+  .card .card-title { font-size: max(9px, calc(var(--cardW, 262px) * 0.08)); line-height: 1.3; font-weight: 600; }
   .card .card-cat {
     position: absolute; top: 14px; left: 0; right: 0;
-    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft);
+    font-size: max(7px, calc(var(--cardW, 262px) * 0.042)); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft);
   }
   .card .card-hint {
     position: absolute; bottom: 14px; left: 0; right: 0;
-    font-size: 11px; color: var(--ink-soft);
+    font-size: max(7px, calc(var(--cardW, 262px) * 0.042)); color: var(--ink-soft);
   }
   .card.lesson-card { cursor: pointer; }
 
   /* new-lesson card */
-  .card.new-card .prompt-line { font-size: 17px; margin-bottom: 16px; line-height: 1.5; }
+  .card.new-card .prompt-line { font-size: max(9px, calc(var(--cardW, 262px) * 0.065)); margin-bottom: 16px; line-height: 1.5; }
   .card.new-card .method {
     text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px;
     color: var(--accent); cursor: pointer; font-style: italic;
   }
   .card.new-card input {
-    width: 100%; padding: 13px 14px; font-size: 16px;
+    width: 100%; padding: 13px 14px; font-size: max(16px, calc(var(--cardW, 262px) * 0.061));
     border: 1.5px solid var(--line); border-radius: 10px;
     background: var(--paper); color: var(--ink); text-align: center;
     outline: none;
   }
   .card.new-card input::placeholder { color: #9ab0b8; }
   .card.new-card button {
-    margin-top: 14px; padding: 11px 30px; font-size: 16px;
+    margin-top: 14px; padding: 11px 30px; font-size: max(9px, calc(var(--cardW, 262px) * 0.061));
     background: var(--accent); color: #fff; border: none; border-radius: 10px; cursor: pointer;
   }
   .card.new-card button:disabled { opacity: 0.45; }
@@ -241,6 +248,7 @@
   }
   #chat-back { background: none; border: none; font-size: 22px; color: var(--ink); cursor: pointer; padding: 2px 8px; }
   #chat-title { font-size: 16px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #chat-parent-link { font-size: 11px; color: var(--accent); cursor: pointer; margin-bottom: 1px; }
   #chat-method { font-size: 11px; color: var(--ink-soft); font-style: italic; }
   /* side breathing room; on wide screens the conversation stays a centered readable column */
   #chat-scroll { flex: 1; overflow-y: auto; padding: 18px max(24px, calc((100% - 720px) / 2)) 10px; -webkit-overflow-scrolling: touch; }
@@ -443,6 +451,7 @@
       </svg>
       <span>paths</span>
     </div>
+    <button id="zoom-btn" type="button">zoom out</button>
   </div>
 
   <div id="bottom-bar">&#9650;&nbsp;&nbsp;profile</div>
@@ -453,6 +462,7 @@
   <div id="chat-header">
     <button id="chat-back">&#8249;</button>
     <div style="flex:1;min-width:0">
+      <div id="chat-parent-link"></div>
       <div id="chat-title"></div>
       <div id="chat-method"></div>
     </div>
@@ -565,11 +575,20 @@
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v10 · Jul 9"; // bump on every deploy — the auto-updater compares this against the server, and the tag below must match
+const BUILD = "v11 · Jul 9"; // bump on every deploy — the auto-updater compares this against the server, and the tag below must match
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v11", date: "Jul 9", changes: [
+    "Fixed: hold-to-pause only worked when pressing exactly on the \"listening\" label — it now works anywhere on screen, including over the transcript, while still telling a still press apart from a scroll.",
+    "Fixed: releasing a hold used to reset a multi-second silence timer, which could make it seem like what you said while holding was never heard. Releasing now reacts quickly instead.",
+    "Fixed: reopening a lesson where the last thing said was an unanswered question no longer leaves you guessing — it's spoken again before the mic opens.",
+    "Fixed: exiting the app mid-reply and reopening could play two voices at once; also fixed the transcript not following new text as it streams in.",
+    "New: pinch to zoom now has a much wider range, shrinks the card text along with the cards, and there's a one-tap zoom button too.",
+    "New: starting a lesson from a suggested learning path now links back to the lesson it came from.",
+    "New: swipe right to exit a lesson or Notes, from either voice or text mode, in one motion.",
+  ]},
   { tag: "v10", date: "Jul 9", changes: [
     "Tapping any card now works no matter how it's aligned — rebuilt card-tap detection from scratch using each card's real measured position instead of trusting the browser to figure out what you tapped, which was unreliable on phones.",
     "Fixed: holding to pause during voice mode was broken by an earlier fix — it now only reacts to scrolling inside the transcript, so a still finger holding elsewhere is never mistaken for a scroll.",
@@ -1054,7 +1073,9 @@ function cardAtPoint(x, y) {
       if (activePointers.size !== 2) return; // waiting for the lifted finger to fully release
       const pts = [...activePointers.values()];
       const d = dist2(pts[0], pts[1]);
-      state.cardScale = Math.max(0.65, Math.min(1.35, pinchStartScale * (d / pinchStartDist)));
+      // much wider range than before — he wants to zoom out and in freely;
+      // still clamped so cards can't vanish to nothing or blow past the screen
+      state.cardScale = Math.max(0.32, Math.min(2.2, pinchStartScale * (d / pinchStartDist)));
       updateCardSize();
       layoutWheel(false);
       return;
@@ -1160,12 +1181,24 @@ function cardAtPoint(x, y) {
   }, { passive: false });
 })();
 
-function beginLesson(topic, methodKey, starterText) {
+// one-tap zoom, alongside pinch — toggles a "see everything" zoomed-out view
+const ZOOM_OUT_SCALE = 0.45;
+$("zoom-btn").onclick = () => {
+  const zoomedOut = state.cardScale <= (1 + ZOOM_OUT_SCALE) / 2;
+  state.cardScale = zoomedOut ? 1 : ZOOM_OUT_SCALE;
+  $("zoom-btn").textContent = zoomedOut ? "zoom out" : "reset view";
+  updateCardSize();
+  layoutWheel(false);
+  save();
+};
+
+function beginLesson(topic, methodKey, starterText, parentId) {
   if (!state.apiKey) { openSettings(); toast("Add your Anthropic API key first"); return; }
   const lesson = {
     id: uid(), topic, method: methodKey,
     title: topic.length > 40 ? topic.slice(0, 40) + "…" : topic,
     category: "", messages: [], paths: [], updatedAt: Date.now(),
+    parentId: parentId || undefined, // set when started from a learning path — links back to where it came from
   };
   state.lessons.push(lesson);
   save();
@@ -1248,7 +1281,7 @@ function renderPaths(paths) {
     d.textContent = q;
     d.onclick = () => {
       $("paths-sheet").classList.remove("open");
-      beginLesson(q, "socratic", `Teach me this: ${q}`);
+      beginLesson(q, "socratic", `Teach me this: ${q}`, pathsLessonId);
     };
     row.appendChild(d);
   });
@@ -1266,6 +1299,14 @@ function openChat(id, noVoice) {
   $("chat-title").textContent = lesson.title;
   const m = METHODS.find(x => x.key === lesson.method);
   $("chat-method").textContent = m ? m.tag : "";
+  const parentLink = $("chat-parent-link");
+  const parent = lesson.parentId && getLesson(lesson.parentId);
+  if (parent) {
+    parentLink.textContent = "↰ from " + parent.title;
+    parentLink.onclick = () => openChat(parent.id);
+  } else {
+    parentLink.textContent = ""; parentLink.onclick = null;
+  }
   updateCostLabel(lesson);
   const sc = $("chat-scroll");
   sc.innerHTML = "";
@@ -1284,9 +1325,14 @@ function openChat(id, noVoice) {
     requestAnimationFrame(() => { sc.scrollTop = sc.scrollHeight; });
   }
   const due = reentryDue(lesson);
+  // was the last thing said an assistant question the student never answered?
+  // opening straight into silent listening left them guessing what to say —
+  // now the app always speaks first, one way or another, before the mic opens
+  const pending = lastMsg && lastMsg.role === "assistant" && !lastMsg.synthetic;
   if (!noVoice && state.voiceDefault && voiceSupported() && lesson.messages.length) {
-    enterVoice(!due); // when a welcome-back is due, Claude speaks first — don't open the mic yet
+    enterVoice(!due && !pending, !due && pending); // don't open the mic yet, and don't double-render, if something needs re-saying first
     if (due && voice.active) { voiceReenter(lesson); return; }
+    if (!due && pending && voice.active) { voiceRepeatPending(lesson, lastMsg); return; }
   }
   if (due && !voice.active) reenterCheck(lesson);
 }
@@ -1432,7 +1478,31 @@ $("chat-input").addEventListener("keydown", e => {
 $("chat-input").addEventListener("input", function () {
   this.style.height = "auto"; this.style.height = Math.min(this.scrollHeight, 110) + "px";
 });
-$("chat-back").onclick = () => { renderHome(); show("home"); };
+function exitLessonToHome() { renderHome(); show("home"); }
+$("chat-back").onclick = exitLessonToHome;
+// swipe right anywhere on a full-screen view to exit it — previously exiting
+// a lesson meant tapping X on voice mode, landing back in text mode, then
+// tapping the back arrow separately; one swipe now goes all the way home
+// from any of them. Horizontal-only, with a real distance+ratio threshold,
+// so it never fights each view's own vertical scrolling.
+function attachSwipeExit(viewId, onExit) {
+  const el = $(viewId);
+  let sx = 0, sy = 0, down = false;
+  el.addEventListener("pointerdown", e => {
+    if (/^(INPUT|BUTTON|TEXTAREA)$/.test(e.target.tagName)) return;
+    down = true; sx = e.clientX; sy = e.clientY;
+  });
+  el.addEventListener("pointerup", e => {
+    if (!down) return;
+    down = false;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (dx > 90 && Math.abs(dx) > Math.abs(dy) * 2) onExit();
+  });
+  el.addEventListener("pointercancel", () => { down = false; });
+}
+attachSwipeExit("view-chat", exitLessonToHome);
+attachSwipeExit("view-notes", () => { renderHome(); show("home"); });
+attachSwipeExit("view-whatsnew", () => { renderHome(); show("home"); });
 
 /* ================= Profile ================= */
 function renderProfile() {
@@ -1574,7 +1644,7 @@ function setVoiceStatus(mode) {
   else if (mode === "speaking") { dot.classList.add("pulse"); txt.textContent = "speaking · tap to interrupt"; }
 }
 
-function enterVoice(autoListen = true) {
+function enterVoice(autoListen = true, excludeLastFromHistory = false) {
   if (!voiceSupported()) { toast("Voice needs Chrome, Edge, or Safari — Firefox doesn't support speech recognition yet"); return; }
   const lesson = getLesson(currentLessonId);
   if (!lesson) return;
@@ -1588,7 +1658,9 @@ function enterVoice(autoListen = true) {
   try { speechSynthesis.cancel(); const un = new SpeechSynthesisUtterance(" "); un.volume = 0; speechSynthesis.speak(un); } catch (e) {}
   // unlock the audio element too — iOS only allows play() begun in a user gesture
   try { ttsAudio.src = SILENT_WAV; ttsAudio.play().catch(() => {}); } catch (e) {}
-  buildVoiceHistory(lesson);
+  // when about to re-speak the last message live (voiceRepeatPending), leave
+  // it out of the plain history render so it doesn't appear twice
+  buildVoiceHistory(lesson, excludeLastFromHistory);
   if (autoListen) { setVoiceStatus("listening"); startListening(); }
 }
 function exitVoice() {
@@ -1603,10 +1675,11 @@ function exitVoice() {
 }
 
 /* ---- conversation rendering inside voice mode ---- */
-function buildVoiceHistory(lesson) {
+function buildVoiceHistory(lesson, excludeLast) {
   const sc = $("voice-scroll");
   sc.innerHTML = "";
-  lesson.messages.forEach(m => {
+  const msgs = excludeLast ? lesson.messages.slice(0, -1) : lesson.messages;
+  msgs.forEach(m => {
     if (m.synthetic) return; // hidden bookkeeping turn, not part of the visible conversation
     const d = document.createElement("div");
     d.className = "vmsg " + m.role;
@@ -1614,6 +1687,9 @@ function buildVoiceHistory(lesson) {
     sc.appendChild(d);
   });
   sc.scrollTop = sc.scrollHeight;
+  // scrollHeight can be measured before layout has fully settled on a long
+  // history — same fix used when opening the text view
+  requestAnimationFrame(() => { sc.scrollTop = sc.scrollHeight; });
 }
 function voiceAutoScroll() {
   const sc = $("voice-scroll");
@@ -1759,6 +1835,22 @@ async function voiceReenter(lesson) {
     voice.speaking = false; voice.streamDone = true;
     if (voice.active) startListening();
   }
+}
+
+// re-opening a lesson where the assistant's last question was never answered
+// used to silently start listening, leaving the student unsure what to say.
+// This re-speaks the already-stored question — no API call, free — before
+// the mic opens, so voice mode never just sits there waiting in silence.
+function voiceRepeatPending(lesson, lastMsg) {
+  voiceCurrentEl = null;
+  voice.speaking = true; voice.streamDone = true;
+  voice.queue = []; voice.hl = -1;
+  clearInterval(voice.keepAlive);
+  voice.keepAlive = setInterval(() => { try { if (speechSynthesis.speaking) speechSynthesis.resume(); } catch (e) {} }, 5000);
+  const spoken = stripForSpeech(lastMsg.content);
+  renderVoiceWords(spoken);
+  enqueueSentences(spoken, 0, true);
+  pumpSpeech(); // in case the queue is already ready to go
 }
 
 // finds newly-completed sentences past `from`, queues them for TTS; returns new offset
@@ -2075,6 +2167,11 @@ function renderVoiceWords(fullText) {
   frag.appendChild(document.createTextNode(clean.slice(last)));
   el.appendChild(frag);
   refreshWordClasses();
+  // follow new text as it streams in even before TTS playback has started
+  // highlighting anything — text can arrive well ahead of the first spoken
+  // chunk, and without this the transcript grows below the fold while
+  // scroll position sits wherever it was for the last reply
+  voiceAutoScroll();
 }
 function highlightAt(ci) { voice.hl = ci; refreshWordClasses(); }
 function markSpokenThrough(ci) { voice.hl = ci; refreshWordClasses(); }
@@ -2090,37 +2187,66 @@ function refreshWordClasses() {
 }
 
 /* ---- hold / tap gestures on the overlay ----
-   Split by ZONE, not by how far the finger travels: a touch that starts
-   inside the transcript (#voice-scroll) is always a scroll and never touches
-   hold/interrupt state at all; a touch starting anywhere else on the overlay
-   is a hold/tap gesture and is never cancelled by ordinary finger drift
-   (a still finger moves more than a few px on real hardware — a distance
-   threshold here was silently breaking every genuine hold). */
+   The transcript covers most of the screen, so "hold anywhere except the
+   transcript" (the previous fix) left almost nowhere to actually hold — a
+   real report: "hold only works where it says Listening · hold to pause."
+   This version lets a hold start ANYWHERE, including over the transcript,
+   but decides what a touch inside the transcript actually IS within a short
+   commit window: barely moved after ~150ms → it was a still press, commit to
+   a hold; moved meaningfully right away → it was a scroll, let it scroll and
+   never touch hold state. Touches starting outside the transcript commit
+   immediately, same as before. Once committed, ordinary finger drift never
+   cancels the hold — only release does. */
 (function () {
   const ov = $("voice-overlay");
-  let isDown = false, holdStartedAt = 0;
+  const COMMIT_MS = 150, COMMIT_PX = 10;
+  let isDown = false, holdStartedAt = 0, committed = false, deciding = false, ruledOutAsScroll = false, sx = 0, sy = 0, commitTimer = 0;
   const pt = e => (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
-  function inScroll(e) { return !!(e.target && e.target.closest && e.target.closest("#voice-scroll")); }
-  function down(e) {
-    if (e.target.id === "voice-close" || inScroll(e)) return; // let the transcript scroll natively, untouched
-    isDown = true;
-    holdStartedAt = Date.now();
+  const inScroll = e => !!(e.target && e.target.closest && e.target.closest("#voice-scroll"));
+  function commit() {
+    if (committed || ruledOutAsScroll || !isDown) return;
+    committed = true; deciding = false;
     voice.holding = true;
     if (voice.listening) setVoiceStatus("held");
   }
+  function down(e) {
+    if (e.target.id === "voice-close") return;
+    const p = pt(e);
+    isDown = true; committed = false; ruledOutAsScroll = false;
+    sx = p.clientX; sy = p.clientY;
+    holdStartedAt = Date.now();
+    if (inScroll(e)) { deciding = true; commitTimer = setTimeout(commit, COMMIT_MS); }
+    else commit();
+  }
+  function move(e) {
+    if (!isDown || !deciding) return;
+    const p = pt(e);
+    if (Math.abs(p.clientX - sx) > COMMIT_PX || Math.abs(p.clientY - sy) > COMMIT_PX) {
+      ruledOutAsScroll = true; deciding = false; clearTimeout(commitTimer); // real scroll — leave it alone entirely
+    }
+  }
   function up(e) {
+    if (e.target.id === "voice-close") return;
     if (!isDown) return;
-    isDown = false;
+    isDown = false; clearTimeout(commitTimer); deciding = false;
+    if (ruledOutAsScroll || !committed) return; // was a scroll, or released before the commit window — do nothing
     const wasShort = Date.now() - holdStartedAt < 300;
     voice.holding = false;
-    voice.lastSpeechAt = Date.now(); // grace period after releasing
     if (voice.speaking && wasShort) { interruptSpeech(); return; }
-    if (voice.listening) setVoiceStatus("listening");
+    if (voice.listening) {
+      setVoiceStatus("listening");
+      // a decisive release, not a silent multi-second wait — if something was
+      // already said while held, get to it right away instead of resetting
+      // the full silence timer and leaving the reply hanging in the air
+      voice.lastSpeechAt = Date.now() - 1800;
+    }
   }
   ov.addEventListener("touchstart", down, { passive: true });
+  ov.addEventListener("touchmove", move, { passive: true });
   ov.addEventListener("touchend", up, { passive: true });
-  ov.addEventListener("touchcancel", () => { isDown = false; voice.holding = false; }, { passive: true });
+  ov.addEventListener("touchcancel", () => { isDown = false; deciding = false; clearTimeout(commitTimer); voice.holding = false; }, { passive: true });
   ov.addEventListener("mousedown", down);
+  ov.addEventListener("mousemove", move);
   ov.addEventListener("mouseup", up);
 })();
 $("voice-close").onclick = exitVoice;
@@ -2289,6 +2415,7 @@ if (location.protocol === "file:") {
 }
 updateCardSize();
 renderHome();
+$("zoom-btn").textContent = (state.cardScale || 1) <= (1 + ZOOM_OUT_SCALE) / 2 ? "reset view" : "zoom out";
 $("build-tag").textContent = BUILD;
 
 /* ---- What's New ---- */
@@ -2337,7 +2464,22 @@ async function checkForUpdate() {
 }
 $("update-refresh").onclick = () => location.reload();
 $("update-x").onclick = () => { $("update-banner").classList.remove("show"); };
-document.addEventListener("visibilitychange", () => { if (!document.hidden && !voice.active) checkForUpdate(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return;
+  if (!voice.active) { checkForUpdate(); return; }
+  // returning to an active voice session after backgrounding: iOS can pause
+  // and independently resume the device's speechSynthesis queue AND the
+  // premium-voice <audio> element separately, which can surface as both
+  // talking over each other at once. speechSynthesis is only ever used here
+  // for short filler lines / the local-voice fallback, never the intended
+  // provider when a premium voice is active — safe to always silence it on
+  // resume; if it was a real device-voice reply, pumpSpeech naturally
+  // continues with the next queued sentence.
+  try { speechSynthesis.cancel(); } catch (e) {}
+  // the transcript can also fall out of sync with what's actually playing
+  // after a background/foreground cycle — force it back to the live line
+  requestAnimationFrame(() => requestAnimationFrame(voiceAutoScroll));
+});
 setInterval(checkForUpdate, 20 * 60 * 1000);
 setTimeout(checkForUpdate, 4000);
 if (!state.apiKey) setTimeout(openSettings, 600);
