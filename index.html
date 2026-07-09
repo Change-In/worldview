@@ -579,11 +579,15 @@
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v12 · Jul 9"; // bump on every deploy — the auto-updater compares this against the server, and the tag below must match
+const BUILD = "v13 · Jul 9"; // bump on every deploy — the auto-updater compares this against the server, and the tag below must match
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v13", date: "Jul 9", changes: [
+    "Fixed: mic going silent specifically right after a spoken reply finished — a watchdog now catches when listening claims to be running but never actually picked up any audio, and rebuilds it.",
+    "Changed: the tutor no longer praises or narrates your own conversational moves back to you (\"good job\", pointing out that you corrected yourself) — it responds to what you said, not how well you said it.",
+  ]},
   { tag: "v12", date: "Jul 9", changes: [
     "Fixed: with a premium voice on (Cartesia/ElevenLabs), the transcript used to freeze on the first word of a chunk and jump straight to \"fully spoken\" only when that chunk finished — it now tracks along with actual audio playback.",
     "Fixed: if the mic stopped listening mid-conversation (a known Android/iOS speech-recognition restart failure), it could go silently dead with nothing said or transcribed and no way to recover — it now retries with backoff and rebuilds itself if needed. Could not be confirmed on-device this round; if the mic still seems to go unresponsive, that's the next thing to chase.",
@@ -678,7 +682,7 @@ let currentLessonId = null;
 let streaming = false;
 
 const SYSTEM_PROMPTS = {
-  socratic: `You are a Socratic tutor inside a minimal mobile learning app called Worldview. Teach through questions, not lectures. Start by probing what the student already knows about the topic, then build from their answers — one question at a time, filling gaps as they appear. Keep each reply short (2-5 sentences plus one clear question). Be warm and genuinely curious about their reasoning. If they're wrong, don't correct them outright; ask a question that exposes the contradiction. Occasionally, when a milestone of understanding is reached, briefly affirm what they've figured out before moving deeper.`,
+  socratic: `You are a Socratic tutor inside a minimal mobile learning app called Worldview. Teach through questions, not lectures. Start by probing what the student already knows about the topic, then build from their answers — one question at a time, filling gaps as they appear. Keep each reply short (2-5 sentences plus one clear question). Treat the student as a capable adult directing their own learning, not someone who needs encouragement — you are a source of knowledge they're drawing on, not a companion. No cheerleading and no unprompted praise ("good job", "nice work", "great question"). Never narrate the student's own conversational moves back to them — don't point out that they "corrected themselves," "caught their own mistake," or similar; just respond to the substance of what they said. If they're wrong, don't correct them outright; ask a question that exposes the contradiction. Once a point lands, move directly to the next question — don't pause to affirm it first.`,
   feynman: `You are a tutor using the Feynman Technique inside a minimal mobile learning app called Worldview. First give the student a brief, plain-language pass over the topic (a few sentences, no jargon). Then ask them to explain it back to you as if teaching a 12-year-old. Listen for gaps, oversimplifications, or borrowed jargon in their explanation, point out exactly where their explanation broke down, re-explain just that piece more simply, and have them try again. Keep replies short and focused on one gap at a time.`,
   quiz: `You are a quizmaster inside a minimal mobile learning app called Worldview. Quiz the student on the topic, one question at a time, starting easy and getting harder based on their performance. After each answer, tell them if they were right, give a one-or-two-sentence explanation, and then ask the next question. Mix formats: recall, multiple choice, and "explain why". Keep score casually and mention it every few questions.`,
 };
@@ -1582,7 +1586,7 @@ const voice = {
   active: false, holding: false, listening: false, speaking: false, streamDone: false,
   pending: "", interim: "", lastSpeechAt: 0, rec: null, silenceTimer: null,
   queue: [], utter: null, hl: -1, holdStartedAt: 0, keepAlive: null, ttsErrShown: false, forceLocal: false,
-  recFailStreak: 0,
+  recFailStreak: 0, recAudioSeen: false, deafWatchdog: null,
 };
 
 function voiceSupported() { return !!SR && "speechSynthesis" in window; }
@@ -1729,6 +1733,12 @@ function startListening() {
     renderVoiceUser((voice.pending + interim).trim());
   };
   rec.onstart = () => { voice.recFailStreak = 0; };
+  // proof the mic pipeline is genuinely capturing audio — fires as soon as
+  // input starts flowing, well before any words are recognized, unlike
+  // onresult (needs actual speech) or onerror (a session that's just quietly
+  // not receiving audio throws nothing at all). This is the signal the "deaf
+  // mic" watchdog below waits for.
+  rec.onaudiostart = () => { voice.recAudioSeen = true; };
   // iOS/Android end recognition sessions constantly, including silently after
   // benign errors — restart to keep listening alive. Some browsers fire only
   // onerror (no onend after), some fire both for the same failure, so both
@@ -1745,9 +1755,28 @@ function startListening() {
     if (voice.active && voice.listening && voice.rec === rec && !rec._restarting) restartRecognition(rec);
   };
   voice.listening = true;
+  voice.recAudioSeen = false;
   try { rec.start(); } catch (e) {}
   clearInterval(voice.silenceTimer);
   voice.silenceTimer = setInterval(checkSilence, 250);
+  armDeafWatchdog(rec);
+}
+// the specific bug reported after a spoken reply: recognition reports itself
+// as running (no error, no onend) but the audio session — often still being
+// released after TTS just played through the <audio> element — never
+// actually reaches the recognizer, so nothing is ever transcribed and the
+// app just sits there silently "listening" forever. If audio genuinely never
+// starts flowing within a few seconds, tear the session down and rebuild it
+// rather than trusting that "no error" means "working".
+function armDeafWatchdog(rec) {
+  clearTimeout(voice.deafWatchdog);
+  voice.deafWatchdog = setTimeout(() => {
+    if (voice.active && voice.listening && voice.rec === rec && !voice.recAudioSeen && !rec._restarting) {
+      rec._restarting = true;
+      try { rec.onend = null; rec.onerror = null; rec.stop(); } catch (e) {}
+      startListening();
+    }
+  }, 4000);
 }
 function restartRecognition(deadRec) {
   // starting a new session the instant the old one ends can throw
@@ -1769,7 +1798,8 @@ function restartRecognition(deadRec) {
 function stopListening() {
   voice.listening = false;
   clearInterval(voice.silenceTimer);
-  if (voice.rec) { const r = voice.rec; voice.rec = null; try { r.onend = null; r.stop(); } catch (e) {} }
+  clearTimeout(voice.deafWatchdog);
+  if (voice.rec) { const r = voice.rec; voice.rec = null; try { r.onend = null; r.onerror = null; r.stop(); } catch (e) {} }
 }
 function checkSilence() {
   if (!voice.listening || voice.holding || voice.speaking) return;
