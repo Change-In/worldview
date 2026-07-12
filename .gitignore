@@ -5,3 +5,5 @@ load/
 # local-only launcher (the website replaces it)
 server.js
 serve.cmd
+# local review artifacts — useful during development, not part of the public app
+FABLE_SESSION_REPORT_*.html
