@@ -583,6 +583,14 @@
   .msg.user { margin-left: auto; background: var(--ink); color: #fff; border-bottom-right-radius: 4px; }
   .msg.assistant { margin-right: auto; background: var(--card); border: 1.5px solid var(--line); border-bottom-left-radius: 4px; }
   .msg.assistant.thinking { color: var(--ink-soft); font-style: italic; border-style: dashed; }
+  .msg.assistant.response-failed { color: var(--ink); border-color: var(--gold); }
+  .response-failed-copy { display: grid; gap: 4px; }
+  .response-failed-copy span { color: var(--ink-soft); font-size: 14px; }
+  .response-retry {
+    margin-top: 10px; min-height: 42px; padding: 8px 14px; border: 1.5px solid var(--ink);
+    border-radius: 999px; background: transparent; color: var(--ink); font: inherit; font-weight: 700; cursor: pointer;
+  }
+  .response-retry:disabled { opacity: .5; cursor: default; }
   .msg p { margin-bottom: 8px; } .msg p:last-child { margin-bottom: 0; }
   .session-div {
     display: flex; align-items: center; gap: 10px; margin: 20px 0 14px;
@@ -1174,11 +1182,16 @@
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v18 · Jul 16"; // bump on every deploy — the auto-updater compares this against the server, and the tag below must match
+const BUILD = "v19 · Jul 16"; // bump on every deploy — the auto-updater compares this against the server, and the tag below must match
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v19", date: "Jul 16", changes: [
+    "Temporary Anthropic overloads now retry automatically with bounded exponential backoff instead of becoming a permanent error message.",
+    "If capacity is still unavailable, the learner's turn stays saved and a clear Retry response control replaces the raw provider error.",
+    "Reopening any lesson with an unanswered learner turn now resumes the response automatically, including a brand-new lesson with only its opening prompt.",
+  ]},
   { tag: "v18", date: "Jul 16", changes: [
     "Lesson maps are now designed by Opus as topic-specific dependency graphs, then validated and linearized into the easiest teaching order.",
     "Nodes use real concepts from the subject and can depend on multiple earlier ideas; old v1 and generic checklists regenerate when opened.",
@@ -1396,7 +1409,15 @@ function lessonApiMessages(lesson) {
   const start = lesson.learnerSummary && Number.isInteger(lesson.summaryThroughMessageIndex)
     ? Math.max(0, Math.min(lesson.summaryThroughMessageIndex, lesson.messages.length))
     : 0;
-  return lesson.messages.slice(start).map(message => ({ role: message.role, content: message.content }));
+  // A failed response can leave two learner turns beside each other if the
+  // learner adds clarification before retrying. Merge adjacent same-role
+  // turns for the API while preserving the original visible transcript.
+  return lesson.messages.slice(start).reduce((messages, message) => {
+    const previous = messages[messages.length - 1];
+    if (previous && previous.role === message.role) previous.content += "\n\n" + message.content;
+    else messages.push({ role: message.role, content: message.content });
+    return messages;
+  }, []);
 }
 // kick off a quiet background search the moment a lesson starts, so research
 // never blocks the tutor's first question — by the time the student has
@@ -1472,34 +1493,114 @@ function searchToolFor(model) {
     : { type: "web_search_20260209", name: "web_search", max_uses: 2 };
 }
 
+function retryAfterMs(response) {
+  const value = response && response.headers && response.headers.get("retry-after");
+  if (!value) return 0;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const at = Date.parse(value);
+  return Number.isFinite(at) ? Math.max(0, at - Date.now()) : 0;
+}
+function claudeError(message, details = {}) {
+  const error = new Error(message || "Claude could not respond");
+  Object.assign(error, details);
+  const status = Number(error.status) || 0;
+  error.transient = error.transient === true
+    || [429, 500, 502, 503, 504, 529].includes(status)
+    || ["rate_limit_error", "api_error", "timeout_error", "overloaded_error"].includes(error.type)
+    || (!status && /network|fetch|connection|temporar|overload|timeout/i.test(error.message));
+  return error;
+}
+async function responseError(response) {
+  let payload = null;
+  try { payload = await response.json(); } catch (error) {}
+  return claudeError(
+    payload && payload.error && payload.error.message || `API error ${response.status}`,
+    {
+      status: response.status,
+      type: payload && payload.error && payload.error.type,
+      requestId: payload && payload.request_id || response.headers.get("request-id") || "",
+      retryAfterMs: retryAfterMs(response),
+    }
+  );
+}
+function normalizeClaudeError(error) {
+  if (error && typeof error === "object" && ("transient" in error || "status" in error || "type" in error)) return error;
+  if (error && error.name === "AbortError") return error;
+  return claudeError(error && error.message || "The connection ended before Claude replied", {
+    transient: error instanceof TypeError,
+  });
+}
+const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+async function withClaudeRetries(operation, onRetry, maxAttempts = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try { return await operation(attempt); }
+    catch (rawError) {
+      const error = normalizeClaudeError(rawError);
+      lastError = error;
+      // Retrying after visible partial output could duplicate spoken or shown
+      // text. Keep that recoverable through the explicit retry control.
+      if (!error.transient || error.partialText || attempt >= maxAttempts) throw error;
+      const delay = Math.min(8000, Math.max(error.retryAfterMs || 0, 700 * Math.pow(2, attempt - 1)));
+      if (onRetry) onRetry({ attempt, nextAttempt: attempt + 1, maxAttempts, delay, error });
+      await wait(delay);
+    }
+  }
+  throw lastError;
+}
+function friendlyClaudeFailure(error) {
+  if (error && (error.status === 401 || error.status === 403)) {
+    return { title: "The API key needs attention.", detail: "Your message is saved. Check the key in Settings, then retry." };
+  }
+  if (error && error.status === 402) {
+    return { title: "API billing needs attention.", detail: "Your message is saved. Check the Anthropic account, then retry." };
+  }
+  if (error && error.status === 429) {
+    return { title: "The API limit was reached.", detail: "Your message is saved. Wait a moment, then retry." };
+  }
+  if (error && error.transient) {
+    return { title: "Fable is temporarily busy.", detail: "Your message is saved. Retry when you're ready." };
+  }
+  return { title: "Fable couldn't answer yet.", detail: "Your message is saved. Retry the response." };
+}
+
 async function streamChat(system, messages, onText, onSearch, modelOverride, maxTokens) {
   const model = modelOverride || state.model;
-  const res = await fetch(API_URL, {
-    method: "POST", headers: headers(),
-    body: JSON.stringify({
-      // A missing call-site limit must stay conversational. The old 8,000
-      // token fallback could turn a small re-entry check into an unnecessarily
-      // expensive essay if a prompt instruction was ever ignored.
-      model, max_tokens: maxTokens || 2048, stream: true, system, messages,
-      tools: [searchToolFor(model)],
-      // Automatic caching moves the breakpoint forward with the conversation.
-      // The default 5-minute TTL costs 1.25x to write versus 2x for 1 hour;
-      // compact close-time summaries handle longer gaps more cheaply.
-      cache_control: { type: "ephemeral" },
-    }),
-  });
-  if (!res.ok) {
-    let msg = `API error ${res.status}`;
-    try { msg = (await res.json()).error.message; } catch (e) {}
-    throw new Error(msg);
+  let res;
+  try {
+    res = await fetch(API_URL, {
+      method: "POST", headers: headers(),
+      body: JSON.stringify({
+        // A missing call-site limit must stay conversational. The old 8,000
+        // token fallback could turn a small re-entry check into an unnecessarily
+        // expensive essay if a prompt instruction was ever ignored.
+        model, max_tokens: maxTokens || 2048, stream: true, system, messages,
+        tools: [searchToolFor(model)],
+        // Automatic caching moves the breakpoint forward with the conversation.
+        // The default 5-minute TTL costs 1.25x to write versus 2x for 1 hour;
+        // compact close-time summaries handle longer gaps more cheaply.
+        cache_control: { type: "ephemeral" },
+      }),
+    });
+  } catch (error) {
+    throw normalizeClaudeError(error);
   }
+  if (!res.ok) throw await responseError(res);
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = "", full = "";
   const usage = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0, searches: 0 };
   const sources = []; // pages the model actually consulted, saved with the reply
   for (;;) {
-    const { done, value } = await reader.read();
+    let packet;
+    try { packet = await reader.read(); }
+    catch (rawError) {
+      const error = normalizeClaudeError(rawError);
+      error.partialText = full;
+      throw error;
+    }
+    const { done, value } = packet;
     if (done) break;
     buf += dec.decode(value, { stream: true });
     let i;
@@ -1526,7 +1627,11 @@ async function streamChat(system, messages, onText, onSearch, modelOverride, max
         } else if (ev.type === "message_delta" && ev.usage) {
           usage.output = ev.usage.output_tokens || 0;
         } else if (ev.type === "error") {
-          throw new Error(ev.error && ev.error.message || "stream error");
+          throw claudeError(ev.error && ev.error.message || "stream error", {
+            status: ev.error && ev.error.type === "overloaded_error" ? 529 : 0,
+            type: ev.error && ev.error.type,
+            partialText: full,
+          });
         }
       }
     }
@@ -2570,6 +2675,32 @@ $("paths-backdrop").onclick = closePathsSheet;
 })();
 
 /* ================= Chat ================= */
+function lastVisibleLessonMessage(lesson) {
+  const messages = lesson && Array.isArray(lesson.messages) ? lesson.messages : [];
+  for (let index = messages.length - 1; index >= 0; index--) {
+    if (!messages[index].synthetic) return messages[index];
+  }
+  return null;
+}
+function lessonHasUnansweredTurn(lesson) {
+  const last = lastVisibleLessonMessage(lesson);
+  return !!last && last.role === "user";
+}
+function markLessonResponsePending(lesson, error) {
+  if (!lesson) return;
+  lesson.responsePending = {
+    since: lesson.responsePending && lesson.responsePending.since || Date.now(),
+    failedAt: error ? Date.now() : null,
+    type: error && error.type || "",
+    status: error && Number(error.status) || 0,
+    requestId: error && error.requestId || "",
+  };
+  save();
+}
+function clearLessonResponsePending(lesson) {
+  if (lesson && lesson.responsePending) delete lesson.responsePending;
+}
+
 function openChat(id, noVoice) {
   const lesson = getLesson(id);
   if (!lesson) return;
@@ -2617,24 +2748,32 @@ function openChat(id, noVoice) {
     appendBubble(msg.role, msg.content, msg.sources);
   });
   show("chat");
-  const lastMsg = lesson.messages[lesson.messages.length - 1];
+  const lastMsg = lastVisibleLessonMessage(lesson);
   const resumed = !noVoice && !!lesson.closedAt && lesson.messages.length > 0;
-  const pending = lastMsg && lastMsg.role === "assistant" && !lastMsg.synthetic;
-  const due = resumed && !pending && reentryDue(lesson);
+  const unanswered = !noVoice && !!lastMsg && lastMsg.role === "user";
+  const pending = !!lastMsg && lastMsg.role === "assistant";
+  const due = resumed && !unanswered && !pending && reentryDue(lesson);
+  const wantsVoice = !noVoice && state.voiceDefault && voiceSupported() && lesson.messages.length;
   if (resumed) {
     lesson.closedAt = null;
     lesson.sessionOpenedAt = Date.now();
     lesson.sessionCount = Math.max(1, Number(lesson.sessionCount) || 1) + 1;
     save();
   }
-  if (resumed && pending) {
+  let recoveryBubble = null;
+  if (unanswered && !wantsVoice && !streaming) {
+    if (resumed) appendDivider();
+    recoveryBubble = appendBubble("assistant", "…");
+    recoveryBubble.classList.add("thinking");
+    if (resumed) scrollToNewSession(recoveryBubble);
+  } else if (resumed && pending) {
     appendDivider();
     const repeated = appendBubble("assistant",lastMsg.content,lastMsg.sources);
     repeated.classList.add("session-repeat");
     scrollToNewSession(repeated);
   } else if (lastMsg && lastMsg.reentry) {
     scrollToNewSession();
-  } else if (!due) {
+  } else if (!due && !recoveryBubble) {
     sc.scrollTop = sc.scrollHeight;
     // browsers sometimes report the wrong scrollHeight until after layout — jump to the latest message for real
     requestAnimationFrame(() => { sc.scrollTop = sc.scrollHeight; });
@@ -2642,10 +2781,15 @@ function openChat(id, noVoice) {
   // was the last thing said an assistant question the student never answered?
   // opening straight into silent listening left them guessing what to say —
   // now the app always speaks first, one way or another, before the mic opens
-  if (!noVoice && state.voiceDefault && voiceSupported() && lesson.messages.length) {
-    enterVoice(!due && !pending, !due && pending, resumed); // pin the first message of the new sitting to the top
+  if (wantsVoice) {
+    enterVoice(!due && !pending && !unanswered, !due && pending, resumed); // pin the first message of the new sitting to the top
+    if (unanswered && voice.active) { voiceSend("", true); return; }
     if (due && voice.active) { voiceReenter(lesson); return; }
     if (!due && pending && voice.active) { voiceRepeatPending(lesson, lastMsg); return; }
+  }
+  if (unanswered && !streaming) {
+    retryPendingTextResponse(lesson.id, recoveryBubble, resumed);
+    return;
   }
   if (due && !voice.active) reenterCheck(lesson);
 }
@@ -2710,11 +2854,17 @@ async function reenterCheck(lesson) {
     apiMessages.push({ role: "user", content: reentryPrompt });
     const system = buildSystem(lesson);
     scrollToNewSession(thinkingBubble);
-    const { text: full, usage } = await streamChat(system, apiMessages, partial => {
-      thinkingBubble.classList.remove("thinking");
-      thinkingBubble.innerHTML = md(partial);
-      // no auto-scroll: the view stays locked at the divider while text fills downward
-    }, () => {}, undefined, 1024);
+    const { text: full, usage } = await withClaudeRetries(
+      () => streamChat(system, apiMessages, partial => {
+        thinkingBubble.classList.remove("thinking");
+        thinkingBubble.innerHTML = md(partial);
+        // no auto-scroll: the view stays locked at the divider while text fills downward
+      }, () => {}, undefined, 1024),
+      () => {
+        thinkingBubble.classList.add("thinking");
+        thinkingBubble.innerHTML = md("*temporarily busy — trying again…*");
+      }
+    );
     // store the synthetic prompt too (hidden from the UI, see render-loop skip
     // above) so the array keeps alternating user/assistant — without it, a
     // lesson that last ended on a reply got two assistant turns in a row here,
@@ -2759,45 +2909,90 @@ function attachSources(bubble, sources) {
   bubble.appendChild(s);
 }
 
-async function sendToClaude(lesson, userText) {
-  const planning = lessonPlanning.get(lesson.id);
-  if (planning) await planning;
-  if (streaming) return;
+function renderTextResponseFailure(bubble, lesson, error) {
+  const copy = friendlyClaudeFailure(error);
+  bubble.classList.remove("thinking");
+  bubble.classList.add("response-failed");
+  bubble.innerHTML = "";
+  const text = document.createElement("div");
+  text.className = "response-failed-copy";
+  const title = document.createElement("strong");
+  title.textContent = copy.title;
+  const detail = document.createElement("span");
+  detail.textContent = copy.detail;
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.className = "response-retry";
+  retry.textContent = "Retry response";
+  retry.onclick = () => retryPendingTextResponse(lesson.id, bubble, false);
+  text.append(title, detail);
+  bubble.append(text, retry);
+}
+async function runTextLessonResponse(lesson, thinkingBubble, pinToNewSession = false) {
+  if (!lesson || streaming) return;
   streaming = true;
   $("chat-send").disabled = true;
-
-  lesson.messages.push({ role: "user", content: userText });
-  save();
-  appendBubble("user", userText);
-
-  const thinkingBubble = appendBubble("assistant", "…");
+  thinkingBubble.classList.remove("response-failed");
   thinkingBubble.classList.add("thinking");
-
+  thinkingBubble.innerHTML = md("…");
   try {
     const apiMessages = lessonApiMessages(lesson);
     const system = buildSystem(lesson);
     const sc = $("chat-scroll");
-    const { text: full, usage, sources } = await streamChat(system, apiMessages, partial => {
-      thinkingBubble.classList.remove("thinking");
-      thinkingBubble.innerHTML = md(partial);
-      sc.scrollTop = sc.scrollHeight;
-    }, () => {
-      if (thinkingBubble.classList.contains("thinking")) thinkingBubble.innerHTML = md("*researching the topic…*");
-    }, undefined, 2048);
+    const { text: full, usage, sources } = await withClaudeRetries(
+      () => streamChat(system, apiMessages, partial => {
+        thinkingBubble.classList.remove("thinking");
+        thinkingBubble.innerHTML = md(partial);
+        if (!pinToNewSession) sc.scrollTop = sc.scrollHeight;
+      }, () => {
+        if (thinkingBubble.classList.contains("thinking")) thinkingBubble.innerHTML = md("*researching the topic…*");
+      }, undefined, 2048),
+      () => {
+        thinkingBubble.classList.add("thinking");
+        thinkingBubble.innerHTML = md("*temporarily busy — trying again…*");
+        if (pinToNewSession) scrollToNewSession(thinkingBubble);
+      }
+    );
+    if (!full.trim()) throw claudeError("Claude returned an empty response", { transient: true });
     if (sources.length) attachSources(thinkingBubble, sources);
     lesson.messages.push({ role: "assistant", content: full, sources: sources.length ? sources : undefined });
+    clearLessonResponsePending(lesson);
     lesson.paths = []; // conversation changed → regenerate paths next time
     lesson.updatedAt = Date.now();
     addCost(lesson, state.model, usage);
     save();
     updateCostLabel(lesson);
-  } catch (e) {
-    thinkingBubble.classList.remove("thinking");
-    thinkingBubble.innerHTML = md("**Hmm, something went wrong:** " + e.message);
+  } catch (rawError) {
+    const error = normalizeClaudeError(rawError);
+    console.warn("Tutor response failed", { error, lessonId: lesson.id, requestId: error.requestId || "" });
+    markLessonResponsePending(lesson, error);
+    renderTextResponseFailure(thinkingBubble, lesson, error);
+    if (pinToNewSession) scrollToNewSession(thinkingBubble);
   } finally {
     streaming = false;
     $("chat-send").disabled = false;
   }
+}
+async function retryPendingTextResponse(lessonId, existingBubble, pinToNewSession = false) {
+  const lesson = getLesson(lessonId);
+  if (!lesson || !lessonHasUnansweredTurn(lesson) || streaming) return;
+  const planning = lessonPlanning.get(lesson.id);
+  if (planning) await planning;
+  if (currentLessonId !== lesson.id || streaming) return;
+  const bubble = existingBubble && existingBubble.isConnected
+    ? existingBubble
+    : appendBubble("assistant", "…");
+  return runTextLessonResponse(lesson, bubble, pinToNewSession);
+}
+async function sendToClaude(lesson, userText) {
+  const planning = lessonPlanning.get(lesson.id);
+  if (planning) await planning;
+  if (streaming) return;
+  lesson.messages.push({ role: "user", content: userText });
+  markLessonResponsePending(lesson);
+  appendBubble("user", userText);
+  const thinkingBubble = appendBubble("assistant", "…");
+  return runTextLessonResponse(lesson, thinkingBubble);
 }
 
 $("chat-send").onclick = () => {
@@ -3774,6 +3969,7 @@ function setVoiceStatus(mode) {
   else if (mode === "finishing") { dot.classList.add("held"); txt.textContent = "finishing your thought…"; }
   else if (mode === "transcribing") { dot.classList.add("pulse"); txt.textContent = "transcribing… tap to cancel"; }
   else if (mode === "retry") { dot.classList.add("held"); txt.textContent = "tap to retry transcription"; }
+  else if (mode === "response-retry") { dot.classList.add("held"); txt.textContent = "tap to retry response"; }
   else if (mode === "paused") { dot.classList.add("held"); txt.textContent = "mic paused · hold to resume"; }
   else if (mode === "thinking") { txt.textContent = "thinking…"; }
   else if (mode === "speaking") { dot.classList.add("pulse"); txt.textContent = "speaking · tap to interrupt"; }
@@ -4815,21 +5011,24 @@ function finishVoiceCapture() {
 }
 
 /* ---- send + spoken reply ---- */
-async function voiceSend(text) {
+async function voiceSend(text, reuseExistingTurn = false) {
   stopListening();
   const lesson = getLesson(currentLessonId);
   if (!lesson) return;
+  if (reuseExistingTurn && !lessonHasUnansweredTurn(lesson)) return;
   setVoiceStatus("thinking");
   const planning = lessonPlanning.get(lesson.id);
   if (planning) {
     await planning;
     if (currentLessonId !== lesson.id) return;
   }
-  finalizeVoiceUser(text);
+  if (!reuseExistingTurn) finalizeVoiceUser(text);
   voice.pending = ""; voice.interim = "";
   voiceCurrentEl = null; // next assistant reply gets a fresh highlighted block
-  lesson.messages.push({ role: "user", content: text });
-  save();
+  if (!reuseExistingTurn) {
+    lesson.messages.push({ role: "user", content: text });
+    markLessonResponsePending(lesson);
+  }
   try { speechSynthesis.cancel(); } catch (e) {} // clear any stuck/paused speech from the last turn
   voice.speaking = true; voice.streamDone = false;
   voice.mutedThisTurn = false;
@@ -4846,30 +5045,43 @@ async function voiceSend(text) {
     // lesson is being driven by voice or text — switching modes used to blow
     // the entire cache
     apiMessages[apiMessages.length - 1].content += "\n\n" + TRANSCRIPT_NOTE + "\n\n" + VOICE_NOTE;
-    const { text: full, usage, sources } = await streamChat(system, apiMessages, partial => {
-      const spoken = stripForSpeech(partial); // keep display & TTS offsets aligned
-      renderVoiceWords(spoken);
-      if (!voice.mutedThisTurn) enqueuedUpTo = enqueueSentences(spoken, enqueuedUpTo, false);
-    }, () => {
-      if (!voice.queue.length && !voice.utter) {
-        $("voice-status-text").textContent = "researching…";
-        sayFiller(); // break the silence the way a person would
+    const { text: full, usage, sources } = await withClaudeRetries(
+      () => streamChat(system, apiMessages, partial => {
+        const spoken = stripForSpeech(partial); // keep display & TTS offsets aligned
+        renderVoiceWords(spoken);
+        if (!voice.mutedThisTurn) enqueuedUpTo = enqueueSentences(spoken, enqueuedUpTo, false);
+      }, () => {
+        if (!voice.queue.length && !voice.utter) {
+          $("voice-status-text").textContent = "researching…";
+          sayFiller(); // break the silence the way a person would
+        }
+      }, undefined, 1024),
+      ({ nextAttempt, maxAttempts }) => {
+        setVoiceStatus("thinking");
+        $("voice-status-text").textContent = `temporarily busy · retrying ${nextAttempt}/${maxAttempts}`;
       }
-    }, undefined, 1024);
+    );
+    if (!full.trim()) throw claudeError("Claude returned an empty response", { transient: true });
     const spokenFull = stripForSpeech(full);
     renderVoiceWords(spokenFull);
     if (!voice.mutedThisTurn) enqueuedUpTo = enqueueSentences(spokenFull, enqueuedUpTo, true);
     voice.streamDone = true;
     pumpSpeech(); // in case queue already drained
     lesson.messages.push({ role: "assistant", content: full, sources: sources.length ? sources : undefined });
+    clearLessonResponsePending(lesson);
     lesson.paths = [];
     lesson.updatedAt = Date.now();
     addCost(lesson, state.model, usage);
     save();
-  } catch (e) {
-    toast(e.message);
+  } catch (rawError) {
+    const error = normalizeClaudeError(rawError);
+    const copy = friendlyClaudeFailure(error);
+    console.warn("Voice tutor response failed", { error, lessonId: lesson.id, requestId: error.requestId || "" });
+    markLessonResponsePending(lesson, error);
+    renderVoiceWords(copy.title + " " + copy.detail);
+    toast(copy.title + " Your message is saved.", 5200);
     voice.speaking = false; voice.streamDone = true;
-    if (voice.active) setVoiceStatus("ready");
+    if (voice.active) setVoiceStatus("response-retry");
   }
 }
 
@@ -4890,11 +5102,17 @@ async function voiceReenter(lesson) {
     const apiMessages = lessonApiMessages(lesson);
     const reentryPrompt = reentryPromptFor(lesson);
     apiMessages.push({ role: "user", content: reentryPrompt + "\n\n" + VOICE_NOTE });
-    const { text: full, usage } = await streamChat(system, apiMessages, partial => {
-      const spoken = stripForSpeech(partial);
-      renderVoiceWords(spoken);
-      if (!voice.mutedThisTurn) enqueuedUpTo = enqueueSentences(spoken, enqueuedUpTo, false);
-    }, () => {}, undefined, 1024);
+    const { text: full, usage } = await withClaudeRetries(
+      () => streamChat(system, apiMessages, partial => {
+        const spoken = stripForSpeech(partial);
+        renderVoiceWords(spoken);
+        if (!voice.mutedThisTurn) enqueuedUpTo = enqueueSentences(spoken, enqueuedUpTo, false);
+      }, () => {}, undefined, 1024),
+      ({ nextAttempt, maxAttempts }) => {
+        setVoiceStatus("thinking");
+        $("voice-status-text").textContent = `temporarily busy · retrying ${nextAttempt}/${maxAttempts}`;
+      }
+    );
     const spokenFull = stripForSpeech(full);
     renderVoiceWords(spokenFull);
     if (!voice.mutedThisTurn) enqueuedUpTo = enqueueSentences(spokenFull, enqueuedUpTo, true);
@@ -4908,7 +5126,8 @@ async function voiceReenter(lesson) {
     addCost(lesson, state.model, usage);
     save();
   } catch (e) {
-    toast(e.message);
+    const copy = friendlyClaudeFailure(normalizeClaudeError(e));
+    toast(copy.title, 5200);
     voice.speaking = false; voice.streamDone = true;
     if (voice.active) setVoiceStatus("ready");
   }
@@ -5242,6 +5461,7 @@ function handleVoiceControl(event) {
   if (["thinking","starting","finishing"].includes(voice.statusMode)) return;
   if (voice.speaking) { interruptSpeech(); return; }
   if (voice.statusMode === "retry" && voice.retainedBlob) { retryOwnedTranscription(); return; }
+  if (voice.statusMode === "response-retry") { voiceSend("", true); return; }
   const text = (voice.pending + voice.interim).trim();
   if (voice.captureWanted || voice.listening || voice.rec) {
     finishVoiceCapture();
@@ -5262,6 +5482,11 @@ document.addEventListener("keydown", event => {
   if (voice.statusMode === "retry" && voice.retainedBlob) {
     voice.spaceHeld = false;
     retryOwnedTranscription();
+    return;
+  }
+  if (voice.statusMode === "response-retry") {
+    voice.spaceHeld = false;
+    voiceSend("", true);
     return;
   }
   voice.spaceHeld = true;
@@ -5446,6 +5671,9 @@ function refreshWordClasses() {
     if (voice.statusMode === "retry" && voice.retainedBlob) {
       action="retry";suppressSyntheticClick();return;
     }
+    if (voice.statusMode === "response-retry") {
+      action="retry-response";suppressSyntheticClick();return;
+    }
     if (voice.captureWanted || voice.listening || voice.rec) {
       action="finish";suppressSyntheticClick();return;
     }
@@ -5501,6 +5729,8 @@ function refreshWordClasses() {
       finishVoiceCapture();
     } else if (action === "retry" && !cancelled) {
       retryOwnedTranscription();
+    } else if (action === "retry-response" && !cancelled) {
+      voiceSend("", true);
     } else if (action === "cancel-transcription" && !cancelled) {
       cancelOwnedTranscriptionForRetry();
     }
