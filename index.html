@@ -189,7 +189,7 @@
        themselves opt back out so drag/swipe gestures keep working on them */
     perspective: var(--carouselPerspective, 1100px); touch-action: pan-y; overflow: hidden;
   }
-  #carousel { position: relative; width: 100%; height: calc(var(--cardH, 320px) + 30px); transform-style: preserve-3d; }
+  #carousel { position: relative; width: 100%; height: calc(var(--cardH, 320px) + 30px); transform-style: preserve-3d; contain:layout paint style; }
   #lesson-layer-guide {
     position: absolute; right: 48px; top: 50%; transform: translateY(-50%); z-index: 4; pointer-events: none;
     display: flex; flex-direction: column; align-items: flex-start; gap: 12px;
@@ -459,6 +459,8 @@
     min-height:230px; display:flex; flex-direction:column; border:1.5px solid var(--line);
     border-radius:16px; background:var(--card); padding:18px;
   }
+  .trend-card-button { appearance:none; color:var(--ink); font:inherit; text-align:left; cursor:pointer; }
+  .trend-card-button:active { transform:scale(.985); }
   .trend-rank { color:#8a7229; font-size:10px; letter-spacing:.12em; text-transform:uppercase; }
   .trend-card h3 { font:500 23px/1.15 Georgia,"Times New Roman",serif; margin:9px 0 14px; }
   .trend-lessons { display:grid; gap:7px; }
@@ -792,19 +794,24 @@
     display: none; flex-direction: column;
     padding: calc(env(safe-area-inset-top) + 16px) 0 calc(env(safe-area-inset-bottom) + 26px);
     user-select: none; -webkit-user-select: none;
+    touch-action: pan-y; outline: none;
   }
+  body.voice-mode { overflow:hidden; }
+  body.voice-mode #view-chat #chat-input,
+  body.voice-mode #view-chat #chat-send,
+  body.voice-mode #view-chat #chat-mic { pointer-events:none; }
   #voice-topbar { position:absolute;left:0;right:0;top:calc(env(safe-area-inset-top) + 10px);height:48px;display:grid;grid-template-columns:56px 1fr 56px;align-items:center;padding:0 10px;z-index:4;pointer-events:none; }
   #voice-topbar > * { pointer-events:auto; }
   #voice-close {
     position: static; justify-self:start;
     background: none; border: none; font-size: 22px; color: var(--ink-soft); cursor: pointer;
-    padding: 8px; z-index: 2;
+    width:48px; height:48px; padding: 8px; z-index: 2; touch-action:manipulation;
   }
   #voice-title { min-width:0;text-align:center;font:600 14px/1.2 system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
   #voice-path-button { justify-self:end;width:42px;height:42px;background:rgba(255,255,255,.72); }
   #voice-scroll {
     flex: 1; overflow-y: auto; padding: 72px max(28px, calc((100% - 720px) / 2)) 24px;
-    -webkit-overflow-scrolling: touch;
+    -webkit-overflow-scrolling: touch; touch-action:pan-y; overscroll-behavior:contain;
   }
   .vmsg { max-width: 90%; margin-bottom: 14px; font-size: 16px; line-height: 1.55; opacity: 0.72; }
   .vmsg.user { margin-left: auto; text-align: right; color: var(--accent); font-style: italic; }
@@ -818,7 +825,7 @@
   .voice-current .w { color: #b9c8cd; transition: color 0.12s; }
   .voice-current .w.spoken { color: var(--ink); }
   .voice-current .w.current { color: var(--accent); background: rgba(29,93,115,0.12); border-radius: 4px; }
-  #voice-control-zone { position:relative;flex:0 0 auto;align-self:center;width:min(calc(100% - 32px),420px);padding-top:18px; }
+  #voice-control-zone { position:relative;z-index:5;flex:0 0 auto;align-self:center;width:min(calc(100% - 32px),420px);padding-top:18px; }
   #voice-status {
     width:100%; min-height:60px;
     display: flex; align-items: center; justify-content: center; gap: 10px;
@@ -1070,7 +1077,7 @@
 </div>
 
 <!-- ============ Voice mode ============ -->
-<div id="voice-overlay">
+<div id="voice-overlay" tabindex="-1" aria-label="Spoken lesson">
   <div id="voice-topbar">
     <button id="voice-close" aria-label="Return to main menu">&#8592;</button>
     <div id="voice-title"></div>
@@ -1114,6 +1121,20 @@
     <div class="legacy-voice-settings">
     <label>Voice</label>
     <select id="set-voice"></select>
+    <label>Spoken language</label>
+    <select id="set-speechlanguage">
+      <option value="en">English</option>
+      <option value="es">Spanish</option>
+      <option value="fr">French</option>
+      <option value="de">German</option>
+      <option value="pt">Portuguese</option>
+      <option value="it">Italian</option>
+      <option value="nl">Dutch</option>
+      <option value="sv">Swedish</option>
+      <option value="no">Norwegian</option>
+      <option value="da">Danish</option>
+    </select>
+    <div class="hint">Voice transcription assumes this language instead of trying to guess from a short answer.</div>
     <label>Voice + transcription key (Cartesia)</label>
     <input id="set-cartkey" type="password" placeholder="sk_car_..." autocomplete="off">
     <div class="hint">Used for spoken replies and reliable hold-to-talk transcription. Keep this key private; a shared tester build needs a small protected token service instead.</div>
@@ -1150,11 +1171,17 @@
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v16 · Jul 16"; // bump on every deploy — the auto-updater compares this against the server, and the tag below must match
+const BUILD = "v17 · Jul 16"; // bump on every deploy — the auto-updater compares this against the server, and the tag below must match
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v17", date: "Jul 16", changes: [
+    "Voice mode now suppresses the phone keyboard, keeps scrolling and exit independent from recording, and recovers if a release or transcription request gets stuck.",
+    "Spoken language is chosen in Settings and sent directly to transcription; pathological repeated-word transcripts are cleaned before they reach the tutor.",
+    "Tutor questions now ask for reasoning, prediction, and explanation instead of steering toward hidden one-word answers.",
+    "The lesson carousel uses a lighter sliding transform for smoother horizontal dragging. Trends now ranks individual lessons by activity signals instead of grouping them by category.",
+  ]},
   { tag: "v16", date: "Jul 16", changes: [
     "Voice turns now record actual microphone audio and transcribe that recording, replacing the browser speech service that went deaf after two or three phone turns.",
     "A failed transcription keeps the recording safe for one-tap retry; muted, late, backgrounded, and stuck recorder states now recover without silently losing or duplicating a turn.",
@@ -1227,7 +1254,7 @@ const VERSIONS = [
   ]},
 ];
 const LS_KEY = "worldview-v1";
-let state = { apiKey: "", model: "claude-sonnet-5", lessons: [], notes: [], voiceURI: "", voiceDefault: true, elKey: "", cartKey: "", cartVoice: "", cardScale: 1 };
+let state = { apiKey: "", model: "claude-sonnet-5", lessons: [], notes: [], voiceURI: "", voiceDefault: true, speechLanguage: "en", elKey: "", cartKey: "", cartVoice: "", cardScale: 1 };
 try { Object.assign(state, JSON.parse(localStorage.getItem(LS_KEY) || "{}")); } catch (e) {}
 const save = () => { try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {} };
 // if config.js supplies a key and none is saved yet, use it — skips the Settings prompt entirely
@@ -1243,6 +1270,7 @@ if (!state.cartKey && typeof window.WORLDVIEW_CARTESIA_KEY === "string" && windo
   state.cartKey = window.WORLDVIEW_CARTESIA_KEY;
   save();
 }
+if (!state.speechLanguage) { state.speechLanguage = "en"; save(); }
 // one-tap setup link: open the site once with ?key=...&elkey=... and both keys
 // save to this device permanently — no typing, no pasting. Works because the
 // installed home-screen icon shares the same localStorage as this tab.
@@ -1298,8 +1326,8 @@ const lessonPlanning = new Map(); // prevents any early text/voice send from out
 const lessonAssessments = new Map(); // one learner-only close summary at a time per lesson
 
 const SYSTEM_PROMPTS = {
-  socratic: `You are a precise Socratic tutor inside a minimal mobile learning app called Worldview. The learner should do more reasoning than you do talking. Begin at the most fundamental useful idea, then advance one small step at a time through one clear question per reply. Before asking a question that depends on a prerequisite, verify from the learner's own earlier messages that they understand that prerequisite; if the evidence is missing, probe or establish it first without jargon. Treat the learner's statements — not your own past explanations — as the evidence of what they know. Keep replies short: usually 1-3 sentences and one question. Explain only the minimum needed to let them reason forward. No greetings, welcome-backs, cheerleading, praise, personality, or narration of the learner's conversational moves. If they're wrong, prefer a question that exposes the contradiction; if they lack the foundation to answer, give one compact piece of information and then ask them to use it.`,
-  feynman: `You are a precise tutor using an explain-it-simply loop inside a minimal mobile learning app called Worldview. Start with the smallest plain-language foundation required for the topic, with no unexplained jargon. Ask the learner to explain that one piece back in their own words. Use only the learner's messages as evidence of what they understand. Identify one gap at a time, explain only that gap briefly, and ask them to try again. No greetings, welcome-backs, cheerleading, praise, or companion-like language. Keep every reply short enough that the learner does more thinking and speaking than you do.`,
+  socratic: `You are a precise Socratic tutor inside a minimal mobile learning app called Worldview. The learner should do more reasoning than you do talking. Begin at the most fundamental useful idea, then advance one small step at a time through one clear question per reply. Before asking a question that depends on a prerequisite, verify from the learner's own earlier messages that they understand that prerequisite; if the evidence is missing, probe or establish it first without jargon. Treat the learner's statements — not your own past explanations — as the evidence of what they know. Keep replies short: usually 1-3 sentences and one question. Ask open questions that make the learner explain a mechanism, make a prediction, compare possibilities, or talk through their reasoning. Never steer toward a hidden one-word term as the goal. If the learner gives a one-word answer, ask them to explain why or how they reached it instead of simply revealing or accepting the answer. Explain only the minimum needed to let them reason forward. No greetings, welcome-backs, cheerleading, praise, personality, or narration of the learner's conversational moves. If they're wrong, prefer a question that exposes the contradiction; if they lack the foundation to answer, give one compact piece of information and then ask them to use it.`,
+  feynman: `You are a precise tutor using an explain-it-simply loop inside a minimal mobile learning app called Worldview. Start with the smallest plain-language foundation required for the topic, with no unexplained jargon. Ask the learner to explain that one piece back in their own words, including how or why it works. Never make a hidden one-word term the goal; a one-word reply is a cue to ask for the learner's reasoning. Use only the learner's messages as evidence of what they understand. Identify one gap at a time, explain only that gap briefly, and ask them to try again. No greetings, welcome-backs, cheerleading, praise, or companion-like language. Keep every reply short enough that the learner does more thinking and speaking than you do.`,
   quiz: `You are a quizmaster inside a minimal mobile learning app called Worldview. Quiz the student on the topic, one question at a time, starting easy and getting harder based on their performance. After each answer, tell them if they were right, give a one-or-two-sentence explanation, and then ask the next question. Mix formats: recall, multiple choice, and "explain why". Keep score casually and mention it every few questions.`,
 };
 
@@ -1311,7 +1339,7 @@ Object.keys(SYSTEM_PROMPTS).forEach(k => SYSTEM_PROMPTS[k] += "\n\n" + METHOD_NO
 // silently read past likely mis-hearings instead of the student having to
 // notice and correct them (a real STT upgrade is a bigger, separate project —
 // see the report for that)
-const TRANSCRIPT_NOTE = `[Note: this message came from live speech-to-text and may contain misheard words, wrong homophones, or missing punctuation. Silently interpret the student's likely intent from context — don't point out transcription errors unless truly ambiguous.]`;
+const TRANSCRIPT_NOTE = `[Note: this message came from live speech-to-text and may contain misheard words, wrong homophones, or missing punctuation. Silently interpret the student's likely intent from context. If it is only one unfamiliar word that does not fit the lesson, ask the learner to talk through what they mean in a fuller sentence instead of treating the token as a confident answer. Don't point out transcription errors unless truly ambiguous.]`;
 
 // appended to every request: research at the START of a topic, stay out of the
 // way mid-conversation — mid-lesson searches were causing long silent stalls.
@@ -1825,21 +1853,28 @@ $("notes-back").onclick = () => { renderHome(); show("home"); };
 $("note-add").onclick = addNote;
 $("note-input").addEventListener("keydown", e => { if (e.key === "Enter") addNote(); });
 
-/* cards ride a circle whose center is behind the screen, but each card is
-   counter-rotated so its face always stays flat toward you — the ring curves
-   away into depth while every panel remains readable. */
+/* Cards use one lightweight 3D slide: horizontal position, shallow depth,
+   and a small counter-angle. This preserves the carousel's layered feel
+   without making mobile Safari recalculate a full circular transform chain. */
 function layoutWheel(animate = true, refreshGuide = true) {
-  const n = wheel.cards.length;
-  const step = 360 / Math.max(n, 10);                       // degrees between cards on the circle
-  const rad = step * Math.PI / 180;
-  const R = Math.round((wheel.cardW * 0.78) / Math.sin(rad)); // radius so neighbors sit ~78% of a card apart
+  const spacing = wheel.cardW * 0.78;
+  const depthStep = Math.max(42, wheel.cardW * 0.18);
+  const transition = animate ? "transform .32s cubic-bezier(.22,.8,.25,1), opacity .28s ease" : "none";
   wheel.cards.forEach((el, i) => {
-    const d = i - wheel.pos;                                // distance from center, in cards
+    const d = i - wheel.pos;
     const abs = Math.abs(d);
-    const ang = d * step;
-    el.style.transition = animate ? "transform 0.35s ease, opacity 0.35s ease" : "none";
-    // to circle center → around the ring → out to the rim → un-rotate to face the screen
-    el.style.transform = `translateZ(${-R}px) rotateY(${ang}deg) translateZ(${R}px) rotateY(${-ang}deg)`;
+    if (abs > 4.4) {
+      el.style.visibility = "hidden";
+      el.style.pointerEvents = "none";
+      return;
+    }
+    const x = d * spacing;
+    const z = -Math.min(abs, 4) * depthStep;
+    const angle = Math.max(-28, Math.min(28, d * -7));
+    const scale = Math.max(.78, 1 - abs * .055);
+    el.style.visibility = "visible";
+    if (el.style.transition !== transition) el.style.transition = transition;
+    el.style.transform = `translate3d(${x}px,0,${z}px) rotateY(${angle}deg) scale(${scale})`;
     el.style.opacity = abs > 4 ? 0 : String(Math.max(0, 1 - abs * 0.18));
     el.style.zIndex = String(300 - Math.round(abs * 10));
     el.style.pointerEvents = abs > 3.5 ? "none" : "auto";
@@ -2151,6 +2186,7 @@ async function beginLesson(topic, methodKey, starterText, parentId, sourceUrl) {
     id: uid(), topic, method: methodKey,
     title: topic.length > 40 ? topic.slice(0, 40) + "…" : topic,
     category: "", messages: [], paths: [], updatedAt: Date.now(),
+    sessionCount: 1,
     parentId: parentId || undefined, // set when started from a learning path — links back to where it came from
     sourceUrl: sourceUrl || undefined,
   };
@@ -2218,7 +2254,7 @@ async function fetchMeta(lesson, options = {}) {
       ? `Source URL: ${lesson.sourceUrl}\n\nResearch notes from reading the source:\n${lesson.briefing.slice(0, 9000)}`
       : `Topic: ${lesson.topic}`;
     const meta = await jsonCall(
-      `You are the curriculum planner for a curiosity-driven learning app. Before the tutor speaks, turn the learner's question or supplied source into one clear LINEAR path of 6-10 checkpoints. For a source, the title and one-sentence overview must plainly say what the source itself is about, while the checkpoints must run from the smallest necessary foundation through the source's final or most advanced idea. Include the real systems and processes that explain the material, plus only the prerequisites actually needed. Do not merely split or paraphrase the question. For example, "why do bugs fly toward light?" should move in order through sensory cues, natural navigation, artificial light, flight behavior, and competing explanations. Give each checkpoint a stable short id, a plain-language overview title, its scale (foundation, concept, or extension), the immediately previous checkpoint id as its sole prerequisite (the first has none), and one sentence describing what the learner should be able to explain there. The array order is the lesson order; do not branch. Pick the best starting checkpoint and write one short diagnostic opening question that begins there without mentioning the path. Also return a short elegant lesson title, a one-sentence plain-language overview, and one broad category.`,
+      `You are the curriculum planner for a curiosity-driven learning app. Before the tutor speaks, turn the learner's question or supplied source into one clear LINEAR path of 6-10 checkpoints. For a source, the title and one-sentence overview must plainly say what the source itself is about, while the checkpoints must run from the smallest necessary foundation through the source's final or most advanced idea. Include the real systems and processes that explain the material, plus only the prerequisites actually needed. Do not merely split or paraphrase the question. For example, "why do bugs fly toward light?" should move in order through sensory cues, natural navigation, artificial light, flight behavior, and competing explanations. Give each checkpoint a stable short id, a plain-language overview title, its scale (foundation, concept, or extension), the immediately previous checkpoint id as its sole prerequisite (the first has none), and one sentence describing what the learner should be able to explain there. The array order is the lesson order; do not branch. Pick the best starting checkpoint and write one short diagnostic opening question that invites the learner to explain, predict, compare, or reason aloud. It must not be a recall question whose intended answer is one word, and it must not mention the path. Also return a short elegant lesson title, a one-sentence plain-language overview, and one broad category.`,
       plannerInput,
       { type: "object", properties: {
           title: { type: "string" }, category: { type: "string" }, source_overview: { type:"string" },
@@ -2490,7 +2526,12 @@ function openChat(id, noVoice) {
   const resumed = !noVoice && !!lesson.closedAt && lesson.messages.length > 0;
   const pending = lastMsg && lastMsg.role === "assistant" && !lastMsg.synthetic;
   const due = resumed && !pending && reentryDue(lesson);
-  if (resumed) { lesson.closedAt = null; lesson.sessionOpenedAt = Date.now(); save(); }
+  if (resumed) {
+    lesson.closedAt = null;
+    lesson.sessionOpenedAt = Date.now();
+    lesson.sessionCount = Math.max(1, Number(lesson.sessionCount) || 1) + 1;
+    save();
+  }
   if (resumed && pending) {
     appendDivider();
     const repeated = appendBubble("assistant",lastMsg.content,lastMsg.sources);
@@ -3033,23 +3074,42 @@ function renderSourceLibrary() {
 function renderTrends() {
   const targets = [$("trends-home-body"), $("trends-body")].filter(Boolean);
   if (!targets.length) return;
-  const grouped = new Map();
-  state.lessons.forEach(lesson => {
-    const category = lessonCategory(lesson);
-    const group = grouped.get(category) || { category, lessons:[], updatedAt:0 };
-    group.lessons.push(lesson);
-    group.updatedAt = Math.max(group.updatedAt, Number(lesson.updatedAt) || 0);
-    grouped.set(category, group);
+  const lessons = state.lessons.filter(lesson => (lesson.messages || []).some(message => !message.synthetic));
+  const stats = lessons.map(lesson => {
+    const visible = (lesson.messages || []).filter(message => !message.synthetic);
+    const learner = visible.filter(message => message.role === "user");
+    const learnerWords = learner.reduce((total,message) => total + String(message.content || "").trim().split(/\s+/).filter(Boolean).length, 0);
+    const reentries = visible.filter(message => message.reentry).length;
+    return {
+      lesson,
+      exchanges: Math.ceil(visible.length / 2),
+      learnerWords,
+      sessions: Math.max(Number(lesson.sessionCount) || 1, 1 + reentries),
+      mastery: Number.isFinite(Number(lesson.masteryScore)) ? Number(lesson.masteryScore) : null,
+      updatedAt: Number(lesson.updatedAt) || 0,
+    };
   });
-  const groups = [...grouped.values()]
-    .sort((a,b) => (b.lessons.length - a.lessons.length) || (b.updatedAt - a.updatedAt) || a.category.localeCompare(b.category))
-    .slice(0, 6);
-  const cards = groups.length ? groups.map((group,index) => {
-    const recent = Date.now() - group.updatedAt < 3 * 24 * 60 * 60 * 1000;
-    const signal = index === 0 && group.lessons.length > 1 ? "Most explored" : recent ? "Recently active" : "From your lessons";
-    const lessons = [...group.lessons].sort((a,b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0,3);
-    return `<article class="trend-card"><div class="trend-rank">${signal}</div><h3>${esc(group.category)}</h3><div class="trend-lessons">${lessons.map(lesson => `<button class="trend-lesson" type="button" data-trend-lesson-id="${esc(String(lesson.id))}">${esc(lesson.title || lesson.topic || "Conversation")}</button>`).join("")}</div><div class="trend-signal"><span>${group.lessons.length} lesson${group.lessons.length === 1 ? "" : "s"}</span><span>${relativeTime(group.updatedAt)}</span></div></article>`;
-  }).join("") : `<article class="trend-card trend-empty"><div class="trend-rank">From your lessons</div><h3>Your patterns</h3><div class="trend-signal"><span>No patterns yet</span></div></article>`;
+  const chosen = [];
+  const used = new Set();
+  const addMeasure = (label, list, metric) => {
+    const item = list.find(candidate => candidate && !used.has(candidate.lesson.id));
+    if (!item) return;
+    used.add(item.lesson.id);
+    chosen.push({ label, item, metric:metric(item) });
+  };
+  addMeasure("Most revisited", [...stats].filter(item => item.sessions > 1).sort((a,b) => b.sessions-a.sessions || b.updatedAt-a.updatedAt), item => `${item.sessions} sittings`);
+  addMeasure("Deepest conversation", [...stats].filter(item => item.exchanges > 0).sort((a,b) => b.learnerWords-a.learnerWords || b.exchanges-a.exchanges), item => `${item.exchanges} exchange${item.exchanges === 1 ? "" : "s"}`);
+  addMeasure("Recently active", [...stats].sort((a,b) => b.updatedAt-a.updatedAt), item => `${item.exchanges} exchange${item.exchanges === 1 ? "" : "s"}`);
+  addMeasure("Strongest understanding", [...stats].filter(item => item.mastery != null).sort((a,b) => b.mastery-a.mastery), item => `${Math.round(item.mastery * 100)}% understood`);
+  const momentum = [...stats].sort((a,b) => {
+    const score = item => item.sessions * 4 + Math.log2(item.learnerWords + 1) * 2 + item.updatedAt / 1e13;
+    return score(b) - score(a);
+  });
+  while (chosen.length < Math.min(6, stats.length)) addMeasure("Active lesson", momentum, item => `${item.exchanges} exchange${item.exchanges === 1 ? "" : "s"}`);
+  const cards = chosen.length ? chosen.map(({label,item,metric}) => {
+    const lesson = item.lesson;
+    return `<button type="button" class="trend-card trend-card-button" data-trend-lesson-id="${esc(String(lesson.id))}"><div class="trend-rank">${esc(label)}</div><h3>${esc(lesson.title || lesson.topic || "Conversation")}</h3><div class="trend-signal"><span>${esc(metric)}</span><span>${relativeTime(item.updatedAt)}</span></div></button>`;
+  }).join("") : `<article class="trend-card trend-empty"><div class="trend-rank">Concept demo</div><h3>Your learning signals</h3><div class="trend-signal"><span>Start a lesson to see them</span></div></article>`;
   const html = `<div class="trends-shell"><div class="trend-demo">Concept demo</div><div class="trend-grid">${cards}</div></div>`;
   targets.forEach(target => {
     target.innerHTML = html;
@@ -3314,7 +3374,7 @@ function createDictationController(options) {
     rec.continuous = false;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
-    rec.lang = navigator.language || "en-US";
+    rec.lang = speechRecognitionLocale();
     setControlsBusy(true);
     setPhase("requesting");
     showStatus("Starting microphone…");
@@ -3510,6 +3570,7 @@ const voice = {
   mediaStartedAt:0, mediaTimer:null, mediaLevelRAF:0, mediaMeterFrames:0, mediaAudioContext:null, mediaAnalyser:null, mediaSourceNode:null, mediaSourceStream:null,
   ownedSendAfterTranscription:true, ownedStopRequested:false, ownedStopTimer:null, ownedFinalize:null, transcribeAbort:null, lastMicLevel:0,
   retainedBlob:null, retainedMime:"", retainedSendAfter:true,
+  keyboardRestore:null,
 };
 
 function ownedVoiceCaptureSupported() {
@@ -3518,6 +3579,16 @@ function ownedVoiceCaptureSupported() {
 function voiceSupported() {
   return FULL_VOICE_MODE_ENABLED && (ownedVoiceCaptureSupported() || !!SR) &&
     ("speechSynthesis" in window || !!state.cartKey || !!state.elKey);
+}
+const SPEECH_LOCALES = {
+  en:"en-US", es:"es-ES", fr:"fr-FR", de:"de-DE", pt:"pt-BR",
+  it:"it-IT", nl:"nl-NL", sv:"sv-SE", no:"nb-NO", da:"da-DK",
+};
+function speechLanguageCode() {
+  return Object.prototype.hasOwnProperty.call(SPEECH_LOCALES, state.speechLanguage) ? state.speechLanguage : "en";
+}
+function speechRecognitionLocale() {
+  return SPEECH_LOCALES[speechLanguageCode()] || "en-US";
 }
 
 /* ---- voice selection: prefer natural/neural system voices ---- */
@@ -3555,9 +3626,9 @@ function pickVoice() {
   }
   if (state.voiceURI) {
     const v = ttsVoices.find(v => v.voiceURI === state.voiceURI);
-    if (v && !(voice.forceLocal && !v.localService)) return v;
+    if (v && v.lang && v.lang.slice(0, 2) === speechLanguageCode() && !(voice.forceLocal && !v.localService)) return v;
   }
-  const lang = (navigator.language || "en").slice(0, 2);
+  const lang = speechLanguageCode();
   const pool = all.filter(v => v.lang && v.lang.slice(0, 2) === lang);
   return [...(pool.length ? pool : all)].sort((a, b) => voiceScore(b) - voiceScore(a))[0] || null;
 }
@@ -3566,7 +3637,7 @@ function populateVoiceSelect() {
   if (!sel) return;
   const best = pickVoice();
   sel.innerHTML = `<option value="">Automatic${best ? " (" + best.name.replace(/Microsoft |Google /, "") + ")" : ""}</option>`;
-  const lang = (navigator.language || "en").slice(0, 2);
+  const lang = speechLanguageCode();
   ttsVoices
     .filter(v => v.lang && v.lang.slice(0, 2) === lang)
     .sort((a, b) => voiceScore(b) - voiceScore(a))
@@ -3581,7 +3652,7 @@ function populateVoiceSelect() {
 function setVoiceStatus(mode) {
   const dot = $("voice-dot"), txt = $("voice-status-text"), control = $("voice-status");
   voice.statusMode = mode;
-  control.disabled = mode === "thinking" || mode === "transcribing" || mode === "finishing";
+  control.disabled = mode === "thinking" || mode === "finishing";
   control.classList.toggle("locked", mode === "locked");
   control.classList.toggle("starting", mode === "starting" || mode === "reconnecting" || mode === "finishing" || mode === "transcribing");
   dot.className = "";
@@ -3593,7 +3664,7 @@ function setVoiceStatus(mode) {
   else if (mode === "pressing") { dot.classList.add("pulse"); txt.textContent = "recording · release to send"; }
   else if (mode === "locked") { dot.classList.add("pulse"); txt.textContent = "locked · tap when finished"; }
   else if (mode === "finishing") { dot.classList.add("held"); txt.textContent = "finishing your thought…"; }
-  else if (mode === "transcribing") { dot.classList.add("pulse"); txt.textContent = "turning your voice into words…"; }
+  else if (mode === "transcribing") { dot.classList.add("pulse"); txt.textContent = "transcribing… tap to cancel"; }
   else if (mode === "retry") { dot.classList.add("held"); txt.textContent = "tap to retry transcription"; }
   else if (mode === "paused") { dot.classList.add("held"); txt.textContent = "mic paused · hold to resume"; }
   else if (mode === "thinking") { txt.textContent = "thinking…"; }
@@ -3602,6 +3673,34 @@ function setVoiceStatus(mode) {
 }
 
 let voicePinNextMessageTop = false;
+function lockVoiceKeyboard() {
+  const input = $("chat-input");
+  if (input && !voice.keyboardRestore) {
+    voice.keyboardRestore = {
+      readOnly: input.readOnly,
+      inputMode: input.getAttribute("inputmode"),
+    };
+    input.readOnly = true;
+    input.setAttribute("inputmode", "none");
+    try { input.blur(); } catch (error) {}
+  }
+  document.body.classList.add("voice-mode");
+  const overlay = $("voice-overlay");
+  requestAnimationFrame(() => {
+    if (!voice.active) return;
+    try { overlay.focus({ preventScroll:true }); } catch (error) { try { overlay.focus(); } catch (focusError) {} }
+  });
+}
+function unlockVoiceKeyboard() {
+  document.body.classList.remove("voice-mode");
+  const input = $("chat-input");
+  if (input && voice.keyboardRestore) {
+    input.readOnly = voice.keyboardRestore.readOnly;
+    if (voice.keyboardRestore.inputMode == null) input.removeAttribute("inputmode");
+    else input.setAttribute("inputmode", voice.keyboardRestore.inputMode);
+  }
+  voice.keyboardRestore = null;
+}
 function enterVoice(autoListen = true, excludeLastFromHistory = false, pinNextMessageTop = false) {
   if (!voiceSupported()) { toast("Voice needs microphone access and a supported transcription service."); return; }
   const lesson = getLesson(currentLessonId);
@@ -3619,6 +3718,7 @@ function enterVoice(autoListen = true, excludeLastFromHistory = false, pinNextMe
   voice.forceLocal = false; // give the better (cloud) voices a fresh chance every session
   elBroken = false; cartBroken = false; // and the premium voices too
   $("voice-overlay").style.display = "flex";
+  lockVoiceKeyboard();
   $("voice-title").textContent = lesson.title || lesson.topic || "Lesson";
   // unlock speech synthesis with a silent utterance (needed on iOS; harmless elsewhere)
   try { speechSynthesis.cancel(); const un = new SpeechSynthesisUtterance(" "); un.volume = 0; speechSynthesis.speak(un); } catch (e) {}
@@ -3642,6 +3742,7 @@ function exitVoice() {
   resetVoiceLockVisual();
   closeLessonPath();
   $("voice-overlay").style.display = "none";
+  unlockVoiceKeyboard();
 }
 
 /* ---- conversation rendering inside voice mode ---- */
@@ -3666,6 +3767,12 @@ function voiceAutoScroll() {
   // don't fight the user if they scrolled up to reread something
   if (sc.scrollHeight - sc.scrollTop - sc.clientHeight < 160) sc.scrollTop = sc.scrollHeight;
 }
+function resizeVoiceSessionTail() {
+  const sc = $("voice-scroll");
+  const tail = sc.querySelector(".voice-session-tail-space");
+  if (!tail || !voiceCurrentEl) return;
+  tail.style.height = Math.max(0, sc.clientHeight - voiceCurrentEl.offsetHeight - 12) + "px";
+}
 
 /* ---- retired v13 recognizer implementation (kept only as rollback reference) ---- */
 function legacyStartListening(resume = false) {
@@ -3679,7 +3786,7 @@ function legacyStartListening(resume = false) {
   setVoiceStatus("listening");
   const rec = new SR();
   voice.rec = rec;
-  rec.continuous = !!voice.spaceHeld; rec.interimResults = true; rec.lang = navigator.language || "en-US";
+  rec.continuous = !!voice.spaceHeld; rec.interimResults = true; rec.lang = speechRecognitionLocale();
   rec.onresult = e => {
     let interim = "";
     for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -3845,6 +3952,22 @@ function voiceRecordingExtension(mime) {
   if (/ogg/i.test(mime)) return "ogg";
   if (/wav/i.test(mime)) return "wav";
   return "webm";
+}
+function normalizeVoiceTranscript(raw) {
+  const text = String(raw || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  const tokens = text.split(" ");
+  const output = [];
+  for (let index = 0; index < tokens.length;) {
+    const normalized = tokens[index].toLocaleLowerCase().replace(/[^\p{L}\p{N}']/gu, "");
+    let end = index + 1;
+    while (end < tokens.length && tokens[end].toLocaleLowerCase().replace(/[^\p{L}\p{N}']/gu, "") === normalized) end++;
+    const runLength = end - index;
+    if (normalized && runLength >= 4) output.push(tokens[index]);
+    else output.push(...tokens.slice(index, end));
+    index = end;
+  }
+  return output.join(" ");
 }
 function disableOwnedMicTrack() {
   if (!voice.mediaStream) return;
@@ -4025,14 +4148,14 @@ async function transcribeOwnedVoice(blob, mime) {
   const timeout = setTimeout(() => {
     timeoutExpired = true;
     controller.abort();
-  }, 45000);
+  }, 25000);
   let lastError = null;
   try {
     for (let attempt = 0; attempt < 2; attempt++) {
       const form = new FormData();
       form.append("file", blob, `voice-turn.${extension}`);
       form.append("model", "ink-whisper");
-      form.append("language", "en");
+      form.append("language", speechLanguageCode());
       try {
         const response = await fetch("https://api.cartesia.ai/stt", {
           method: "POST",
@@ -4054,7 +4177,7 @@ async function transcribeOwnedVoice(blob, mime) {
           throw failure;
         }
         const result = await response.json();
-        return String(result.text || "").trim();
+        return normalizeVoiceTranscript(result.text);
       } catch (error) {
         if (error.name === "AbortError" && timeoutExpired) {
           const timeoutError = new Error("transcription timed out");
@@ -4089,6 +4212,9 @@ async function finalizeOwnedVoiceCapture(epoch, chunks, mime, sendAfter) {
     toast("The phone opened the mic but returned no audio. Hold once more to reconnect.", 5200);
     return;
   }
+  voice.retainedBlob = blob;
+  voice.retainedMime = mime || blob.type || "";
+  voice.retainedSendAfter = sendAfter;
   setVoiceStatus("transcribing");
   try {
     const transcript = await transcribeOwnedVoice(blob, mime);
@@ -4114,6 +4240,7 @@ async function finalizeOwnedVoiceCapture(epoch, chunks, mime, sendAfter) {
     voice.captureEngine = "";
     voice.sendOnEnd = false;
     if (error.emptyTranscript) {
+      voice.retainedBlob = null; voice.retainedMime = ""; voice.retainedSendAfter = true;
       releaseOwnedMicStream();
       setVoiceStatus(voice.pending.trim() ? "captured" : "ready");
       toast(measuredSignal
@@ -4127,6 +4254,14 @@ async function finalizeOwnedVoiceCapture(epoch, chunks, mime, sendAfter) {
     setVoiceStatus("retry");
     toast("Your recording is safe. Tap to retry transcription.", 6200);
   }
+}
+function cancelOwnedTranscriptionForRetry() {
+  if (!voice.active || voice.statusMode !== "transcribing") return;
+  if (voice.transcribeAbort) {
+    try { voice.transcribeAbort.abort(); } catch (error) {}
+  }
+  setVoiceStatus(voice.retainedBlob ? "retry" : (voice.pending.trim() ? "captured" : "ready"));
+  toast(voice.retainedBlob ? "Transcription cancelled. Your recording is safe; tap when you want to retry." : "Transcription cancelled.", 5200);
 }
 async function retryOwnedTranscription() {
   const blob = voice.retainedBlob;
@@ -4404,7 +4539,7 @@ function startListening(resume = false) {
   rec.continuous = true;
   rec.interimResults = true;
   rec.maxAlternatives = 1;
-  rec.lang = navigator.language || "en-US";
+  rec.lang = speechRecognitionLocale();
   rec.onstart = () => {
     if (!voiceRecognitionIsCurrent(rec,epoch)) return;
     voice.hasRecognitionStarted = true;
@@ -4994,7 +5129,9 @@ function interruptSpeech() {
 
 function handleVoiceControl(event) {
   if (event) event.stopPropagation();
-  if (!voice.active || ["thinking","starting","finishing","transcribing"].includes(voice.statusMode)) return;
+  if (!voice.active) return;
+  if (voice.statusMode === "transcribing") { cancelOwnedTranscriptionForRetry(); return; }
+  if (["thinking","starting","finishing"].includes(voice.statusMode)) return;
   if (voice.speaking) { interruptSpeech(); return; }
   if (voice.statusMode === "retry" && voice.retainedBlob) { retryOwnedTranscription(); return; }
   const text = (voice.pending + voice.interim).trim();
@@ -5095,6 +5232,7 @@ function renderVoiceWords(fullText) {
   frag.appendChild(document.createTextNode(clean.slice(last)));
   el.appendChild(frag);
   refreshWordClasses();
+  resizeVoiceSessionTail();
   // follow new text as it streams in even before TTS playback has started
   // highlighting anything — text can arrive well ahead of the first spoken
   // chunk, and without this the transcript grows below the fold while
@@ -5190,10 +5328,13 @@ function refreshWordClasses() {
   function suppressSyntheticClick() { voice.suppressControlClickUntil = Date.now() + 550; }
   control.addEventListener("pointerdown", event => {
     if (event.button != null && event.button !== 0) return;
-    if (!voice.active || voice.statusMode === "thinking") return;
+    if (!voice.active || ["thinking","starting","finishing"].includes(voice.statusMode)) return;
     tracking=true;pointerId=event.pointerId;sx=event.clientX;sy=event.clientY;startedAt=Date.now();lockedDuringGesture=false;resumedCaptured=false;
     try { control.setPointerCapture(pointerId); } catch (e) {}
     if (voice.speaking) { action="interrupt"; interruptSpeech(); suppressSyntheticClick(); return; }
+    if (voice.statusMode === "transcribing") {
+      action="cancel-transcription";suppressSyntheticClick();return;
+    }
     if (voice.statusMode === "retry" && voice.retainedBlob) {
       action="retry";suppressSyntheticClick();return;
     }
@@ -5252,18 +5393,45 @@ function refreshWordClasses() {
       finishVoiceCapture();
     } else if (action === "retry" && !cancelled) {
       retryOwnedTranscription();
+    } else if (action === "cancel-transcription" && !cancelled) {
+      cancelOwnedTranscriptionForRetry();
     }
     action="";lockedDuringGesture=false;resumedCaptured=false;
     if (!voice.locked) resetVoiceLockVisual();
   }
   control.addEventListener("pointerup",event => finish(event,false));
   control.addEventListener("pointercancel",event => finish(event,true));
+  window.addEventListener("pointerup", event => { if (tracking) finish(event,false); }, true);
+  window.addEventListener("pointercancel", event => { if (tracking) finish(event,true); }, true);
+  control.addEventListener("lostpointercapture", event => {
+    if (tracking && !lockedDuringGesture) finish({ pointerId, clientX:sx, clientY:sy }, true);
+  });
   control.addEventListener("click",event => {
     if (Date.now() < voice.suppressControlClickUntil) { event.preventDefault();event.stopPropagation();return; }
     // Keyboard/assistive activation has no pointer sequence; keep a complete
     // tap-to-toggle path for accessibility and laptop use.
     handleVoiceControl(event);
   });
+})();
+/* A deliberate swipe from the phone's left edge exits the spoken lesson.
+   It never owns ordinary transcript swipes, so vertical reading remains native. */
+(function attachVoiceEdgeExit() {
+  const overlay = $("voice-overlay");
+  let tracking=false, sx=0, sy=0;
+  overlay.addEventListener("pointerdown", event => {
+    if (!voice.active || event.clientX > 28 || event.target.closest("button")) return;
+    tracking=true; sx=event.clientX; sy=event.clientY;
+  });
+  overlay.addEventListener("pointerup", event => {
+    if (!tracking) return;
+    tracking=false;
+    const dx=event.clientX-sx, dy=event.clientY-sy;
+    if (dx > 88 && Math.abs(dx) > Math.abs(dy) * 1.7) {
+      exitVoice();
+      exitLessonToHome();
+    }
+  });
+  overlay.addEventListener("pointercancel", () => { tracking=false; });
 })();
 $("voice-close").onclick = () => { exitVoice(); exitLessonToHome(); };
 if (FULL_VOICE_MODE_ENABLED) {
@@ -5374,9 +5542,10 @@ function organizeSettingsPanel() {
     nodes.filter(Boolean).forEach(node => body.appendChild(node)); details.append(summary, body); intro.after(details); return details;
   }
   const fieldNodes = id => { const field=$(id), label=field && field.previousElementSibling; return [label,field]; };
-  const model = fieldNodes("set-model"), voiceSelect = fieldNodes("set-voice");
+  const model = fieldNodes("set-model"), voiceSelect = fieldNodes("set-voice"), speechLanguage = fieldNodes("set-speechlanguage");
   const voiceDefault = $("set-voicedefault") && $("set-voicedefault").closest("label"); if (voiceDefault) voiceDefault.className = "settings-check";
-  const learning = group("Learning & conversation", [...model, ...voiceSelect, voiceDefault], true);
+  const speechLanguageHint = $("set-speechlanguage") && $("set-speechlanguage").nextElementSibling;
+  const learning = group("Learning & conversation", [...model, ...voiceSelect, ...speechLanguage, speechLanguageHint, voiceDefault], true);
   const key = fieldNodes("set-key"), keyHint = $("set-key") && $("set-key").nextElementSibling;
   const connection = group("AI connection", [...key, keyHint]);
   const voiceNodes = [];
@@ -5394,6 +5563,7 @@ function openSettings() {
   $("set-cartkey").value = state.cartKey || "";
   $("set-cartvoice").value = state.cartVoice || "";
   $("set-model").value = state.model;
+  $("set-speechlanguage").value = speechLanguageCode();
   populateVoiceSelect();
   $("set-voicedefault").checked = !!state.voiceDefault;
   $("settings").classList.add("open");
@@ -5406,7 +5576,7 @@ $("gear").onclick = openSettings;
 // voice list, which made every close look like an unsaved change)
 let settingsSnap = "";
 function settingsFields() {
-  return JSON.stringify([$("set-key").value.trim(), $("set-elkey").value.trim(), $("set-cartkey").value.trim(), $("set-cartvoice").value.trim(), $("set-model").value, $("set-voice").value, $("set-voicedefault").checked]);
+  return JSON.stringify([$("set-key").value.trim(), $("set-elkey").value.trim(), $("set-cartkey").value.trim(), $("set-cartvoice").value.trim(), $("set-model").value, $("set-voice").value, $("set-speechlanguage").value, $("set-voicedefault").checked]);
 }
 function settingsDirty() { return settingsFields() !== settingsSnap; }
 function applySettings() {
@@ -5417,6 +5587,7 @@ function applySettings() {
   elBroken = false; cartBroken = false; // new keys → give the premium voices a fresh chance
   state.model = $("set-model").value;
   state.voiceURI = $("set-voice").value;
+  state.speechLanguage = $("set-speechlanguage").value || "en";
   state.voiceDefault = $("set-voicedefault").checked;
   voice.forceLocal = false; // a new voice choice clears any local-only fallback
   save();
