@@ -538,8 +538,8 @@
   .source-card-hold { position:absolute;right:13px;bottom:10px;color:var(--ink-soft);font-size:9px;letter-spacing:.08em;text-transform:uppercase; }
   .custom-category-card { display:flex;flex-direction:column;justify-content:center;text-align:center;border-color:rgba(200,173,89,.78);background:linear-gradient(160deg,var(--card),#f6f0dc);cursor:pointer;-webkit-touch-callout:none; }
   .custom-category-card .card-cat { color:#8a7229; }.custom-category-count { margin-top:12px;color:var(--ink-soft);font-size:11px; }
-  .category-add-button { position:absolute;right:max(14px,env(safe-area-inset-right));top:50%;z-index:18;transform:translateY(-50%);width:52px;height:52px;border:1px solid rgba(200,173,89,.55);border-radius:17px;background:rgba(255,253,250,.92);color:#92782c;font-size:32px;font-weight:300;line-height:1;box-shadow:0 8px 22px rgba(22,64,79,.09);cursor:pointer; }
-  #source-page .category-add-button { right:max(12px,env(safe-area-inset-right)); }
+  .category-add-button { position:absolute;right:max(18px,env(safe-area-inset-right));top:22%;z-index:18;transform:translateY(-50%);width:52px;height:52px;border:1px solid rgba(200,173,89,.55);border-radius:17px;background:rgba(255,253,250,.92);color:#92782c;font-size:32px;font-weight:300;line-height:1;box-shadow:0 8px 22px rgba(22,64,79,.09);cursor:pointer; }
+  #source-page .category-add-button { right:max(18px,env(safe-area-inset-right));top:22%; }
 
   /* User collections and source preview */
   #category-organizer,#source-preview-sheet { position:fixed;inset:0;z-index:124;display:none;align-items:flex-end;background:rgba(22,64,79,.34); }
@@ -569,6 +569,7 @@
   .source-preview-actions .primary { border-color:var(--accent);background:var(--accent);color:white; }
   @media(max-width:700px){
     .category-add-button{right:8px;width:46px;height:46px;border-radius:15px}.source-preview-actions{grid-template-columns:1fr}
+    #source-page .category-add-button{right:8px}
     .source-create-card{padding:13px}.source-create-card h3{margin-bottom:8px;font-size:18px}
     #source-url{padding:9px 10px;font-size:14px}.source-input-divider{margin:4px 0;font-size:8px}
     #source-file-button{padding:8px 10px;font-size:11px}#source-pending-preview{height:48px;margin-top:5px}
