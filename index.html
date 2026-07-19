@@ -822,6 +822,7 @@
   .settings-group[open] summary::after { content:"−"; }
   .settings-group-body { padding:0 16px 17px; border-top:1px solid rgba(157,179,184,.55); }
   .settings-check { display:flex!important;align-items:center;gap:10px;text-transform:none!important;font-size:14px!important;letter-spacing:0!important;color:var(--ink)!important;margin-top:18px!important; }
+  .settings-check[hidden], #settings-developer-group[hidden], #settings-premium-group[hidden], #settings-tester-group[hidden] { display:none!important; }
   .settings-check input { width:auto!important; accent-color:var(--accent); transform:scale(1.2); }
   #settings-developer-group[hidden] { display:none; }
   .developer-status { margin:10px 0 2px;padding:10px 12px;border-left:2px solid #c8ad59;color:var(--ink-soft);font-size:12px;line-height:1.45; }
@@ -1052,16 +1053,6 @@
   &#9888; This copy was opened as a <b>file</b>, so it has no stable site identity and microphone permission may repeat.
   For testing, launch with <b>serve.cmd</b>. The native build will request permission once and remember the choice.
   <span id="fw-x" title="Dismiss">&#10005;</span>
-</div>
-
-<div id="update-banner">
-  <span>A new version is ready.</span>
-  <button id="update-refresh" type="button">Refresh</button>
-  <span id="update-x" title="Later">&#10005;</span>
-</div>
-
-<div id="splash">
-  <svg id="splash-mark" viewBox="0 0 24 24"><path d="M4 13l5 5L20 6"/></svg>
 </div>
 
 <div id="intro-demo" role="dialog" aria-modal="true" aria-labelledby="intro-title" aria-hidden="true">
@@ -1437,7 +1428,6 @@
     <div class="hint">Save all your lessons (and their paid research) to a file, then Load it in another browser or on your phone so nothing is lost.</div>
     <button id="intro-replay" type="button">View introduction</button>
     <button id="settings-save">Save</button>
-    <div class="hint" style="text-align:center;margin-top:14px">Version <span id="build-tag" style="text-decoration:underline;cursor:pointer">&nbsp;</span> &middot; tap to see what's new</div>
   </div>
 </div>
 
@@ -1452,7 +1442,7 @@
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v25 · Jul 19"; // bump on every deploy — the auto-updater compares this against the server, and the tag below must match
+const BUILD = "v26 · Jul 19";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -1615,14 +1605,15 @@ if (!state.speechLanguage) { state.speechLanguage = "en"; save(); }
 // installed home-screen icon shares the same localStorage as this tab.
 (function keyFromLink() {
   const params = new URLSearchParams(location.search);
-  const k = params.get("key"), ek = params.get("elkey"), ck = params.get("cartkey"), invite = params.get("invite");
-  if (!k && !ek && !ck && !invite) return;
+  const k = params.get("key"), ek = params.get("elkey"), ck = params.get("cartkey"), invite = params.get("invite"), developer = params.get("developer") === "1";
+  state.developerMode = developer;
+  if (!k && !ek && !ck && !invite && !developer) return;
   if (k) state.apiKey = k;
   if (ek) state.elKey = ek;
   if (ck) state.cartKey = ck;
   if (invite) state.testerInvite = invite;
   save();
-  history.replaceState(null, "", location.pathname); // don't leave the key sitting in the address bar
+  history.replaceState(null, "", location.pathname); // don't leave setup values sitting in the address bar
   setTimeout(() => toast(invite ? "Tester access is ready on this device." : "Set up on this device — you won't need to enter a key again.", 4500), 400);
 })();
 
@@ -2324,12 +2315,32 @@ const PRICES = {
 function addCost(lesson, model, usage) {
   if (!lesson || !usage) return;
   const p = PRICES[model] || [3, 15];
+  const previousCost = lesson.cost || 0;
   lesson.cost = (lesson.cost || 0)
     + (usage.input * p[0]
        + (usage.cacheWrite || 0) * p[0] * 1.25   // cache writes cost 1.25x
        + (usage.cacheRead || 0) * p[0] * 0.1     // cache reads cost 0.1x — the savings
        + usage.output * p[1]) / 1e6
     + (usage.searches || 0) * 0.01;              // web search: $10 per 1000 searches
+  trackLessonMetric(lesson,{ bucket:"tutor", model, costUsd:Math.max(0,(lesson.cost || 0) - previousCost), apiCall:true });
+}
+function trackLessonMetric(lesson, metric = {}) {
+  if (!lesson || !backendAccessEnabled()) return;
+  const body = {
+    lessonId:lesson.id, lessonTitle:lesson.title || lesson.topic || "",
+    eventId:metric.eventId || uid(), bucket:metric.bucket || "lifecycle",
+    model:metric.model || "", costUsd:Number(metric.costUsd) || 0,
+    apiCall:!!metric.apiCall,
+  };
+  if (typeof metric.complete === "boolean") body.complete = metric.complete;
+  if (Number.isFinite(Number(metric.masteryScore))) body.masteryScore = Number(metric.masteryScore);
+  backendFetch("lesson-metrics",{ headers:{"content-type":"application/json"}, body:JSON.stringify(body) })
+    .catch(error => console.warn("Lesson metric was not recorded",error));
+}
+function addServiceCost(lesson,bucket,costUsd,model,eventId) {
+  if (!lesson || !Number.isFinite(costUsd) || costUsd < 0) return;
+  lesson.cost = (lesson.cost || 0) + costUsd;
+  trackLessonMetric(lesson,{ eventId:eventId || uid(), bucket, model, costUsd, apiCall:true });
 }
 function fmtCost(c) {
   if (!c) return "";
@@ -2529,7 +2540,8 @@ function renderHome() {
   wheel.cards = []; wheel.ids = []; wheel.renderedIndices = new Set();
   let nc = null;
 
-  {
+  const insidePersonalCategory = !!(wheel.layerCategory && wheel.layerCategory.startsWith("custom:"));
+  if (!insidePersonalCategory) {
     const noc = document.createElement("div");
     noc.className = "card notes-card";
     noc.dataset.kind = "notes";
@@ -2577,7 +2589,11 @@ function renderHome() {
   }
 
   // lesson cards, newest first
-  const visibleLessons = [...state.lessons].reverse().filter(lesson => !isSourceLesson(lesson) && lessonMatchesLayer(lesson));
+  const visibleLessons = [...state.lessons].reverse().filter(lesson => {
+    if (isSourceLesson(lesson) || !lessonMatchesLayer(lesson)) return false;
+    if (!wheel.layerCategory && (lesson.customCategoryIds || []).length) return false;
+    return true;
+  });
   visibleLessons.forEach(l => {
     const card = document.createElement("div");
     card.className = "card lesson-card";
@@ -2612,6 +2628,14 @@ function renderHome() {
     c.appendChild(card);
     wheel.cards.push(card); wheel.ids.push(l.id);
   });
+
+  if (insidePersonalCategory && !visibleLessons.length) {
+    const empty = document.createElement("div");
+    empty.className = "card custom-category-card";
+    empty.innerHTML = `<div class="card-cat">collection</div><div class="card-title serif">Nothing filed here yet</div><div class="custom-category-count">Return to Most recent and hold a lesson to add it.</div>`;
+    c.appendChild(empty);
+    wheel.cards.push(empty); wheel.ids.push(null);
+  }
 
   if (!wheel.cards.length) {
     wheel.layerCategory = null; wheel.layerIndex = 0;
@@ -2992,36 +3016,15 @@ function pathControlAtPoint(x, y) {
     down = false; gestureAxis = null;
     if (target >= 0 && wheel.cards[target]) wheel.cards[target].style.translate = "";
   });
-  // Laptop trackpad: vertical movement changes the organizational layer while
-  // horizontal movement still spins the carousel. Touch/mouse dragging upward
-  // on a card keeps its separate meaning: open that lesson's branches.
-  let layerFloat = wheel.layerIndex, layerSettleTimer = 0;
+  // Laptop trackpad: horizontal movement spins the carousel. Vertical wheel
+  // movement stays with the page and never changes the organizational layer.
   area.addEventListener("wheel", e => {
-    // Vertical scrolling on the empty space moves between the question deck
-    // and the source shelf. Over a card, the existing deck/branch gestures own it.
-    if (cardAtPoint(e.clientX, e.clientY) < 0 && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-      return;
-    }
-    e.preventDefault();
+    // Touch/mouse dragging upward keeps its separate meaning: lesson branches.
     const vertical = Math.abs(e.deltaY) > Math.abs(e.deltaX);
-    if (vertical) {
-      const layers = categoryLayers();
-      if (wheel.previewLayerIndex === null) layerFloat = wheel.layerIndex;
-      layerFloat += -e.deltaY / 280;
-      wheel.previewLayerIndex = ((Math.round(layerFloat) % layers.length) + layers.length) % layers.length;
-      wheel.categorySelecting = true;
-      const guide = $("lesson-layer-guide");
-      guide.style.setProperty("--category-angle", ((layerFloat - Math.round(layerFloat)) * 360 / layers.length) + "deg");
-      updateLayerGuide();
-      clearTimeout(layerSettleTimer);
-      layerSettleTimer = setTimeout(() => {
-        const target = ((Math.round(layerFloat) % layers.length) + layers.length) % layers.length;
-        applyCategoryLayer(target);
-      }, 150);
-      return;
-    }
+    if (vertical) return;
+    e.preventDefault();
     // desktop scroll spins the ring continuously — no stepping card to card
-    wheel.pos = Math.max(0, Math.min(wheel.cards.length - 1, wheel.pos + (e.deltaY + e.deltaX) / 420));
+    wheel.pos = Math.max(0, Math.min(wheel.cards.length - 1, wheel.pos + e.deltaX / 420));
     scheduleWheelLayout(false);
   }, { passive: false });
 })();
@@ -3054,6 +3057,7 @@ async function beginLesson(topic, methodKey, starterText, parentId, sourceUrl, s
   };
   state.lessons.push(lesson);
   save();
+  trackLessonMetric(lesson,{ eventId:`lesson-start:${lesson.id}`, bucket:"lifecycle", complete:false });
   const briefingPromise = startBriefing(lesson);
   const wantsVoice = state.voiceDefault && voiceSupported();
   if (wantsVoice) {
@@ -3938,6 +3942,7 @@ function assessLessonUnderstanding(lesson,sessionId = "") {
       lesson.assessmentVersion = "learner-state-v3-sessions";
       lesson.assessmentUpdatedAt = Date.now();
       save();
+      trackLessonMetric(lesson,{ eventId:`assessment:${lesson.id}:${lesson.assessmentUpdatedAt}`, bucket:"lifecycle", complete:lesson.pathComplete, masteryScore:lesson.masteryScore });
       if ($("view-home").classList.contains("active")) renderHome();
       if ($("view-profile").classList.contains("active")) renderProfile();
       if (lessonPathLessonId === lesson.id && $("lesson-path-panel").classList.contains("open")) renderLessonPath(lesson);
@@ -3968,6 +3973,7 @@ function closeLessonSession(lesson) {
   }
   lesson.closedAt = Date.now();
   save();
+  trackLessonMetric(lesson,{ eventId:`close:${lesson.id}:${lesson.closedAt}`, bucket:"lifecycle", complete:!!lesson.pathComplete, masteryScore:lesson.masteryScore });
   assessLessonUnderstanding(lesson,session && session.id);
 }
 function exitLessonToHome() {
@@ -4440,7 +4446,11 @@ function renderSourceLibrary() {
     const count = customCategoryCount(sourceLibraryCategoryId,"upload");
     row.insertAdjacentHTML("beforeend",`<button type="button" class="source-card custom-category-card source-category-return" data-source-category-return><span class="source-card-host">all sources &larr;</span><strong class="source-card-title">${esc(activeCategory.name)}</strong><span class="custom-category-count">${count} source${count === 1 ? "" : "s"}</span></button>`);
   }
-  const lessons = [...state.lessons].filter(lesson => isSourceLesson(lesson) && (!sourceLibraryCategoryId || (lesson.customCategoryIds || []).includes(sourceLibraryCategoryId))).sort((a,b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const lessons = [...state.lessons].filter(lesson => {
+    if (!isSourceLesson(lesson)) return false;
+    const memberships = lesson.customCategoryIds || [];
+    return sourceLibraryCategoryId ? memberships.includes(sourceLibraryCategoryId) : !memberships.length;
+  }).sort((a,b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   row.insertAdjacentHTML("beforeend", lessons.map(lesson => {
     const overview = lesson.sourceOverview || lesson.topic || "";
     return `<article class="source-card" data-source-lesson-id="${lesson.id}">${masteryDotHTML(lesson)}<button type="button" class="source-card-path" aria-label="Open learning path" title="Learning path"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6v4m10-4v4M7 10h10M12 10v5"/><circle cx="7" cy="4" r="2"/><circle cx="17" cy="4" r="2"/><circle cx="12" cy="18" r="2"/></svg></button><button type="button" class="source-card-visual" aria-label="Preview source">${sourceCardVisual(lesson)}</button><div class="source-card-copy"><span class="source-card-host">${esc(sourceHostLabel(lesson))}</span><strong class="source-card-title">${esc(lesson.title || "Source lesson")}</strong><span class="source-card-overview">${esc(overview)}</span></div><span class="source-card-hold">hold to organize</span></article>`;
@@ -5242,7 +5252,7 @@ function exitVoice() {
   voice.retainedBlob = null; voice.retainedMime = ""; voice.retainedSendAfter = true;
   try { speechSynthesis.cancel(); } catch (e) {}
   try { ttsAudio.pause(); ttsAudio.onended = null; ttsAudio.src = ""; } catch (e) {}
-  voice.queue = []; voice.utter = null; voice.speaking = false;
+  discardQueuedAudio(); voice.utter = null; voice.speaking = false;
   resetVoiceLockVisual();
   closeLessonPath();
   closeConversationHistory();
@@ -5760,6 +5770,9 @@ async function transcribeOwnedVoice(blob, mime) {
           throw failure;
         }
         const lesson = getLesson(currentLessonId);
+        if (lesson && diagnosticProvider === "deepgram-server") {
+          addServiceCost(lesson,"stt",Math.max(0,Number(result.duration) || 0) / 60 * 0.0048,"deepgram-nova-3",`stt:${result.request_id || uid()}`);
+        }
         const rawText = String(result.text || "").trim();
         const normalized = normalizeVoiceTranscript(rawText);
         const returnedLanguage = String(result.language || "").toLocaleLowerCase();
@@ -6348,7 +6361,7 @@ async function voiceSend(text, reuseExistingTurn = false) {
   try { speechSynthesis.cancel(); } catch (e) {} // clear any stuck/paused speech from the last turn
   voice.speaking = true; voice.streamDone = false;
   voice.mutedThisTurn = false;
-  voice.queue = []; voice.hl = -1;
+  discardQueuedAudio(); voice.hl = -1;
   // Chrome/Edge silently pause long speech after ~15s — nudge it to keep going
   clearInterval(voice.keepAlive);
   voice.keepAlive = setInterval(() => { try { if (speechSynthesis.speaking) speechSynthesis.resume(); } catch (e) {} }, 5000);
@@ -6411,7 +6424,7 @@ async function voiceReenter(lesson) {
   try { speechSynthesis.cancel(); } catch (e) {}
   voice.speaking = true; voice.streamDone = false;
   voice.mutedThisTurn = false;
-  voice.queue = []; voice.hl = -1;
+  discardQueuedAudio(); voice.hl = -1;
   clearInterval(voice.keepAlive);
   voice.keepAlive = setInterval(() => { try { if (speechSynthesis.speaking) speechSynthesis.resume(); } catch (e) {} }, 5000);
   let enqueuedUpTo = 0;
@@ -6469,7 +6482,7 @@ function voiceRepeatPending(lesson, lastMsg) {
   voiceCurrentEl = null;
   voice.speaking = true; voice.streamDone = true;
   voice.mutedThisTurn = false;
-  voice.queue = []; voice.hl = -1;
+  discardQueuedAudio(); voice.hl = -1;
   clearInterval(voice.keepAlive);
   voice.keepAlive = setInterval(() => { try { if (speechSynthesis.speaking) speechSynthesis.resume(); } catch (e) {} }, 5000);
   const spoken = stripForSpeech(lastMsg.content);
@@ -6501,7 +6514,8 @@ function stripForSpeech(s) { // don't read markdown symbols aloud
   return s.replace(/\*\*?/g, "").replace(/`/g, "").replace(/#+\s/g, "");
 }
 function queueUtterance(text, base) {
-  voice.queue.push({ text, base });
+  voice.queue.push({ text, base, lessonId:currentLessonId, metricEventId:uid() });
+  prefetchQueuedCloudAudio();
   pumpSpeech();
 }
 /* while a search runs before any reply text exists, say a short line instead
@@ -6597,7 +6611,13 @@ async function cartFetch(text) {
 async function pumpCart(item) {
   voice.utter = item;
   try {
-    const url = await cartFetch(item.text);
+    prepareCloudAudio(item,"cartesia");
+    const url = await item.audioPromise;
+    if (!url) throw item.audioError || new Error("voice synthesis failed");
+    if (!item.costRecorded) {
+      addServiceCost(getLesson(item.lessonId),"tts",item.text.length * 0.03 / 1000,"cartesia-sonic-3.5",item.metricEventId);
+      item.costRecorded = true;
+    }
     if (!voice.active || voice.utter !== item) { URL.revokeObjectURL(url); return; }
     try { speechSynthesis.cancel(); } catch (e) {}
     highlightAt(item.base);
@@ -6627,10 +6647,37 @@ async function deepgramFetch(text) {
   }
   return URL.createObjectURL(await r.blob());
 }
+function prepareCloudAudio(item,provider) {
+  if (!item || (item.audioProvider === provider && item.audioPromise)) return;
+  if (item.audioUrl) { try { URL.revokeObjectURL(item.audioUrl); } catch (error) {} }
+  item.audioProvider = provider;
+  item.audioError = null;
+  item.audioPromise = (provider === "deepgram" ? deepgramFetch(item.text) : cartFetch(item.text))
+    .then(url => { item.audioUrl = url; return url; })
+    .catch(error => { item.audioError = error; return null; });
+}
+function prefetchQueuedCloudAudio() {
+  const provider = ttsProvider();
+  if (provider !== "deepgram" && provider !== "cartesia") return;
+  voice.queue.slice(0,2).forEach(item => prepareCloudAudio(item,provider));
+}
+function discardQueuedAudio() {
+  voice.queue.forEach(item => {
+    if (item.audioUrl) { try { URL.revokeObjectURL(item.audioUrl); } catch (error) {} }
+    item.audioUrl = null;
+  });
+  voice.queue = [];
+}
 async function pumpDeepgram(item) {
   voice.utter = item;
   try {
-    const url = await deepgramFetch(item.text);
+    prepareCloudAudio(item,"deepgram");
+    const url = await item.audioPromise;
+    if (!url) throw item.audioError || new Error("voice synthesis failed");
+    if (!item.costRecorded) {
+      addServiceCost(getLesson(item.lessonId),"tts",item.text.length * 0.03 / 1000,state.deepgramModel || "aura-2-arcas-en",item.metricEventId);
+      item.costRecorded = true;
+    }
     if (!voice.active || voice.utter !== item) { URL.revokeObjectURL(url); return; }
     try { speechSynthesis.cancel(); } catch (e) {}
     highlightAt(item.base);
@@ -6743,6 +6790,7 @@ function pumpSpeech() {
   }
   const item = voice.queue.shift();
   const provider = ttsProvider();
+  prefetchQueuedCloudAudio();
   // merge adjacent queued sentences into one utterance (~250 chars) — fewer
   // robotic pauses between sentences, while the first sentence still starts fast
   while (provider !== "cartesia" && provider !== "deepgram" && voice.queue.length && item.text.length < 250 &&
@@ -6815,7 +6863,7 @@ function speakingDone() {
 }
 function interruptSpeech() {
   voice.mutedThisTurn = true;
-  voice.queue = []; voice.utter = null;
+  discardQueuedAudio(); voice.utter = null;
   stopWordSync();
   releaseVoiceAudioOutput();
   voice.micReadyAt = Date.now() + 260;
@@ -7282,7 +7330,8 @@ function organizeSettingsPanel() {
   const fieldNodes = id => { const field=$(id), label=field && field.previousElementSibling; return [label,field]; };
   const model = fieldNodes("set-model"), thinking = fieldNodes("set-thinking"), voiceSelect = fieldNodes("set-voice"), speechLanguage = fieldNodes("set-speechlanguage");
   const voiceDefault = $("set-voicedefault") && $("set-voicedefault").closest("label"); if (voiceDefault) voiceDefault.className = "settings-check";
-  const developerToggle = $("set-developer") && $("set-developer").closest("label"); if (developerToggle) developerToggle.className = "settings-check";
+  const developerToggle = $("set-developer") && $("set-developer").closest("label");
+  if (developerToggle) { developerToggle.className = "settings-check"; developerToggle.hidden = true; }
   const speechLanguageHint = $("set-speechlanguage") && $("set-speechlanguage").nextElementSibling;
   const learning = group("Learning & conversation", [...voiceSelect, ...speechLanguage, speechLanguageHint, voiceDefault, developerToggle], true);
   const thinkingHint = $("set-thinking") && $("set-thinking").nextElementSibling;
@@ -7294,6 +7343,7 @@ function organizeSettingsPanel() {
   const key = fieldNodes("set-key"), keyHint = $("set-key") && $("set-key").nextElementSibling;
   [...key,keyHint].filter(Boolean).forEach(node => node.classList.add("owner-provider-field"));
   const connection = group("Tester access", [...tester, testerHint, ...key, keyHint], true);
+  connection.id = "settings-tester-group";
   const planPreview = $("plan-preview");
   const plan = group("Monthly plan preview", [planPreview]);
   const voiceNodes = [];
@@ -7308,11 +7358,14 @@ function organizeSettingsPanel() {
 organizeSettingsPanel();
 const SECRET_SETTING_IDS = ["set-testercode","set-key","set-cartkey","set-elkey","set-deepgramkey"];
 function syncDeveloperSettingsVisibility() {
+  const developer = !!state.developerMode;
   const group = $("settings-developer-group");
-  if (group) group.hidden = !$("set-developer").checked;
+  if (group) group.hidden = !developer;
   const premium = $("settings-premium-group");
-  if (premium) premium.hidden = !$("set-developer").checked;
-  document.querySelectorAll(".owner-provider-field").forEach(node => { node.hidden = !$("set-developer").checked; });
+  if (premium) premium.hidden = !developer;
+  const tester = $("settings-tester-group");
+  if (tester) tester.hidden = backendAccessEnabled() && !developer;
+  document.querySelectorAll(".owner-provider-field").forEach(node => { node.hidden = !developer; });
 }
 function setSettingsInteractive(active) {
   const settings = $("settings");
@@ -7374,7 +7427,9 @@ function applySettings() {
   state.voiceURI = $("set-voice").value;
   state.speechLanguage = $("set-speechlanguage").value || "en";
   state.voiceDefault = $("set-voicedefault").checked;
-  state.developerMode = $("set-developer").checked;
+  // Production is always learner-facing. Developer controls are available
+  // only from an explicit ?developer=1 owner link and never from Settings.
+  state.developerMode = !!state.developerMode;
   state.monthlyBudget = Number($("set-planbudget").value) || 5;
   voice.forceLocal = false; // a new voice choice clears any local-only fallback
   save();
@@ -7426,7 +7481,7 @@ $("settings-save").onclick = () => {
 };
 
 /* ================= One-screen introduction ================= */
-const INTRO_VERSION = "intro-v1";
+const INTRO_VERSION = "intro-v2";
 function setIntroOpen(open,remember = false) {
   const intro = $("intro-demo");
   intro.classList.toggle("open",open);
@@ -7455,56 +7510,9 @@ updateCardSize();
 wheel.categoryOverview = (state.cardScale || 1) < 0.72;
 renderHome();
 $("zoom-btn").textContent = Math.abs((state.cardScale || 1) - compactCardScale()) < 0.07 ? "reset view" : "zoom out";
-$("build-tag").textContent = BUILD;
-
-/* ---- What's New ---- */
-function renderChangelog() {
-  const body = $("whatsnew-body");
-  body.innerHTML = VERSIONS.map(v => `
-    <div class="ver-card">
-      <div class="ver-head"><span class="ver-tag">${esc(v.tag)}</span><span class="ver-date">${esc(v.date)}</span></div>
-      <ul>${v.changes.map(c => `<li>${esc(c)}</li>`).join("")}</ul>
-    </div>
-  `).join("");
-}
-function openWhatsNew() { renderChangelog(); show("whatsnew"); $("whatsnew-body").scrollTop = 0; }
-$("whatsnew-back").onclick = () => { renderHome(); show("home"); };
-$("build-tag").onclick = () => { $("settings").classList.remove("open"); openWhatsNew(); };
-
-/* ---- first launch of a new version: a full-screen green flash, then reveal
-   What's New. Skipped on a brand-new install — there's nothing to catch up on. */
 const introNeededAtBoot = state.introSeenVersion !== INTRO_VERSION;
-if (!introNeededAtBoot && state.lastSeenBuild && state.lastSeenBuild !== BUILD) {
-  $("splash").classList.add("show");
-  setTimeout(() => {
-    $("splash").classList.add("fading");
-    setTimeout(() => {
-      $("splash").classList.remove("show", "fading");
-      openWhatsNew();
-    }, 550);
-  }, 700);
-}
 if (introNeededAtBoot) setTimeout(() => setIntroOpen(true),80);
-state.lastSeenBuild = BUILD;
 save();
-
-/* ---- updates: the home-screen app resumes an old copy instead of reloading,
-   so check whenever it comes back to the foreground. A silent auto-reload
-   used to fire here — removed because a background reload while the app is
-   installed as an iOS home-screen icon can reset the microphone permission,
-   which is exactly the interruption this was supposed to prevent. Now it's a
-   banner the user dismisses or acts on, so a refresh only ever happens when
-   they choose it (e.g. never mid-conversation). */
-async function checkForUpdate() {
-  try {
-    const r = await fetch("index.html", { cache: "no-store" });
-    const txt = await r.text();
-    const m = txt.match(/const BUILD = "([^"]+)"/);
-    if (m && m[1] !== BUILD && !streaming && !voice.active) $("update-banner").classList.add("show");
-  } catch (e) {} // offline — try again next time
-}
-$("update-refresh").onclick = () => location.reload();
-$("update-x").onclick = () => { $("update-banner").classList.remove("show"); };
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     if (voice.active) {
@@ -7516,7 +7524,7 @@ document.addEventListener("visibilitychange", () => {
     }
     return;
   }
-  if (!voice.active) { checkForUpdate(); return; }
+  if (!voice.active) return;
   if (voice.pausedByVisibility) {
     voice.pausedByVisibility = false;
     const settling = ["finishing","transcribing","retry"].includes(voice.statusMode);
@@ -7541,8 +7549,6 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("blur", () => {
   if (voice.active && voice.spaceHeld) pauseVoiceCapture("The Space-key recording paused when the window lost focus.");
 });
-setInterval(checkForUpdate, 20 * 60 * 1000);
-setTimeout(checkForUpdate, 4000);
 if (!aiAvailable()) setTimeout(() => {
   if (!$("intro-demo").classList.contains("open") && !$("settings").classList.contains("open")) openSettings();
 }, 600);
