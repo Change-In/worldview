@@ -481,36 +481,6 @@
   .method-choice, .drawer-item, .rail-item { transition:background .2s ease,color .2s ease,transform .2s ease; }
   @media(max-width:700px){ .section-rail{left:3px}.rail-item{font-size:10px;padding-left:15px}.rail-settings{left:6px}.profile-edge{padding:11px 6px} }
 
-  /* ---------- Trends concept demo ---------- */
-  #view-trends, #trends-page { background: var(--paper); }
-  #trends-body, #trends-home-body { flex:1; min-height:0; overflow:hidden; width:100%; }
-  .trends-shell {
-    height:100%; min-height:0; display:flex; flex-direction:column; justify-content:center;
-    padding:28px max(32px,calc((100% - 850px)/2)) 34px;
-  }
-  .trend-demo {
-    align-self:flex-start; margin:0 0 14px; padding:5px 9px; border:1px solid rgba(200,173,89,.65);
-    border-radius:999px; color:#806a27; background:rgba(200,173,89,.08);
-    font-size:9px; font-weight:650; letter-spacing:.13em; text-transform:uppercase;
-  }
-  .trend-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
-  .trend-card {
-    min-height:230px; display:flex; flex-direction:column; border:1.5px solid var(--line);
-    border-radius:16px; background:var(--card); padding:18px;
-  }
-  .trend-card-button { appearance:none; color:var(--ink); font:inherit; text-align:left; cursor:pointer; }
-  .trend-card-button:active { transform:scale(.985); }
-  .trend-rank { color:#8a7229; font-size:10px; letter-spacing:.12em; text-transform:uppercase; }
-  .trend-card h3 { font:500 23px/1.15 Georgia,"Times New Roman",serif; margin:9px 0 14px; }
-  .trend-lessons { display:grid; gap:7px; }
-  .trend-lesson {
-    width:100%; border:0; border-radius:10px; background:rgba(22,64,79,.055); color:var(--ink);
-    padding:10px 11px; text-align:left; font-size:13px; line-height:1.25; cursor:pointer;
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-  }
-  .trend-signal { display:flex; justify-content:space-between; gap:12px; margin-top:auto; padding-top:15px; color:var(--ink-soft); font-size:11px; }
-  .trend-empty { max-width:300px; min-height:180px; }
-
   /* ---------- Learn from a source carousel ---------- */
   #source-page { padding:0; overflow:hidden; }
   #source-carousel-wrap { position:relative;flex:1; min-height:0; display:flex; align-items:center; width:100%; overflow:hidden; }
@@ -860,8 +830,7 @@
     .mobile-category-option.active { border-color:#c8ad59; background:rgba(200,173,89,.12); font-weight:650; }
     @keyframes mobileSheetIn { from{transform:translateY(35%);opacity:.5} }
     #carousel-page #carousel-wrap { padding-top:10px; }
-    #source-page, #trends-page { padding:0; }
-    .trends-shell { justify-content:center; padding:22px 0 30px 58px; }
+    #source-page { padding:0; }
     .trend-demo { margin-left:14px; }
     .trend-grid {
       display:flex; gap:11px; overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none;
@@ -1086,7 +1055,6 @@
   <nav class="section-rail" aria-label="Explore sections">
     <button id="rail-explore" class="rail-item active" type="button">Explore</button>
     <button id="rail-sources" class="rail-item" type="button">Upload</button>
-    <button id="rail-trends" class="rail-item" type="button">Trends</button>
   </nav>
   <button id="profile-edge" class="profile-edge" type="button">Profile &#8594;</button>
   <button id="mobile-category-button" type="button" aria-haspopup="dialog">Most recent</button>
@@ -1146,9 +1114,6 @@
           </div>
           <button id="source-category-add" class="category-add-button" type="button" aria-label="Create or organize source categories">+</button>
         </div>
-      </section>
-      <section id="trends-page" class="home-deck-page" aria-label="Trends">
-        <div id="trends-home-body"></div>
       </section>
     </div>
     <div id="bottom-bar">&#9650;&nbsp;&nbsp;profile</div>
@@ -1256,15 +1221,6 @@
   </div>
 </div>
 
-<!-- ============ TRENDS CONCEPT ============ -->
-<div id="view-trends" class="view">
-  <div class="view-header">
-    <button id="trends-back" type="button" aria-label="Back to questions">&#8592;</button>
-    <h2 class="serif">Trends</h2>
-  </div>
-  <div id="trends-body"></div>
-</div>
-
 <!-- ============ WHAT'S NEW ============ -->
 <div id="view-whatsnew" class="view">
   <div class="view-header">
@@ -1294,7 +1250,6 @@
     <nav class="drawer-nav" aria-label="Main navigation">
       <button id="nav-new" class="drawer-item" type="button"><span class="drawer-icon">?</span><span>Questions</span></button>
       <button id="nav-source" class="drawer-item" type="button"><span class="drawer-icon">&#8595;</span><span>Upload</span></button>
-      <button id="nav-trends" class="drawer-item" type="button"><span class="drawer-icon">&#8599;</span><span>Trends</span></button>
     </nav>
     <div class="drawer-spacer"></div>
     <button id="nav-settings" class="drawer-item drawer-settings" type="button"><span class="drawer-icon">&#9881;</span><span>Settings</span></button>
@@ -1452,7 +1407,7 @@
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v27 · Jul 19";
+const BUILD = "v28 · Jul 19";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2546,7 +2501,6 @@ function renderHome() {
   if (wheel.layerCategory && selectedLayerIndex < 0) { wheel.layerCategory = null; wheel.layerIndex = 0; }
   else if (selectedLayerIndex >= 0) wheel.layerIndex = selectedLayerIndex;
   renderSourceLibrary();
-  renderTrends();
   const c = $("carousel");
   c.innerHTML = "";
   wheel.cards = []; wheel.ids = []; wheel.renderedIndices = new Set();
@@ -4076,7 +4030,6 @@ attachLessonSwipeNavigation();
 attachHomeDrawerSwipe();
 attachSwipeExit("view-notes", () => { renderHome(); show("home"); });
 attachSwipeExit("view-whatsnew", () => { renderHome(); show("home"); });
-attachSwipeExit("view-trends", () => { renderHome(); show("home"); });
 function attachProfileSwipeExit() {
   const el = $("view-profile");
   let tracking = false, horizontal = false, pointerId = null;
@@ -4240,13 +4193,12 @@ $("rail-settings").onclick = openSettings;
 function scrollHomeSection(id) { show("home"); $(id).scrollIntoView({ behavior:"smooth", block:"start" }); }
 $("rail-explore").onclick = () => scrollHomeSection("carousel-page");
 $("rail-sources").onclick = openSourceSheet;
-$("rail-trends").onclick = () => scrollHomeSection("trends-page");
 function syncHomeRail() {
   const scroller = $("home-deck-scroll");
-  const index = Math.max(0, Math.min(2, Math.round(scroller.scrollTop / Math.max(1, scroller.clientHeight))));
-  [$("rail-explore"), $("rail-sources"), $("rail-trends")].forEach((button, i) => button.classList.toggle("active", i === index));
+  const index = Math.max(0, Math.min(1, Math.round(scroller.scrollTop / Math.max(1, scroller.clientHeight))));
+  [$("rail-explore"), $("rail-sources")].forEach((button, i) => button.classList.toggle("active", i === index));
   // Lesson categories only describe Explore. Keep the thumb control out of
-  // Upload and Trends, where "Most recent" has no meaning.
+  // Upload, where "Most recent" has no meaning.
   $("mobile-category-button").style.display = innerWidth <= 700 && index === 0 ? "flex" : "none";
 }
 $("home-deck-scroll").addEventListener("scroll", syncHomeRail, { passive:true });
@@ -4567,35 +4519,6 @@ $("source-preview-close").onclick = closeSourcePreview;
 $("source-preview-sheet").onclick = event => { if (event.target === $("source-preview-sheet")) closeSourcePreview(); };
 $("source-preview-path").onclick = () => { const id=sourcePreviewLessonId; closeSourcePreview(); if (id) openSourceTree(id); };
 $("source-preview-continue").onclick = () => { const id=sourcePreviewLessonId; closeSourcePreview(); if (id) openChat(id); };
-function renderTrends() {
-  const targets = [$("trends-home-body"), $("trends-body")].filter(Boolean);
-  if (!targets.length) return;
-  const lessons = state.lessons.filter(lesson => (lesson.messages || []).some(message => !message.synthetic));
-  const themeMap = new Map();
-  lessons.forEach(lesson => {
-    const name = lessonCategory(lesson);
-    const key = name.toLocaleLowerCase();
-    const visible = (lesson.messages || []).filter(message => !message.synthetic);
-    const learnerWords = visible.filter(message => message.role === "user").reduce((total,message) => total + String(message.content || "").trim().split(/\s+/).filter(Boolean).length,0);
-    const theme = themeMap.get(key) || { name,lessons:0,learnerWords:0,sessions:0,updatedAt:0,mastery:[] };
-    theme.lessons++;
-    theme.learnerWords += learnerWords;
-    theme.sessions += Math.max(1,Number(lesson.sessionCount)||1);
-    theme.updatedAt = Math.max(theme.updatedAt,Number(lesson.updatedAt)||0);
-    if (Number.isFinite(Number(lesson.masteryScore))) theme.mastery.push(Number(lesson.masteryScore));
-    themeMap.set(key,theme);
-  });
-  const themes = [...themeMap.values()].sort((a,b) => (b.lessons*5+b.sessions+Math.log2(b.learnerWords+1))-(a.lessons*5+a.sessions+Math.log2(a.learnerWords+1)) || b.updatedAt-a.updatedAt).slice(0,6);
-  const cards = themes.length ? themes.map((theme,index) => {
-    const label = index === 0 ? "Most explored theme" : Date.now()-theme.updatedAt < 7*864e5 ? "Growing theme" : "Recurring theme";
-    const mastery = theme.mastery.length ? Math.round(theme.mastery.reduce((a,b)=>a+b,0)/theme.mastery.length*100) : null;
-    return `<article class="trend-card"><div class="trend-rank">${label}</div><h3>${esc(theme.name)}</h3><div class="trend-signal"><span>${theme.lessons} learning path${theme.lessons === 1 ? "" : "s"}</span><span>${mastery == null ? relativeTime(theme.updatedAt) : mastery + "% understood"}</span></div></article>`;
-  }).join("") : `<article class="trend-card trend-empty"><div class="trend-rank">Concept demo</div><h3>Shared curiosity will appear here</h3><div class="trend-signal"><span>themes, not private conversations</span></div></article>`;
-  const html = `<div class="trends-shell"><div class="trend-demo">Concept demo</div><div class="trend-grid">${cards}</div></div>`;
-  targets.forEach(target => {
-    target.innerHTML = html;
-  });
-}
 function openSourceTree(id) {
   const lesson = getLesson(id);
   if (!lesson) return;
@@ -4712,9 +4635,7 @@ $("drawer-close").onclick = closeDrawer;
 $("drawer-backdrop").onclick = e => { if (e.target === $("drawer-backdrop")) closeDrawer(); };
 $("nav-new").onclick = () => showHomeLauncher(true);
 $("nav-source").onclick = openSourceSheet;
-$("nav-trends").onclick = () => { closeDrawer(); renderTrends(); scrollHomeSection("trends-page"); };
 $("nav-settings").onclick = () => { closeDrawer(); openSettings(); };
-$("trends-back").onclick = () => { renderHome(); show("home"); };
 $("source-close").onclick = closeSourceSheet;
 $("source-scroll-cue").onclick = openSourceSheet;
 $("source-start").onclick = startSourceLesson;
