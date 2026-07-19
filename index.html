@@ -800,6 +800,13 @@
     -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
   }
   #settings-panel h3 { font-family:Georgia,serif; font-size:24px; font-weight:500; margin-bottom:20px; }
+  #plan-preview { padding:18px;border:1px solid rgba(22,64,79,.22);border-radius:14px;background:rgba(200,173,89,.07); }
+  .plan-preview-head { display:flex;align-items:baseline;justify-content:space-between;gap:16px;color:var(--ink); }
+  .plan-preview-head span { font:600 18px Georgia,serif; }
+  .plan-preview-head output { font:600 25px Georgia,serif;color:#8f772c; }
+  #set-planbudget { width:100%;margin:18px 0 12px;accent-color:#c8ad59; }
+  #plan-preview p { margin:0;color:var(--ink-soft);font-size:13px;line-height:1.5; }
+  #plan-preview small { display:block;margin-top:10px;color:#8f772c;letter-spacing:.04em; }
   #settings-panel label { display: block; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 14px 0 6px; }
   #settings-panel input, #settings-panel select {
     width: 100%; padding: 12px 14px; font-size: 16px; border: 1.5px solid var(--line);
@@ -1344,6 +1351,9 @@
 <div id="settings" aria-hidden="true">
   <div id="settings-panel">
     <h3>Settings</h3>
+    <label>Tester access code</label>
+    <input id="set-testercode" class="secret-input" type="text" placeholder="Private alpha code" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore disabled>
+    <div class="hint">A private alpha pass, not an AI provider key. A tester link can save it automatically on this device.</div>
     <label>Anthropic API key</label>
     <input id="set-key" class="secret-input" type="text" placeholder="sk-ant-..." autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore disabled>
     <div class="hint">Saved on this device &mdash; enter it once per device (phone, laptop) and it stays until you clear browser data. Get a key at console.anthropic.com.</div>
@@ -1412,6 +1422,12 @@
       Show developer model lab on this device
     </label>
     </div>
+    <div id="plan-preview">
+      <div class="plan-preview-head"><span>Monthly learning allowance</span><output id="plan-budget-value">$5</output></div>
+      <input id="set-planbudget" type="range" min="3" max="30" step="1" value="5" aria-label="Choose a monthly learning allowance">
+      <p>You choose the limit. API usage draws against it; learning pauses at the limit. At month-end, the unused portion supports Fable and the allowance resets. After a completely inactive month, the next renewal pauses instead of charging again.</p>
+      <small>Pricing preview only &mdash; no payment is collected yet.</small>
+    </div>
     <label>Backup &amp; sync (across browsers / phone)</label>
     <div class="row2">
       <button id="export-btn" type="button">&#8681; Save lessons</button>
@@ -1427,6 +1443,7 @@
 
 <div id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <!-- optional: config.js can pre-fill your API key so you never retype it (see that file) -->
 <script src="config.js"></script>
 <!-- optional: data.js is a shared lessons file — auto-loaded so browsers/devices stay in sync -->
@@ -1435,11 +1452,16 @@
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v24 · Jul 19"; // bump on every deploy — the auto-updater compares this against the server, and the tag below must match
+const BUILD = "v25 · Jul 19"; // bump on every deploy — the auto-updater compares this against the server, and the tag below must match
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v25", date: "Jul 19", changes: [
+    "Private tester links now route tutoring and lesson-path generation through Fable's server instead of exposing an AI key in the browser.",
+    "Voice testing now uses server-side Deepgram Nova-3 transcription with an explicit language and Aura-2 speech, protected by per-tester monthly limits.",
+    "Settings includes a preview of the choose-your-own monthly learning allowance; billing is deliberately not active yet."
+  ]},
   { tag: "v24", date: "Jul 19", changes: [
     "Horizontal lesson dragging now renders only the nearby cards and uses a flat GPU slide instead of recomputing every saved card in a 3D scene.",
   ]},
@@ -1556,7 +1578,7 @@ const VERSIONS = [
   ]},
 ];
 const LS_KEY = "worldview-v1";
-let state = { apiKey: "", model: "claude-sonnet-5", tutorThinking: "fast", developerMode: false, ttsProvider: "auto", deepgramKey: "", deepgramModel: "aura-2-arcas-en", lessons: [], notes: [], customCategories: [], voiceURI: "", voiceDefault: true, speechLanguage: "en", elKey: "", cartKey: "", cartVoice: "", cardScale: 1 };
+let state = { apiKey: "", testerInvite: "", monthlyBudget: 5, model: "claude-sonnet-5", tutorThinking: "fast", developerMode: false, ttsProvider: "auto", deepgramKey: "", deepgramModel: "aura-2-arcas-en", lessons: [], notes: [], customCategories: [], voiceURI: "", voiceDefault: true, speechLanguage: "en", elKey: "", cartKey: "", cartVoice: "", cardScale: 1 };
 try { Object.assign(state, JSON.parse(localStorage.getItem(LS_KEY) || "{}")); } catch (e) {}
 if (!Array.isArray(state.lessons)) state.lessons = [];
 if (!Array.isArray(state.customCategories)) state.customCategories = [];
@@ -1587,20 +1609,80 @@ if (!state.cartKey && typeof window.WORLDVIEW_CARTESIA_KEY === "string" && windo
   save();
 }
 if (!state.speechLanguage) { state.speechLanguage = "en"; save(); }
-// one-tap setup link: open the site once with ?key=...&elkey=... and both keys
+// one-tap setup link. Tester links carry only a revocable alpha pass; provider
+// keys stay in Supabase project secrets and never reach the phone.
 // save to this device permanently — no typing, no pasting. Works because the
 // installed home-screen icon shares the same localStorage as this tab.
 (function keyFromLink() {
   const params = new URLSearchParams(location.search);
-  const k = params.get("key"), ek = params.get("elkey"), ck = params.get("cartkey");
-  if (!k && !ek && !ck) return;
+  const k = params.get("key"), ek = params.get("elkey"), ck = params.get("cartkey"), invite = params.get("invite");
+  if (!k && !ek && !ck && !invite) return;
   if (k) state.apiKey = k;
   if (ek) state.elKey = ek;
   if (ck) state.cartKey = ck;
+  if (invite) state.testerInvite = invite;
   save();
   history.replaceState(null, "", location.pathname); // don't leave the key sitting in the address bar
-  setTimeout(() => toast("Set up on this device — you won't need to enter a key again.", 4500), 400);
+  setTimeout(() => toast(invite ? "Tester access is ready on this device." : "Set up on this device — you won't need to enter a key again.", 4500), 400);
 })();
+
+/* ================= Tester backend =================
+   The project URL and publishable key identify the Supabase project; they are
+   intentionally public. Anthropic and Deepgram secrets exist only inside the
+   Edge Functions. Each phone receives its own anonymous Auth identity. */
+const SUPABASE_URL = "https://eqppapoepynjvsfnoodj.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT";
+const backendClient = window.supabase && window.supabase.createClient
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+      auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:false, storageKey:"worldview-alpha-auth" },
+    })
+  : null;
+let backendSessionPromise = null;
+function backendAccessEnabled() { return !!(backendClient && state.testerInvite); }
+function aiAvailable() { return backendAccessEnabled() || !!state.apiKey; }
+async function backendAccessToken(forceRefresh = false) {
+  if (!backendAccessEnabled()) throw claudeError("Tester access is missing.", { status:401, type:"access_denied" });
+  if (backendSessionPromise && !forceRefresh) return backendSessionPromise;
+  backendSessionPromise = (async () => {
+    let session = null;
+    if (forceRefresh) {
+      const refreshed = await backendClient.auth.refreshSession();
+      if (refreshed.error) throw refreshed.error;
+      session = refreshed.data.session;
+    } else {
+      const current = await backendClient.auth.getSession();
+      if (current.error) throw current.error;
+      session = current.data.session;
+    }
+    if (!session) {
+      const signedIn = await backendClient.auth.signInAnonymously({ options:{ data:{ client:"worldview-alpha" } } });
+      if (signedIn.error) throw signedIn.error;
+      session = signedIn.data.session;
+    }
+    if (!session?.access_token) throw new Error("Tester sign-in did not return a session.");
+    return session.access_token;
+  })();
+  try { return await backendSessionPromise; }
+  finally { backendSessionPromise = null; }
+}
+async function backendFetch(functionName, options = {}, retryAuth = true) {
+  const token = await backendAccessToken(false);
+  const requestHeaders = new Headers(options.headers || {});
+  requestHeaders.set("apikey", SUPABASE_PUBLISHABLE_KEY);
+  requestHeaders.set("authorization", "Bearer " + token);
+  requestHeaders.set("x-worldview-access", state.testerInvite);
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/${functionName}${options.query || ""}`, {
+    method: options.method || "POST",
+    headers: requestHeaders,
+    body: options.body,
+    signal: options.signal,
+  });
+  if (response.status === 401 && retryAuth) {
+    await backendAccessToken(true);
+    return backendFetch(functionName, options, false);
+  }
+  return response;
+}
 // if a shared data.js is present, merge its lessons in on boot (cross-browser / cross-device sync)
 if (window.WORLDVIEW_DATA && Array.isArray(window.WORLDVIEW_DATA.lessons)) {
   mergeLessons(window.WORLDVIEW_DATA.lessons);
@@ -1845,7 +1927,7 @@ function boundedCompactionBoundary(messages,start,candidate,maxChars = 16000) {
   return chosen;
 }
 async function compactLessonContext(lesson) {
-  if (!lesson || !state.apiKey) return;
+  if (!lesson || !aiAvailable()) return;
   const candidateBoundary = rollingCompactionBoundary(lesson);
   if (candidateBoundary < 0) return;
   const priorBoundary = lesson.rollingContext && Number.isInteger(lesson.rollingContext.throughMessageIndex)
@@ -1891,7 +1973,7 @@ async function awaitLessonCompaction(lesson) {
 // never blocks the tutor's first question — by the time the student has
 // answered it, the grounding is usually already sitting in lesson.briefing
 async function startBriefing(lesson) {
-  if (!state.apiKey) return;
+  if (!aiAvailable()) return;
   const requiresFreshGrounding = !!(lesson.sourceUrl || lesson.sourceMedia)
     || /\b(today|latest|current|recent|news|new release|price|schedule)\b/i.test(lesson.topic || "");
   if (!requiresFreshGrounding) return;
@@ -2053,6 +2135,15 @@ function headers() {
     "anthropic-dangerous-direct-browser-access": "true",
   };
 }
+async function anthropicRequest(payload) {
+  if (backendAccessEnabled()) {
+    return backendFetch("tutor-stream", {
+      headers:{ "content-type":"application/json" },
+      body:JSON.stringify(payload),
+    });
+  }
+  return fetch(API_URL, { method:"POST", headers:headers(), body:JSON.stringify(payload) });
+}
 
 // web search tool: lets Claude research a topic before teaching it (fewer hallucinations).
 // The newest variant needs a 4.6+ model; Haiku 4.5 only supports the basic one.
@@ -2139,9 +2230,11 @@ async function withClaudeRetries(operation, onRetry, maxAttempts = 3) {
 }
 function friendlyClaudeFailure(error) {
   if (error && (error.status === 401 || error.status === 403)) {
+    if (backendAccessEnabled()) return { title: "Tester access needs attention.", detail: "Your message is saved. Reopen the private tester link, then retry." };
     return { title: "The API key needs attention.", detail: "Your message is saved. Check the key in Settings, then retry." };
   }
   if (error && error.status === 402) {
+    if (backendAccessEnabled()) return { title: "This month's testing allowance is used.", detail: "Your message is saved. Access can resume when the allowance renews or is increased." };
     return { title: "API billing needs attention.", detail: "Your message is saved. Check the Anthropic account, then retry." };
   }
   if (error && error.status === 429) {
@@ -2164,10 +2257,7 @@ async function streamChat(system, messages, onText, onSearch, modelOverride, max
   if (requestPolicy.thinking === "disabled" && model === "claude-sonnet-5") payload.thinking = { type:"disabled" };
   let res;
   try {
-    res = await fetch(API_URL, {
-      method: "POST", headers: headers(),
-      body: JSON.stringify(payload),
-    });
+    res = await anthropicRequest(payload);
   } catch (error) {
     throw normalizeClaudeError(error);
   }
@@ -2255,15 +2345,12 @@ function updateCostLabel(lesson) {
 async function jsonCall(system, userText, schema, maxTokens = 512, costLesson = null, model = "claude-haiku-4-5", effort = "") {
   const outputConfig = { format: { type: "json_schema", schema } };
   if (effort && model !== "claude-haiku-4-5") outputConfig.effort = effort;
-  const res = await fetch(API_URL, {
-    method: "POST", headers: headers(),
-    body: JSON.stringify({
-      model, max_tokens: maxTokens, system,
-      messages: [{ role: "user", content: userText }],
-      output_config: outputConfig,
-    }),
+  const res = await anthropicRequest({
+    model, max_tokens: maxTokens, system,
+    messages: [{ role: "user", content: userText }],
+    output_config: outputConfig,
   });
-  if (!res.ok) throw new Error(`meta call failed (${res.status})`);
+  if (!res.ok) throw await responseError(res);
   const data = await res.json();
   if (costLesson && data.usage) {
     addCost(costLesson, model, { input: data.usage.input_tokens, output: data.usage.output_tokens });
@@ -2955,7 +3042,7 @@ $("zoom-btn").onclick = event => {
 };
 
 async function beginLesson(topic, methodKey, starterText, parentId, sourceUrl, sourceMedia) {
-  if (!state.apiKey) { openSettings(); toast("Add your Anthropic API key first"); return; }
+  if (!aiAvailable()) { openSettings(); toast("Open a tester link or add a developer API key first"); return; }
   const lesson = {
     id: uid(), topic, method: methodKey,
     title: topic.length > 40 ? topic.slice(0, 40) + "…" : topic,
@@ -3139,7 +3226,7 @@ function lessonNeedsUniquePath(lesson) {
   return version !== KNOWLEDGE_PLAN_VERSION;
 }
 async function ensureUniqueLessonPath(lesson) {
-  if (!lesson || !lessonNeedsUniquePath(lesson) || !state.apiKey) return;
+  if (!lesson || !lessonNeedsUniquePath(lesson) || !aiAvailable()) return;
   if (lessonPathMigrations.has(lesson.id)) return lessonPathMigrations.get(lesson.id);
   // Do not retry a failed planner request on every tap during a temporary
   // outage. A later open can try again without blocking today's fallback path.
@@ -3271,7 +3358,7 @@ async function openPaths(id) {
 }
 async function fillPathQuestions(lesson) {
   const row = $("paths-row");
-  if (!state.apiKey) { row.innerHTML = `<div class="path-card loading">add your API key in settings</div>`; return; }
+  if (!aiAvailable()) { row.innerHTML = `<div class="path-card loading">tester access is needed</div>`; return; }
   try {
     const existing = lesson.paths || [];
     const needed = Math.max(1, 5 - existing.length);
@@ -3775,7 +3862,7 @@ $("chat-input").addEventListener("input", function () {
   this.style.height = "auto"; this.style.height = Math.min(this.scrollHeight, 110) + "px";
 });
 function assessLessonUnderstanding(lesson,sessionId = "") {
-  if (!lesson || !state.apiKey) return Promise.resolve();
+  if (!lesson || !aiAvailable()) return Promise.resolve();
   if (lessonAssessments.has(lesson.id)) return lessonAssessments.get(lesson.id);
   // Register the entire close operation before waiting for a background
   // compaction. A quick reopen now waits for the assessment gate instead of
@@ -3869,7 +3956,7 @@ function assessLessonUnderstanding(lesson,sessionId = "") {
 function closeLessonSession(lesson) {
   if (!lesson) return;
   const session = archiveCurrentLessonSession(lesson);
-  if (session && !session.summary && !state.apiKey) {
+  if (session && !session.summary && !aiAvailable()) {
     const learnerText = visibleMessagesInRange(lesson,session.from,session.to)
       .filter(message => message.role === "user")
       .slice(-3)
@@ -4533,7 +4620,7 @@ function closeSourceSheet() {
 async function startSourceLesson() {
   const raw = $("source-url").value.trim();
   if (!raw && !pendingSourceFile) { $("source-status").textContent = "Add a webpage, photo, or PDF first."; return; }
-  if (!state.apiKey) { openSettings(); toast("Add your Anthropic API key first"); return; }
+  if (!aiAvailable()) { openSettings(); toast("Open a tester link or add a developer API key first"); return; }
   let url = "";
   if (raw) {
     try {
@@ -4980,11 +5067,11 @@ const voice = {
 };
 
 function ownedVoiceCaptureSupported() {
-  return !!(state.cartKey && navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+  return !!((backendAccessEnabled() || state.cartKey) && navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
 }
 function voiceSupported() {
   return FULL_VOICE_MODE_ENABLED && (ownedVoiceCaptureSupported() || !!SR) &&
-    ("speechSynthesis" in window || !!state.cartKey || !!state.elKey);
+    ("speechSynthesis" in window || backendAccessEnabled() || !!state.cartKey || !!state.elKey);
 }
 const SPEECH_LOCALES = {
   en:"en-US", es:"es-ES", fr:"fr-FR", de:"de-DE", pt:"pt-BR",
@@ -5121,7 +5208,7 @@ function enterVoice(autoListen = true, excludeLastFromHistory = false, pinNextMe
   if (!voiceSupported()) { toast("Voice needs microphone access and a supported transcription service."); return; }
   const lesson = getLesson(currentLessonId);
   if (!lesson) return;
-  if (!state.apiKey) { openSettings(); return; }
+  if (!aiAvailable()) { openSettings(); return; }
   stopListening();
   voice.active = true;
   voicePinNextMessageTop = pinNextMessageTop;
@@ -5414,7 +5501,7 @@ function rememberSttDiagnostic(lesson,diagnostic) {
   save();
 }
 async function repairVoiceTranscriptWithContext(text,lesson) {
-  if (!text || !lesson || !state.apiKey || text.length > 700) return { text, changed:false, confidence:"none" };
+  if (!text || !lesson || !aiAvailable() || text.length > 700) return { text, changed:false, confidence:"none" };
   const recent = activeLessonMessages(lesson)
     .filter(message => !message.synthetic)
     .slice(-6)
@@ -5624,32 +5711,54 @@ async function transcribeOwnedVoice(blob, mime) {
   let lastError = null;
   try {
     for (let attempt = 0; attempt < 2; attempt++) {
-      const form = new FormData();
-      form.append("file", blob, `voice-turn.${extension}`);
-      form.append("model", "ink-whisper");
-      form.append("language", speechLanguageCode());
-      form.append("timestamp_granularities[]", "word");
       try {
-        const response = await fetch("https://api.cartesia.ai/stt", {
-          method: "POST",
-          headers: {
-            "Authorization": "Bearer " + state.cartKey,
-            "Cartesia-Version": "2026-03-01",
-          },
-          body: form,
-          signal: controller.signal,
-        });
+        let response, result, diagnosticProvider, diagnosticModel;
+        if (backendAccessEnabled()) {
+          response = await backendFetch("transcribe", {
+            query:"?language=" + encodeURIComponent(speechLanguageCode()),
+            headers:{ "content-type":mime || blob.type || "audio/webm" },
+            body:blob,
+            signal:controller.signal,
+          });
+          if (response.ok) {
+            const deepgram = await response.json();
+            const alternative = deepgram?.results?.channels?.[0]?.alternatives?.[0] || {};
+            result = {
+              text:alternative.transcript || "",
+              words:Array.isArray(alternative.words) ? alternative.words : [],
+              language:speechLanguageCode(),
+              duration:Number(deepgram?.metadata?.duration) || 0,
+              request_id:deepgram?.metadata?.request_id || "",
+            };
+          }
+          diagnosticProvider = "deepgram-server";
+          diagnosticModel = "nova-3";
+        } else {
+          const form = new FormData();
+          form.append("file", blob, `voice-turn.${extension}`);
+          form.append("model", "ink-whisper");
+          form.append("language", speechLanguageCode());
+          form.append("timestamp_granularities[]", "word");
+          response = await fetch("https://api.cartesia.ai/stt", {
+            method: "POST",
+            headers: { "Authorization":"Bearer " + state.cartKey, "Cartesia-Version":"2026-03-01" },
+            body:form,
+            signal:controller.signal,
+          });
+          if (response.ok) result = await response.json();
+          diagnosticProvider = "cartesia-batch";
+          diagnosticModel = "ink-whisper";
+        }
         if (!response.ok) {
           let message = `transcription error ${response.status}`;
           try {
             const body = await response.json();
-            message = body.message || body.error && body.error.message || message;
+            message = body.message || body.err_msg || body.error && body.error.message || message;
           } catch (error) {}
           const failure = new Error(message);
           failure.noRetry = response.status < 500 && response.status !== 429;
           throw failure;
         }
-        const result = await response.json();
         const lesson = getLesson(currentLessonId);
         const rawText = String(result.text || "").trim();
         const normalized = normalizeVoiceTranscript(rawText);
@@ -5658,7 +5767,7 @@ async function transcribeOwnedVoice(blob, mime) {
         const confidences = (Array.isArray(result.words) ? result.words : []).map(word => Number(word.confidence ?? word.probability)).filter(Number.isFinite);
         const averageConfidence = confidences.length ? confidences.reduce((sum,value) => sum + value,0) / confidences.length : null;
         const spokenWords = normalized.match(/[\p{L}\p{N}']+/gu) || [];
-        // Ink often omits confidence metadata. Very short hallucinations are
+        // Some providers omit confidence metadata. Very short hallucinations are
         // exactly where language mistakes are hardest for the learner to spot,
         // so route only those missing-confidence turns through the conservative
         // Haiku checker; ordinary explanations still go straight to the tutor.
@@ -5667,14 +5776,14 @@ async function transcribeOwnedVoice(blob, mime) {
           || (returnedLanguage && !returnedLanguage.startsWith(selectedLanguage))
           || (averageConfidence != null && averageConfidence < .78)
           || shortWithoutConfidence;
-        // Normal multiword turns now go straight to Sonnet. Ink's current word
-        // schema omits confidence, so Haiku enters only for observable warning
+        // Normal multiword turns go straight to the tutor. The repair model
+        // enters only for observable warning
         // signs (or very short missing-confidence turns), not on every answer.
         const repaired = needsContextRepair
           ? await repairVoiceTranscriptWithContext(normalized,lesson)
           : { text:normalized,changed:false,confidence:"not-needed" };
         rememberSttDiagnostic(lesson,{
-          at:Date.now(), provider:"cartesia-batch", model:"ink-whisper",
+          at:Date.now(), provider:diagnosticProvider, model:diagnosticModel,
           language:speechLanguageCode(), returnedLanguage:result.language || "",
           requestId:result.request_id || "", duration:Number(result.duration) || 0,
           rawText, normalizedText:normalized, sentText:repaired.text,
@@ -6454,8 +6563,9 @@ function startWordSync(item) {
 function ttsProvider() {
   const selected = state.ttsProvider || "auto";
   if (selected === "device") return "device";
-  if (selected === "deepgram" && state.deepgramKey && !deepgramBroken) return "deepgram";
+  if (selected === "deepgram" && (backendAccessEnabled() || state.deepgramKey) && !deepgramBroken) return "deepgram";
   if (selected === "cartesia" && state.cartKey && !cartBroken) return "cartesia";
+  if (backendAccessEnabled() && !deepgramBroken) return "deepgram";
   if (selected === "cartesia" || selected === "deepgram") return "device";
   if (state.cartKey && !cartBroken) return "cartesia";
   if (state.deepgramKey && !deepgramBroken) return "deepgram";
@@ -6503,11 +6613,13 @@ async function pumpCart(item) {
    microphone transcription remains an independent service. */
 async function deepgramFetch(text) {
   const model = state.deepgramModel || "aura-2-arcas-en";
-  const r = await fetch("https://api.deepgram.com/v1/speak?model=" + encodeURIComponent(model) + "&encoding=mp3", {
-    method:"POST",
-    headers:{ "Authorization":"Token " + state.deepgramKey, "content-type":"application/json" },
-    body:JSON.stringify({ text }),
-  });
+  const r = backendAccessEnabled()
+    ? await backendFetch("voice-stream", { headers:{"content-type":"application/json"}, body:JSON.stringify({text,model}) })
+    : await fetch("https://api.deepgram.com/v1/speak?model=" + encodeURIComponent(model) + "&encoding=mp3", {
+        method:"POST",
+        headers:{ "Authorization":"Token " + state.deepgramKey, "content-type":"application/json" },
+        body:JSON.stringify({ text }),
+      });
   if (!r.ok) {
     let msg = "HTTP " + r.status;
     try { const j = await r.json(); msg = j.err_msg || j.message || msg; } catch (e) {}
@@ -7178,21 +7290,29 @@ function organizeSettingsPanel() {
   const developerStatus = panel.querySelector(".developer-status");
   const developer = group("Developer model lab", [...model, ...thinking, thinkingHint, ...ttsProvider, ...deepgramKey, ...deepgramModel, developerStatus]);
   developer.id = "settings-developer-group";
+  const tester = fieldNodes("set-testercode"), testerHint = $("set-testercode") && $("set-testercode").nextElementSibling;
   const key = fieldNodes("set-key"), keyHint = $("set-key") && $("set-key").nextElementSibling;
-  const connection = group("AI connection", [...key, keyHint]);
+  [...key,keyHint].filter(Boolean).forEach(node => node.classList.add("owner-provider-field"));
+  const connection = group("Tester access", [...tester, testerHint, ...key, keyHint], true);
+  const planPreview = $("plan-preview");
+  const plan = group("Monthly plan preview", [planPreview]);
   const voiceNodes = [];
   ["set-cartkey","set-cartvoice","set-elkey"].forEach(id => { const field=$(id); if(!field)return; const label=field.previousElementSibling, hint=field.nextElementSibling && field.nextElementSibling.classList.contains("hint") ? field.nextElementSibling : null; voiceNodes.push(label,field,hint); });
   const premium = group("Premium voice services", voiceNodes);
+  premium.id = "settings-premium-group";
   const row = $("export-btn") && $("export-btn").closest(".row2"), dataLabel = row && row.previousElementSibling, file=$("import-file"), dataHint=file && file.nextElementSibling;
   const data = group("Your data", [dataLabel,row,file,dataHint]);
-  [learning,developer,connection,premium,data].reverse().forEach(section => intro.after(section));
+  [learning,connection,plan,developer,premium,data].reverse().forEach(section => intro.after(section));
   panel.querySelectorAll(".legacy-voice-settings").forEach(wrapper => { if (!wrapper.children.length) wrapper.remove(); });
 }
 organizeSettingsPanel();
-const SECRET_SETTING_IDS = ["set-key","set-cartkey","set-elkey","set-deepgramkey"];
+const SECRET_SETTING_IDS = ["set-testercode","set-key","set-cartkey","set-elkey","set-deepgramkey"];
 function syncDeveloperSettingsVisibility() {
   const group = $("settings-developer-group");
   if (group) group.hidden = !$("set-developer").checked;
+  const premium = $("settings-premium-group");
+  if (premium) premium.hidden = !$("set-developer").checked;
+  document.querySelectorAll(".owner-provider-field").forEach(node => { node.hidden = !$("set-developer").checked; });
 }
 function setSettingsInteractive(active) {
   const settings = $("settings");
@@ -7209,6 +7329,7 @@ function setSettingsInteractive(active) {
 setSettingsInteractive(false);
 function openSettings() {
   setSettingsInteractive(true);
+  $("set-testercode").value = state.testerInvite || "";
   $("set-key").value = state.apiKey;
   $("set-elkey").value = state.elKey || "";
   $("set-cartkey").value = state.cartKey || "";
@@ -7222,6 +7343,8 @@ function openSettings() {
   populateVoiceSelect();
   $("set-voicedefault").checked = !!state.voiceDefault;
   $("set-developer").checked = !!state.developerMode;
+  $("set-planbudget").value = String(state.monthlyBudget || 5);
+  $("plan-budget-value").value = "$" + $("set-planbudget").value;
   syncDeveloperSettingsVisibility();
   $("settings").classList.add("open");
   $("settings-panel").scrollTop = 0; // always open showing the top (API key first)
@@ -7233,10 +7356,11 @@ $("gear").onclick = openSettings;
 // voice list, which made every close look like an unsaved change)
 let settingsSnap = "";
 function settingsFields() {
-  return JSON.stringify([$("set-key").value.trim(), $("set-elkey").value.trim(), $("set-cartkey").value.trim(), $("set-cartvoice").value.trim(), $("set-deepgramkey").value.trim(), $("set-deepgrammodel").value, $("set-ttsprovider").value, $("set-model").value, $("set-thinking").value, $("set-voice").value, $("set-speechlanguage").value, $("set-voicedefault").checked, $("set-developer").checked]);
+  return JSON.stringify([$("set-testercode").value.trim(), $("set-key").value.trim(), $("set-elkey").value.trim(), $("set-cartkey").value.trim(), $("set-cartvoice").value.trim(), $("set-deepgramkey").value.trim(), $("set-deepgrammodel").value, $("set-ttsprovider").value, $("set-model").value, $("set-thinking").value, $("set-voice").value, $("set-speechlanguage").value, $("set-voicedefault").checked, $("set-developer").checked, $("set-planbudget").value]);
 }
 function settingsDirty() { return settingsFields() !== settingsSnap; }
 function applySettings() {
+  state.testerInvite = $("set-testercode").value.trim();
   state.apiKey = $("set-key").value.trim();
   state.elKey = $("set-elkey").value.trim();
   state.cartKey = $("set-cartkey").value.trim();
@@ -7251,6 +7375,7 @@ function applySettings() {
   state.speechLanguage = $("set-speechlanguage").value || "en";
   state.voiceDefault = $("set-voicedefault").checked;
   state.developerMode = $("set-developer").checked;
+  state.monthlyBudget = Number($("set-planbudget").value) || 5;
   voice.forceLocal = false; // a new voice choice clears any local-only fallback
   save();
 }
@@ -7265,6 +7390,9 @@ function closeSettings(askSave) {
 }
 $("settings").addEventListener("click", e => { if (e.target === $("settings")) closeSettings(true); });
 $("set-developer").addEventListener("change",syncDeveloperSettingsVisibility);
+$("set-planbudget").addEventListener("input", () => {
+  $("plan-budget-value").value = "$" + $("set-planbudget").value;
+});
 (function settingsSwipe() { // mobile: swipe down on the panel to leave settings
   const panel = $("settings-panel");
   let sx = 0, sy = 0, atTop = true;
@@ -7310,7 +7438,7 @@ function setIntroOpen(open,remember = false) {
 function finishIntro(openQuestion = false) {
   setIntroOpen(false,true);
   if (openQuestion) { renderHome();show("home");wheel.pos=1;layoutWheel(false); }
-  if (!state.apiKey) setTimeout(() => { if (!$("settings").classList.contains("open")) openSettings(); },220);
+  if (!aiAvailable()) setTimeout(() => { if (!$("settings").classList.contains("open")) openSettings(); },220);
 }
 $("intro-start").onclick = () => finishIntro(true);
 $("intro-skip").onclick = () => finishIntro(false);
@@ -7415,7 +7543,7 @@ window.addEventListener("blur", () => {
 });
 setInterval(checkForUpdate, 20 * 60 * 1000);
 setTimeout(checkForUpdate, 4000);
-if (!state.apiKey) setTimeout(() => {
+if (!aiAvailable()) setTimeout(() => {
   if (!$("intro-demo").classList.contains("open") && !$("settings").classList.contains("open")) openSettings();
 }, 600);
 </script>
