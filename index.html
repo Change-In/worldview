@@ -220,9 +220,9 @@
     flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0;
     /* pan-y lets fingers scroll vertically inside the notes card; cards
        themselves opt back out so drag/swipe gestures keep working on them */
-    perspective: var(--carouselPerspective, 1100px); touch-action: pan-y; overflow: hidden;
+    touch-action: pan-y; overflow: hidden;
   }
-  #carousel { position: relative; width: 100%; height: calc(var(--cardH, 320px) + 30px); transform-style: preserve-3d; contain:layout paint style; }
+  #carousel { position: relative; width: 100%; height: calc(var(--cardH, 320px) + 30px); contain:layout paint style; }
   #lesson-layer-guide {
     position: absolute; right: 48px; top: 50%; transform: translateY(-50%); z-index: 4; pointer-events: none;
     display: flex; flex-direction: column; align-items: flex-start; gap: 12px;
@@ -280,7 +280,7 @@
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     padding: 22px; text-align: center;
     box-shadow: 0 8px 24px rgba(22,64,79,0.08);
-    will-change: transform, opacity;
+    visibility:hidden; will-change:auto;
     cursor: grab; user-select: none; -webkit-user-select: none;
     backface-visibility: hidden;
     touch-action: none;
@@ -1435,11 +1435,14 @@
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v23 · Jul 18"; // bump on every deploy — the auto-updater compares this against the server, and the tag below must match
+const BUILD = "v24 · Jul 19"; // bump on every deploy — the auto-updater compares this against the server, and the tag below must match
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v24", date: "Jul 19", changes: [
+    "Horizontal lesson dragging now renders only the nearby cards and uses a flat GPU slide instead of recomputing every saved card in a 3D scene.",
+  ]},
   { tag: "v23", date: "Jul 18", changes: [
     "Personal category mini-stacks now sit on the same bottom edge as full-size lesson and source cards, matching the concept sketch.",
   ]},
@@ -2271,7 +2274,7 @@ async function jsonCall(system, userText, schema, maxTokens = 512, costLesson = 
 }
 
 /* ================= Home / circular wheel ================= */
-const wheel = { pos: 1, cards: [], ids: [], cardW: 262, layerCategory: null, layerIndex: 0, previewLayerIndex: null, categoryOverview: false, categorySelecting: false, methodInteracting: false };
+const wheel = { pos: 1, cards: [], ids: [], renderedIndices: new Set(), cardW: 262, layerCategory: null, layerIndex: 0, previewLayerIndex: null, categoryOverview: false, categorySelecting: false, methodInteracting: false };
 
 function lessonCategory(lesson) {
   return String((lesson && lesson.category) || "Unsorted").trim() || "Unsorted";
@@ -2436,7 +2439,7 @@ function renderHome() {
   renderTrends();
   const c = $("carousel");
   c.innerHTML = "";
-  wheel.cards = []; wheel.ids = [];
+  wheel.cards = []; wheel.ids = []; wheel.renderedIndices = new Set();
   let nc = null;
 
   {
@@ -2599,37 +2602,47 @@ $("notes-back").onclick = () => { renderHome(); show("home"); };
 $("note-add").onclick = addNote;
 $("note-input").addEventListener("keydown", e => { if (e.key === "Enter") addNote(); });
 
-/* Cards use one lightweight 3D slide: horizontal position, shallow depth,
-   and a small counter-angle. This preserves the carousel's layered feel
-   without making mobile Safari recalculate a full circular transform chain. */
+/* The carousel is a flat composited slide. Scale, overlap, opacity, and
+   z-index preserve the layered-card feel without asking mobile Safari to
+   rebuild a 3D scene on every finger sample. Only nearby cards are touched;
+   this keeps a library of 50 lessons about as cheap to drag as five. */
 function layoutWheel(animate = true, refreshGuide = true) {
   const spacing = wheel.cardW * 0.78;
-  const depthStep = Math.max(42, wheel.cardW * 0.18);
   const transition = animate ? "transform .32s cubic-bezier(.22,.8,.25,1), opacity .28s ease" : "none";
-  wheel.cards.forEach((el, i) => {
+  const nextRendered = new Set();
+  const first = Math.max(0, Math.ceil(wheel.pos - 3.35));
+  const last = Math.min(wheel.cards.length - 1, Math.floor(wheel.pos + 3.35));
+  for (let i = first; i <= last; i++) {
+    const el = wheel.cards[i];
     const d = i - wheel.pos;
     const abs = Math.abs(d);
-    if (abs > 4.4) {
-      el.style.visibility = "hidden";
-      el.style.pointerEvents = "none";
-      return;
-    }
+    nextRendered.add(i);
     const x = d * spacing;
-    const z = -Math.min(abs, 4) * depthStep;
-    const angle = Math.max(-28, Math.min(28, d * -7));
     const scale = Math.max(.78, 1 - abs * .055);
     el.style.visibility = "visible";
+    el.style.willChange = "transform, opacity";
     if (el.style.transition !== transition) el.style.transition = transition;
-    el.style.transform = `translate3d(${x}px,0,${z}px) rotateY(${angle}deg) scale(${scale})`;
+    el.style.transform = `translate3d(${x}px,0,0) scale(${scale})`;
     // Collection stacks are a navigation surface, not a receding lesson card.
     // Keep their paper fully opaque so the cards beneath never show through.
     el.style.opacity = el.classList.contains("custom-category-card")
       ? (abs > 4 ? "0" : "1")
       : (abs > 4 ? "0" : String(Math.max(0, 1 - abs * 0.18)));
     el.style.zIndex = String(300 - Math.round(abs * 10));
-    el.style.pointerEvents = abs > 3.5 ? "none" : "auto";
+    el.style.pointerEvents = "auto";
     el.classList.toggle("centered", abs < 0.45);
+  }
+  wheel.renderedIndices.forEach(i => {
+    if (nextRendered.has(i)) return;
+    const el = wheel.cards[i];
+    if (!el) return;
+    el.style.visibility = "hidden";
+    el.style.opacity = "0";
+    el.style.pointerEvents = "none";
+    el.style.willChange = "auto";
+    el.classList.remove("centered");
   });
+  wheel.renderedIndices = nextRendered;
   if (refreshGuide) updateLayerGuide();
 }
 
@@ -2656,7 +2669,9 @@ function scheduleWheelLayout(refreshGuide = false) {
 // point wins, picking the frontmost (highest z-index) if more than one does.
 function cardAtPoint(x, y) {
   let best = -1, bestZ = -Infinity;
-  wheel.cards.forEach((el, idx) => {
+  wheel.renderedIndices.forEach(idx => {
+    const el = wheel.cards[idx];
+    if (!el) return;
     const r = el.getBoundingClientRect();
     if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
       const z = parseInt(el.style.zIndex || "0", 10);
@@ -2672,7 +2687,9 @@ function cardAtPoint(x, y) {
 function pathControlAtPoint(x, y) {
   const hitSlop = innerWidth <= 700 ? 10 : 6;
   let best = null, bestZ = -Infinity;
-  wheel.cards.forEach((card, index) => {
+  wheel.renderedIndices.forEach(index => {
+    const card = wheel.cards[index];
+    if (!card) return;
     if (!wheel.ids[index] || card.style.pointerEvents === "none") return;
     const button = card.querySelector(".card-path-button");
     if (!button) return;
