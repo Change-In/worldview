@@ -74,7 +74,7 @@
   #intro-demo {
     position: fixed; inset: 0; z-index: 210; display: none; place-items: center;
     padding: max(22px,env(safe-area-inset-top)) 22px max(22px,env(safe-area-inset-bottom));
-    background: rgba(247,246,242,.97); backdrop-filter: blur(10px);
+    background: rgba(247,246,242,.97); backdrop-filter: blur(10px); overflow-y:auto;
   }
   #intro-demo.open { display: grid; }
   .intro-card {
@@ -95,12 +95,18 @@
   .intro-step span { display: block; width: 27px; height: 27px; margin: 0 auto 9px; border: 2px solid #c8ad59; border-radius: 50%; background: var(--card); animation: introNode .38s both; }
   .intro-step:nth-child(2) span { animation-delay: .47s; }
   .intro-step:nth-child(3) span { animation-delay: .76s; background: var(--accent); border-color: var(--accent); }
+  .intro-question { display:grid;grid-template-columns:1fr auto;gap:9px;margin:0; }
+  #intro-topic { min-width:0;height:50px;border:1.5px solid var(--line);border-radius:13px;background:#fbfaf6;color:var(--ink);padding:0 15px;font-size:16px;outline:none; }
+  #intro-topic:focus { border-color:var(--accent);box-shadow:0 0 0 3px rgba(23,77,91,.1); }
   #intro-start { width: 100%; min-height: 50px; border: 0; border-radius: 13px; background: var(--accent); color: #fff; font-size: 15px; font-weight: 650; cursor: pointer; }
+  #intro-start:disabled { opacity:.38;cursor:default; }
+  #intro-example { margin:12px auto 0;padding:7px 11px;border:0;background:none;color:var(--ink-soft);font-size:12px;text-decoration:underline;text-underline-offset:3px;cursor:pointer; }
   #intro-skip { margin-top: 12px; padding: 8px 14px; border: 0; background: none; color: var(--ink-soft); font-size: 12px; cursor: pointer; }
   @keyframes introCardIn { from { opacity:0; transform:translateY(18px) scale(.985) } }
   @keyframes introLine { from { transform:scaleX(0); opacity:.25 } }
   @keyframes introNode { from { transform:scale(.45); opacity:0 } }
-  @media (max-height:600px) { .intro-card{padding-top:22px}.intro-card h2{font-size:29px}.intro-path{margin:20px 0}.intro-card>p{font-size:13px} }
+  @media (max-width:520px) { .intro-question{grid-template-columns:1fr} }
+  @media (max-height:700px) { #intro-demo{place-items:start center}.intro-card{padding-top:22px}.intro-card h2{font-size:29px}.intro-path{margin:18px 0}.intro-card>p{font-size:13px} }
   @media (prefers-reduced-motion:reduce) { .intro-card,.intro-path::before,.intro-step span{animation:none!important} }
 
   /* ---------- Views ---------- */
@@ -1059,14 +1065,18 @@
   <section class="intro-card">
     <div class="intro-wordmark">Worldview</div>
     <h2 id="intro-title">Follow a question until it makes sense.</h2>
-    <p>Ask about anything. Worldview gives you one useful question at a time, so you reason it through instead of just reading an answer.</p>
+    <p>Ask about anything. Worldview maps the ideas underneath your question, then gives you one useful question at a time so you can reason your way through them.</p>
     <div class="intro-path" aria-label="Ask, think aloud, understand">
       <div class="intro-step"><span></span>Ask</div>
       <div class="intro-step"><span></span>Think aloud</div>
       <div class="intro-step"><span></span>Understand</div>
     </div>
-    <button id="intro-start" type="button">Ask your first question</button>
-    <button id="intro-skip" type="button">Not now</button>
+    <form id="intro-question" class="intro-question">
+      <input id="intro-topic" type="text" placeholder="What are you curious about?" autocomplete="off" enterkeyhint="go" aria-label="What are you curious about?">
+      <button id="intro-start" type="submit" disabled>Begin</button>
+    </form>
+    <button id="intro-example" type="button">Try an example: How does lightning form?</button>
+    <button id="intro-skip" type="button">Explore first</button>
   </section>
 </div>
 
@@ -1442,7 +1452,7 @@
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v26 · Jul 19";
+const BUILD = "v27 · Jul 19";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -1725,7 +1735,8 @@ const SYSTEM_PROMPTS = {
 // keep the pedagogy invisible: the method itself is never revealed to the student
 const METHOD_NOTE = `Never name or describe the teaching technique or methodology you are using — no method names, no pedagogy terms, no educator names, even if the student asks directly. If they ask how you teach, say only that you guide them with questions and adapt to their answers.`;
 const INPUT_MODE_NOTE = `A learner message ending [input_mode:speech] came from speech-to-text. Silently interpret likely homophones or missing punctuation from context; ask for a fuller explanation only when meaning is genuinely ambiguous. For that turn, write short neutral sentences for speech: no markdown, lists, emojis, headings, filler, or asides. Never mention or repeat the marker.`;
-Object.keys(SYSTEM_PROMPTS).forEach(k => SYSTEM_PROMPTS[k] += "\n\n" + METHOD_NOTE + "\n\n" + INPUT_MODE_NOTE);
+const MASTERY_GATE_NOTE = `Do not advance merely because you explained a checkpoint or the learner agreed. Remain at that checkpoint until the learner's own explanation demonstrates its stated mastery goal. Tutor coverage, recognition, and agreement are not evidence of understanding.`;
+Object.keys(SYSTEM_PROMPTS).forEach(k => SYSTEM_PROMPTS[k] += "\n\n" + METHOD_NOTE + "\n\n" + MASTERY_GATE_NOTE + "\n\n" + INPUT_MODE_NOTE);
 
 // zero-latency mitigation for imperfect browser speech-to-text: let the model
 // silently read past likely mis-hearings instead of the student having to
@@ -1805,8 +1816,9 @@ function buildSystem(lesson) {
     ? "\n\n--- Teaching route ---\n" + lesson.knowledgeTree.map((node,index) => {
         const graphNode = graphById.get(node.id) || node;
         const prerequisites = Array.isArray(graphNode.prerequisites) && graphNode.prerequisites.length ? graphNode.prerequisites.join(",") : "none";
-        return `${index + 1}. ${node.id}: ${node.title} | needs ${prerequisites}`;
-      }).join("\n") + `\nStart: ${lesson.knowledgeTreeStartId || lesson.knowledgeTree[0].id}. First diagnostic: ${lesson.knowledgeTreeStartingQuestion || "Ask what the learner thinks causes it."}\nFollow this order without scripting it. Verify understanding from the learner's explanation before advancing, especially at converging prerequisites.`
+        const masteryGoal = graphNode.why_needed || node.why_needed || "explain this idea in their own words";
+        return `${index + 1}. ${node.id}: ${node.title} | needs ${prerequisites} | learner must show: ${masteryGoal}`;
+      }).join("\n") + `\nStart: ${lesson.knowledgeTreeStartId || lesson.knowledgeTree[0].id}. First diagnostic: ${lesson.knowledgeTreeStartingQuestion || "Ask what the learner thinks causes it."}\nFollow this order without scripting it. Verify every mastery goal from the learner's own explanation before advancing, especially at converging prerequisites. Tutor coverage and learner agreement are not evidence of mastery.`
     : "";
   const checkpointTrace = trustedPlan && Array.isArray(lesson.knowledgeTree) && lesson.knowledgeTree.length
     ? `\n\nEnd every reply with [[checkpoint:node-id]] using the route node being taught or checked. It is hidden; never mention it.`
@@ -3076,7 +3088,15 @@ async function beginLesson(topic, methodKey, starterText, parentId, sourceUrl, s
   if (lesson.sourceUrl || lesson.sourceMedia) await briefingPromise;
   const planningPromise = fetchMeta(lesson);
   lessonPlanning.set(lesson.id, planningPromise);
-  await planningPromise;
+  let planned = await planningPromise;
+  // The stronger foundational validator may reject a superficially plausible
+  // chronological map. Give Opus one clean retry before the first tutor turn
+  // so a recoverable planning miss never becomes the learner's opening path.
+  if (!planned && currentLessonId === lesson.id) {
+    const retryPlanning = fetchMeta(lesson,{ quiet:true });
+    lessonPlanning.set(lesson.id,retryPlanning);
+    planned = await retryPlanning;
+  }
   lessonPlanning.delete(lesson.id);
   $("chat-input").disabled = false;
   if (currentLessonId !== lesson.id) return lesson;
@@ -3099,7 +3119,7 @@ async function startLesson() {
   syncStartButton();
 }
 
-const KNOWLEDGE_PLAN_VERSION = "dependency-graph-v2-opus";
+const KNOWLEDGE_PLAN_VERSION = "dependency-graph-v3-foundational";
 const SCRIPTED_PATH_IDS = ["parts","signals","mechanism","conditions","evidence","connections"];
 function fallbackKnowledgeTree() { return []; }
 function scriptedKnowledgeTree(nodes) {
@@ -3142,7 +3162,15 @@ function normalizeKnowledgePlan(meta) {
     node.prerequisites = [...new Set(node.prerequisitesRaw.map(raw => idMap.get(raw) || raw).filter(id => byId.has(id) && id !== node.id))];
     delete node.prerequisitesRaw;
   });
-  const requested = Array.isArray(meta.linear_path) ? meta.linear_path.map(raw => idMap.get(String(raw)) || String(raw)) : [];
+  const foundationNodes = nodes.filter(node => node.scale === "foundation" && !node.prerequisites.length);
+  if (!foundationNodes.length) throw new Error("Opus omitted a prerequisite-free conceptual foundation");
+  const requestedStart = idMap.get(String(meta.starting_node_id || "")) || String(meta.starting_node_id || "");
+  const startingNode = byId.get(requestedStart);
+  if (!startingNode || startingNode.scale !== "foundation" || startingNode.prerequisites.length) {
+    throw new Error("Opus chose a starting point that already depends on untested ideas");
+  }
+  const requested = [startingNode.id,...(Array.isArray(meta.linear_path) ? meta.linear_path.map(raw => idMap.get(String(raw)) || String(raw)) : [])]
+    .filter((id,index,all) => byId.has(id) && all.indexOf(id) === index);
   const bias = new Map(requested.map((id,index) => [id,index]));
   const remaining = new Set(nodes.map(node => node.id));
   const ordered = [];
@@ -3154,7 +3182,7 @@ function normalizeKnowledgePlan(meta) {
     ordered.push(next);
     remaining.delete(next.id);
   }
-  return { graph:nodes, linear:ordered };
+  return { graph:nodes, linear:ordered, startingId:startingNode.id };
 }
 
 // Build title, category, and the planning map before the first teaching turn.
@@ -3170,13 +3198,17 @@ async function fetchMeta(lesson, options = {}) {
 
 The graph must be specific to the subject. Node titles must name real domain concepts, mechanisms, institutions, forces, models, or transitions. Never use reusable template labels such as "main parts involved," "what the parts sense," "how it unfolds," "conditions," "evidence and uncertainty," or "connections." Do not paste the topic into a generic curriculum skeleton.
 
+The beginning of the phenomenon is not necessarily the beginning of understanding. Before choosing the first node, perform a conceptual-floor check: what ideas does a smart novice need in order to make sense of the words and mechanisms in the proposed first checkpoint? Descend one useful layer at a time until the first node can be reasoned about without relying on an important unexplained concept. Usually include two to five concrete foundation nodes, though the topic decides the count. Do not descend into irrelevant textbook background.
+
+For example, a lightning map that begins with cumulonimbus formation is chronologically early but pedagogically incomplete. A novice may first need charged particles/electrons, attraction and repulsion, charge imbalance or separation, and electric fields before cloud microphysics and discharge can make sense. This is a regression example, not a reusable weather template: apply the same prerequisite-floor test in the actual domain of every lesson.
+
 Model genuine dependencies. Use 6–16 nodes. A node may have zero, one, or as many as four prerequisites. Independent foundations may sit in parallel and later converge into a synthesis. Do not force every topic into the same number of layers, the same roles, or a symmetrical graph. Include only concepts that materially help answer the learner's question, but include enough surrounding structure to explain a complex system rather than merely define terms.
 
 For a question such as how a race to AGI could change the economy, a strong graph might need distinct ideas about production, labor and human capital, capital ownership, knowledge as an economic input, automation and substitution, intellectual property, distribution, institutional responses, transition dynamics, and the final economic shift. Those are illustrative, not a required template. For another subject, use entirely different concepts.
 
-After creating the dependency graph, return linear_path as a topological ordering containing every node exactly once. Choose among simultaneously available nodes to minimize context switching and let intermediate ideas converge naturally. The learner-facing checklist will use this order, while the original prerequisites remain stored as the deeper map.
+After creating the dependency graph, return linear_path as a topological ordering containing every node exactly once. Choose among simultaneously available nodes to minimize context switching and let intermediate ideas converge naturally. The learner-facing checklist will use this order, while the original prerequisites remain stored as the deeper map. Set starting_node_id to a prerequisite-free foundation node and put it first in linear_path.
 
-Write a diagnostic opening question that invites explanation, prediction, comparison, or reasoning aloud. It must not be a recall question whose intended answer is one word. For a supplied source, the title and overview must describe the actual source rather than its website.`,
+Write a diagnostic opening question that directly tests the starting foundation's mastery_goal. It must invite explanation, prediction, comparison, or reasoning aloud, not presume understanding, and not be a recall question whose intended answer is one word. Every mastery_goal must describe what the learner should be able to explain or reason through in their own words before the tutor advances. For a supplied source, the title and overview must describe the actual source rather than its website.`,
       plannerInput,
       { type: "object", properties: {
           title: { type: "string" }, category: { type: "string" }, source_overview: { type:"string" },
@@ -3197,7 +3229,7 @@ Write a diagnostic opening question that invites explanation, prediction, compar
     lesson.sourceOverview = cleanPlannerText(meta.source_overview);
     lesson.conceptGraph = plan.graph;
     lesson.knowledgeTree = plan.linear;
-    lesson.knowledgeTreeStartId = lesson.knowledgeTree[0].id;
+    lesson.knowledgeTreeStartId = plan.startingId;
     lesson.knowledgeTreeStartingQuestion = cleanPlannerText(meta.starting_question) || "What do you already think is causing this?";
     lesson.knowledgeTreePromptVersion = KNOWLEDGE_PLAN_VERSION;
     lesson.knowledgeTreeCreatedAt = Date.now();
@@ -3205,6 +3237,7 @@ Write a diagnostic opening question that invites explanation, prediction, compar
     save();
     if (currentLessonId === lesson.id) { $("chat-title").textContent = lesson.title; $("voice-title").textContent = lesson.title; }
     if (!quiet) renderHome();
+    return true;
   } catch (e) {
     if (scriptedKnowledgeTree(lesson.knowledgeTree)) lesson.knowledgeTree = [];
     if (!Array.isArray(lesson.knowledgeTree)) lesson.knowledgeTree = [];
@@ -3216,6 +3249,7 @@ Write a diagnostic opening question that invites explanation, prediction, compar
     lesson.knowledgeTreeError = String(e && e.message || "Planning failed");
     lesson.knowledgeTreeCreatedAt = Date.now();
     save();
+    return false;
   }
 }
 
@@ -3899,7 +3933,7 @@ function assessLessonUnderstanding(lesson,sessionId = "") {
     // never be consumed by this assessment.
     const learnerBoundary = learnerMessages.length;
     try {
-      const tree = (lesson.knowledgeTree || []).map(node => `${node.id}: ${node.title}`).join("\n").slice(0,5000);
+      const tree = (lesson.knowledgeTree || []).map(node => `${node.id}: ${node.title} | mastery: ${node.why_needed || "explain the concept in their own words"}`).join("\n").slice(0,5000);
       const evidence = newStatements.map((message,index) => `${index+1}. ${message.content}`).join("\n").slice(-8000);
       const previous = rollingContext && rollingContext.learnerSummary || lesson.learnerSummary || "No earlier learner summary.";
       const sessionTranscript = session
@@ -7481,21 +7515,48 @@ $("settings-save").onclick = () => {
 };
 
 /* ================= One-screen introduction ================= */
-const INTRO_VERSION = "intro-v2";
+const INTRO_VERSION = "intro-v3";
 function setIntroOpen(open,remember = false) {
   const intro = $("intro-demo");
   intro.classList.toggle("open",open);
   intro.setAttribute("aria-hidden",open ? "false" : "true");
   document.querySelectorAll(".view").forEach(view => { view.inert = open; });
   if (remember) { state.introSeenVersion = INTRO_VERSION; save(); }
-  if (open) requestAnimationFrame(() => $("intro-start").focus({preventScroll:true}));
+  if (open) requestAnimationFrame(() => (innerWidth > 700 ? $("intro-topic") : $("intro-example")).focus({preventScroll:true}));
 }
 function finishIntro(openQuestion = false) {
   setIntroOpen(false,true);
   if (openQuestion) { renderHome();show("home");wheel.pos=1;layoutWheel(false); }
   if (!aiAvailable()) setTimeout(() => { if (!$("settings").classList.contains("open")) openSettings(); },220);
 }
-$("intro-start").onclick = () => finishIntro(true);
+async function startIntroLesson() {
+  const input = $("intro-topic");
+  const topic = input.value.trim();
+  if (!topic || startIntroLesson.running) return;
+  if (!aiAvailable()) {
+    finishIntro(false);
+    openSettings();
+    toast("Open a tester link before starting a lesson");
+    return;
+  }
+  startIntroLesson.running = true;
+  $("intro-start").disabled = true;
+  setIntroOpen(false,true);
+  try {
+    await beginLesson(topic,"socratic",METHODS[0].starter(topic));
+    input.value = "";
+  } finally {
+    startIntroLesson.running = false;
+    $("intro-start").disabled = !input.value.trim();
+  }
+}
+$("intro-question").addEventListener("submit",event => { event.preventDefault();startIntroLesson(); });
+$("intro-topic").addEventListener("input",event => { $("intro-start").disabled = !event.target.value.trim(); });
+$("intro-example").onclick = () => {
+  $("intro-topic").value = "How does lightning form?";
+  $("intro-start").disabled = false;
+  $("intro-topic").focus();
+};
 $("intro-skip").onclick = () => finishIntro(false);
 $("intro-replay").onclick = () => { closeSettings(true);setIntroOpen(true); };
 $("intro-demo").addEventListener("keydown",event => { if (event.key === "Escape") finishIntro(false); });
