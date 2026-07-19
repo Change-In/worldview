@@ -571,17 +571,19 @@
   .source-card-hold { position:absolute;right:13px;bottom:10px;color:var(--ink-soft);font-size:9px;letter-spacing:.08em;text-transform:uppercase; }
   .custom-category-card {
     display:flex;flex-direction:column;justify-content:center;text-align:center;overflow:visible!important;
-    isolation:isolate;border-color:var(--line);background:var(--card);cursor:pointer;-webkit-touch-callout:none;
+    isolation:isolate;border-color:var(--line);background:#fffdfa;cursor:pointer;-webkit-touch-callout:none;
+    height:var(--categoryH,180px)!important;
   }
+  .card.custom-category-card { margin-top:calc(0px - var(--categoryHalf,90px)); }
   /* A category is a visible stack of lesson cards, as in the concept sketch. */
   .custom-category-card::before,.custom-category-card::after {
     content:"";position:absolute;inset:0;border:1.5px solid var(--line);border-radius:inherit;
-    background:var(--card);pointer-events:none;z-index:-1;box-shadow:0 8px 24px rgba(22,64,79,.05);
+    background:#fffdfa;pointer-events:none;z-index:-1;box-shadow:0 8px 24px rgba(22,64,79,.06);
   }
-  .custom-category-card::before { transform:translate(8px,-9px);opacity:.82; }
-  .custom-category-card::after { transform:translate(16px,-18px);opacity:.58; }
-  .custom-category-card .card-cat { color:var(--ink-soft);opacity:.72; }
-  .custom-category-count { position:absolute;left:0;right:0;bottom:15px;color:var(--ink-soft);font-size:10px;letter-spacing:.04em; }
+  .custom-category-card::before { transform:translate(7px,-8px); }
+  .custom-category-card::after { transform:translate(14px,-16px); }
+  .custom-category-card .card-cat { color:var(--ink-soft);opacity:.82;top:12px; }
+  .custom-category-count { position:absolute;left:0;right:0;bottom:12px;color:var(--ink-soft);font-size:10px;letter-spacing:.04em; }
   .source-card.custom-category-card { padding:22px;align-items:center; }
   .source-card.custom-category-card .source-card-title { margin:0;max-width:82%;text-align:center;font:600 max(18px,calc(var(--cardW,262px)*.075))/1.22 Georgia,serif; }
   .source-category-return .source-card-host { color:#8a7229; }
@@ -812,6 +814,8 @@
   .settings-group-body { padding:0 16px 17px; border-top:1px solid rgba(157,179,184,.55); }
   .settings-check { display:flex!important;align-items:center;gap:10px;text-transform:none!important;font-size:14px!important;letter-spacing:0!important;color:var(--ink)!important;margin-top:18px!important; }
   .settings-check input { width:auto!important; accent-color:var(--accent); transform:scale(1.2); }
+  #settings-developer-group[hidden] { display:none; }
+  .developer-status { margin:10px 0 2px;padding:10px 12px;border-left:2px solid #c8ad59;color:var(--ink-soft);font-size:12px;line-height:1.45; }
   @media(min-width:760px){ #settings{align-items:center;justify-content:center} #settings-panel{width:min(620px,calc(100% - 40px));border-radius:20px;padding:30px;max-height:84vh} }
   #mobile-category-button, #mobile-category-sheet { display:none; }
   @media(max-width:700px){
@@ -1341,12 +1345,36 @@
     <label>Anthropic API key</label>
     <input id="set-key" class="secret-input" type="text" placeholder="sk-ant-..." autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore disabled>
     <div class="hint">Saved on this device &mdash; enter it once per device (phone, laptop) and it stays until you clear browser data. Get a key at console.anthropic.com.</div>
-    <label>Model</label>
+    <label>Tutor model</label>
     <select id="set-model">
       <option value="claude-sonnet-5">Claude Sonnet 5 (default &mdash; smart &amp; affordable)</option>
       <option value="claude-opus-4-8">Claude Opus 4.8 (max quality, pricier)</option>
       <option value="claude-haiku-4-5">Claude Haiku 4.5 (fastest, cheapest)</option>
     </select>
+    <label>Sonnet response mode</label>
+    <select id="set-thinking">
+      <option value="fast">Fast &mdash; thinking off, low effort</option>
+      <option value="adaptive-low">Adaptive &mdash; low effort</option>
+      <option value="adaptive-medium">Adaptive &mdash; medium effort</option>
+    </select>
+    <div class="hint">Only affects Sonnet 5. Fast is Fable&rsquo;s current default; the adaptive modes let you test whether extra reasoning actually improves the lesson.</div>
+    <label>Spoken reply provider</label>
+    <select id="set-ttsprovider">
+      <option value="auto">Automatic &mdash; best configured option</option>
+      <option value="cartesia">Cartesia Sonic 3.5</option>
+      <option value="deepgram">Deepgram Aura-2</option>
+      <option value="device">This device&rsquo;s voice</option>
+    </select>
+    <label>Deepgram API key (developer device only)</label>
+    <input id="set-deepgramkey" class="secret-input" type="text" placeholder="Enter a newly rotated key" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore disabled>
+    <label>Deepgram Aura-2 voice</label>
+    <select id="set-deepgrammodel">
+      <option value="aura-2-arcas-en">Arcas &mdash; natural, smooth, clear</option>
+      <option value="aura-2-andromeda-en">Andromeda &mdash; casual, expressive</option>
+      <option value="aura-2-apollo-en">Apollo &mdash; confident, comfortable</option>
+      <option value="aura-2-athena-en">Athena &mdash; calm, professional</option>
+    </select>
+    <div class="developer-status">Tutor, transcription, and spoken voice are independent tests. Deepgram Aura-2 changes only what the tutor sounds like; it does not transcribe your microphone.</div>
     <div class="legacy-voice-settings">
     <label>Voice</label>
     <select id="set-voice"></select>
@@ -1377,6 +1405,10 @@
       <input id="set-voicedefault" type="checkbox" style="width:auto;accent-color:var(--accent);transform:scale(1.3);">
       Open lessons in spoken conversation
     </label>
+    <label style="display:flex;align-items:center;gap:10px;text-transform:none;font-size:15px;letter-spacing:0;color:var(--ink);margin-top:18px;">
+      <input id="set-developer" type="checkbox" style="width:auto;accent-color:var(--accent);transform:scale(1.3);">
+      Show developer model lab on this device
+    </label>
     </div>
     <label>Backup &amp; sync (across browsers / phone)</label>
     <div class="row2">
@@ -1401,11 +1433,17 @@
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v21 · Jul 18"; // bump on every deploy — the auto-updater compares this against the server, and the tag below must match
+const BUILD = "v22 · Jul 18"; // bump on every deploy — the auto-updater compares this against the server, and the tag below must match
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v22", date: "Jul 18", changes: [
+    "Personal categories are now compact opaque mini-stacks instead of translucent full-height lesson cards, matching the phone concept more closely.",
+    "A local developer model lab separates tutor reasoning, microphone transcription, and spoken voice so unrelated systems are never compared as one setting.",
+    "Sonnet can now be compared in fast, adaptive-low, and adaptive-medium modes, while spoken output can compare Cartesia Sonic 3.5, Deepgram Aura-2, and the device voice.",
+    "Advanced provider controls stay hidden for normal testers unless developer mode is enabled on that device.",
+  ]},
   { tag: "v21", date: "Jul 18", changes: [
     "Personal collections now look like layered card stacks and stay separate: Explore collections never leak into Upload, even when they share a name.",
     "A calm one-screen introduction explains Ask → Think aloud → Understand on first launch, with a replay control in Settings.",
@@ -1510,7 +1548,7 @@ const VERSIONS = [
   ]},
 ];
 const LS_KEY = "worldview-v1";
-let state = { apiKey: "", model: "claude-sonnet-5", lessons: [], notes: [], customCategories: [], voiceURI: "", voiceDefault: true, speechLanguage: "en", elKey: "", cartKey: "", cartVoice: "", cardScale: 1 };
+let state = { apiKey: "", model: "claude-sonnet-5", tutorThinking: "fast", developerMode: false, ttsProvider: "auto", deepgramKey: "", deepgramModel: "aura-2-arcas-en", lessons: [], notes: [], customCategories: [], voiceURI: "", voiceDefault: true, speechLanguage: "en", elKey: "", cartKey: "", cartVoice: "", cardScale: 1 };
 try { Object.assign(state, JSON.parse(localStorage.getItem(LS_KEY) || "{}")); } catch (e) {}
 if (!Array.isArray(state.lessons)) state.lessons = [];
 if (!Array.isArray(state.customCategories)) state.customCategories = [];
@@ -2026,11 +2064,12 @@ function tutorTurnNeedsSearch(lesson,messages) {
 }
 function tutorRequestPolicy(lesson,messages,allowSearch = null) {
   const model = state.model;
+  const sonnetMode = state.tutorThinking || "fast";
   return {
     allowSearch: allowSearch == null ? tutorTurnNeedsSearch(lesson,messages) : !!allowSearch,
     cache:true,
-    effort:model === "claude-opus-4-8" ? "medium" : model === "claude-sonnet-5" ? "low" : "",
-    thinking:model === "claude-sonnet-5" ? "disabled" : "",
+    effort:model === "claude-opus-4-8" ? "medium" : model === "claude-sonnet-5" ? (sonnetMode === "adaptive-medium" ? "medium" : "low") : "",
+    thinking:model === "claude-sonnet-5" && sonnetMode === "fast" ? "disabled" : "",
   };
 }
 
@@ -2347,6 +2386,9 @@ function updateCardSize() {
   wheel.cardW = w;
   document.documentElement.style.setProperty("--cardW", w + "px");
   document.documentElement.style.setProperty("--cardH", h + "px");
+  const categoryH = Math.round(h * (mobile ? .54 : .58));
+  document.documentElement.style.setProperty("--categoryH", categoryH + "px");
+  document.documentElement.style.setProperty("--categoryHalf", Math.round(categoryH / 2) + "px");
   document.documentElement.style.setProperty("--carouselPerspective", Math.round(Math.max(700, w * 4.2)) + "px");
 }
 window.addEventListener("resize", () => { updateCardSize(); layoutWheel(false); });
@@ -2574,7 +2616,11 @@ function layoutWheel(animate = true, refreshGuide = true) {
     el.style.visibility = "visible";
     if (el.style.transition !== transition) el.style.transition = transition;
     el.style.transform = `translate3d(${x}px,0,${z}px) rotateY(${angle}deg) scale(${scale})`;
-    el.style.opacity = abs > 4 ? 0 : String(Math.max(0, 1 - abs * 0.18));
+    // Collection stacks are a navigation surface, not a receding lesson card.
+    // Keep their paper fully opaque so the cards beneath never show through.
+    el.style.opacity = el.classList.contains("custom-category-card")
+      ? (abs > 4 ? "0" : "1")
+      : (abs > 4 ? "0" : String(Math.max(0, 1 - abs * 0.18)));
     el.style.zIndex = String(300 - Math.round(abs * 10));
     el.style.pointerEvents = abs > 3.5 ? "none" : "auto";
     el.classList.toggle("centered", abs < 0.45);
@@ -6352,7 +6398,7 @@ function sayFiller() {
    (needs a paid plan to speak at all) > this device's built-in voice. */
 const ttsAudio = new Audio();
 const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
-let elBroken = false, cartBroken = false; // one failure → fall back for the session
+let elBroken = false, cartBroken = false, deepgramBroken = false; // one failure → fall back for the session
 let usedAudioElThisTurn = false; // set whenever a premium voice actually plays through <audio> — see speakingDone
 
 /* ---- word-sync during premium-voice playback ----
@@ -6384,7 +6430,13 @@ function startWordSync(item) {
   wordSyncRAF = requestAnimationFrame(tick);
 }
 function ttsProvider() {
+  const selected = state.ttsProvider || "auto";
+  if (selected === "device") return "device";
+  if (selected === "deepgram" && state.deepgramKey && !deepgramBroken) return "deepgram";
+  if (selected === "cartesia" && state.cartKey && !cartBroken) return "cartesia";
+  if (selected === "cartesia" || selected === "deepgram") return "device";
   if (state.cartKey && !cartBroken) return "cartesia";
+  if (state.deepgramKey && !deepgramBroken) return "deepgram";
   if (state.elKey && !elBroken) return "elevenlabs";
   return "device";
 }
@@ -6421,6 +6473,37 @@ async function pumpCart(item) {
   } catch (e) {
     cartBroken = true;
     toast("Cartesia voice unavailable (" + e.message + ") — trying the next option.", 6000);
+    if (voice.utter === item) { voice.utter = null; voice.queue.unshift(item); pumpSpeech(); }
+  }
+}
+
+/* Deepgram Aura-2 developer comparison path. It changes spoken output only;
+   microphone transcription remains an independent service. */
+async function deepgramFetch(text) {
+  const model = state.deepgramModel || "aura-2-arcas-en";
+  const r = await fetch("https://api.deepgram.com/v1/speak?model=" + encodeURIComponent(model) + "&encoding=mp3", {
+    method:"POST",
+    headers:{ "Authorization":"Token " + state.deepgramKey, "content-type":"application/json" },
+    body:JSON.stringify({ text }),
+  });
+  if (!r.ok) {
+    let msg = "HTTP " + r.status;
+    try { const j = await r.json(); msg = j.err_msg || j.message || msg; } catch (e) {}
+    throw new Error(msg);
+  }
+  return URL.createObjectURL(await r.blob());
+}
+async function pumpDeepgram(item) {
+  voice.utter = item;
+  try {
+    const url = await deepgramFetch(item.text);
+    if (!voice.active || voice.utter !== item) { URL.revokeObjectURL(url); return; }
+    try { speechSynthesis.cancel(); } catch (e) {}
+    highlightAt(item.base);
+    await playBlobUrl(url,item);
+  } catch (e) {
+    deepgramBroken = true;
+    toast("Deepgram voice unavailable (" + e.message + ") — using this device's voice for now.",6000);
     if (voice.utter === item) { voice.utter = null; voice.queue.unshift(item); pumpSpeech(); }
   }
 }
@@ -6528,12 +6611,13 @@ function pumpSpeech() {
   const provider = ttsProvider();
   // merge adjacent queued sentences into one utterance (~250 chars) — fewer
   // robotic pauses between sentences, while the first sentence still starts fast
-  while (provider !== "cartesia" && voice.queue.length && item.text.length < 250 &&
+  while (provider !== "cartesia" && provider !== "deepgram" && voice.queue.length && item.text.length < 250 &&
          voice.queue[0].base === item.base + item.text.length) {
     item.text += voice.queue.shift().text;
   }
   setVoiceStatus("speaking");
   if (provider === "cartesia") { pumpCart(item); return; }
+  if (provider === "deepgram") { pumpDeepgram(item); return; }
   if (provider === "elevenlabs") { pumpEl(item); return; }
   const u = new SpeechSynthesisUtterance(item.text);
   const v = pickVoice();
@@ -7062,10 +7146,16 @@ function organizeSettingsPanel() {
     nodes.filter(Boolean).forEach(node => body.appendChild(node)); details.append(summary, body); intro.after(details); return details;
   }
   const fieldNodes = id => { const field=$(id), label=field && field.previousElementSibling; return [label,field]; };
-  const model = fieldNodes("set-model"), voiceSelect = fieldNodes("set-voice"), speechLanguage = fieldNodes("set-speechlanguage");
+  const model = fieldNodes("set-model"), thinking = fieldNodes("set-thinking"), voiceSelect = fieldNodes("set-voice"), speechLanguage = fieldNodes("set-speechlanguage");
   const voiceDefault = $("set-voicedefault") && $("set-voicedefault").closest("label"); if (voiceDefault) voiceDefault.className = "settings-check";
+  const developerToggle = $("set-developer") && $("set-developer").closest("label"); if (developerToggle) developerToggle.className = "settings-check";
   const speechLanguageHint = $("set-speechlanguage") && $("set-speechlanguage").nextElementSibling;
-  const learning = group("Learning & conversation", [...model, ...voiceSelect, ...speechLanguage, speechLanguageHint, voiceDefault], true);
+  const learning = group("Learning & conversation", [...voiceSelect, ...speechLanguage, speechLanguageHint, voiceDefault, developerToggle], true);
+  const thinkingHint = $("set-thinking") && $("set-thinking").nextElementSibling;
+  const ttsProvider = fieldNodes("set-ttsprovider"), deepgramKey = fieldNodes("set-deepgramkey"), deepgramModel = fieldNodes("set-deepgrammodel");
+  const developerStatus = panel.querySelector(".developer-status");
+  const developer = group("Developer model lab", [...model, ...thinking, thinkingHint, ...ttsProvider, ...deepgramKey, ...deepgramModel, developerStatus]);
+  developer.id = "settings-developer-group";
   const key = fieldNodes("set-key"), keyHint = $("set-key") && $("set-key").nextElementSibling;
   const connection = group("AI connection", [...key, keyHint]);
   const voiceNodes = [];
@@ -7073,11 +7163,15 @@ function organizeSettingsPanel() {
   const premium = group("Premium voice services", voiceNodes);
   const row = $("export-btn") && $("export-btn").closest(".row2"), dataLabel = row && row.previousElementSibling, file=$("import-file"), dataHint=file && file.nextElementSibling;
   const data = group("Your data", [dataLabel,row,file,dataHint]);
-  [learning,connection,premium,data].reverse().forEach(section => intro.after(section));
+  [learning,developer,connection,premium,data].reverse().forEach(section => intro.after(section));
   panel.querySelectorAll(".legacy-voice-settings").forEach(wrapper => { if (!wrapper.children.length) wrapper.remove(); });
 }
 organizeSettingsPanel();
-const SECRET_SETTING_IDS = ["set-key","set-cartkey","set-elkey"];
+const SECRET_SETTING_IDS = ["set-key","set-cartkey","set-elkey","set-deepgramkey"];
+function syncDeveloperSettingsVisibility() {
+  const group = $("settings-developer-group");
+  if (group) group.hidden = !$("set-developer").checked;
+}
 function setSettingsInteractive(active) {
   const settings = $("settings");
   settings.inert = !active;
@@ -7097,10 +7191,16 @@ function openSettings() {
   $("set-elkey").value = state.elKey || "";
   $("set-cartkey").value = state.cartKey || "";
   $("set-cartvoice").value = state.cartVoice || "";
+  $("set-deepgramkey").value = state.deepgramKey || "";
+  $("set-deepgrammodel").value = state.deepgramModel || "aura-2-arcas-en";
+  $("set-ttsprovider").value = state.ttsProvider || "auto";
   $("set-model").value = state.model;
+  $("set-thinking").value = state.tutorThinking || "fast";
   $("set-speechlanguage").value = speechLanguageCode();
   populateVoiceSelect();
   $("set-voicedefault").checked = !!state.voiceDefault;
+  $("set-developer").checked = !!state.developerMode;
+  syncDeveloperSettingsVisibility();
   $("settings").classList.add("open");
   $("settings-panel").scrollTop = 0; // always open showing the top (API key first)
   settingsSnap = settingsFields();
@@ -7111,7 +7211,7 @@ $("gear").onclick = openSettings;
 // voice list, which made every close look like an unsaved change)
 let settingsSnap = "";
 function settingsFields() {
-  return JSON.stringify([$("set-key").value.trim(), $("set-elkey").value.trim(), $("set-cartkey").value.trim(), $("set-cartvoice").value.trim(), $("set-model").value, $("set-voice").value, $("set-speechlanguage").value, $("set-voicedefault").checked]);
+  return JSON.stringify([$("set-key").value.trim(), $("set-elkey").value.trim(), $("set-cartkey").value.trim(), $("set-cartvoice").value.trim(), $("set-deepgramkey").value.trim(), $("set-deepgrammodel").value, $("set-ttsprovider").value, $("set-model").value, $("set-thinking").value, $("set-voice").value, $("set-speechlanguage").value, $("set-voicedefault").checked, $("set-developer").checked]);
 }
 function settingsDirty() { return settingsFields() !== settingsSnap; }
 function applySettings() {
@@ -7119,11 +7219,16 @@ function applySettings() {
   state.elKey = $("set-elkey").value.trim();
   state.cartKey = $("set-cartkey").value.trim();
   state.cartVoice = $("set-cartvoice").value.trim();
-  elBroken = false; cartBroken = false; // new keys → give the premium voices a fresh chance
+  state.deepgramKey = $("set-deepgramkey").value.trim();
+  state.deepgramModel = $("set-deepgrammodel").value || "aura-2-arcas-en";
+  state.ttsProvider = $("set-ttsprovider").value || "auto";
+  elBroken = false; cartBroken = false; deepgramBroken = false; // new keys → give the premium voices a fresh chance
   state.model = $("set-model").value;
+  state.tutorThinking = $("set-thinking").value || "fast";
   state.voiceURI = $("set-voice").value;
   state.speechLanguage = $("set-speechlanguage").value || "en";
   state.voiceDefault = $("set-voicedefault").checked;
+  state.developerMode = $("set-developer").checked;
   voice.forceLocal = false; // a new voice choice clears any local-only fallback
   save();
 }
@@ -7137,6 +7242,7 @@ function closeSettings(askSave) {
   setSettingsInteractive(false);
 }
 $("settings").addEventListener("click", e => { if (e.target === $("settings")) closeSettings(true); });
+$("set-developer").addEventListener("change",syncDeveloperSettingsVisibility);
 (function settingsSwipe() { // mobile: swipe down on the panel to leave settings
   const panel = $("settings-panel");
   let sx = 0, sy = 0, atTop = true;
