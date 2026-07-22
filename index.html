@@ -819,6 +819,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .settings-group summary::after { content:"+"; color:var(--ink-soft); font-family:system-ui,sans-serif; }
   .settings-group[open] summary::after { content:"−"; }
   .settings-group-body { padding:0 16px 17px; border-top:1px solid var(--line); }
+  .settings-group.settings-group-flat { margin:0 0 14px; overflow:visible; background:none; box-shadow:none; }
+  .settings-group.settings-group-flat .settings-group-body { padding:0; border:0; }
   .settings-check { display:flex!important;align-items:center;gap:10px;text-transform:none!important;font-size:14px!important;letter-spacing:0!important;color:var(--ink)!important;margin-top:18px!important; }
   .settings-check[hidden], #settings-developer-group[hidden], #settings-premium-group[hidden], #settings-tester-group[hidden], #settings-data-group[hidden] { display:none!important; }
   .settings-check input { width:auto!important; accent-color:var(--accent); transform:scale(1.2); }
@@ -1344,7 +1346,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <div id="settings" aria-hidden="true">
   <div id="settings-panel">
     <h3>Settings</h3>
-    <label>Tester access code</label>
+    <label>Access code</label>
     <input id="set-testercode" class="secret-input" type="text" placeholder="Private alpha code" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore disabled>
     <label>Tutor model</label>
     <select id="set-model">
@@ -1437,11 +1439,17 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v31 · Jul 21";
+const BUILD = "v32 · Jul 22";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v32", date: "Jul 22", changes: [
+    "Restored tester access with the new code and verified a real tutor response through the deployed server.",
+    "Settings now stays out of the way at launch and shows only the small set of learner-facing MVP controls.",
+    "If tester access changes again, the lesson now opens the access field instead of appearing to wait forever.",
+    "Ask Anything is now only the question and Begin button—no method, mic, or voice-mode label on the card.",
+  ]},
   { tag: "v31", date: "Jul 21", changes: [
     "Fixed a new lesson sometimes never starting a conversation if you navigated away while it was being planned.",
     "Added a visible 'mapping this lesson…' indicator while a lesson is generated, instead of a screen that looked frozen.",
@@ -1868,15 +1876,15 @@ function updateCloudAccountUI(status = "") {
   const label = $("account-status");
   if (!label) return;
   if (!cloudAccount) {
-    label.textContent = status === "error" ? "Lesson backup is temporarily unavailable. Your local copy is still here." : "Preparing private lesson backup…";
+    label.textContent = status === "error" ? "Backup unavailable. Local lessons are safe." : "Preparing lesson backup…";
     const signOut = $("account-signout");
     if (signOut) signOut.hidden = true;
     return;
   }
   const email = cloudAccount && cloudAccount.email;
   label.textContent = email
-    ? `${email} · ${status === "error" ? "sync needs another try" : status === "synced" ? "lessons synced" : "signed in"}`
-    : `${status === "error" ? "Cloud backup needs another try" : "Lessons are privately backed up on this device. Add email to recover them anywhere."}`;
+    ? `${email} · ${status === "error" ? "sync needs another try" : status === "synced" ? "synced" : "connected"}`
+    : `${status === "error" ? "Backup needs another try" : "Backed up on this device. Add email for recovery."}`;
   const signOut = $("account-signout");
   if (signOut) signOut.hidden = !email;
 }
@@ -2470,7 +2478,7 @@ async function withClaudeRetries(operation, onRetry, maxAttempts = 3) {
 }
 function friendlyClaudeFailure(error) {
   if (error && (error.status === 401 || error.status === 403)) {
-    if (backendAccessEnabled()) return { title: "Tester access needs attention.", detail: "Your message is saved. Reopen the private tester link, then retry." };
+    if (backendAccessEnabled()) return { title: "Tester access needs attention.", detail: "Your message is saved. Update the access code, then continue.", access:true };
     return { title: "The API key needs attention.", detail: "Your message is saved. Check the key in Settings, then retry." };
   }
   if (error && error.status === 402) {
@@ -2484,6 +2492,18 @@ function friendlyClaudeFailure(error) {
     return { title: "Fable is temporarily busy.", detail: "Your message is saved. Retry when you're ready." };
   }
   return { title: "Fable couldn't answer yet.", detail: "Your message is saved. Retry the response." };
+}
+function resetInvalidTesterAccess(error) {
+  if (!error || ![401,403].includes(Number(error.status)) || !backendAccessEnabled()) return false;
+  // A changed alpha code should never leave the learner in a silent retry
+  // loop. Existing account entitlements remain untouched; only a stale code
+  // stored on this device is cleared so the focused access field can reappear.
+  if (!backendEntitled && state.testerInvite) {
+    state.testerInvite = "";
+    save();
+  }
+  syncDeveloperSettingsVisibility();
+  return true;
 }
 
 async function streamChat(system, messages, onText, onSearch, modelOverride, maxTokens, requestPolicy = {}) {
@@ -2813,7 +2833,6 @@ function renderHome() {
       <div class="new-card-actions">
         <button id="start-btn" type="button">Begin</button>
       </div>
-      <div class="card-hint">spoken conversation opens by default</div>
     `;
     c.appendChild(nc);
     wheel.cards.push(nc); wheel.ids.push(null);
@@ -3267,7 +3286,7 @@ $("zoom-btn").onclick = event => {
 };
 
 async function beginLesson(topic, methodKey, starterText, parentId, sourceUrl, sourceMedia) {
-  if (!aiAvailable()) { openSettings(); toast("Open a tester link or add a developer API key first"); return; }
+  if (!aiAvailable()) { openSettings(); toast("Enter the access code, then Save."); return; }
   const lesson = {
     id: uid(), topic, method: methodKey, starterText,
     title: topic.length > 40 ? topic.slice(0, 40) + "…" : topic,
@@ -4024,11 +4043,12 @@ async function reenterCheck(lesson, existingBubble) {
   } catch (rawError) {
     const error = normalizeClaudeError(rawError);
     const copy = friendlyClaudeFailure(error);
+    const accessFailure = resetInvalidTesterAccess(error);
     thinkingBubble.classList.remove("thinking");
     thinkingBubble.classList.add("response-failed");
-    thinkingBubble.innerHTML = `<div class="response-failed-copy"><strong>${esc(copy.title)}</strong><span>${esc(copy.detail)}</span></div><button type="button" class="response-retry">Retry opening question</button>`;
+    thinkingBubble.innerHTML = `<div class="response-failed-copy"><strong>${esc(copy.title)}</strong><span>${esc(copy.detail)}</span></div><button type="button" class="response-retry">${accessFailure ? "Update access" : "Retry opening question"}</button>`;
     const retry = thinkingBubble.querySelector(".response-retry");
-    if (retry) retry.onclick = () => reenterCheck(lesson,thinkingBubble);
+    if (retry) retry.onclick = accessFailure ? openSettings : () => reenterCheck(lesson,thinkingBubble);
   } finally {
     streaming = false;
     $("chat-send").disabled = false;
@@ -4064,6 +4084,7 @@ function attachSources(bubble, sources) {
 
 function renderTextResponseFailure(bubble, lesson, error) {
   const copy = friendlyClaudeFailure(error);
+  const accessFailure = resetInvalidTesterAccess(error);
   bubble.classList.remove("thinking");
   bubble.classList.add("response-failed");
   bubble.innerHTML = "";
@@ -4076,8 +4097,8 @@ function renderTextResponseFailure(bubble, lesson, error) {
   const retry = document.createElement("button");
   retry.type = "button";
   retry.className = "response-retry";
-  retry.textContent = "Retry response";
-  retry.onclick = () => retryPendingTextResponse(lesson.id, bubble);
+  retry.textContent = accessFailure ? "Update access" : "Retry response";
+  retry.onclick = accessFailure ? openSettings : () => retryPendingTextResponse(lesson.id, bubble);
   text.append(title, detail);
   bubble.append(text, retry);
 }
@@ -4905,7 +4926,7 @@ function closeSourceSheet() {
 async function startSourceLesson() {
   const raw = $("source-url").value.trim();
   if (!raw && !pendingSourceFile) { $("source-status").textContent = "Add a webpage, photo, or PDF first."; return; }
-  if (!aiAvailable()) { openSettings(); toast("Open a tester link or add a developer API key first"); return; }
+  if (!aiAvailable()) { openSettings(); toast("Enter the access code, then Save."); return; }
   let url = "";
   if (raw) {
     try {
@@ -6617,12 +6638,16 @@ async function voiceSend(text, reuseExistingTurn = false) {
   } catch (rawError) {
     const error = normalizeClaudeError(rawError);
     const copy = friendlyClaudeFailure(error);
+    const accessFailure = resetInvalidTesterAccess(error);
     console.warn("Voice tutor response failed", { error, lessonId: lesson.id, requestId: error.requestId || "" });
     markLessonResponsePending(lesson, error);
     renderVoiceWords(copy.title + " " + copy.detail);
     toast(copy.title + " Your message is saved.", 5200);
     voice.speaking = false; voice.streamDone = true;
-    if (voice.active) setVoiceStatus("response-retry");
+    if (voice.active) {
+      if (accessFailure) setTimeout(() => { exitVoice();openSettings();toast("Enter the current access code, then Save.",5200); },180);
+      else setVoiceStatus("response-retry");
+    }
   }
 }
 
@@ -6677,10 +6702,15 @@ async function voiceReenter(lesson) {
     save();
     scheduleLessonCompaction(lesson);
   } catch (e) {
-    const copy = friendlyClaudeFailure(normalizeClaudeError(e));
+    const error = normalizeClaudeError(e);
+    const copy = friendlyClaudeFailure(error);
+    const accessFailure = resetInvalidTesterAccess(error);
     toast(copy.title, 5200);
     voice.speaking = false; voice.streamDone = true;
-    if (voice.active) setVoiceStatus("reentry-retry");
+    if (voice.active) {
+      if (accessFailure) setTimeout(() => { exitVoice();openSettings();toast("Enter the current access code, then Save.",5200); },180);
+      else setVoiceStatus("reentry-retry");
+    }
   }
 }
 
@@ -7553,31 +7583,35 @@ function organizeSettingsPanel() {
   const heading = panel.querySelector("h3");
   const intro = document.createElement("p"); intro.className = "settings-intro"; intro.hidden = true;
   heading.after(intro);
-  function group(title, nodes, open = false) {
-    const details = document.createElement("details"); details.className = "settings-group"; details.open = open;
+  function group(title, nodes, open = false, flat = false) {
+    const details = document.createElement(flat ? "section" : "details"); details.className = "settings-group"; details.open = open;
+    if (flat) details.classList.add("settings-group-flat");
     const summary = document.createElement("summary"); summary.textContent = title;
     const body = document.createElement("div"); body.className = "settings-group-body";
-    nodes.filter(Boolean).forEach(node => body.appendChild(node)); details.append(summary, body); intro.after(details); return details;
+    nodes.filter(Boolean).forEach(node => body.appendChild(node));
+    if (flat) details.append(body); else details.append(summary, body);
+    intro.after(details); return details;
   }
   const fieldNodes = id => { const field=$(id), label=field && field.previousElementSibling; return [label,field]; };
   const model = fieldNodes("set-model"), thinking = fieldNodes("set-thinking"), speechLanguage = fieldNodes("set-speechlanguage"), theme = fieldNodes("set-theme");
   const voiceDefault = $("set-voicedefault") && $("set-voicedefault").closest("label"); if (voiceDefault) voiceDefault.className = "settings-check";
   const developerToggle = $("set-developer") && $("set-developer").closest("label");
-  if (developerToggle) { developerToggle.className = "settings-check"; developerToggle.hidden = !state.developerUnlocked; }
+  if (developerToggle) { developerToggle.className = "settings-check"; developerToggle.hidden = !(state.developerUnlocked && state.developerMode); }
   const speechLanguageHint = $("set-speechlanguage") && $("set-speechlanguage").nextElementSibling;
-  const learning = group("Learning & conversation", [...theme, ...speechLanguage, speechLanguageHint, voiceDefault, developerToggle], true);
+  if (speechLanguageHint) speechLanguageHint.remove();
+  const learning = group("Learning & conversation", [...theme, ...speechLanguage, voiceDefault, developerToggle], true, true);
   const thinkingHint = $("set-thinking") && $("set-thinking").nextElementSibling;
   const ttsProvider = fieldNodes("set-ttsprovider"), deepgramKey = fieldNodes("set-deepgramkey"), deepgramModel = fieldNodes("set-deepgrammodel");
   const developerStatus = panel.querySelector(".developer-status");
   const developer = group("Developer model lab", [...model, ...thinking, thinkingHint, ...ttsProvider, ...deepgramKey, ...deepgramModel, developerStatus]);
   developer.id = "settings-developer-group";
   const tester = fieldNodes("set-testercode");
-  const connection = group("Tester access", [...tester], true);
+  const connection = group("Tester access", [...tester], true, true);
   connection.id = "settings-tester-group";
   const accountCard = document.createElement("div");
   accountCard.className = "settings-account-card";
-  accountCard.innerHTML = `<p id="account-status" class="settings-account-status">Preparing private lesson backup…</p><div class="settings-account-row"><input id="account-email" type="email" autocomplete="email" inputmode="email" placeholder="Email address" aria-label="Email address for lesson recovery"><button id="account-link" type="button">Save with email</button></div><button id="account-signout" type="button" hidden>Sign out on this device</button>`;
-  const account = group("Account & lesson backup",[accountCard],true);
+  accountCard.innerHTML = `<p id="account-status" class="settings-account-status">Preparing lesson backup…</p><div class="settings-account-row"><input id="account-email" type="email" autocomplete="email" inputmode="email" placeholder="Email for lesson backup" aria-label="Email address for lesson recovery"><button id="account-link" type="button">Connect</button></div><button id="account-signout" type="button" hidden>Sign out</button>`;
+  const account = group("Account & lesson backup",[accountCard],true,true);
   account.id = "settings-account-group";
   const voiceNodes = [];
   ["set-cartkey","set-cartvoice","set-elkey"].forEach(id => { const field=$(id); if(!field)return; const label=field.previousElementSibling, hint=field.nextElementSibling && field.nextElementSibling.classList.contains("hint") ? field.nextElementSibling : null; voiceNodes.push(label,field,hint); });
@@ -7594,7 +7628,7 @@ const SECRET_SETTING_IDS = ["set-testercode","set-cartkey","set-elkey","set-deep
 function syncDeveloperSettingsVisibility() {
   const developer = !!state.developerMode;
   const developerToggle = $("set-developer") && $("set-developer").closest("label");
-  if (developerToggle) developerToggle.hidden = !state.developerUnlocked;
+  if (developerToggle) developerToggle.hidden = !(state.developerUnlocked && state.developerMode);
   const group = $("settings-developer-group");
   if (group) group.hidden = !developer;
   const premium = $("settings-premium-group");
@@ -7778,7 +7812,7 @@ async function startIntroLesson() {
   if (!aiAvailable()) {
     finishIntro(false);
     openSettings();
-    toast("Open a tester link before starting a lesson");
+    toast("Enter the access code, then Save.");
     return;
   }
   startIntroLesson.running = true;
