@@ -1439,11 +1439,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v34 · Jul 22";
+const BUILD = "v35 · Jul 22";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v35", date: "Jul 22", changes: [
+    "Spoken lessons now try one persistent voice connection instead of reopening a new one every sentence, to cut the delay between finishing a sentence and hearing the next one.",
+    "If that new connection ever has trouble, the lesson quietly falls back to the previous reliable method — voice should never just stop working because of this change.",
+  ]},
   { tag: "v34", date: "Jul 22", changes: [
     "Fixed a long tutor reply sometimes being thrown away entirely and replaced with a generic error, instead of just showing what was already said.",
     "Fixed a short spoken reply occasionally causing the rest of the lesson to silently fall back to the phone's built-in voice.",
@@ -5498,6 +5502,7 @@ const voice = {
   textPresenter:null, audioCleanupTimer:null,
   speechText:"", expectedSpeechEnd:0, queuedThrough:0, playedThrough:0, tailRepairAttempted:false,
   captureTiming:null, turnTiming:null,
+  relay:{ ws:null, ready:false, connecting:false, audioCtx:null, nextStartTime:0, sources:[] },
 };
 
 function ownedVoiceCaptureSupported() {
@@ -5649,6 +5654,9 @@ function enterVoice(autoListen = true, excludeLastFromHistory = false, pinNextMe
   try { speechSynthesis.cancel(); const un = new SpeechSynthesisUtterance(" "); un.volume = 0; speechSynthesis.speak(un); } catch (e) {}
   // unlock the audio element too — iOS only allows play() begun in a user gesture
   try { ttsAudio.src = SILENT_WAV; ttsAudio.play().catch(() => {}); } catch (e) {}
+  // open the persistent Deepgram relay in the background; the first sentence
+  // or two may still go out over the REST fallback while it connects
+  openVoiceRelay();
   // when about to re-speak the last message live (voiceRepeatPending), leave
   // it out of the plain history render so it doesn't appear twice
   buildVoiceHistory(lesson, excludeLastFromHistory);
@@ -5661,6 +5669,7 @@ function exitVoice() {
   clearInterval(voice.keepAlive);
   if (voice.textPresenter) { voice.textPresenter.cancel();voice.textPresenter = null; }
   clearTimeout(voice.audioCleanupTimer);
+  closeVoiceRelay();
   stopListening();
   releaseOwnedMicStream();
   voice.retainedBlob = null; voice.retainedMime = ""; voice.retainedSendAfter = true;
@@ -7275,8 +7284,145 @@ function discardQueuedAudio() {
     item.audioResponse = null;
   });
   voice.queue = [];
+  relayStopAll();
+  if (voice.relay.currentReject) relayUtteranceFailed(new Error("interrupted"));
 }
+
+/* ---- Deepgram persistent-connection relay ----
+   One WebSocket per spoken lesson, opened in enterVoice(), reused for every
+   sentence instead of a fresh HTTPS request per sentence (see pumpDeepgram
+   below and voice-stream's REST version, which remains the fallback if the
+   relay never connects or fails). The relay endpoint only speaks raw PCM
+   (Deepgram's streaming TTS has no MP3 option), so playback uses the Web
+   Audio API directly rather than the MediaSource/<audio> path used elsewhere. */
+const VOICE_RELAY_SAMPLE_RATE = 24000; // must match voice-relay's Deepgram query params
+function voiceRelaySupported() {
+  return backendAccessEnabled() && typeof WebSocket !== "undefined" && (typeof AudioContext !== "undefined" || typeof webkitAudioContext !== "undefined");
+}
+function openVoiceRelay() {
+  if (!voiceRelaySupported() || voice.relay.ws || voice.relay.connecting) return;
+  voice.relay.connecting = true;
+  (async () => {
+    try {
+      const token = await backendAccessToken(false);
+      const model = state.developerMode ? (state.deepgramModel || "aura-2-arcas-en") : "aura-2-arcas-en";
+      const wsUrl = SUPABASE_URL.replace(/^https/, "wss") + "/functions/v1/voice-relay"
+        + "?token=" + encodeURIComponent(token)
+        + "&access=" + encodeURIComponent(state.testerInvite || "")
+        + "&model=" + encodeURIComponent(model);
+      const ws = new WebSocket(wsUrl);
+      ws.binaryType = "arraybuffer";
+      voice.relay.ws = ws;
+      ws.onmessage = event => {
+        if (typeof event.data === "string") {
+          let msg; try { msg = JSON.parse(event.data); } catch (error) { return; }
+          if (msg.type === "ready") { voice.relay.ready = true; voice.relay.connecting = false; }
+          else if (msg.type === "flushed") relayUtteranceFlushed();
+          else if (msg.type === "error") relayUtteranceFailed(new Error(msg.message || "Voice relay error"));
+          return;
+        }
+        relayScheduleChunk(event.data);
+      };
+      ws.onerror = () => { voice.relay.connecting = false; };
+      ws.onclose = () => {
+        voice.relay.ws = null; voice.relay.ready = false; voice.relay.connecting = false;
+        if (voice.relay.currentReject) relayUtteranceFailed(new Error("Voice relay closed"));
+      };
+    } catch (error) {
+      voice.relay.connecting = false; // stays unavailable for this lesson; pumpDeepgram falls back to REST
+    }
+  })();
+}
+function closeVoiceRelay() {
+  try { voice.relay.ws && voice.relay.ws.close(); } catch (error) {}
+  voice.relay.ws = null; voice.relay.ready = false; voice.relay.connecting = false;
+  relayStopAll();
+  if (voice.relay.audioCtx) { try { voice.relay.audioCtx.close(); } catch (error) {} voice.relay.audioCtx = null; }
+}
+function relayEnsureAudioContext() {
+  if (!voice.relay.audioCtx || voice.relay.audioCtx.state === "closed") {
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    voice.relay.audioCtx = new Ctor({ sampleRate: VOICE_RELAY_SAMPLE_RATE });
+    voice.relay.nextStartTime = 0;
+  }
+  if (voice.relay.audioCtx.state === "suspended") voice.relay.audioCtx.resume().catch(() => {});
+  return voice.relay.audioCtx;
+}
+function relayScheduleChunk(arrayBuffer) {
+  if (!arrayBuffer || !arrayBuffer.byteLength) return;
+  const ctx = relayEnsureAudioContext();
+  const int16 = new Int16Array(arrayBuffer);
+  const float32 = new Float32Array(int16.length);
+  for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
+  const buffer = ctx.createBuffer(1, float32.length, VOICE_RELAY_SAMPLE_RATE);
+  buffer.copyToChannel(float32, 0);
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(ctx.destination);
+  const startAt = Math.max(ctx.currentTime, voice.relay.nextStartTime);
+  source.start(startAt);
+  voice.relay.nextStartTime = startAt + buffer.duration;
+  voice.relay.sources.push(source);
+  if (voice.relay.sources.length === 1) markSpokenTurnTiming("firstAudioMs");
+  source.onended = () => {
+    voice.relay.sources = voice.relay.sources.filter(s => s !== source);
+    relayCheckUtteranceComplete();
+  };
+}
+function relayStopAll() {
+  voice.relay.sources.forEach(source => { try { source.onended = null; source.stop(); } catch (error) {} });
+  voice.relay.sources = [];
+  if (voice.relay.audioCtx) voice.relay.nextStartTime = voice.relay.audioCtx.currentTime;
+}
+function relayCheckUtteranceComplete() {
+  if (voice.relay.currentFlushed && !voice.relay.sources.length && voice.relay.currentResolve) {
+    const resolve = voice.relay.currentResolve;
+    voice.relay.currentItem = null; voice.relay.currentResolve = null; voice.relay.currentReject = null;
+    resolve();
+  }
+}
+function relayUtteranceFlushed() { voice.relay.currentFlushed = true; relayCheckUtteranceComplete(); }
+function relayUtteranceFailed(error) {
+  if (voice.relay.currentReject) {
+    const reject = voice.relay.currentReject;
+    voice.relay.currentItem = null; voice.relay.currentResolve = null; voice.relay.currentReject = null;
+    reject(error);
+  }
+}
+function pumpDeepgramRelay(item) {
+  return new Promise((resolve, reject) => {
+    voice.relay.currentItem = item;
+    voice.relay.currentFlushed = false;
+    voice.relay.currentResolve = resolve;
+    voice.relay.currentReject = reject;
+    try { speechSynthesis.cancel(); } catch (error) {}
+    highlightAt(item.base);
+    try { voice.relay.ws.send(JSON.stringify({ type: "speak", text: item.text })); }
+    catch (error) { reject(error); }
+  });
+}
+
 async function pumpDeepgram(item) {
+  if (voice.relay.ready && voice.relay.ws) {
+    voice.utter = item;
+    try {
+      await pumpDeepgramRelay(item);
+      if (voice.utter === item) {
+        markVoiceItemPlayed(item);
+        markSpokenThrough(item.base + item.text.length);
+        voice.utter = null;
+        pumpSpeech();
+      }
+      return;
+    } catch (error) {
+      // The persistent connection is presumed dead once it fails once —
+      // fall through to the REST path below for this item, and every
+      // remaining item in this lesson uses REST too (matches the existing
+      // deepgramBroken pattern rather than repeatedly retrying a relay
+      // that just failed).
+      closeVoiceRelay();
+    }
+  }
   voice.utter = item;
   try {
     prepareCloudAudio(item,"deepgram");
