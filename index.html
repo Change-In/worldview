@@ -1441,11 +1441,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v37 · Jul 23";
+const BUILD = "v38 · Jul 23";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v38", date: "Jul 23", changes: [
+    "Fixed reopening a lesson sometimes going silent instead of asking what you remember — this happened whenever you left a lesson any way other than the back arrow (switching apps, the screen locking, etc.).",
+  ]},
   { tag: "v37", date: "Jul 23", changes: [
     "Fixed a spoken lesson sometimes getting stuck on 'speaking' with no sound at all, on a weak connection.",
   ]},
@@ -4103,8 +4106,16 @@ function openChat(id, noVoice) {
   updateCostLabel(lesson);
   updateCheckpointUI(lesson);
   const lastMsg = lastVisibleLessonMessage(lesson);
-  const resumed = !noVoice && !!lesson.closedAt && lesson.messages.length > 0;
   const unanswered = !noVoice && !!lastMsg && lastMsg.role === "user";
+  // A reopen with existing history and nothing pending from the learner is
+  // always a fresh sitting that needs a re-entry question — this must not
+  // depend on lesson.closedAt, which only the explicit exit-to-Home control
+  // sets. Backgrounding, switching apps, or the OS/browser reclaiming the
+  // PWA never sets it, so gating on closedAt left an ordinary reopen (any
+  // time the learner didn't tap the back arrow first) with no re-entry
+  // prompt in either voice or text mode — voice opened silently with
+  // nothing spoken, and text just sat on the old transcript with no prompt.
+  const resumed = !noVoice && !unanswered && lesson.messages.length > 0;
   if (resumed) beginResumedLessonSession(lesson);
   else ensureLessonSessionState(lesson);
   const sc = $("chat-scroll");
