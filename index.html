@@ -1441,11 +1441,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v36 · Jul 22";
+const BUILD = "v37 · Jul 23";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v37", date: "Jul 23", changes: [
+    "Fixed a spoken lesson sometimes getting stuck on 'speaking' with no sound at all, on a weak connection.",
+  ]},
   { tag: "v36", date: "Jul 22", changes: [
     "Fixed a personal category's name sometimes showing in the wrong color instead of matching the rest of the app.",
     "Removed the 'swipe up outside a card' hint text at the bottom of Explore.",
@@ -5509,7 +5512,7 @@ const voice = {
   textPresenter:null, audioCleanupTimer:null,
   speechText:"", expectedSpeechEnd:0, queuedThrough:0, playedThrough:0, tailRepairAttempted:false,
   captureTiming:null, turnTiming:null,
-  relay:{ ws:null, ready:false, connecting:false, audioCtx:null, nextStartTime:0, sources:[] },
+  relay:{ ws:null, ready:false, connecting:false, audioCtx:null, nextStartTime:0, sources:[], watchdog:null },
 };
 
 function ownedVoiceCaptureSupported() {
@@ -7343,6 +7346,7 @@ function openVoiceRelay() {
 function closeVoiceRelay() {
   try { voice.relay.ws && voice.relay.ws.close(); } catch (error) {}
   voice.relay.ws = null; voice.relay.ready = false; voice.relay.connecting = false;
+  relayClearWatchdog();
   relayStopAll();
   if (voice.relay.audioCtx) { try { voice.relay.audioCtx.close(); } catch (error) {} voice.relay.audioCtx = null; }
 }
@@ -7355,8 +7359,20 @@ function relayEnsureAudioContext() {
   if (voice.relay.audioCtx.state === "suspended") voice.relay.audioCtx.resume().catch(() => {});
   return voice.relay.audioCtx;
 }
+/* A WebSocket that looks open can go silently dead on a weak mobile signal —
+   no close/error event ever fires, so without this the relay's promise would
+   never settle: voice.speaking stays true and the UI is stuck on "speaking"
+   forever with no audio and no error. Reset on every sign of life (a chunk
+   arriving); once flushed, remaining playback is local Web Audio scheduling
+   and no longer depends on the network, so the watchdog is no longer needed. */
+function relayResetWatchdog() {
+  clearTimeout(voice.relay.watchdog);
+  voice.relay.watchdog = setTimeout(() => relayUtteranceFailed(new Error("Voice relay timed out")), 6000);
+}
+function relayClearWatchdog() { clearTimeout(voice.relay.watchdog); voice.relay.watchdog = null; }
 function relayScheduleChunk(arrayBuffer) {
   if (!arrayBuffer || !arrayBuffer.byteLength) return;
+  relayResetWatchdog();
   const ctx = relayEnsureAudioContext();
   const int16 = new Int16Array(arrayBuffer);
   const float32 = new Float32Array(int16.length);
@@ -7388,8 +7404,9 @@ function relayCheckUtteranceComplete() {
     resolve();
   }
 }
-function relayUtteranceFlushed() { voice.relay.currentFlushed = true; relayCheckUtteranceComplete(); }
+function relayUtteranceFlushed() { voice.relay.currentFlushed = true; relayClearWatchdog(); relayCheckUtteranceComplete(); }
 function relayUtteranceFailed(error) {
+  relayClearWatchdog();
   if (voice.relay.currentReject) {
     const reject = voice.relay.currentReject;
     voice.relay.currentItem = null; voice.relay.currentResolve = null; voice.relay.currentReject = null;
@@ -7404,7 +7421,7 @@ function pumpDeepgramRelay(item) {
     voice.relay.currentReject = reject;
     try { speechSynthesis.cancel(); } catch (error) {}
     highlightAt(item.base);
-    try { voice.relay.ws.send(JSON.stringify({ type: "speak", text: item.text })); }
+    try { voice.relay.ws.send(JSON.stringify({ type: "speak", text: item.text })); relayResetWatchdog(); }
     catch (error) { reject(error); }
   });
 }
