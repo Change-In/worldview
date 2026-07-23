@@ -287,10 +287,18 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .map-node.active { background:var(--accent); transform:scale(1.25); }
   .category-map-label { position:absolute; left:50%; top:100%; transform:translate(-50%,-5px); color:var(--ink); font:600 12px Georgia,serif; white-space:nowrap; }
   #lesson-layer-guide.overview.category-map { transform:translateY(-50%) scale(1.35); }
-  #category-active-label { display:none; }
+  /* Small persistent label above the first card showing the current
+     folder ("Most recent" by default) — the dot-picker (#lesson-layer-guide)
+     remains the actual switcher; this just names where you are without
+     needing to hover/scroll to reveal it. */
+  #category-active-label { display:flex; align-items:center; gap:7px; position:absolute; left:calc(50% - (var(--cardW,262px) / 2)); top:calc(50% - (var(--cardH,320px) / 2) - 30px); z-index:4; }
   #category-active-label span { width:9px;height:9px;border-radius:50%;background:var(--accent); }
   #category-active-label b { color:var(--ink);font-family:Georgia,serif;font-size:13px; }
-  @media(max-width:700px){ #lesson-layer-guide.category-map{right:25px;transform:translateY(-50%) scale(.82)} #lesson-layer-guide.overview.category-map{transform:translateY(-50%) scale(1.05)} #category-active-label{left:58px} }
+  @media(max-width:700px){ #lesson-layer-guide.category-map{right:25px;transform:translateY(-50%) scale(.82)} #lesson-layer-guide.overview.category-map{transform:translateY(-50%) scale(1.05)}
+    /* Mobile already has its own current-folder indicator, the bottom-right
+       "Most recent" pill — showing this top label too would be the exact
+       clutter this session's fixes are trying to remove, not add. */
+    #category-active-label{display:none} }
   #carousel.layer-enter-up { animation:layerEnterUp .26s cubic-bezier(.22,.8,.25,1); }
   #carousel.layer-enter-down { animation:layerEnterDown .26s cubic-bezier(.22,.8,.25,1); }
   @keyframes layerEnterUp { from{opacity:.25;transform:translateY(34px)} to{opacity:1;transform:translateY(0)} }
@@ -334,7 +342,11 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .card .card-title { font-size: max(9px, calc(var(--cardW, 262px) * 0.08)); line-height: 1.3; font-weight: 600; }
   .card .card-cat {
     position: absolute; top: 14px; left: 50%; right: auto; transform: translateX(-50%);
-    max-width: calc(100% - 28px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    /* Kept clear of the top-right lesson-path button (44px, right:8px) and
+       mastery dot (right:59px) that share this same band — a long category
+       name centered at the old calc(100% - 28px) width reached almost to
+       the card's right edge and visually collided with both. */
+    max-width: calc(100% - 150px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     font-size: max(7px, calc(var(--cardW, 262px) * 0.042)); letter-spacing: 0.1em; text-transform: uppercase;
     color: var(--accent-700); background: var(--accent-100); border-radius: 999px;
     padding: max(3px, calc(var(--cardW, 262px) * 0.014)) max(9px, calc(var(--cardW, 262px) * 0.032));
@@ -497,8 +509,9 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .rail-item { position:relative; border:0; background:none; color:var(--accent-700); padding:2px 4px 2px 19px; text-align:left; font-size:12px; cursor:pointer; white-space:nowrap; }
   .rail-item::before { content:""; position:absolute; left:1px; top:50%; width:9px; height:9px; border:2px solid var(--accent); background:var(--paper); border-radius:50%; transform:translateY(-50%); }
   .rail-item.active { color:var(--ink); font-weight:650; }
+  .rail-item.active::before { background:var(--accent); box-shadow:0 0 0 3px rgba(189,90,48,.16); }
   .rail-settings { position:absolute; left:12px; top:14px; z-index:13; border:1px solid rgba(189,90,48,.55); background:color-mix(in srgb,var(--card) 72%,transparent); color:var(--accent-700); border-radius:999px; padding:7px 11px; cursor:pointer; }
-  .profile-edge { position:absolute; right:0; top:50%; transform:translateY(-50%); z-index:13; writing-mode:vertical-rl; border:1px solid rgba(189,90,48,.6); border-right:0; background:color-mix(in srgb,var(--card) 88%,transparent); color:var(--accent-700); border-radius:12px 0 0 12px; padding:13px 8px; font-size:11px; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; }
+  .profile-edge { position:absolute; right:12px; top:14px; z-index:13; border:1px solid rgba(189,90,48,.55); background:color-mix(in srgb,var(--card) 72%,transparent); color:var(--accent-700); border-radius:999px; padding:7px 11px; cursor:pointer; }
   .drawer-item, .rail-item { transition:background .2s ease,color .2s ease,transform .2s ease; }
   @media(max-width:700px){ .section-rail{left:3px}.rail-item{font-size:10px;padding-left:15px}.rail-settings{left:6px}.profile-edge{padding:11px 6px} }
 
@@ -567,14 +580,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .source-card .lesson-mastery-dot { left:12px;right:auto;top:12px;z-index:4; }
   .source-card-hold { position:absolute;right:13px;bottom:10px;color:var(--ink-soft);font-size:9px;letter-spacing:.08em;text-transform:uppercase; }
   .custom-category-card {
-    display:flex;flex-direction:column;justify-content:center;text-align:center;overflow:visible!important;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;overflow:visible!important;
     isolation:isolate;border-color:var(--line);background:var(--card);cursor:pointer;-webkit-touch-callout:none;
     height:var(--categoryH,180px)!important;
     appearance:none;-webkit-appearance:none;color:var(--ink);font:inherit;
   }
-  /* Short collection stacks share the full-size cards' bottom edge. Their
-     reduced height now grows upward, matching the physical stack metaphor. */
-  .card.custom-category-card { margin-top:calc((var(--cardH,320px) / 2) - var(--categoryH,180px)); }
+  /* Vertically centered like every other card, using this card's own
+     (shorter) height rather than the full-size card height. */
+  .card.custom-category-card { margin-top:calc(var(--categoryH,180px) / -2); }
   /* A category is a visible stack of lesson cards, as in the concept sketch. */
   .custom-category-card::before,.custom-category-card::after {
     content:"";position:absolute;inset:0;border:1.5px solid var(--line);border-radius:inherit;
@@ -583,8 +596,9 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .custom-category-card::before { transform:translate(7px,-8px); }
   .custom-category-card::after { transform:translate(14px,-16px); }
   .custom-category-card .card-cat { color:var(--ink-soft);opacity:.82;top:12px; }
+  .custom-category-card .card-title { max-width:82%;text-align:center; }
   .custom-category-count { position:absolute;left:0;right:0;bottom:12px;color:var(--ink-soft);font-size:10px;letter-spacing:.04em; }
-  .source-card.custom-category-card { padding:22px;align-items:center;align-self:flex-end; }
+  .source-card.custom-category-card { padding:22px;align-items:center; }
   .source-card.custom-category-card .source-card-title { margin:0;max-width:82%;text-align:center;font:600 max(18px,calc(var(--cardW,262px)*.075))/1.22 Georgia,serif; }
   .source-category-return .source-card-host { color:var(--accent-700); }
   .category-add-button {
@@ -866,7 +880,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       width:34px; height:34px; background:color-mix(in srgb,var(--card) 88%,transparent);
       border-radius:999px; box-shadow:var(--shadow-sm);
     }
-    .profile-edge { top:auto; bottom:12px; right:12px; transform:none; writing-mode:horizontal-tb; border:1px solid rgba(189,90,48,.6); border-radius:999px; padding:9px 12px; background:color-mix(in srgb,var(--card) 94%,transparent); }
+    .profile-edge { left:10px; right:auto; top:calc(env(safe-area-inset-top) + 10px); bottom:auto; font-size:10px; padding:6px 9px; border:1px solid rgba(189,90,48,.55); border-radius:999px; background:color-mix(in srgb,var(--card) 72%,transparent); color:var(--accent-700); }
     #lesson-layer-guide { display:none!important; }
     #mobile-category-button { display:flex; align-items:center; gap:7px; position:absolute; right:12px; top:auto; bottom:58px; z-index:14; border:1px solid rgba(189,90,48,.55); background:color-mix(in srgb,var(--card) 94%,transparent); color:var(--accent-700); border-radius:999px; padding:9px 11px; font-size:10px; }
     #mobile-category-button::before { content:""; width:8px; height:8px; border-radius:50%; background:var(--accent); }
@@ -1093,7 +1107,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     <button id="rail-explore" class="rail-item active" type="button">Explore</button>
     <button id="rail-sources" class="rail-item" type="button">Upload</button>
   </nav>
-  <button id="profile-edge" class="profile-edge" type="button">Profile &#8594;</button>
+  <button id="profile-edge" class="profile-edge" type="button">Profile</button>
   <button id="mobile-category-button" type="button" aria-haspopup="dialog">Most recent</button>
   <div id="home-header">
     <button id="home-menu" class="menu-button" type="button" aria-label="Open menu">&#9776;</button>
@@ -1112,7 +1126,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       <section id="carousel-page" class="home-deck-page" aria-label="Questions and saved lessons">
         <div id="carousel-wrap">
           <div id="carousel"></div>
-          <div id="lesson-layer-guide" aria-label="Lesson category selector">
+          <div id="lesson-layer-guide" aria-label="Lesson folder selector">
             <div id="lesson-layer-up" class="layer-destination"></div>
             <div id="lesson-layer-name"></div>
             <div id="lesson-layer-down" class="layer-destination"></div>
@@ -1128,7 +1142,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
             <span>paths</span>
           </div>
           <button id="zoom-btn" type="button">zoom out</button>
-          <button id="explore-category-add" class="category-add-button" type="button" aria-label="Create or organize custom categories"><span class="category-add-icon">+</span><span>Categories</span></button>
+          <button id="explore-category-add" class="category-add-button" type="button" aria-label="Create or organize custom folders"><span class="category-add-icon">+</span><span>Folders</span></button>
         </div>
       </section>
 
@@ -1151,7 +1165,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
               <div id="source-status" role="status" aria-live="polite"></div>
             </article>
           </div>
-          <button id="source-category-add" class="category-add-button" type="button" aria-label="Create or organize source categories"><span class="category-add-icon">+</span><span>Categories</span></button>
+          <button id="source-category-add" class="category-add-button" type="button" aria-label="Create or organize source folders"><span class="category-add-icon">+</span><span>Folders</span></button>
         </div>
       </section>
     </div>
@@ -1159,7 +1173,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   </div>
 </div>
 
-<div id="mobile-category-sheet" role="dialog" aria-modal="true" aria-label="Choose a lesson category">
+<div id="mobile-category-sheet" role="dialog" aria-modal="true" aria-label="Choose a lesson folder">
   <div class="mobile-category-panel">
     <h3>Choose lessons</h3>
     <div id="mobile-category-options"></div>
@@ -1180,11 +1194,11 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <div id="category-organizer" role="dialog" aria-modal="true" aria-labelledby="category-organizer-title" aria-hidden="true">
   <div class="category-organizer-panel">
     <div class="organizer-head">
-      <div><div class="organizer-kicker" id="category-organizer-kicker">your categories</div><h2 id="category-organizer-title">Organize lessons</h2></div>
-      <button id="category-organizer-close" type="button" aria-label="Close category organizer">&times;</button>
+      <div><div class="organizer-kicker" id="category-organizer-kicker">your folders</div><h2 id="category-organizer-title">Organize lessons</h2></div>
+      <button id="category-organizer-close" type="button" aria-label="Close folder organizer">&times;</button>
     </div>
     <div class="category-create-row">
-      <input id="category-name-input" type="text" maxlength="36" autocomplete="off" placeholder="Name a category" aria-label="New category name">
+      <input id="category-name-input" type="text" maxlength="36" autocomplete="off" placeholder="Name a folder" aria-label="New folder name">
       <button id="category-create" type="button">Create</button>
     </div>
     <div id="category-organizer-list"></div>
@@ -1361,7 +1375,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       <option value="adaptive-low">Adaptive &mdash; low effort</option>
       <option value="adaptive-medium">Adaptive &mdash; medium effort</option>
     </select>
-    <div class="hint">Only affects Sonnet 5. Fast is Fable&rsquo;s current default; the adaptive modes let you test whether extra reasoning actually improves the lesson.</div>
+    <div class="hint">Only affects Sonnet 5. Fast is Worldview&rsquo;s current default; the adaptive modes let you test whether extra reasoning actually improves the lesson.</div>
     <label>Spoken reply provider</label>
     <select id="set-ttsprovider">
       <option value="auto">Automatic &mdash; best configured option</option>
@@ -1441,11 +1455,20 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v38 · Jul 23";
+const BUILD = "v39 · Jul 23";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v39", date: "Jul 23", changes: [
+    "Categories are now called folders everywhere in the app.",
+    "Moved the Profile button from the screen edge to the top, next to Settings, so it's no longer crowded into a corner.",
+    "Fixed the Explore/Upload dot not visually filling in for the section you're on.",
+    "Folder cards now center their title text and sit centered like other cards, instead of bottom-aligned.",
+    "Fixed a lesson's folder/topic tag sometimes overlapping the path button on its card.",
+    "Fixed reopening a lesson before you'd ever answered its very first question asking what you remembered, instead of just repeating that first question.",
+    "Fixed a small visual flash when a new spoken reply appears.",
+  ]},
   { tag: "v38", date: "Jul 23", changes: [
     "Fixed reopening a lesson sometimes going silent instead of asking what you remember — this happened whenever you left a lesson any way other than the back arrow (switching apps, the screen locking, etc.).",
   ]},
@@ -1453,10 +1476,10 @@ const VERSIONS = [
     "Fixed a spoken lesson sometimes getting stuck on 'speaking' with no sound at all, on a weak connection.",
   ]},
   { tag: "v36", date: "Jul 22", changes: [
-    "Fixed a personal category's name sometimes showing in the wrong color instead of matching the rest of the app.",
+    "Fixed a personal folder's name sometimes showing in the wrong color instead of matching the rest of the app.",
     "Removed the 'swipe up outside a card' hint text at the bottom of Explore.",
     "Moved the dark mode button to the bottom-left corner.",
-    "The category '+' button now has a label and sits on the left.",
+    "The folder '+' button now has a label and sits on the left.",
   ]},
   { tag: "v35", date: "Jul 22", changes: [
     "Spoken lessons now try one persistent voice connection instead of reopening a new one every sentence, to cut the delay between finishing a sentence and hearing the next one.",
@@ -1499,7 +1522,7 @@ const VERSIONS = [
     "Teaching-method controls and the Ask Anything microphone were removed from the learner surface; guided questioning remains built in.",
   ]},
   { tag: "v25", date: "Jul 19", changes: [
-    "Private tester links now route tutoring and lesson-path generation through Fable's server instead of exposing an AI key in the browser.",
+    "Private tester links now route tutoring and lesson-path generation through Worldview's server instead of exposing an AI key in the browser.",
     "Voice testing now uses server-side Deepgram Nova-3 transcription with an explicit language and Aura-2 speech, protected by per-tester monthly limits.",
     "Settings includes a preview of the choose-your-own monthly learning allowance; billing is deliberately not active yet."
   ]},
@@ -1507,10 +1530,10 @@ const VERSIONS = [
     "Horizontal lesson dragging now renders only the nearby cards and uses a flat GPU slide instead of recomputing every saved card in a 3D scene.",
   ]},
   { tag: "v23", date: "Jul 18", changes: [
-    "Personal category mini-stacks now sit on the same bottom edge as full-size lesson and source cards, matching the concept sketch.",
+    "Personal folder mini-stacks now sit on the same bottom edge as full-size lesson and source cards, matching the concept sketch.",
   ]},
   { tag: "v22", date: "Jul 18", changes: [
-    "Personal categories are now compact opaque mini-stacks instead of translucent full-height lesson cards, matching the phone concept more closely.",
+    "Personal folders are now compact opaque mini-stacks instead of translucent full-height lesson cards, matching the phone concept more closely.",
     "A local developer model lab separates tutor reasoning, microphone transcription, and spoken voice so unrelated systems are never compared as one setting.",
     "Sonnet can now be compared in fast, adaptive-low, and adaptive-medium modes, while spoken output can compare Cartesia Sonic 3.5, Deepgram Aura-2, and the device voice.",
     "Advanced provider controls stay hidden for normal testers unless developer mode is enabled on that device.",
@@ -1529,7 +1552,7 @@ const VERSIONS = [
     "Every reopen begins a visually new sitting from a compact learner summary and asks what you remember or what else you want to understand.",
     "Older sittings now live behind the history arrow instead of filling the active conversation, and the lesson path shows the checkpoint the tutor reports following.",
     "Upload now accepts photos and PDFs, keeps their actual preview, and gives webpages and YouTube lessons a visual source card with a separate learning-path control.",
-    "Create your own categories from the + controls in Explore or Upload. Hold a lesson or source, then release it over a category to organize it without interrupting normal swiping.",
+    "Create your own folders from the + controls in Explore or Upload. Hold a lesson or source, then release it over a folder to organize it without interrupting normal swiping.",
   ]},
   { tag: "v19", date: "Jul 16", changes: [
     "Temporary Anthropic overloads now retry automatically with bounded exponential backoff instead of becoming a permanent error message.",
@@ -1539,18 +1562,18 @@ const VERSIONS = [
   { tag: "v18", date: "Jul 16", changes: [
     "Lesson maps are now designed by Opus as topic-specific dependency graphs, then validated and linearized into the easiest teaching order.",
     "Nodes use real concepts from the subject and can depend on multiple earlier ideas; old v1 and generic checklists regenerate when opened.",
-    "If planning fails, Fable shows a retryable unavailable state instead of fabricating the same six generic checkpoints.",
+    "If planning fails, Worldview shows a retryable unavailable state instead of fabricating the same six generic checkpoints.",
   ]},
   { tag: "v17", date: "Jul 16", changes: [
     "Voice mode now suppresses the phone keyboard, keeps scrolling and exit independent from recording, and recovers if a release or transcription request gets stuck.",
     "Spoken language is chosen in Settings and sent directly to transcription; pathological repeated-word transcripts are cleaned before they reach the tutor.",
     "Tutor questions now ask for reasoning, prediction, and explanation instead of steering toward hidden one-word answers.",
-    "The lesson carousel uses a lighter sliding transform for smoother horizontal dragging. Trends now ranks individual lessons by activity signals instead of grouping them by category.",
+    "The lesson carousel uses a lighter sliding transform for smoother horizontal dragging. Trends now ranks individual lessons by activity signals instead of grouping them by folder.",
   ]},
   { tag: "v16", date: "Jul 16", changes: [
     "Voice turns now record actual microphone audio and transcribe that recording, replacing the browser speech service that went deaf after two or three phone turns.",
     "A failed transcription keeps the recording safe for one-tap retry; muted, late, backgrounded, and stuck recorder states now recover without silently losing or duplicating a turn.",
-    "Profile opens only from its button, starts with categories, and reveals conversations only after you choose a category.",
+    "Profile opens only from its button, starts with folders, and reveals conversations only after you choose a folder.",
     "Upload is now one compact carousel: the URL form is the first card and saved sources use the same card size. Trends is a minimal concept demo built from your lessons.",
     "Lesson dragging is frame-smoothed and direction-locked; path buttons are easier to hit; zoom stays proportional; old generic checklists regenerate into topic-specific paths.",
     "Returning to a lesson now begins with a direct question: what do you remember about our discussion?",
@@ -2549,9 +2572,9 @@ function friendlyClaudeFailure(error) {
     return { title: "The API limit was reached.", detail: "Your message is saved. Wait a moment, then retry." };
   }
   if (error && error.transient) {
-    return { title: "Fable is temporarily busy.", detail: "Your message is saved. Retry when you're ready." };
+    return { title: "Worldview is temporarily busy.", detail: "Your message is saved. Retry when you're ready." };
   }
-  return { title: "Fable couldn't answer yet.", detail: "Your message is saved. Retry the response." };
+  return { title: "Worldview couldn't answer yet.", detail: "Your message is saved. Retry the response." };
 }
 function resetInvalidTesterAccess(error) {
   if (!error || ![401,403].includes(Number(error.status)) || !backendAccessEnabled()) return false;
@@ -3710,7 +3733,7 @@ function renderLessonPath(lesson) {
   if (!nodes.length) {
     $("lesson-path-overview").textContent = lessonPathMigrations.has(lesson.id)
       ? "Opus is building the concept dependencies and the easiest route through them."
-      : "This lesson does not have a trustworthy map yet. Fable will retry rather than show a generic checklist.";
+      : "This lesson does not have a trustworthy map yet. Worldview will retry rather than show a generic checklist.";
     $("lesson-path-nodes").innerHTML = `<div class="lesson-path-empty"><strong>${lessonPathMigrations.has(lesson.id) ? "Building the map…" : "Lesson map unavailable"}</strong><span>${lessonPathMigrations.has(lesson.id) ? "The concepts will appear here when the dependency graph is ready." : "No template has been substituted."}</span>${lessonPathMigrations.has(lesson.id) ? "" : `<button id="lesson-path-retry" type="button">Try Opus again</button>`}</div>`;
     const retry = $("lesson-path-retry");
     if (retry) retry.onclick = () => {
@@ -4107,15 +4130,26 @@ function openChat(id, noVoice) {
   updateCheckpointUI(lesson);
   const lastMsg = lastVisibleLessonMessage(lesson);
   const unanswered = !noVoice && !!lastMsg && lastMsg.role === "user";
+  const hasLearnerTurn = lesson.messages.some(m => m.role === "user" && !m.synthetic);
+  // The opening question was generated and shown, but the learner never
+  // got to answer it at all (e.g. recovering after a technical failure
+  // before their very first reply) — re-present that exact question for
+  // free instead of silence or a "what do you remember" recap that
+  // presumes learning that never happened. Reuses the same
+  // voiceRepeatPending() the mid-lesson mic button already relies on for
+  // this. See BUG-070.
+  const openingPending = !noVoice && !unanswered && !hasLearnerTurn && lesson.messages.length > 0;
   // A reopen with existing history and nothing pending from the learner is
-  // always a fresh sitting that needs a re-entry question — this must not
-  // depend on lesson.closedAt, which only the explicit exit-to-Home control
-  // sets. Backgrounding, switching apps, or the OS/browser reclaiming the
-  // PWA never sets it, so gating on closedAt left an ordinary reopen (any
-  // time the learner didn't tap the back arrow first) with no re-entry
-  // prompt in either voice or text mode — voice opened silently with
-  // nothing spoken, and text just sat on the old transcript with no prompt.
-  const resumed = !noVoice && !unanswered && lesson.messages.length > 0;
+  // a fresh sitting that needs a re-entry question — this must not depend
+  // on lesson.closedAt, which only the explicit exit-to-Home control sets.
+  // Backgrounding, switching apps, or the OS/browser reclaiming the PWA
+  // never sets it, so gating on closedAt left an ordinary reopen (any time
+  // the learner didn't tap the back arrow first) with no re-entry prompt
+  // in either voice or text mode. It also requires an actual learner
+  // contribution (not just a synthetic bookkeeping turn) — otherwise a
+  // reopen before the learner's first real reply asks them to recall
+  // learning that never happened; that case is openingPending instead.
+  const resumed = !noVoice && !unanswered && hasLearnerTurn && lesson.messages.length > 0;
   if (resumed) beginResumedLessonSession(lesson);
   else ensureLessonSessionState(lesson);
   const sc = $("chat-scroll");
@@ -4136,14 +4170,15 @@ function openChat(id, noVoice) {
   if (unanswered && !wantsVoice && !streaming) {
     recoveryBubble = appendBubble("assistant", "…");
     recoveryBubble.classList.add("thinking");
-  } else if (!resumed && !recoveryBubble) {
+  } else if (!resumed && !openingPending && !recoveryBubble) {
     sc.scrollTop = sc.scrollHeight;
     requestAnimationFrame(() => { sc.scrollTop = sc.scrollHeight; });
   }
   if (wantsVoice) {
-    enterVoice(false, false, resumed);
+    enterVoice(false, openingPending, resumed);
     if (unanswered && voice.active) { voiceSend("", true); return; }
     if (resumed && voice.active) { voiceReenter(lesson); return; }
+    if (openingPending && voice.active) { voiceRepeatPending(lesson, lastMsg); return; }
   }
   if (unanswered && !streaming) {
     retryPendingTextResponse(lesson.id, recoveryBubble);
@@ -4795,15 +4830,15 @@ function setLessonCategoryMembership(lesson,categoryId,include) {
 }
 function renderCategoryOrganizer() {
   const lesson = getLesson(categoryOrganizerState.lessonId);
-  $("category-organizer-kicker").textContent = categoryOrganizerState.section === "upload" ? "source categories" : "lesson categories";
-  $("category-organizer-title").textContent = lesson ? `Organize “${lesson.title || lesson.topic || "lesson"}”` : "Your categories";
+  $("category-organizer-kicker").textContent = categoryOrganizerState.section === "upload" ? "source folders" : "lesson folders";
+  $("category-organizer-title").textContent = lesson ? `Organize “${lesson.title || lesson.topic || "lesson"}”` : "Your folders";
   $("category-organizer-help").textContent = lesson
-    ? "Keep holding and release over a category, or tap categories to add or remove this item. One item can live in more than one category."
-    : "Create a category here. Tap one to open it; hold any lesson or source later to place it there.";
+    ? "Keep holding and release over a folder, or tap folders to add or remove this item. One item can live in more than one folder."
+    : "Create a folder here. Tap one to open it; hold any lesson or source later to place it there.";
   const list = $("category-organizer-list");
   const sectionCategories = categoriesForSection(categoryOrganizerState.section);
   if (!sectionCategories.length) {
-    list.innerHTML = `<div class="organizer-empty">Create your first category above.</div>`;
+    list.innerHTML = `<div class="organizer-empty">Create your first folder above.</div>`;
     return;
   }
   list.innerHTML = sectionCategories.map(category => {
@@ -4832,7 +4867,7 @@ function renderCategoryOrganizer() {
     button.onclick = () => {
       const row = button.closest("[data-organizer-category-id]");
       const category = state.customCategories.find(item => item.id === row.dataset.organizerCategoryId);
-      if (!category || !confirm(`Delete the category “${category.name}”? The lessons themselves will stay.`)) return;
+      if (!category || !confirm(`Delete the folder “${category.name}”? The lessons themselves will stay.`)) return;
       state.customCategories = state.customCategories.filter(item => item.id !== category.id);
       state.lessons.forEach(item => { item.customCategoryIds = (item.customCategoryIds || []).filter(id => id !== category.id); });
       if (wheel.layerCategory === `custom:${category.id}`) { wheel.layerCategory = null; wheel.layerIndex = 0; }
@@ -4845,7 +4880,7 @@ function createCustomCategory() {
   const input = $("category-name-input");
   const name = input.value.replace(/\s+/g," ").trim();
   if (!name) return;
-  if (categoriesForSection(categoryOrganizerState.section).some(category => category.name.toLocaleLowerCase() === name.toLocaleLowerCase())) { toast("That category already exists here."); return; }
+  if (categoriesForSection(categoryOrganizerState.section).some(category => category.name.toLocaleLowerCase() === name.toLocaleLowerCase())) { toast("That folder already exists here."); return; }
   const category = { id:uid(),name,section:categoryOrganizerState.section,createdAt:Date.now() };
   state.customCategories.push(category);
   const lesson = getLesson(categoryOrganizerState.lessonId);
@@ -5067,7 +5102,7 @@ function openSourceTree(id) {
   const tree = Array.isArray(lesson.knowledgeTree) && !scriptedKnowledgeTree(lesson.knowledgeTree) ? lesson.knowledgeTree : [];
   $("source-tree-nodes").innerHTML = tree.length
     ? tree.map(node => `<article class="source-tree-node${node.id === lesson.knowledgeTreeStartId ? " start" : ""}"><span class="source-tree-scale">${esc(node.scale || "concept")}</span><strong>${esc(node.title)}</strong><p>${esc(node.why_needed || "This idea supports what comes next.")}${node.prerequisites && node.prerequisites.length ? ` Prerequisites: ${esc(node.prerequisites.join(", "))}.` : ""}</p></article>`).join("")
-    : `<div class="lesson-path-empty"><strong>${lessonPathMigrations.has(lesson.id) ? "Building the source map…" : "Source map unavailable"}</strong><span>${lessonPathMigrations.has(lesson.id) ? "Opus is identifying the source's actual concept dependencies." : "Fable will retry with Opus instead of showing a generic checklist."}</span>${lessonPathMigrations.has(lesson.id) ? "" : `<button id="source-tree-retry" type="button">Try Opus again</button>`}</div>`;
+    : `<div class="lesson-path-empty"><strong>${lessonPathMigrations.has(lesson.id) ? "Building the source map…" : "Source map unavailable"}</strong><span>${lessonPathMigrations.has(lesson.id) ? "Opus is identifying the source's actual concept dependencies." : "Worldview will retry with Opus instead of showing a generic checklist."}</span>${lessonPathMigrations.has(lesson.id) ? "" : `<button id="source-tree-retry" type="button">Try Opus again</button>`}</div>`;
   $("source-tree-sheet").classList.add("open");
   $("source-tree-sheet").setAttribute("aria-hidden","false");
   const retry = $("source-tree-retry");
@@ -5492,7 +5527,7 @@ if (!FULL_VOICE_MODE_ENABLED) {
     startLabel: "Start voice input",
     canStart: () => !streaming,
     submitBlocked: () => streaming,
-    blockedMessage: "Wait for Fable’s reply to finish, then tap the mic.",
+    blockedMessage: "Wait for Worldview’s reply to finish, then tap the mic.",
     onCommit: () => $("chat-send").click(),
   });
 }
@@ -7858,14 +7893,20 @@ function renderVoiceWords(fullText) {
     sc.appendChild(voiceCurrentEl);
     voicePinNextMessageTop = false;
     voice.followResponse = true;
-    requestAnimationFrame(() => {
-      sc.querySelectorAll(".voice-session-tail-space").forEach(element => element.remove());
-      const tail=document.createElement("div");
-      tail.className="voice-session-tail-space";
-      tail.style.height=Math.max(0,sc.clientHeight-voiceCurrentEl.offsetHeight-12)+"px";
-      sc.appendChild(tail);
-      sc.scrollTop = Math.max(0,voiceCurrentEl.offsetTop - 8);
-    });
+    // Was deferred a frame via requestAnimationFrame, which guaranteed one
+    // visible paint of the reply sitting wherever the old scroll position
+    // left it (often clipped at the bottom) before snapping into its pinned
+    // spot a frame later — the "screen has to adjust" flash. offsetTop of a
+    // freshly appended element reflects everything above it and is valid
+    // immediately, with no layout-settling wait needed, so this can run
+    // synchronously in the same task and land in its final position before
+    // the next paint instead of after it.
+    sc.querySelectorAll(".voice-session-tail-space").forEach(element => element.remove());
+    const tail=document.createElement("div");
+    tail.className="voice-session-tail-space";
+    tail.style.height=Math.max(0,sc.clientHeight-voiceCurrentEl.offsetHeight-12)+"px";
+    sc.appendChild(tail);
+    sc.scrollTop = Math.max(0,voiceCurrentEl.offsetTop - 8);
   }
   const el = voiceCurrentEl;
   el.innerHTML = "";
@@ -8196,7 +8237,7 @@ function importLessonsFromText(text) {
   const incoming = (data && data.lessons) || [];
   const incomingNotes = (data && data.notes) || [];
   const incomingCategories = (data && data.customCategories) || [];
-  if (!incoming.length && !incomingNotes.length && !incomingCategories.length) { toast("That file had no lessons, notes, or categories"); return; }
+  if (!incoming.length && !incomingNotes.length && !incomingCategories.length) { toast("That file had no lessons, notes, or folders"); return; }
   const before = state.lessons.length, beforeN = state.notes.length;
   mergeLessons(incoming);
   mergeNotes(incomingNotes);
