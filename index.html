@@ -160,11 +160,6 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   /* ---------- Views ---------- */
   .view { flex: 1; display: none; flex-direction: column; min-height: 0; }
   .view.active { display: flex; }
-  #view-profile { touch-action: pan-y; }
-  #view-profile.active { animation:profileIn .28s cubic-bezier(.22,.8,.25,1); }
-  #view-profile.profile-swiping { animation:none!important; transition:none!important; }
-  #view-profile.profile-settling { animation:none!important; transition:transform .2s cubic-bezier(.22,.8,.25,1); }
-  @keyframes profileIn { from { transform:translateX(100%); opacity:.75 } to { transform:translateX(0); opacity:1 } }
 
   /* ---------- Home ---------- */
   #home-header {
@@ -316,11 +311,6 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     pointer-events: none;
   }
   #paths-ring.show { display: flex; }
-  #zoom-btn {
-    position: absolute; bottom: 12px; right: 16px;
-    background: rgba(44,36,28,0.07); border: 1px solid var(--line); color: var(--ink-soft);
-    font-size: 11px; letter-spacing: 0.04em; padding: 6px 12px; border-radius: 999px; cursor: pointer;
-  }
 
   .card {
     position: absolute; left: 50%; top: 50%;
@@ -337,17 +327,17 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     backface-visibility: hidden;
     touch-action: none;
   }
-  /* text scales with the card itself — pinch-zoom shrinks the words along
-     with the card, not just the box around them */
+  /* text size scales with the card size (--cardW), so words stay proportional
+     to the card at every breakpoint */
   .card .card-title { font-size: max(9px, calc(var(--cardW, 262px) * 0.08)); line-height: 1.3; font-weight: 600; }
   .card .card-cat {
-    position: absolute; top: 14px; left: 50%; right: auto; transform: translateX(-50%);
-    /* Kept clear of the top-right lesson-path button (44px, right:8px) and
-       mastery dot (right:59px) that share this same band — a long category
-       name centered at the old calc(100% - 28px) width reached almost to
-       the card's right edge and visually collided with both. */
-    max-width: calc(100% - 150px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    font-size: max(7px, calc(var(--cardW, 262px) * 0.042)); letter-spacing: 0.1em; text-transform: uppercase;
+    /* Left-aligned at the card's top-left so the tag stays fully readable and
+       simply ends before the top-right lesson-path button / mastery dot,
+       instead of being centered and shrunk to an unreadable stub to avoid
+       overlapping them (the previous calc(100% - 150px) attempt). */
+    position: absolute; top: 14px; left: 16px; right: auto; transform: none;
+    max-width: calc(100% - 68px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: max(9px, calc(var(--cardW, 262px) * 0.045)); letter-spacing: 0.08em; text-transform: uppercase;
     color: var(--accent-700); background: var(--accent-100); border-radius: 999px;
     padding: max(3px, calc(var(--cardW, 262px) * 0.014)) max(9px, calc(var(--cardW, 262px) * 0.032));
   }
@@ -385,6 +375,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .card.new-card button:disabled { opacity: 0.45; }
   .card.new-card .new-card-actions { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
   .card.new-card .new-card-actions #start-btn { flex: 1; max-width: 132px; }
+  /* Folders lives on the Ask Anything card's bottom-right corner (moved off the
+     old floating pill that made Explore feel cluttered). */
+  #new-card-folders {
+    position: absolute; right: 14px; bottom: 14px; width: auto;
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 7px 12px; border: 1px solid rgba(189,90,48,.5); border-radius: 999px;
+    background: color-mix(in srgb, var(--card) 82%, transparent); color: var(--accent-700);
+    font-size: max(10px, calc(var(--cardW, 262px) * 0.04)); font-weight: 650; letter-spacing: 0.01em; cursor: pointer;
+  }
+  #new-card-folders span { font-size: 1.15em; line-height: 1; }
 
   /* notes + what's-new views — a plain list; shared header style */
   .view-header {
@@ -511,9 +511,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .rail-item.active { color:var(--ink); font-weight:650; }
   .rail-item.active::before { background:var(--accent); box-shadow:0 0 0 3px rgba(189,90,48,.16); }
   .rail-settings { position:absolute; left:12px; top:14px; z-index:13; border:1px solid rgba(189,90,48,.55); background:color-mix(in srgb,var(--card) 72%,transparent); color:var(--accent-700); border-radius:999px; padding:7px 11px; cursor:pointer; }
-  .profile-edge { position:absolute; right:12px; top:14px; z-index:13; border:1px solid rgba(189,90,48,.55); background:color-mix(in srgb,var(--card) 72%,transparent); color:var(--accent-700); border-radius:999px; padding:7px 11px; cursor:pointer; }
   .drawer-item, .rail-item { transition:background .2s ease,color .2s ease,transform .2s ease; }
-  @media(max-width:700px){ .section-rail{left:3px}.rail-item{font-size:10px;padding-left:15px}.rail-settings{left:6px}.profile-edge{padding:11px 6px} }
+  @media(max-width:700px){ .section-rail{left:3px}.rail-item{font-size:10px;padding-left:15px}.rail-settings{left:6px} }
 
   /* ---------- Learn from a source carousel ---------- */
   #source-page { padding:0; overflow:hidden; }
@@ -585,9 +584,10 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     height:var(--categoryH,180px)!important;
     appearance:none;-webkit-appearance:none;color:var(--ink);font:inherit;
   }
-  /* Vertically centered like every other card, using this card's own
-     (shorter) height rather than the full-size card height. */
-  .card.custom-category-card { margin-top:calc(var(--categoryH,180px) / -2); }
+  /* The card itself sits on the same bottom edge as the full-size lesson and
+     source cards (the stack metaphor). Its TEXT is vertically centered inside
+     the shorter card via the flex justify-content:center above. */
+  .card.custom-category-card { margin-top:calc((var(--cardH,320px) / 2) - var(--categoryH,180px)); }
   /* A category is a visible stack of lesson cards, as in the concept sketch. */
   .custom-category-card::before,.custom-category-card::after {
     content:"";position:absolute;inset:0;border:1.5px solid var(--line);border-radius:inherit;
@@ -595,7 +595,9 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   }
   .custom-category-card::before { transform:translate(7px,-8px); }
   .custom-category-card::after { transform:translate(14px,-16px); }
-  .custom-category-card .card-cat { color:var(--ink-soft);opacity:.82;top:12px; }
+  /* Folder cards have no top-right path button, so their eyebrow re-centers
+     (the base .card-cat is left-aligned only to clear that button on lessons). */
+  .custom-category-card .card-cat { left:50%;right:auto;transform:translateX(-50%);max-width:82%;color:var(--ink-soft);opacity:.82;top:12px; }
   .custom-category-card .card-title { max-width:82%;text-align:center; }
   .custom-category-count { position:absolute;left:0;right:0;bottom:12px;color:var(--ink-soft);font-size:10px;letter-spacing:.04em; }
   .source-card.custom-category-card { padding:22px;align-items:center; }
@@ -664,20 +666,6 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .source-tree-node strong { display:block;margin:3px 0;font:500 17px Georgia,serif; }
   .source-tree-node p { margin:0;color:var(--ink-soft);font-size:12px;line-height:1.45; }
   #source-tree-continue { width:100%;padding:14px;border:0;border-radius:12px;background:var(--accent);color:white;font-size:15px;font-weight:650;cursor:pointer; }
-
-  /* ---------- Bottom bar ---------- */
-  #bottom-bar {
-    flex: 0 0 auto;
-    margin: 0 18px calc(env(safe-area-inset-bottom) + 14px);
-    height: 52px;
-    border: 1.5px solid var(--line); border-radius: 12px;
-    background: var(--card);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft);
-    cursor: pointer; user-select: none;
-    touch-action: none;
-  }
-  #bottom-bar { display:none; }
 
   /* ---------- Chat ---------- */
   #chat-header {
@@ -783,9 +771,9 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   }
   #chat-send:disabled { opacity: 0.45; }
 
-  /* ---------- Profile ---------- */
+  /* ---------- Profile (top page of the home deck) ---------- */
   #profile-header {
-    padding: calc(env(safe-area-inset-top) + 22px) 24px 12px; text-align: center;
+    padding: 18px 24px 10px; text-align: center;
   }
   #profile-header h2 { font-size: 19px; letter-spacing: 0.1em; text-transform: uppercase; }
   #profile-header p { color: var(--ink-soft); font-size: 13px; margin-top: 4px; font-style: italic; }
@@ -880,7 +868,6 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       width:34px; height:34px; background:color-mix(in srgb,var(--card) 88%,transparent);
       border-radius:999px; box-shadow:var(--shadow-sm);
     }
-    .profile-edge { left:10px; right:auto; top:calc(env(safe-area-inset-top) + 10px); bottom:auto; font-size:10px; padding:6px 9px; border:1px solid rgba(189,90,48,.55); border-radius:999px; background:color-mix(in srgb,var(--card) 72%,transparent); color:var(--accent-700); }
     #lesson-layer-guide { display:none!important; }
     #mobile-category-button { display:flex; align-items:center; gap:7px; position:absolute; right:12px; top:auto; bottom:58px; z-index:14; border:1px solid rgba(189,90,48,.55); background:color-mix(in srgb,var(--card) 94%,transparent); color:var(--accent-700); border-radius:999px; padding:9px 11px; font-size:10px; }
     #mobile-category-button::before { content:""; width:8px; height:8px; border-radius:50%; background:var(--accent); }
@@ -1103,11 +1090,11 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <!-- ============ HOME ============ -->
 <div id="view-home" class="view active">
   <button id="rail-settings" class="rail-settings" type="button">Settings</button>
-  <nav class="section-rail" aria-label="Explore sections">
+  <nav class="section-rail" aria-label="Home sections">
+    <button id="rail-profile" class="rail-item" type="button">Profile</button>
     <button id="rail-explore" class="rail-item active" type="button">Explore</button>
     <button id="rail-sources" class="rail-item" type="button">Upload</button>
   </nav>
-  <button id="profile-edge" class="profile-edge" type="button">Profile</button>
   <button id="mobile-category-button" type="button" aria-haspopup="dialog">Most recent</button>
   <div id="home-header">
     <button id="home-menu" class="menu-button" type="button" aria-label="Open menu">&#9776;</button>
@@ -1123,6 +1110,13 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 
   <div id="legacy-home">
     <div id="home-deck-scroll">
+      <section id="profile-page" class="home-deck-page" aria-label="Your Worldview">
+        <div id="profile-header">
+          <h2 class="serif">Your Worldview</h2>
+          <p>what you&rsquo;ve been curious about</p>
+        </div>
+        <div id="profile-scroll"></div>
+      </section>
       <section id="carousel-page" class="home-deck-page" aria-label="Questions and saved lessons">
         <div id="carousel-wrap">
           <div id="carousel"></div>
@@ -1141,8 +1135,6 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
             </svg>
             <span>paths</span>
           </div>
-          <button id="zoom-btn" type="button">zoom out</button>
-          <button id="explore-category-add" class="category-add-button" type="button" aria-label="Create or organize custom folders"><span class="category-add-icon">+</span><span>Folders</span></button>
         </div>
       </section>
 
@@ -1169,7 +1161,6 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
         </div>
       </section>
     </div>
-    <div id="bottom-bar">&#9650;&nbsp;&nbsp;profile</div>
   </div>
 </div>
 
@@ -1250,15 +1241,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   </div>
 </div>
 
-<!-- ============ PROFILE ============ -->
-<div id="view-profile" class="view">
-  <div id="profile-header">
-    <button id="profile-top-back" type="button" aria-label="Back to learn" style="position:absolute;left:18px;top:calc(env(safe-area-inset-top) + 16px);border:0;background:none;color:var(--ink);font-size:25px;cursor:pointer">&#8592;</button>
-    <h2 class="serif">Your Worldview</h2>
-    <p>what you&rsquo;ve been curious about</p>
-  </div>
-  <div id="profile-scroll"></div>
-</div>
+<!-- Profile is now the top page of the home deck (scroll up above Explore) —
+     see #profile-page inside #home-deck-scroll above. -->
 
 <!-- ============ NOTES ============ -->
 <div id="view-notes" class="view">
@@ -1455,11 +1439,19 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v39 · Jul 23";
+const BUILD = "v40 · Jul 23";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v40", date: "Jul 23", changes: [
+    "Profile is now a page you scroll up to, above Explore and Upload — the Profile button is gone and the left dots now show Profile, Explore, Upload.",
+    "The Folders control moved to the bottom-right corner of the Ask Anything card, so the home screen feels less cluttered.",
+    "Removed pinch-to-zoom and the zoom-out button — they were easy to get stuck in a state that froze sideways scrolling, and everyone is reset to a clean card size.",
+    "Fixed the card labels (like the folder/topic tag) being shrunk so small they were unreadable.",
+    "Folder cards sit on the bottom edge like before, with their text centered inside.",
+    "Fixed a bug that was creating duplicate '· recovered copy' lessons when syncing.",
+  ]},
   { tag: "v39", date: "Jul 23", changes: [
     "Categories are now called folders everywhere in the app.",
     "Moved the Profile button from the screen edge to the top, next to Settings, so it's no longer crowded into a corner.",
@@ -1810,9 +1802,22 @@ function cloudSnapshot() {
     },
   };
 }
+// Only the visible learner/assistant conversation decides whether two copies
+// of a lesson have genuinely diverged. Hidden bookkeeping — synthetic re-entry
+// turns, the exact provider-facing `apiContent`, `reentry`/`sources` flags,
+// per-message timestamps — legitimately differs between two devices for the
+// SAME conversation, and comparing it (old behavior: JSON.stringify the whole
+// message) made ordinary syncs look like conflicts and spawn endless
+// "· recovered copy" duplicates. See BUG-073.
+function visibleConversation(messages) {
+  return (Array.isArray(messages) ? messages : [])
+    .filter(message => message && !message.synthetic)
+    .map(message => ({ role: message.role, content: String(message.content == null ? "" : message.content) }));
+}
 function messagePrefix(a,b) {
-  if (!Array.isArray(a) || !Array.isArray(b) || a.length > b.length) return false;
-  return a.every((message,index) => JSON.stringify(message) === JSON.stringify(b[index]));
+  const av = visibleConversation(a), bv = visibleConversation(b);
+  if (av.length > bv.length) return false;
+  return av.every((message,index) => message.role === bv[index].role && message.content === bv[index].content);
 }
 function mergeCloudLessons(remoteLessons) {
   const localById = new Map((state.lessons || []).map(lesson => [lesson.id,lesson]));
@@ -1985,6 +1990,10 @@ if (!["claude-sonnet-5","claude-haiku-4-5"].includes(state.model)) { state.model
 // Settings still lets a tester opt back into text-first lessons.
 if (!state.spokenTurnsV1) { state.voiceDefault = true; state.spokenTurnsV1 = true; save(); }
 if (innerWidth <= 700 && !state.mobileScaleV1) { state.cardScale = 0.82; state.mobileScaleV1 = true; save(); }
+// Pinch-to-zoom and the zoom-out button were removed. Reset everyone to a
+// clean fixed card size once, so nobody is stranded at an odd previously-
+// pinched scale with no control left to fix it. See BUG-074.
+if (!state.zoomRemovedV1) { state.cardScale = innerWidth <= 700 ? 0.82 : 1; state.zoomRemovedV1 = true; save(); }
 // The saved-lesson hint teaches the interaction once. Existing learners have
 // already demonstrated that they know it, so don't make them keep reading it.
 if (!state.continueHintV1) {
@@ -2925,6 +2934,7 @@ function renderHome() {
       <div class="new-card-actions">
         <button id="start-btn" type="button">Begin</button>
       </div>
+      <button id="new-card-folders" type="button" aria-label="Create or organize folders"><span>+</span> Folders</button>
     `;
     c.appendChild(nc);
     wheel.cards.push(nc); wheel.ids.push(null);
@@ -3156,11 +3166,11 @@ function pathControlAtPoint(x, y) {
   let gestureAxis = null;
   let pathPress = null;
 
-  // pinch-to-resize the cards — tracked independently of the single-finger
-  // drag/tap logic below; two fingers down suspends dragging until they lift
+  // A second finger no longer resizes cards (pinch-to-zoom was removed — it
+  // was easy to leave the gesture in a stuck state that froze horizontal
+  // dragging, and the card scale is now fixed). We still track how many
+  // pointers are down only so a stray second finger doesn't hijack a drag.
   const activePointers = new Map();
-  let pinching = false, pinchStartDist = 0, pinchStartScale = 1;
-  const dist2 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
   // free-spinning ring: no snapping to cards — a flick glides with momentum
   // and settles wherever friction stops it
@@ -3188,14 +3198,7 @@ function pathControlAtPoint(x, y) {
       return;
     }
     activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (activePointers.size === 2) {
-      pinching = true; down = false; // a second finger cancels any single-finger drag/tap in progress
-      const pts = [...activePointers.values()];
-      pinchStartDist = dist2(pts[0], pts[1]);
-      pinchStartScale = state.cardScale || 1;
-      return;
-    }
-    if (activePointers.size > 2 || pinching) return; // ignore extra fingers / mid-pinch teardown
+    if (activePointers.size >= 2) { down = false; return; } // a second finger cancels the single-finger drag; no pinch-zoom
     target = cardAtPoint(e.clientX, e.clientY);
     // if the tap lands precisely on the new-lesson card's text input, let it
     // focus natively instead of starting a drag — resolved by coordinates
@@ -3219,20 +3222,7 @@ function pathControlAtPoint(x, y) {
       return;
     }
     if (activePointers.has(e.pointerId)) activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (pinching) {
-      if (activePointers.size !== 2) return; // waiting for the lifted finger to fully release
-      const pts = [...activePointers.values()];
-      const d = dist2(pts[0], pts[1]);
-      // much wider range than before — he wants to zoom out and in freely;
-      // still clamped so cards can't vanish to nothing or blow past the screen
-      const minScale = innerWidth <= 700 ? 0.68 : 0.58;
-      const maxScale = innerWidth <= 700 ? 1.20 : 1.35;
-      state.cardScale = Math.max(minScale, Math.min(maxScale, pinchStartScale * (d / pinchStartDist)));
-      wheel.categoryOverview = state.cardScale < 0.72;
-      updateCardSize();
-      scheduleWheelLayout(false);
-      return;
-    }
+    if (activePointers.size >= 2) return; // two fingers down: not a drag (pinch-zoom removed)
     if (!down) return;
     const dx = e.clientX - sx, dy = e.clientY - sy;
     const distance = Math.hypot(dx, dy);
@@ -3274,15 +3264,6 @@ function pathControlAtPoint(x, y) {
     }
     if (wheel.methodInteracting) { down = false; wheel.methodInteracting = false; return; }
     activePointers.delete(e.pointerId);
-    if (pinching) {
-      if (activePointers.size < 2) {
-        pinching = false;
-        updateCardSize();
-        layoutWheel(false);
-        save();
-      } // remember the chosen size
-      return;
-    }
     if (!down) return;
     down = false;
     const dx = e.clientX - sx, dy = e.clientY - sy;
@@ -3319,9 +3300,9 @@ function pathControlAtPoint(x, y) {
         const el = wheel.cards[idx];
         if (el.classList.contains("new-card")) {
           wheel.pos = idx; layoutWheel();
-          const btn = $("start-btn");
-          const r = btn && btn.getBoundingClientRect();
-          if (r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) startLesson();
+          const hit = (id) => { const b = $(id); const r = b && b.getBoundingClientRect(); return r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; };
+          if (hit("start-btn")) startLesson();
+          else if (hit("new-card-folders")) openCategoryOrganizer(null, "explore");
           return;
         }
         if (el.dataset.kind === "notes") { wheel.pos = idx; layoutWheel(); showNotes(); return; }
@@ -3345,7 +3326,6 @@ function pathControlAtPoint(x, y) {
       return;
     }
     activePointers.delete(e.pointerId);
-    if (activePointers.size < 2) { if (pinching) save(); pinching = false; }
     down = false; gestureAxis = null;
     if (target >= 0 && wheel.cards[target]) wheel.cards[target].style.translate = "";
   });
@@ -3361,21 +3341,6 @@ function pathControlAtPoint(x, y) {
     scheduleWheelLayout(false);
   }, { passive: false });
 })();
-
-// one-tap zoom, alongside pinch — toggles a "see everything" zoomed-out view
-const ZOOM_OUT_SCALE = 0.68;
-const compactCardScale = () => innerWidth > 700 ? 0.62 : ZOOM_OUT_SCALE;
-$("zoom-btn").addEventListener("pointerdown", event => event.stopPropagation());
-$("zoom-btn").onclick = event => {
-  event.stopPropagation();
-  const zoomedOut = Math.abs((state.cardScale || 1) - compactCardScale()) < 0.07;
-  state.cardScale = zoomedOut ? 1 : compactCardScale();
-  wheel.categoryOverview = !zoomedOut;
-  $("zoom-btn").textContent = zoomedOut ? "zoom out" : "reset view";
-  updateCardSize();
-  layoutWheel(false);
-  save();
-};
 
 const LESSON_PLANNING_PHASES = {
   "reading-source": "reading the source",
@@ -4505,8 +4470,7 @@ function assessLessonUnderstanding(lesson,sessionId = "") {
       lesson.assessmentUpdatedAt = Date.now();
       save();
       trackLessonMetric(lesson,{ eventId:`assessment:${lesson.id}:${lesson.assessmentUpdatedAt}`, bucket:"lifecycle", complete:lesson.pathComplete, masteryScore:lesson.masteryScore });
-      if ($("view-home").classList.contains("active")) renderHome();
-      if ($("view-profile").classList.contains("active")) renderProfile();
+      if ($("view-home").classList.contains("active")) { renderHome(); renderProfile(); }
       if (lessonPathLessonId === lesson.id && $("lesson-path-panel").classList.contains("open")) renderLessonPath(lesson);
     } catch (error) {
       console.warn("Learner assessment failed", error);
@@ -4545,7 +4509,7 @@ function exitLessonToHome() {
   closeConversationHistory();
   renderHome(); show("home");
   currentLessonId = null;
-  requestAnimationFrame(() => { if ($("home-deck-scroll")) $("home-deck-scroll").scrollTop = 0; });
+  requestAnimationFrame(homeLandOnExplore);
 }
 $("chat-back").onclick = exitLessonToHome;
 // swipe right anywhere on a full-screen view to exit it — previously exiting
@@ -4604,70 +4568,6 @@ attachLessonSwipeNavigation();
 attachHomeDrawerSwipe();
 attachSwipeExit("view-notes", () => { renderHome(); show("home"); });
 attachSwipeExit("view-whatsnew", () => { renderHome(); show("home"); });
-function attachProfileSwipeExit() {
-  const el = $("view-profile");
-  let tracking = false, horizontal = false, pointerId = null;
-  let sx = 0, sy = 0, lx = 0, ly = 0, startedAt = 0, suppressClickUntil = 0;
-  const clearStyles = () => {
-    el.classList.remove("profile-swiping", "profile-settling");
-    el.style.transform = "";
-  };
-  const settle = () => {
-    el.classList.remove("profile-swiping");
-    el.classList.add("profile-settling");
-    el.style.transform = "translateX(0)";
-    setTimeout(clearStyles, 220);
-  };
-  el.addEventListener("pointerdown", event => {
-    if (event.isPrimary === false || tracking) return;
-    tracking = true; horizontal = false; pointerId = event.pointerId;
-    sx = lx = event.clientX; sy = ly = event.clientY; startedAt = performance.now();
-  });
-  el.addEventListener("pointermove", event => {
-    if (!tracking || event.pointerId !== pointerId) return;
-    lx = event.clientX; ly = event.clientY;
-    const dx = lx - sx, dy = ly - sy;
-    if (!horizontal && dx > 9 && Math.abs(dx) > Math.abs(dy) * 1.15) {
-      horizontal = true;
-      el.classList.add("profile-swiping");
-      try { el.setPointerCapture(pointerId); } catch (error) {}
-    }
-    if (!horizontal) return;
-    event.preventDefault();
-    el.style.transform = `translateX(${Math.max(0, dx)}px)`;
-  }, { passive:false });
-  const finish = event => {
-    if (!tracking || (event && event.pointerId != null && event.pointerId !== pointerId)) return;
-    const x = event ? event.clientX : lx, y = event ? event.clientY : ly;
-    const dx = x - sx, dy = y - sy;
-    const elapsed = Math.max(1, performance.now() - startedAt);
-    const exits = horizontal && dx > 42 && (dx > 68 || dx / elapsed > .55) && Math.abs(dx) > Math.abs(dy) * 1.1;
-    tracking = false;
-    if (pointerId != null) {
-      try { el.releasePointerCapture(pointerId); } catch (error) {}
-    }
-    pointerId = null;
-    if (!horizontal) return;
-    suppressClickUntil = Date.now() + 350;
-    if (!exits) { settle(); return; }
-    el.classList.remove("profile-swiping");
-    el.classList.add("profile-settling");
-    el.style.transform = `translateX(${innerWidth}px)`;
-    setTimeout(() => {
-      renderHome();
-      show("home");
-      clearStyles();
-    }, 160);
-  };
-  el.addEventListener("pointerup", finish);
-  el.addEventListener("pointercancel", finish);
-  el.addEventListener("click", event => {
-    if (Date.now() >= suppressClickUntil) return;
-    event.preventDefault();
-    event.stopPropagation();
-  }, true);
-}
-attachProfileSwipeExit();
 
 /* ================= Profile ================= */
 let profileCategory = null;
@@ -4760,20 +4660,27 @@ function barGesture(el, onActivate, dir) {
   });
   el.addEventListener("pointercancel", () => { active = false; });
 }
-barGesture($("bottom-bar"), () => { renderProfile(true); show("profile"); }, "up");
-$("profile-top-back").onclick = () => { renderHome(); show("home"); };
-$("profile-edge").onclick = () => { renderProfile(true); show("profile"); };
 $("rail-settings").onclick = openSettings;
+// The three home pages stacked top→bottom: Profile, Explore, Upload. The rail
+// scrolls the deck to each; scrolling the deck highlights the matching dot.
 function scrollHomeSection(id) { show("home"); $(id).scrollIntoView({ behavior:"smooth", block:"start" }); }
+$("rail-profile").onclick = () => { renderProfile(true); scrollHomeSection("profile-page"); };
 $("rail-explore").onclick = () => scrollHomeSection("carousel-page");
 $("rail-sources").onclick = openSourceSheet;
+// Land the deck on Explore (the middle page) rather than Profile (the top page)
+// whenever home is entered fresh — otherwise opening the app would show Profile.
+function homeLandOnExplore() {
+  const deck = $("home-deck-scroll"), explore = $("carousel-page");
+  if (deck && explore) deck.scrollTop = explore.offsetTop;
+}
 function syncHomeRail() {
   const scroller = $("home-deck-scroll");
-  const index = Math.max(0, Math.min(1, Math.round(scroller.scrollTop / Math.max(1, scroller.clientHeight))));
-  [$("rail-explore"), $("rail-sources")].forEach((button, i) => button.classList.toggle("active", i === index));
-  // Lesson categories only describe Explore. Keep the thumb control out of
-  // Upload, where "Most recent" has no meaning.
-  $("mobile-category-button").style.display = innerWidth <= 700 && index === 0 ? "flex" : "none";
+  const index = Math.max(0, Math.min(2, Math.round(scroller.scrollTop / Math.max(1, scroller.clientHeight))));
+  [$("rail-profile"), $("rail-explore"), $("rail-sources")].forEach((button, i) => button.classList.toggle("active", i === index));
+  if (index === 0) renderProfile(); // keep the profile page fresh when it scrolls into view
+  // Lesson folders only describe Explore. Keep the thumb control out of
+  // Profile/Upload, where "Most recent" has no meaning.
+  $("mobile-category-button").style.display = innerWidth <= 700 && index === 1 ? "flex" : "none";
 }
 $("home-deck-scroll").addEventListener("scroll", syncHomeRail, { passive:true });
 syncHomeRail();
@@ -4806,7 +4713,7 @@ function closeDrawer() {
 function showHomeLauncher(focusPrompt) {
   wheel.layerCategory = null; wheel.layerIndex = 0;
   closeDrawer(); renderHome(); show("home");
-  $("home-deck-scroll").scrollTo({ top: 0, behavior: "smooth" });
+  homeLandOnExplore(); // land on the Explore page (the Ask Anything card), not Profile
   wheel.pos = 1; layoutWheel();
   if (focusPrompt) setTimeout(() => $("topic-input").focus(), 320);
 }
@@ -4959,7 +4866,9 @@ $("category-organizer-close").onclick = closeCategoryOrganizer;
 $("category-organizer").onclick = event => { if (event.target === $("category-organizer")) closeCategoryOrganizer(); };
 $("category-create").onclick = createCustomCategory;
 $("category-name-input").onkeydown = event => { if (event.key === "Enter") { event.preventDefault();createCustomCategory(); } };
-$("explore-category-add").onclick = () => openCategoryOrganizer(null,"explore");
+// Explore's Folders control now lives on the Ask Anything card (hit-tested in
+// the carousel pointerup, since the carousel captures pointer events). Upload
+// keeps its own labeled Folders pill.
 $("source-category-add").onclick = () => openCategoryOrganizer(null,"upload");
 let sourceTreeLessonId = null;
 function isSourceLesson(lesson) { return !!safeHttpUrl(lesson && lesson.sourceUrl) || !!(lesson && lesson.sourceMedia); }
@@ -8244,7 +8153,7 @@ function importLessonsFromText(text) {
   mergeCustomCategories(incomingCategories,data && data.v);
   save();
   renderHome();
-  if ($("view-profile").classList.contains("active")) renderProfile();
+  renderProfile();
   const added = state.lessons.length - before;
   const addedN = state.notes.length - beforeN;
   toast("Loaded " + incoming.length + " lessons" + (added ? " (" + added + " new)" : "") +
@@ -8527,8 +8436,11 @@ if (location.protocol === "file:") {
   $("fw-x").onclick = () => { $("file-warning").style.display = "none"; };
 }
 updateCardSize();
-wheel.categoryOverview = (state.cardScale || 1) < 0.72;
+wheel.categoryOverview = false;
 renderHome();
+renderProfile();       // populate the Profile page (top of the home deck)
+homeLandOnExplore();   // but open on Explore, not Profile
+requestAnimationFrame(homeLandOnExplore); // again after layout settles
 if (backendClient) {
   backendClient.auth.onAuthStateChange((event,session) => {
     if (["SIGNED_IN","INITIAL_SESSION","USER_UPDATED"].includes(event) && session) {
@@ -8538,7 +8450,6 @@ if (backendClient) {
   initCloudPersistence();
 }
 try { matchMedia("(prefers-color-scheme:dark)").addEventListener("change",() => { if ((state.theme || "system") === "system") applyTheme(); }); } catch (error) {}
-$("zoom-btn").textContent = Math.abs((state.cardScale || 1) - compactCardScale()) < 0.07 ? "reset view" : "zoom out";
 const introNeededAtBoot = state.introSeenVersion !== INTRO_VERSION;
 if (introNeededAtBoot) setTimeout(() => setIntroOpen(true),80);
 save();
