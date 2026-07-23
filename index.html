@@ -259,12 +259,6 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     display: flex; flex-direction: column; position: relative;
   }
   #carousel-page #carousel-wrap { flex: 1; }
-  .source-scroll-cue {
-    position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
-    border: none; background: none; color: var(--ink-soft); cursor: pointer;
-    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
-    white-space: nowrap;
-  }
 
   #carousel-wrap {
     flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0;
@@ -576,6 +570,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     display:flex;flex-direction:column;justify-content:center;text-align:center;overflow:visible!important;
     isolation:isolate;border-color:var(--line);background:var(--card);cursor:pointer;-webkit-touch-callout:none;
     height:var(--categoryH,180px)!important;
+    appearance:none;-webkit-appearance:none;color:var(--ink);font:inherit;
   }
   /* Short collection stacks share the full-size cards' bottom edge. Their
      reduced height now grows upward, matching the physical stack metaphor. */
@@ -592,8 +587,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .source-card.custom-category-card { padding:22px;align-items:center;align-self:flex-end; }
   .source-card.custom-category-card .source-card-title { margin:0;max-width:82%;text-align:center;font:600 max(18px,calc(var(--cardW,262px)*.075))/1.22 Georgia,serif; }
   .source-category-return .source-card-host { color:var(--accent-700); }
-  .category-add-button { position:absolute;right:max(18px,env(safe-area-inset-right));top:22%;z-index:18;transform:translateY(-50%);width:52px;height:52px;border:1px solid rgba(189,90,48,.55);border-radius:17px;background:color-mix(in srgb,var(--card) 92%,transparent);color:var(--accent-700);font-size:32px;font-weight:300;line-height:1;box-shadow:0 8px 22px rgba(44,36,28,.09);cursor:pointer; }
-  #source-page .category-add-button { right:max(18px,env(safe-area-inset-right));top:22%; }
+  .category-add-button {
+    position:absolute;left:max(18px,env(safe-area-inset-left));bottom:14%;z-index:18;
+    display:flex;align-items:center;gap:6px;padding:10px 16px 10px 12px;
+    border:1px solid rgba(189,90,48,.55);border-radius:999px;
+    background:color-mix(in srgb,var(--card) 92%,transparent);color:var(--accent-700);
+    font-size:13px;font-weight:650;letter-spacing:.01em;white-space:nowrap;
+    box-shadow:0 8px 22px rgba(44,36,28,.09);cursor:pointer;
+  }
+  .category-add-button .category-add-icon { font-size:19px;font-weight:400;line-height:1; }
+  #source-page .category-add-button { left:max(18px,env(safe-area-inset-left));bottom:14%; }
 
   /* User collections and source preview */
   #category-organizer,#source-preview-sheet { position:fixed;inset:0;z-index:124;display:none;align-items:flex-end;background:rgba(44,36,28,.34); }
@@ -622,8 +625,9 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .source-preview-actions button,.source-preview-actions a { min-height:46px;display:grid;place-items:center;padding:10px;border:1px solid var(--line);border-radius:11px;background:var(--paper);color:var(--ink);font:600 12px system-ui;text-decoration:none;cursor:pointer; }
   .source-preview-actions .primary { border-color:var(--accent);background:var(--accent);color:white; }
   @media(max-width:700px){
-    .category-add-button{right:8px;width:46px;height:46px;border-radius:15px}.source-preview-actions{grid-template-columns:1fr}
-    #source-page .category-add-button{right:8px}
+    .category-add-button{left:8px;padding:8px 13px 8px 10px;font-size:11px}.source-preview-actions{grid-template-columns:1fr}
+    .category-add-button .category-add-icon{font-size:16px}
+    #source-page .category-add-button{left:8px}
     .source-create-card{padding:13px}.source-create-card h3{margin-bottom:8px;font-size:18px}
     #source-url{padding:9px 10px;font-size:14px}.source-input-divider{margin:4px 0;font-size:8px}
     #source-file-button{padding:8px 10px;font-size:11px}#source-pending-preview{height:48px;margin-top:5px}
@@ -858,7 +862,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     .rail-item.active::before { background:var(--accent); box-shadow:0 0 0 3px rgba(189,90,48,.16); }
     .rail-settings { left:auto; right:10px; top:calc(env(safe-area-inset-top) + 10px); font-size:10px; padding:6px 9px; }
     #theme-toggle {
-      position:fixed; right:10px; top:calc(env(safe-area-inset-top) + 52px); z-index:13;
+      position:fixed; left:10px; bottom:calc(env(safe-area-inset-bottom) + 12px); z-index:13;
       width:34px; height:34px; background:color-mix(in srgb,var(--card) 88%,transparent);
       border-radius:999px; box-shadow:var(--shadow-sm);
     }
@@ -889,7 +893,6 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       font-size:max(12px,calc(var(--cardW,262px) * .052)); line-height:1.2; border-radius:9px;
     }
     .card.new-card .prompt-line { margin-bottom:10px; }
-    .source-scroll-cue { bottom:52px; }
   }
   #settings-panel .hint { font-size: 12px; color: var(--ink-soft); margin-top: 8px; line-height: 1.5; }
   #settings-save {
@@ -1125,9 +1128,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
             <span>paths</span>
           </div>
           <button id="zoom-btn" type="button">zoom out</button>
-          <button id="explore-category-add" class="category-add-button" type="button" aria-label="Create or organize custom categories">+</button>
+          <button id="explore-category-add" class="category-add-button" type="button" aria-label="Create or organize custom categories"><span class="category-add-icon">+</span><span>Categories</span></button>
         </div>
-        <button id="source-scroll-cue" class="source-scroll-cue" type="button">swipe up outside a card &middot; upload</button>
       </section>
 
       <section id="source-page" class="home-deck-page" aria-labelledby="source-title">
@@ -1149,7 +1151,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
               <div id="source-status" role="status" aria-live="polite"></div>
             </article>
           </div>
-          <button id="source-category-add" class="category-add-button" type="button" aria-label="Create or organize source categories">+</button>
+          <button id="source-category-add" class="category-add-button" type="button" aria-label="Create or organize source categories"><span class="category-add-icon">+</span><span>Categories</span></button>
         </div>
       </section>
     </div>
@@ -1439,11 +1441,17 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v35 · Jul 22";
+const BUILD = "v36 · Jul 22";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v36", date: "Jul 22", changes: [
+    "Fixed a personal category's name sometimes showing in the wrong color instead of matching the rest of the app.",
+    "Removed the 'swipe up outside a card' hint text at the bottom of Explore.",
+    "Moved the dark mode button to the bottom-left corner.",
+    "The category '+' button now has a label and sits on the left.",
+  ]},
   { tag: "v35", date: "Jul 22", changes: [
     "Spoken lessons now try one persistent voice connection instead of reopening a new one every sentence, to cut the delay between finishing a sentence and hearing the next one.",
     "If that new connection ever has trouble, the lesson quietly falls back to the previous reliable method — voice should never just stop working because of this change.",
@@ -5154,7 +5162,6 @@ $("nav-new").onclick = () => showHomeLauncher(true);
 $("nav-source").onclick = openSourceSheet;
 $("nav-settings").onclick = () => { closeDrawer(); openSettings(); };
 $("source-close").onclick = closeSourceSheet;
-$("source-scroll-cue").onclick = openSourceSheet;
 $("source-start").onclick = startSourceLesson;
 $("source-url").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); startSourceLesson(); } };
 $("source-file-button").onclick = () => $("source-file").click();
