@@ -832,6 +832,19 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .settings-check input { width:auto!important; accent-color:var(--accent); transform:scale(1.2); }
   #settings-developer-group[hidden] { display:none; }
   .developer-status { margin:10px 0 2px;padding:10px 12px;border-left:2px solid var(--accent);color:var(--ink-soft);font-size:12px;line-height:1.45; }
+  .voice-timing-panel { margin:14px 0 2px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--paper); }
+  .voice-timing-head { display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;font-weight:700;color:var(--ink);margin-bottom:8px; }
+  .voice-timing-head button { padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink-soft);font-size:11px;cursor:pointer; }
+  .voice-timing-readout { max-height:230px;overflow:auto;-webkit-overflow-scrolling:touch; }
+  .voice-timing-empty { color:var(--ink-soft);font-size:12px;line-height:1.45;margin:0; }
+  .voice-timing-row { display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:6px 0;border-top:1px solid var(--line);font-size:11px;font-variant-numeric:tabular-nums;color:var(--ink-soft); }
+  .voice-timing-row:first-child { border-top:0; }
+  .voice-timing-row b { color:var(--ink);font-weight:700; }
+  .voice-timing-row .vt-when { min-width:52px;color:var(--ink-soft);opacity:.8; }
+  .voice-timing-row .vt-sound.slow { color:#b4541f; }
+  .voice-timing-row .vt-sound.over { color:#a01f1f;font-weight:800; }
+  .voice-timing-row .vt-flag { padding:1px 6px;border-radius:999px;background:rgba(180,84,31,.14);color:#b4541f;font-weight:700; }
+  .voice-timing-legend { margin:8px 0 0;color:var(--ink-soft);font-size:11px;line-height:1.5; }
   .settings-account-card,.usage-card { padding:14px;border:1px solid rgba(126,160,170,.55);border-radius:12px;background:var(--paper); }
   .settings-account-status { margin:0 0 10px;color:var(--ink-soft);font-size:12px;line-height:1.45; }
   .settings-account-row { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px; }
@@ -1377,6 +1390,11 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       <option value="aura-2-athena-en">Athena &mdash; calm, professional</option>
     </select>
     <div class="developer-status">Tutor, transcription, and spoken voice are independent tests. Deepgram Aura-2 changes only what the tutor sounds like; it does not transcribe your microphone.</div>
+    <div id="voice-timing-panel" class="voice-timing-panel">
+      <div class="voice-timing-head"><span>Speech timing &mdash; last 20 spoken turns</span><button id="voice-timing-clear" type="button">Clear</button></div>
+      <div id="voice-timing-readout" class="voice-timing-readout"></div>
+      <p class="voice-timing-legend">think = your words to the tutor's first text &middot; queue = first sentence ready to speak &middot; <strong>sound</strong> = first audio you could actually hear &middot; route = which path spoke (relay = the persistent socket, rest = the per-sentence fallback). "race" means the relay missed its 2.5s budget and the fallback was fired alongside it.</p>
+    </div>
     <div class="legacy-voice-settings">
     <label>Appearance</label>
     <select id="set-theme">
@@ -1439,11 +1457,19 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v40 · Jul 23";
+const BUILD = "v41 · Jul 26";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v41", date: "Jul 26", changes: [
+    "Fixed the big one: a new lesson's first reply could show text but stay silent for up to 30 seconds. The app was starting its audio engine too late — on iPhone that can leave it muted, so speech was being played to nobody with nothing reporting an error.",
+    "The audio engine now starts the moment you open a spoken lesson, and the app refuses the fast voice route entirely if it can't actually make sound.",
+    "If the fast voice connection makes no sound within 2.5 seconds, the backup route now starts alongside it instead of after it — whichever speaks first wins, and you never hear a sentence twice.",
+    "No word is highlighted until you can actually hear it. The highlight now follows the real audio instead of running ahead of silence.",
+    "Both voice routes are locked to the same volume, so a mid-reply route switch can't make the tutor suddenly louder or quieter.",
+    "New (developer settings): a speech timing readout of your last 20 spoken turns, showing exactly how long each one took to make a sound.",
+  ]},
   { tag: "v40", date: "Jul 23", changes: [
     "Profile is now a page you scroll up to, above Explore and Upload — the Profile button is gone and the left dots now show Profile, Explore, Upload.",
     "The Folders control moved to the bottom-right corner of the Ask Anything card, so the home screen feels less cluttered.",
@@ -1636,7 +1662,7 @@ const VERSIONS = [
 const LS_KEY = "worldview-v1";
 let cloudSyncReady = false, cloudHydrating = false, cloudSyncTimer = 0, cloudSyncInFlight = null, cloudAccount = null, backendEntitled = false;
 let localSaveWarningShown = false;
-let state = { apiKey: "", testerInvite: "", monthlyBudget: 5, model: "claude-sonnet-5", tutorThinking: "fast", developerMode: false, developerUnlocked:false, ttsProvider: "auto", deepgramKey: "", deepgramModel: "aura-2-arcas-en", lessons: [], notes: [], customCategories: [], voiceURI: "", voiceDefault: true, speechLanguage: "en", elKey: "", cartKey: "", cartVoice: "", cardScale: 1, theme:"system", libraryUpdatedAt:0 };
+let state = { apiKey: "", testerInvite: "", monthlyBudget: 5, model: "claude-sonnet-5", tutorThinking: "fast", developerMode: false, developerUnlocked:false, ttsProvider: "auto", deepgramKey: "", deepgramModel: "aura-2-arcas-en", lessons: [], notes: [], customCategories: [], voiceURI: "", voiceDefault: true, speechLanguage: "en", elKey: "", cartKey: "", cartVoice: "", cardScale: 1, theme:"system", libraryUpdatedAt:0, voiceTimingLog: [] };
 try { Object.assign(state, JSON.parse(localStorage.getItem(LS_KEY) || "{}")); } catch (e) {}
 if (state.developerMode) state.developerUnlocked = true;
 if (!Array.isArray(state.lessons)) state.lessons = [];
@@ -5467,7 +5493,12 @@ const voice = {
   textPresenter:null, audioCleanupTimer:null,
   speechText:"", expectedSpeechEnd:0, queuedThrough:0, playedThrough:0, tailRepairAttempted:false,
   captureTiming:null, turnTiming:null,
-  relay:{ ws:null, ready:false, connecting:false, audioCtx:null, nextStartTime:0, sources:[], watchdog:null },
+  relay:{
+    ws:null, ready:false, connecting:false, audioCtx:null, gain:null, nextStartTime:0, sources:[], watchdog:null,
+    // race/word-sync bookkeeping (see pumpDeepgram and startRelayWordSync)
+    utteranceStart:0, audibleResolve:null, audiblePromise:null, audibleRAF:0, supersededBy:"",
+    openedAt:0, reopenAttempts:0, reopenTimer:null,
+  },
 };
 
 function ownedVoiceCaptureSupported() {
@@ -5618,7 +5649,11 @@ function enterVoice(autoListen = true, excludeLastFromHistory = false, pinNextMe
   // unlock speech synthesis with a silent utterance (needed on iOS; harmless elsewhere)
   try { speechSynthesis.cancel(); const un = new SpeechSynthesisUtterance(" "); un.volume = 0; speechSynthesis.speak(un); } catch (e) {}
   // unlock the audio element too — iOS only allows play() begun in a user gesture
-  try { ttsAudio.src = SILENT_WAV; ttsAudio.play().catch(() => {}); } catch (e) {}
+  try { ttsAudio.src = SILENT_WAV; ttsAudio.volume = VOICE_TARGET_GAIN; ttsAudio.play().catch(() => {}); } catch (e) {}
+  // and the relay's Web Audio context, for the same reason — it must be
+  // started inside this gesture or the relay route can only ever be silent
+  voice.relay.reopenAttempts = 0;
+  unlockRelayAudio();
   // open the persistent Deepgram relay in the background; the first sentence
   // or two may still go out over the REST fallback while it connects
   openVoiceRelay();
@@ -6774,6 +6809,25 @@ function finishVoiceCapture() {
 }
 
 /* ---- send + spoken reply ---- */
+/* Cross-turn speech diagnostics. `voiceDiag` holds the facts that are known
+   outside a turn's lifetime (how long the pre-warmed relay took to become
+   ready, which route last spoke); the per-sentence route/gain list is what
+   makes a volume complaint after a real drive investigable rather than a
+   matter of opinion (BUG-081). */
+const voiceDiag = { relayReadyMs:0, route:"", gain:0 };
+function noteVoiceRoute(route) {
+  voiceDiag.route = route;
+  voiceDiag.gain = VOICE_TARGET_GAIN;
+  const timing = voice.turnTiming;
+  if (!timing) return;
+  if (!timing.routes) timing.routes = [];
+  const previous = timing.routes.length ? timing.routes[timing.routes.length - 1] : null;
+  timing.routes.push({ route, gain:VOICE_TARGET_GAIN, atMs:Math.round(performance.now() - timing.startedPerf) });
+  // A loudness jump mid-reply is only explainable by the app if the route
+  // changed mid-reply, so count that explicitly instead of inferring it later.
+  if (previous && previous.route !== route) timing.routeSwitches = (timing.routeSwitches || 0) + 1;
+  if (!timing.route) timing.route = route;
+}
 function beginSpokenTurnTracking(lesson,purpose) {
   voice.speechText = "";
   voice.expectedSpeechEnd = 0;
@@ -6787,23 +6841,70 @@ function beginSpokenTurnTracking(lesson,purpose) {
     captureStartedAt:capture && capture.captureStartedAt || undefined,
     pressToMicReadyMs:capture && capture.micReadyMs,
     releaseToTranscriptMs:capture && capture.releaseToTranscriptMs,
+    relayPrewarmedMs:voiceDiag.relayReadyMs || undefined,
+    relayReadyAtStart:!!(voice.relay.ready && voice.relay.ws),
+    routes:[], routeSwitches:0, route:"",
   };
 }
 function markSpokenTurnTiming(name) {
   if (!voice.turnTiming || voice.turnTiming[name] != null) return;
   voice.turnTiming[name] = Math.round(performance.now() - voice.turnTiming.startedPerf);
 }
+const VOICE_TIMING_LOG_LIMIT = 20;
 function finishSpokenTurnTracking() {
   if (!voice.turnTiming) return;
   markSpokenTurnTiming("completeMs");
   const lesson = getLesson(currentLessonId);
+  if (voice.turnTiming.captureStartedAt) voice.turnTiming.endToEndMs = Date.now() - voice.turnTiming.captureStartedAt;
+  const { startedPerf, ...timing } = voice.turnTiming;
   if (lesson) {
-    if (voice.turnTiming.captureStartedAt) voice.turnTiming.endToEndMs = Date.now() - voice.turnTiming.captureStartedAt;
-    const { startedPerf, ...timing } = voice.turnTiming;
     lesson.lastVoiceTiming = timing;
-    save();
+    timing.lessonTitle = lesson.title || lesson.topic || "";
   }
+  /* One slow turn is only diagnosable if it is still there to read after it
+     happened — a single lastVoiceTiming per lesson was overwritten by the
+     next turn, which is exactly when the owner went looking for it. */
+  if (!Array.isArray(state.voiceTimingLog)) state.voiceTimingLog = [];
+  state.voiceTimingLog.unshift(timing);
+  if (state.voiceTimingLog.length > VOICE_TIMING_LOG_LIMIT) state.voiceTimingLog.length = VOICE_TIMING_LOG_LIMIT;
+  save();
+  renderVoiceTimingReadout();
   voice.turnTiming = null;
+}
+/* The owner-facing answer to "why was that slow?". Deliberately plain text
+   rather than a chart: the useful question is always which single link ate
+   the seconds, and these are the real recorded milliseconds, not estimates. */
+function formatVoiceTimingMs(value) { return value == null ? "—" : (value >= 1000 ? (value / 1000).toFixed(1) + "s" : Math.round(value) + "ms"); }
+// recorded provider error text lands in this readout, so it is escaped rather than trusted
+function escapeHtml(value) { return String(value == null ? "" : value).replace(/[&<>"']/g, ch => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[ch])); }
+function renderVoiceTimingReadout() {
+  const host = $("voice-timing-readout");
+  if (!host) return;
+  const rows = Array.isArray(state.voiceTimingLog) ? state.voiceTimingLog : [];
+  if (!rows.length) {
+    host.innerHTML = `<p class="voice-timing-empty">No spoken turns recorded on this device yet. Have a spoken lesson, then come back here.</p>`;
+    return;
+  }
+  host.innerHTML = rows.map(timing => {
+    const sound = timing.firstAudioMs;
+    const soundClass = sound == null ? "" : (sound > 5000 ? " over" : (sound > 2000 ? " slow" : ""));
+    const when = new Date(timing.startedAt || Date.now());
+    const clock = when.getHours().toString().padStart(2,"0") + ":" + when.getMinutes().toString().padStart(2,"0");
+    const flags = [];
+    if (timing.raceStartedMs != null) flags.push(`race @${formatVoiceTimingMs(timing.raceStartedMs)}`);
+    if (timing.routeSwitches) flags.push(`${timing.routeSwitches} route switch${timing.routeSwitches > 1 ? "es" : ""}`);
+    if (timing.relayReadyAtStart === false) flags.push("relay cold");
+    if (timing.error) flags.push(String(timing.error));
+    return `<div class="voice-timing-row">`
+      + `<span class="vt-when">${clock}</span>`
+      + `<span>think <b>${formatVoiceTimingMs(timing.firstTextMs)}</b></span>`
+      + `<span>queue <b>${formatVoiceTimingMs(timing.firstTtsQueuedMs)}</b></span>`
+      + `<span class="vt-sound${soundClass}">sound <b>${formatVoiceTimingMs(sound)}</b></span>`
+      + `<span>route <b>${escapeHtml(timing.route || "—")}</b></span>`
+      + `<span>total <b>${formatVoiceTimingMs(timing.completeMs)}</b></span>`
+      + flags.map(flag => `<span class="vt-flag">${escapeHtml(flag)}</span>`).join("")
+      + `</div>`;
+  }).join("");
 }
 function abortSpokenReplyPlayback(reason) {
   voice.mutedThisTurn = true;
@@ -6823,6 +6924,12 @@ async function voiceSend(text, reuseExistingTurn = false) {
   if (!lesson) return;
   if (reuseExistingTurn && !lessonHasUnansweredTurn(lesson)) return;
   setVoiceStatus("thinking");
+  /* Thinking time is free time to get the socket warm. If the relay opened at
+     lesson start and then idled out during a long knowledge-tree plan, this is
+     the moment to have a live one ready — no-op when it is already open. */
+  voice.relay.reopenAttempts = 0;
+  if (voice.relay.audioCtx && voice.relay.audioCtx.state === "suspended") voice.relay.audioCtx.resume().catch(() => {});
+  openVoiceRelay();
   const planning = lessonPlanning.get(lesson.id);
   if (planning) {
     await planning;
@@ -7104,17 +7211,18 @@ let usedAudioElThisTurn = false; // set whenever a premium voice actually plays 
    unknown, e.g. early into a MediaSource stream) instead of jumping. */
 let wordSyncRAF = 0;
 function stopWordSync() { if (wordSyncRAF) cancelAnimationFrame(wordSyncRAF); wordSyncRAF = 0; }
-function startWordSync(item) {
+/* Shared painter for both playback routes. `progress` returns the fraction of
+   this chunk that has actually been heard; the two routes measure that
+   differently (an <audio> element exposes currentTime/duration, the relay's
+   Web Audio path has to read the context clock), but both must be measuring
+   real audio and never a free-running timer — a highlight that walks ahead of
+   silence is the exact dishonesty VOI-035 is about. */
+function runWordSync(item, progress) {
   stopWordSync();
-  const t0 = performance.now();
-  const estSecs = Math.max(1, item.text.length / 15); // ~15 chars/sec, only used until real duration is known
   let lastPaintAt = 0, lastCharacter = -1;
   const tick = () => {
     if (voice.utter !== item) { wordSyncRAF = 0; return; }
-    const dur = ttsAudio.duration;
-    const frac = isFinite(dur) && dur > 0
-      ? ttsAudio.currentTime / dur
-      : (performance.now() - t0) / 1000 / estSecs;
+    const frac = progress();
     // capped below 1 so this never claims "fully spoken" a beat before
     // onended legitimately does via markSpokenThrough
     const now = performance.now();
@@ -7125,6 +7233,30 @@ function startWordSync(item) {
     wordSyncRAF = requestAnimationFrame(tick);
   };
   wordSyncRAF = requestAnimationFrame(tick);
+}
+function startWordSync(item) {
+  const t0 = performance.now();
+  const estSecs = Math.max(1, item.text.length / 15); // ~15 chars/sec, only used until real duration is known
+  runWordSync(item, () => {
+    const dur = ttsAudio.duration;
+    return isFinite(dur) && dur > 0
+      ? ttsAudio.currentTime / dur
+      : (performance.now() - t0) / 1000 / estSecs;
+  });
+}
+/* Relay route: the audio lives on the AudioContext timeline, so progress is
+   the context clock's position between this utterance's first scheduled chunk
+   and the end of everything scheduled so far. While chunks are still arriving
+   the end keeps moving out, which is correct — the highlight tracks what has
+   been played, not what has been guessed. If the context stalls, the clock
+   stops and so does the highlight. */
+function startRelayWordSync(item) {
+  runWordSync(item, () => {
+    const ctx = voice.relay.audioCtx;
+    const start = voice.relay.utteranceStart, end = voice.relay.nextStartTime;
+    if (!ctx || !(end > start)) return 0;
+    return (ctx.currentTime - start) / (end - start);
+  });
 }
 function ttsProvider() {
   const selected = state.ttsProvider || "auto";
@@ -7175,7 +7307,6 @@ async function pumpCart(item) {
     }
     if (!voice.active || voice.utter !== item) { URL.revokeObjectURL(url); return; }
     try { speechSynthesis.cancel(); } catch (e) {}
-    highlightAt(item.base);
     await playBlobUrl(url, item);
   } catch (e) {
     // A suspiciously-short clip already played successfully — requeuing it
@@ -7261,12 +7392,24 @@ function discardQueuedAudio() {
    (Deepgram's streaming TTS has no MP3 option), so playback uses the Web
    Audio API directly rather than the MediaSource/<audio> path used elsewhere. */
 const VOICE_RELAY_SAMPLE_RATE = 24000; // must match voice-relay's Deepgram query params
+/* One place for the speech-timing budgets (T-06). Time is ranked above cost
+   here by explicit owner decision: an occasional double-synthesized sentence
+   is cheaper than a learner sitting in silence. */
+const VOICE_FIRST_AUDIO_BUDGET_MS = 2500; // relay gets this long to make a sound before REST is fired in parallel
+const VOICE_RELAY_REOPEN_DELAY_MS = 800;  // wait before re-opening a relay that closed while idle
+const VOICE_RELAY_REOPEN_LIMIT = 3;       // bounded — never a reconnect storm on a dead network
+/* Both playback routes are pinned to the same target gain so a mid-reply
+   route switch cannot change loudness (BUG-081). The <audio> element uses
+   .volume, the relay uses a GainNode; 1.0 on both means "whatever the OS
+   volume is", with a single constant to change if levels ever need trimming. */
+const VOICE_TARGET_GAIN = 1;
 function voiceRelaySupported() {
   return backendAccessEnabled() && typeof WebSocket !== "undefined" && (typeof AudioContext !== "undefined" || typeof webkitAudioContext !== "undefined");
 }
 function openVoiceRelay() {
   if (!voiceRelaySupported() || voice.relay.ws || voice.relay.connecting) return;
   voice.relay.connecting = true;
+  voice.relay.openedAt = performance.now();
   (async () => {
     try {
       const token = await backendAccessToken(false);
@@ -7281,7 +7424,11 @@ function openVoiceRelay() {
       ws.onmessage = event => {
         if (typeof event.data === "string") {
           let msg; try { msg = JSON.parse(event.data); } catch (error) { return; }
-          if (msg.type === "ready") { voice.relay.ready = true; voice.relay.connecting = false; }
+          if (msg.type === "ready") {
+            voice.relay.ready = true; voice.relay.connecting = false; voice.relay.reopenAttempts = 0;
+            if (voice.turnTiming) markSpokenTurnTiming("relayReadyMs");
+            voiceDiag.relayReadyMs = Math.round(performance.now() - voice.relay.openedAt);
+          }
           else if (msg.type === "flushed") relayUtteranceFlushed();
           else if (msg.type === "error") relayUtteranceFailed(new Error(msg.message || "Voice relay error"));
           return;
@@ -7292,27 +7439,78 @@ function openVoiceRelay() {
       ws.onclose = () => {
         voice.relay.ws = null; voice.relay.ready = false; voice.relay.connecting = false;
         if (voice.relay.currentReject) relayUtteranceFailed(new Error("Voice relay closed"));
+        else relayScheduleReopen();
       };
     } catch (error) {
       voice.relay.connecting = false; // stays unavailable for this lesson; pumpDeepgram falls back to REST
     }
   })();
 }
+/* Pre-warming the relay at lesson open (enterVoice) only helps if it is still
+   alive when the first sentence finally arrives — and a lesson's knowledge-tree
+   planning can run far longer than a Deepgram speak socket will sit idle, so
+   the pre-warmed socket routinely closed before it was ever used and the first
+   reply paid a cold start anyway. Re-open it (bounded) whenever it closes while
+   nothing is being spoken, so the socket is warm at the moment it is needed. */
+function relayScheduleReopen() {
+  clearTimeout(voice.relay.reopenTimer);
+  if (!voice.active || voice.relay.reopenAttempts >= VOICE_RELAY_REOPEN_LIMIT) return;
+  voice.relay.reopenAttempts++;
+  voice.relay.reopenTimer = setTimeout(() => { if (voice.active && !voice.relay.ws) openVoiceRelay(); }, VOICE_RELAY_REOPEN_DELAY_MS);
+}
 function closeVoiceRelay() {
+  clearTimeout(voice.relay.reopenTimer);
+  voice.relay.reopenAttempts = VOICE_RELAY_REOPEN_LIMIT; // an explicit close is final for this lesson
   try { voice.relay.ws && voice.relay.ws.close(); } catch (error) {}
   voice.relay.ws = null; voice.relay.ready = false; voice.relay.connecting = false;
   relayClearWatchdog();
   relayStopAll();
-  if (voice.relay.audioCtx) { try { voice.relay.audioCtx.close(); } catch (error) {} voice.relay.audioCtx = null; }
+  if (voice.relay.audioCtx) { try { voice.relay.audioCtx.close(); } catch (error) {} voice.relay.audioCtx = null; voice.relay.gain = null; }
 }
 function relayEnsureAudioContext() {
   if (!voice.relay.audioCtx || voice.relay.audioCtx.state === "closed") {
     const Ctor = window.AudioContext || window.webkitAudioContext;
     voice.relay.audioCtx = new Ctor({ sampleRate: VOICE_RELAY_SAMPLE_RATE });
     voice.relay.nextStartTime = 0;
+    voice.relay.gain = null;
   }
   if (voice.relay.audioCtx.state === "suspended") voice.relay.audioCtx.resume().catch(() => {});
+  if (!voice.relay.gain) {
+    try {
+      voice.relay.gain = voice.relay.audioCtx.createGain();
+      voice.relay.gain.gain.value = VOICE_TARGET_GAIN;
+      voice.relay.gain.connect(voice.relay.audioCtx.destination);
+    } catch (error) { voice.relay.gain = null; }
+  }
   return voice.relay.audioCtx;
+}
+function relayAudioDestination(ctx) { return voice.relay.gain || ctx.destination; }
+/* iOS only lets an AudioContext run if it was created and started inside a real
+   user gesture. This context used to be created lazily by the first arriving
+   audio chunk — a network callback, often tens of seconds after the tap that
+   opened the lesson — so on iOS it could be born suspended: chunks were
+   scheduled, `ctx.currentTime` never advanced, nothing was ever audible,
+   `onended` never fired, and the sentence hung in silence while the transcript
+   sat there with its first word highlighted. That is the shape of the reported
+   30-second silent first reply. Creating and starting it here, on the opening
+   tap, is what makes the pre-warm actually pay off. */
+function unlockRelayAudio() {
+  if (!voiceRelaySupported()) return;
+  try {
+    const ctx = relayEnsureAudioContext();
+    const buffer = ctx.createBuffer(1, 1, VOICE_RELAY_SAMPLE_RATE);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(relayAudioDestination(ctx));
+    source.start(0);
+  } catch (error) { /* the REST route does not need Web Audio at all */ }
+}
+/* Whether the relay route can actually produce sound right now. A suspended or
+   missing context means scheduling chunks would be silent, so the REST/<audio>
+   route is used instead of pretending the relay works. */
+function relayAudioUsable() {
+  const ctx = voice.relay.audioCtx;
+  return !!ctx && ctx.state === "running";
 }
 /* A WebSocket that looks open can go silently dead on a weak mobile signal —
    no close/error event ever fires, so without this the relay's promise would
@@ -7336,32 +7534,61 @@ function relayScheduleChunk(arrayBuffer) {
   buffer.copyToChannel(float32, 0);
   const source = ctx.createBufferSource();
   source.buffer = buffer;
-  source.connect(ctx.destination);
+  source.connect(relayAudioDestination(ctx));
   const startAt = Math.max(ctx.currentTime, voice.relay.nextStartTime);
   source.start(startAt);
   voice.relay.nextStartTime = startAt + buffer.duration;
   voice.relay.sources.push(source);
-  if (voice.relay.sources.length === 1) markSpokenTurnTiming("firstAudioMs");
+  if (!voice.relay.utteranceStart) { voice.relay.utteranceStart = startAt; relayWatchForAudible(startAt); }
   source.onended = () => {
     voice.relay.sources = voice.relay.sources.filter(s => s !== source);
     relayCheckUtteranceComplete();
   };
 }
+/* "A chunk was scheduled" is not the same claim as "the learner heard
+   something" — a suspended context schedules happily and plays nothing. The
+   clock only advances while the context is genuinely running, so waiting for
+   `currentTime` to pass the first chunk's start time is a truthful signal that
+   sound is actually coming out. It is what marks first-audio, what starts the
+   word highlight, and what settles the relay-vs-REST race. */
+function relayWatchForAudible(startAt) {
+  cancelAnimationFrame(voice.relay.audibleRAF);
+  const item = voice.relay.currentItem;
+  const tick = () => {
+    voice.relay.audibleRAF = 0;
+    const ctx = voice.relay.audioCtx;
+    if (!ctx || voice.relay.currentItem !== item) return; // interrupted or superseded
+    if (ctx.state === "running" && ctx.currentTime >= startAt) {
+      markSpokenTurnTiming("firstAudioMs");
+      noteVoiceRoute("relay");
+      if (voice.relay.audibleResolve) { voice.relay.audibleResolve(true); voice.relay.audibleResolve = null; }
+      startRelayWordSync(item);
+      return;
+    }
+    voice.relay.audibleRAF = requestAnimationFrame(tick);
+  };
+  voice.relay.audibleRAF = requestAnimationFrame(tick);
+}
 function relayStopAll() {
   voice.relay.sources.forEach(source => { try { source.onended = null; source.stop(); } catch (error) {} });
   voice.relay.sources = [];
+  cancelAnimationFrame(voice.relay.audibleRAF); voice.relay.audibleRAF = 0;
+  voice.relay.utteranceStart = 0;
   if (voice.relay.audioCtx) voice.relay.nextStartTime = voice.relay.audioCtx.currentTime;
 }
 function relayCheckUtteranceComplete() {
   if (voice.relay.currentFlushed && !voice.relay.sources.length && voice.relay.currentResolve) {
     const resolve = voice.relay.currentResolve;
     voice.relay.currentItem = null; voice.relay.currentResolve = null; voice.relay.currentReject = null;
+    stopWordSync();
     resolve();
   }
 }
 function relayUtteranceFlushed() { voice.relay.currentFlushed = true; relayClearWatchdog(); relayCheckUtteranceComplete(); }
 function relayUtteranceFailed(error) {
   relayClearWatchdog();
+  cancelAnimationFrame(voice.relay.audibleRAF); voice.relay.audibleRAF = 0;
+  if (voice.relay.audibleResolve) { voice.relay.audibleResolve(false); voice.relay.audibleResolve = null; }
   if (voice.relay.currentReject) {
     const reject = voice.relay.currentReject;
     voice.relay.currentItem = null; voice.relay.currentResolve = null; voice.relay.currentReject = null;
@@ -7374,33 +7601,98 @@ function pumpDeepgramRelay(item) {
     voice.relay.currentFlushed = false;
     voice.relay.currentResolve = resolve;
     voice.relay.currentReject = reject;
+    voice.relay.utteranceStart = 0;
+    voice.relay.audiblePromise = new Promise(settle => { voice.relay.audibleResolve = settle; });
     try { speechSynthesis.cancel(); } catch (error) {}
-    highlightAt(item.base);
+    // No highlight here: nothing has been spoken yet. The first word is painted
+    // by startRelayWordSync once audio is genuinely audible (VOI-035).
     try { voice.relay.ws.send(JSON.stringify({ type: "speak", text: item.text })); relayResetWatchdog(); }
     catch (error) { reject(error); }
   });
 }
+/* Stop the relay speaking this sentence because the REST route beat it —
+   without this the loser would keep streaming and the sentence would be
+   spoken twice, one on top of the other. */
+function relaySupersede(reason) {
+  try { voice.relay.ws && voice.relay.ws.send(JSON.stringify({ type: "clear" })); } catch (error) {}
+  relayStopAll();
+  relayUtteranceFailed(new Error(reason));
+}
 
 async function pumpDeepgram(item) {
-  if (voice.relay.ready && voice.relay.ws) {
+  // The relay is only a real option if it can actually make a sound: a
+  // suspended AudioContext would schedule chunks into silence.
+  if (voice.relay.ready && voice.relay.ws && relayAudioUsable()) {
     voice.utter = item;
-    try {
-      await pumpDeepgramRelay(item);
-      if (voice.utter === item) {
-        markVoiceItemPlayed(item);
-        markSpokenThrough(item.base + item.text.length);
-        voice.utter = null;
-        pumpSpeech();
-      }
-      return;
-    } catch (error) {
-      // The persistent connection is presumed dead once it fails once —
-      // fall through to the REST path below for this item, and every
-      // remaining item in this lesson uses REST too (matches the existing
-      // deepgramBroken pattern rather than repeatedly retrying a relay
-      // that just failed).
-      closeVoiceRelay();
+    let relayFailed = null;
+    const relayDone = pumpDeepgramRelay(item);
+    relayDone.catch(error => { relayFailed = error; });
+    const audible = voice.relay.audiblePromise || Promise.resolve(false);
+    /* Race, don't queue. Waiting for the 6s watchdog before even starting the
+       REST request is what stacked a dead relay's cost on top of a cold REST
+       start. Give the relay a first-audio budget; if it makes no sound by
+       then, synthesize the same sentence over REST *in parallel* while the
+       relay keeps trying, and play whichever speaks first. */
+    const wonInBudget = await Promise.race([
+      audible,
+      relayDone.then(() => true, () => false),
+      new Promise(resolve => setTimeout(() => resolve(false), VOICE_FIRST_AUDIO_BUDGET_MS)),
+    ]);
+    if (wonInBudget && !relayFailed) {
+      try {
+        await relayDone;
+        if (voice.utter === item) {
+          markVoiceItemPlayed(item);
+          markSpokenThrough(item.base + item.text.length);
+          voice.utter = null;
+          pumpSpeech();
+        }
+        return;
+      } catch (error) { relayFailed = error; }
     }
+    if (voice.active && voice.utter === item && !relayFailed) {
+      markSpokenTurnTiming("raceStartedMs");
+      prepareCloudAudio(item,"deepgram");
+      const winner = await Promise.race([
+        audible.then(ok => ok ? "relay" : "relay-failed"),
+        relayDone.then(() => "relay", () => "relay-failed"),
+        item.audioPromise.then(response => response ? "rest" : "relay-failed"),
+      ]);
+      if (winner === "relay") {
+        try {
+          await relayDone;
+          if (voice.utter === item) {
+            markVoiceItemPlayed(item);
+            markSpokenThrough(item.base + item.text.length);
+            voice.utter = null;
+            pumpSpeech();
+          }
+          return; // the REST response is simply left unused for this sentence
+        } catch (error) { relayFailed = error; }
+      } else if (winner === "rest") {
+        if (voice.relay.utteranceStart) {
+          /* The relay started speaking in the moments while REST was landing.
+             Cutting it off now would clip a word mid-air to swap in an
+             identical sentence, so the relay finishes and the REST clip is the
+             one that goes unused — the accepted cost of ranking time first. */
+          try {
+            await relayDone;
+            if (voice.utter === item) {
+              markVoiceItemPlayed(item);
+              markSpokenThrough(item.base + item.text.length);
+              voice.utter = null;
+              pumpSpeech();
+            }
+            return;
+          } catch (error) { relayFailed = error; }
+        }
+        relaySupersede("REST route reached audio first");
+      }
+    }
+    // Whatever happened, this relay demonstrably could not speak within the
+    // budget, so the rest of the lesson uses REST (the pre-existing
+    // deepgramBroken pattern — never retry a route that just failed).
+    closeVoiceRelay();
   }
   voice.utter = item;
   try {
@@ -7414,7 +7706,8 @@ async function pumpDeepgram(item) {
     }
     if (!voice.active || voice.utter !== item) { if (response.body) try { await response.body.cancel(); } catch (error) {} return; }
     try { speechSynthesis.cancel(); } catch (e) {}
-    highlightAt(item.base);
+    // No highlight before playback starts — playViaMediaSource/playBlobUrl
+    // begin the word sync from the real audio position once play() resolves.
     if (MSE_OK && response.body) await playViaMediaSource(response,item);
     else await playBlobUrl(URL.createObjectURL(await response.blob()),item);
   } catch (e) {
@@ -7483,7 +7776,8 @@ function playBlobUrl(url, item) {
       resolve();
     };
     ttsAudio.onerror = () => { stopWordSync(); URL.revokeObjectURL(url); reject(new Error("playback failed")); };
-    ttsAudio.play().then(() => { markSpokenTurnTiming("firstAudioMs");startWordSync(item); }).catch(reject);
+    ttsAudio.volume = VOICE_TARGET_GAIN;
+    ttsAudio.play().then(() => { markSpokenTurnTiming("firstAudioMs");noteVoiceRoute("rest");startWordSync(item); }).catch(reject);
   });
 }
 function playViaMediaSource(res, item) {
@@ -7526,8 +7820,9 @@ function playViaMediaSource(res, item) {
           queue.push(value);
           if (!started) {
             started = true;
+            ttsAudio.volume = VOICE_TARGET_GAIN;
             ttsAudio.play()
-              .then(() => { markSpokenTurnTiming("firstAudioMs");startWordSync(item); })
+              .then(() => { markSpokenTurnTiming("firstAudioMs");noteVoiceRoute("rest");startWordSync(item); })
               .catch(error => finish(reject,error instanceof Error ? error : new Error("voice playback could not start")));
           }
           pump();
@@ -7542,7 +7837,6 @@ async function pumpEl(item) {
     const res = await elStream(item.text);
     if (!voice.active || voice.utter !== item) { try { res.body.cancel(); } catch (e) {} return; } // interrupted meanwhile
     try { speechSynthesis.cancel(); } catch (e) {} // stop any spoken filler line
-    highlightAt(item.base);
     if (MSE_OK) await playViaMediaSource(res, item);
     else await playBlobUrl(URL.createObjectURL(await res.blob()), item);
   } catch (e) {
@@ -8195,7 +8489,8 @@ function organizeSettingsPanel() {
   const thinkingHint = $("set-thinking") && $("set-thinking").nextElementSibling;
   const ttsProvider = fieldNodes("set-ttsprovider"), deepgramKey = fieldNodes("set-deepgramkey"), deepgramModel = fieldNodes("set-deepgrammodel");
   const developerStatus = panel.querySelector(".developer-status");
-  const developer = group("Developer model lab", [...model, ...thinking, thinkingHint, ...ttsProvider, ...deepgramKey, ...deepgramModel, developerStatus]);
+  const voiceTiming = $("voice-timing-panel");
+  const developer = group("Developer model lab", [...model, ...thinking, thinkingHint, ...ttsProvider, ...deepgramKey, ...deepgramModel, developerStatus, voiceTiming]);
   developer.id = "settings-developer-group";
   const tester = fieldNodes("set-testercode");
   const connection = group("Tester access", [...tester], true, true);
@@ -8223,6 +8518,7 @@ function syncDeveloperSettingsVisibility() {
   if (developerToggle) developerToggle.hidden = !(state.developerUnlocked && state.developerMode);
   const group = $("settings-developer-group");
   if (group) group.hidden = !developer;
+  if (developer) renderVoiceTimingReadout();
   const premium = $("settings-premium-group");
   if (premium) premium.hidden = true;
   const data = $("settings-data-group");
@@ -8356,6 +8652,7 @@ function closeSettings(askSave) {
   setSettingsInteractive(false);
 }
 $("settings").addEventListener("click", e => { if (e.target === $("settings")) closeSettings(true); });
+if ($("voice-timing-clear")) $("voice-timing-clear").addEventListener("click",() => { state.voiceTimingLog = []; save(); renderVoiceTimingReadout(); });
 $("set-developer").addEventListener("change",event => {
   if (!state.developerUnlocked) return;
   state.developerMode = !!event.target.checked;
