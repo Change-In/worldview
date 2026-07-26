@@ -1457,11 +1457,18 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v42 · Jul 26";
+const BUILD = "v43 · Jul 26";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v43", date: "Jul 26", changes: [
+    "Reopening a lesson no longer asks what you remember about a discussion that never happened. Coming back now depends on whether you actually completed a checkpoint.",
+    "If you completed a checkpoint, the tutor asks about that one as a warm-up and moves straight into the next one in the same reply.",
+    "If you completed nothing, the lesson simply starts that checkpoint again from the beginning, re-asking its opening question for free.",
+    "The tutor now keeps the previous, current and next checkpoint in mind, so its questions lean toward where you're going instead of only where you are.",
+    "Fixed the tutor sometimes ending a reply by just confirming you understood, leaving you nothing to answer. Every ordinary reply now ends with a real question.",
+  ]},
   { tag: "v42", date: "Jul 26", changes: [
     "Fixed v41 breaking the tutor's voice completely: the words lit up but no sound came out. v41 started using a second audio system that an iPhone can silence without reporting anything — so the app believed it was speaking while the phone stayed quiet.",
     "Spoken lessons are back on the audio path that has always worked, which in testing already starts in about half a second.",
@@ -2086,6 +2093,28 @@ function lessonCheckpoint(lesson) {
   const id = lesson && (lesson.currentPathNodeId || lesson.lastTutorCheckpointId);
   return nodes.find(node => node.id === id) || nodes[0] || null;
 }
+/* The tutor should know where it is in the journey, not just which square it
+   is standing on (LES-033, owner's framing). Previous gives it something to
+   connect back to, next is what the current question should be leaning toward.
+   `lastCompleted` is what re-entry is allowed to ask about: a completed
+   checkpoint is the only thing the learner has actually demonstrated. */
+function lessonCheckpointWindow(lesson) {
+  const nodes = Array.isArray(lesson && lesson.knowledgeTree) ? lesson.knowledgeTree : [];
+  const completedIds = Array.isArray(lesson && lesson.completedPathNodeIds) ? lesson.completedPathNodeIds : [];
+  const completed = new Set(completedIds);
+  const current = lessonCheckpoint(lesson);
+  const index = current ? nodes.findIndex(node => node.id === current.id) : -1;
+  // completion order, not route order — the learner's own path through it
+  const lastCompleted = completedIds.slice().reverse().map(id => nodes.find(node => node.id === id)).find(Boolean)
+    || nodes.filter(node => completed.has(node.id)).pop() || null;
+  return {
+    previous: index > 0 ? nodes[index - 1] : null,
+    current,
+    next: index >= 0 && index + 1 < nodes.length ? nodes[index + 1] : null,
+    lastCompleted,
+    completedCount: nodes.filter(node => completed.has(node.id)).length,
+  };
+}
 function lessonRouteComplete(lesson) {
   const nodes = Array.isArray(lesson && lesson.knowledgeTree) ? lesson.knowledgeTree : [];
   if (!nodes.length) return false;
@@ -2184,7 +2213,7 @@ function buildSystem(lesson) {
     ? "\n\n--- Teaching route ---\n" + lesson.knowledgeTree.map((node,index) => `${index + 1}. ${node.id}: ${node.title}`).join("\n") + `\nStart: ${lesson.knowledgeTreeStartId || lesson.knowledgeTree[0].id}. First diagnostic: ${lesson.knowledgeTreeStartingQuestion || "Ask what the learner thinks causes it."}\nFollow this order without scripting it. The current node's prerequisites and mastery test are supplied separately. Verify mastery from the learner's explanation before advancing; tutor coverage and learner agreement are not evidence of mastery.`
     : "";
   const checkpointTrace = trustedPlan && Array.isArray(lesson.knowledgeTree) && lesson.knowledgeTree.length
-    ? `\n\nEnd every reply with exactly one hidden marker: [[checkpoint:node-id;mastery:hold]] or [[checkpoint:node-id;mastery:demonstrated]]. Use the current route node only. "Demonstrated" requires the learner's latest reply to satisfy that node's mastery goal in their own reasoning; your explanation, their agreement, uncertainty, recognition, or a one-word answer always means hold. The app, not you, chooses the next node. Never mention the marker.`
+    ? `\n\nEnd every reply with exactly one hidden marker: [[checkpoint:node-id;mastery:hold]] or [[checkpoint:node-id;mastery:demonstrated]]. Use the current route node only. "Demonstrated" requires the learner's latest reply to satisfy that node's mastery goal in their own reasoning; your explanation, their agreement, uncertainty, recognition, or a one-word answer always means hold. The app, not you, chooses the next node. Never mention the marker.\n\nEvery ordinary reply must end with a question the learner can answer. Confirming that they understood is never a complete turn — a reply that only acknowledges leaves them with nothing to respond to. When their answer completes the current checkpoint, acknowledge it in a single clause and, in that same reply, ask the first question of the next checkpoint; do not stop at the acknowledgement and do not wait a turn. The only reply that may end without a question is one where the whole route is complete.`
     : "";
   const compactState = lesson.rollingContext && lesson.rollingContext.learnerSummary || lesson.learnerSummary;
   const continuity = lesson.rollingContext && lesson.rollingContext.continuity;
@@ -2203,6 +2232,20 @@ function buildSystem(lesson) {
     const prerequisites = Array.isArray(graphNode.prerequisites) && graphNode.prerequisites.length ? graphNode.prerequisites.join(", ") : "none";
     const masteryGoal = graphNode.why_needed || resumeCheckpoint.why_needed || "explain this idea in their own words";
     learnerStateParts.push(`Current/resume checkpoint: ${resumeCheckpoint.id}: ${resumeCheckpoint.title}. Prerequisites: ${prerequisites}. Learner must show: ${masteryGoal}. Continue from this node; do not restart at the route's first diagnostic unless the learner asks to review.`);
+    /* Where the learner is in the journey, not just which square they are on
+       (LES-033). Previous is something to connect back to; next is what the
+       current question should be leaning toward, and what to ask the moment
+       this checkpoint is satisfied. */
+    const window = lessonCheckpointWindow(lesson);
+    if (window.previous && window.previous.id !== resumeCheckpoint.id) {
+      learnerStateParts.push(`Previous checkpoint (already behind them, connect back to it rather than re-teaching it): ${window.previous.id}: ${window.previous.title}.`);
+    }
+    if (window.next) {
+      const nextGoal = (graphById.get(window.next.id) || window.next).why_needed || "";
+      learnerStateParts.push(`Next checkpoint (lean the current question toward it; ask its first question in the same reply that completes the current one): ${window.next.id}: ${window.next.title}.${nextGoal ? ` It will require: ${nextGoal}` : ""}`);
+    } else {
+      learnerStateParts.push("Next checkpoint: none — the current checkpoint is the last on the route.");
+    }
   }
   if (routeComplete) learnerStateParts.push("Route status: all planned checkpoints were previously assessed as understood. Ask what the learner wants to explore next or which idea they want to revisit; do not automatically repeat the capstone.");
   if (lesson.masteryNextGap) learnerStateParts.push(`Next assessed gap: ${lesson.masteryNextGap}`);
@@ -4133,7 +4176,16 @@ function openChat(id, noVoice) {
   updateCheckpointUI(lesson);
   const lastMsg = lastVisibleLessonMessage(lesson);
   const unanswered = !noVoice && !!lastMsg && lastMsg.role === "user";
-  const hasLearnerTurn = lesson.messages.some(m => m.role === "user" && !m.synthetic);
+  /* Re-entry keys off DEMONSTRATED progress, not message count (owner's rule,
+     2026-07-26, BUG-084). The previous gate — "has the learner sent a real
+     message" — was true from the very first instant of every lesson, because
+     beginLesson() starts the lesson by sending the learner's own topic as a
+     user message. So the recap fired on the first reopen of every lesson and
+     asked what they remembered about a discussion that had never happened.
+     A completed checkpoint is the only thing the learner has actually proved,
+     so it is the only thing re-entry is allowed to ask them to recall. */
+  const completedCheckpoints = lessonCheckpointWindow(lesson).completedCount;
+  const hasLearnerTurn = completedCheckpoints > 0;
   // The opening question was generated and shown, but the learner never
   // got to answer it at all (e.g. recovering after a technical failure
   // before their very first reply) — re-present that exact question for
@@ -4181,7 +4233,7 @@ function openChat(id, noVoice) {
     enterVoice(false, openingPending, resumed);
     if (unanswered && voice.active) { voiceSend("", true); return; }
     if (resumed && voice.active) { voiceReenter(lesson); return; }
-    if (openingPending && voice.active) { voiceRepeatPending(lesson, lastMsg); return; }
+    if (openingPending && voice.active) { voiceRepeatPending(lesson, lessonRestartMessage(lesson, lastMsg)); return; }
   }
   if (unanswered && !streaming) {
     retryPendingTextResponse(lesson.id, recoveryBubble);
@@ -4231,8 +4283,34 @@ function openChat(id, noVoice) {
 /* ---- Socratic re-entry: coming back after time away, Claude opens by
    checking what you still remember instead of resuming mid-thought ---- */
 const REENTRY_PROMPT = "[New sitting. Without greeting, recap, or web search, ask one short natural question combining: what the learner remembers from the discussion, and what else about this topic they now want to understand. Use their answer to continue the route, follow the new curiosity, or repair the nearest prerequisite.]";
+/* Re-entry may only ask the learner to recall something they actually
+   demonstrated — i.e. a COMPLETED checkpoint (owner's rule, 2026-07-26,
+   BUG-084). Asking "what do you remember about X" when nothing was ever
+   discussed is the failure this replaces; the caller in openChat() guarantees
+   we only get here when at least one checkpoint is complete, and the
+   no-completed-checkpoint case restarts the current checkpoint for free
+   instead of calling the model at all. */
+/* No checkpoint completed means nothing has been demonstrated, so the sitting
+   restarts the current checkpoint "as if it never started" (owner's rule).
+   With no completed checkpoint the learner is necessarily still on the route's
+   first node — advancing requires demonstrating one — so the planner's stored
+   opening question IS the from-scratch question, and re-asking it costs
+   nothing. Falls back to re-speaking the last thing said if no stored question
+   exists (older lessons, or a plan that never produced one). */
+function lessonRestartMessage(lesson, lastMsg) {
+  const window = lessonCheckpointWindow(lesson);
+  const stored = String(lesson.knowledgeTreeStartingQuestion || "").trim();
+  if (!window.completedCount && stored) return { role:"assistant", content:stored };
+  return lastMsg;
+}
 function reentryPromptFor(lesson) {
-  return REENTRY_PROMPT;
+  const window = lessonCheckpointWindow(lesson);
+  const done = window.lastCompleted;
+  if (!done) return REENTRY_PROMPT;
+  const resumeTarget = window.current && window.current.id !== done.id ? window.current : window.next;
+  return `[New sitting. The learner has already demonstrated the checkpoint "${done.title}". Without greeting or recap, ask one short natural question that gets them to put "${done.title}" back into their own words — this is a warm-up, not a re-test, so keep it light and specific to that idea.`
+    + (resumeTarget ? ` In the same reply, move on: ask the first question of "${resumeTarget.title}".` : ` The route is complete, so also ask which idea they want to revisit or go deeper on.`)
+    + ` Do not ask what they remember "so far" in general, and do not refer to anything they have not demonstrated.]`;
 }
 async function reenterCheck(lesson, existingBubble) {
   streaming = true;
