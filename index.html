@@ -1457,11 +1457,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v41 · Jul 26";
+const BUILD = "v42 · Jul 26";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v42", date: "Jul 26", changes: [
+    "Fixed v41 breaking the tutor's voice completely: the words lit up but no sound came out. v41 started using a second audio system that an iPhone can silence without reporting anything — so the app believed it was speaking while the phone stayed quiet.",
+    "Spoken lessons are back on the audio path that has always worked, which in testing already starts in about half a second.",
+    "Opening the knowledge tree on a brand-new lesson said the map was unavailable with a retry button while it was actually still being built. It now says it's building, and only reports a problem when there really is one.",
+  ]},
   { tag: "v41", date: "Jul 26", changes: [
     "Fixed the big one: a new lesson's first reply could show text but stay silent for up to 30 seconds. The app was starting its audio engine too late — on iPhone that can leave it muted, so speech was being played to nobody with nothing reporting an error.",
     "The audio engine now starts the moment you open a spoken lesson, and the app refuses the fast voice route entirely if it can't actually make sound.",
@@ -1662,7 +1667,7 @@ const VERSIONS = [
 const LS_KEY = "worldview-v1";
 let cloudSyncReady = false, cloudHydrating = false, cloudSyncTimer = 0, cloudSyncInFlight = null, cloudAccount = null, backendEntitled = false;
 let localSaveWarningShown = false;
-let state = { apiKey: "", testerInvite: "", monthlyBudget: 5, model: "claude-sonnet-5", tutorThinking: "fast", developerMode: false, developerUnlocked:false, ttsProvider: "auto", deepgramKey: "", deepgramModel: "aura-2-arcas-en", lessons: [], notes: [], customCategories: [], voiceURI: "", voiceDefault: true, speechLanguage: "en", elKey: "", cartKey: "", cartVoice: "", cardScale: 1, theme:"system", libraryUpdatedAt:0, voiceTimingLog: [] };
+let state = { apiKey: "", testerInvite: "", monthlyBudget: 5, model: "claude-sonnet-5", tutorThinking: "fast", developerMode: false, developerUnlocked:false, ttsProvider: "auto", deepgramKey: "", deepgramModel: "aura-2-arcas-en", lessons: [], notes: [], customCategories: [], voiceURI: "", voiceDefault: true, speechLanguage: "en", elKey: "", cartKey: "", cartVoice: "", cardScale: 1, theme:"system", libraryUpdatedAt:0, voiceTimingLog: [], voiceRelayEnabled: false };
 try { Object.assign(state, JSON.parse(localStorage.getItem(LS_KEY) || "{}")); } catch (e) {}
 if (state.developerMode) state.developerUnlocked = true;
 if (!Array.isArray(state.lessons)) state.lessons = [];
@@ -3722,10 +3727,17 @@ function renderLessonPath(lesson) {
   const percent = assessed ? Math.round(Math.max(0,Math.min(1,Number(lesson.masteryScore))) * 100) : 0;
   $("lesson-path-progress").innerHTML = `<span>${assessed ? `${percent}% understood` : "not assessed yet"}</span><span class="lesson-path-progress-track"><span class="lesson-path-progress-fill" style="--path-progress:${percent}%"></span></span><span>${completed.size}/${nodes.length}</span>`;
   if (!nodes.length) {
-    $("lesson-path-overview").textContent = lessonPathMigrations.has(lesson.id)
+    /* Two different waits used to look like one failure. `lessonPathMigrations`
+       only tracks a RETRY of an existing lesson — a lesson being planned for
+       the very first time is tracked by `lessonPlanning`, so opening the map on
+       a brand-new note fell into the error branch and claimed the map was
+       unavailable, with a retry button, while Opus was still working on it.
+       A wait is a wait; only a genuine failure may say something is wrong. */
+    const building = lessonPathMigrations.has(lesson.id) || lessonPlanning.has(lesson.id);
+    $("lesson-path-overview").textContent = building
       ? "Opus is building the concept dependencies and the easiest route through them."
       : "This lesson does not have a trustworthy map yet. Worldview will retry rather than show a generic checklist.";
-    $("lesson-path-nodes").innerHTML = `<div class="lesson-path-empty"><strong>${lessonPathMigrations.has(lesson.id) ? "Building the map…" : "Lesson map unavailable"}</strong><span>${lessonPathMigrations.has(lesson.id) ? "The concepts will appear here when the dependency graph is ready." : "No template has been substituted."}</span>${lessonPathMigrations.has(lesson.id) ? "" : `<button id="lesson-path-retry" type="button">Try Opus again</button>`}</div>`;
+    $("lesson-path-nodes").innerHTML = `<div class="lesson-path-empty"><strong>${building ? "Building the map…" : "Lesson map unavailable"}</strong><span>${building ? "The concepts will appear here when the dependency graph is ready." : (lesson.knowledgeTreeError ? String(lesson.knowledgeTreeError).slice(0,160) : "The lesson map could not be built.")}</span>${building ? "" : `<button id="lesson-path-retry" type="button">Try Opus again</button>`}</div>`;
     const retry = $("lesson-path-retry");
     if (retry) retry.onclick = () => {
       lesson.knowledgeTreeRetryAt = 0;
@@ -5037,7 +5049,8 @@ function openSourceTree(id) {
   const tree = Array.isArray(lesson.knowledgeTree) && !scriptedKnowledgeTree(lesson.knowledgeTree) ? lesson.knowledgeTree : [];
   $("source-tree-nodes").innerHTML = tree.length
     ? tree.map(node => `<article class="source-tree-node${node.id === lesson.knowledgeTreeStartId ? " start" : ""}"><span class="source-tree-scale">${esc(node.scale || "concept")}</span><strong>${esc(node.title)}</strong><p>${esc(node.why_needed || "This idea supports what comes next.")}${node.prerequisites && node.prerequisites.length ? ` Prerequisites: ${esc(node.prerequisites.join(", "))}.` : ""}</p></article>`).join("")
-    : `<div class="lesson-path-empty"><strong>${lessonPathMigrations.has(lesson.id) ? "Building the source map…" : "Source map unavailable"}</strong><span>${lessonPathMigrations.has(lesson.id) ? "Opus is identifying the source's actual concept dependencies." : "Worldview will retry with Opus instead of showing a generic checklist."}</span>${lessonPathMigrations.has(lesson.id) ? "" : `<button id="source-tree-retry" type="button">Try Opus again</button>`}</div>`;
+    // same distinction as the lesson path above: still planning is not a failure
+    : (building => `<div class="lesson-path-empty"><strong>${building ? "Building the source map…" : "Source map unavailable"}</strong><span>${building ? "Opus is identifying the source's actual concept dependencies." : "Worldview will retry with Opus instead of showing a generic checklist."}</span>${building ? "" : `<button id="source-tree-retry" type="button">Try Opus again</button>`}</div>`)(lessonPathMigrations.has(lesson.id) || lessonPlanning.has(lesson.id));
   $("source-tree-sheet").classList.add("open");
   $("source-tree-sheet").setAttribute("aria-hidden","false");
   const retry = $("source-tree-retry");
@@ -7403,8 +7416,27 @@ const VOICE_RELAY_REOPEN_LIMIT = 3;       // bounded — never a reconnect storm
    .volume, the relay uses a GainNode; 1.0 on both means "whatever the OS
    volume is", with a single constant to change if levels ever need trimming. */
 const VOICE_TARGET_GAIN = 1;
+/* ---- v42: the Web Audio relay is no longer the default output path ----
+   v41 assumed that an AudioContext whose clock is advancing is a context the
+   learner can hear. That is false on iOS: the hardware silent switch mutes Web
+   Audio output while `ctx.state` stays "running" and `ctx.currentTime` keeps
+   ticking, and scheduled sources still fire `onended` on schedule. So every
+   signal the app used to prove "this is playing" stayed true while the phone
+   produced no sound at all — a whole lesson could run silently with the words
+   lighting up and nothing ever erroring, which is exactly what was reported.
+
+   The `<audio>` element route (voice-stream REST) does not have this failure
+   mode and is the path that has worked on the owner's phone for many builds.
+   Measured first audio on that route was 0.9-1.8s, already inside the 2s goal,
+   so the relay was buying very little in exchange for this risk. It stays in
+   the code behind an explicit developer opt-in and must prove audible output on
+   a real device before it can be trusted again. Flipping this one flag is all
+   that re-enables it. */
+function voiceRelayRouteEnabled() {
+  return !!(state.developerMode && state.voiceRelayEnabled);
+}
 function voiceRelaySupported() {
-  return backendAccessEnabled() && typeof WebSocket !== "undefined" && (typeof AudioContext !== "undefined" || typeof webkitAudioContext !== "undefined");
+  return voiceRelayRouteEnabled() && backendAccessEnabled() && typeof WebSocket !== "undefined" && (typeof AudioContext !== "undefined" || typeof webkitAudioContext !== "undefined");
 }
 function openVoiceRelay() {
   if (!voiceRelaySupported() || voice.relay.ws || voice.relay.connecting) return;
