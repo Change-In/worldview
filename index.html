@@ -330,6 +330,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   /* text size scales with the card size (--cardW), so words stay proportional
      to the card at every breakpoint */
   .card .card-title { font-size: max(9px, calc(var(--cardW, 262px) * 0.08)); line-height: 1.3; font-weight: 600; }
+  /* Generated titles are often "Subject: a longer explanatory clause". The
+     subject is what identifies the card at a glance, so it keeps the full size
+     and the qualifier drops back — rather than shrinking the whole title
+     uniformly until nothing is quick to read. */
+  .card .card-title .title-sub { font-size:.66em; opacity:.78; font-weight:500; display:block; margin-top:.18em; line-height:1.25; }
+  /* Long single-clause titles still need to fit, so they step down by length. */
+  .card .card-title.len-long { font-size: max(9px, calc(var(--cardW, 262px) * 0.068)); }
+  .card .card-title.len-xlong { font-size: max(9px, calc(var(--cardW, 262px) * 0.058)); }
   .card .card-cat {
     /* Left-aligned at the card's top-left so the tag stays fully readable and
        simply ends before the top-right lesson-path button / mastery dot,
@@ -588,18 +596,47 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
      source cards (the stack metaphor). Its TEXT is vertically centered inside
      the shorter card via the flex justify-content:center above. */
   .card.custom-category-card { margin-top:calc((var(--cardH,320px) / 2) - var(--categoryH,180px)); }
-  /* A category is a visible stack of lesson cards, as in the concept sketch. */
+  /* A category is a visible stack of lesson cards, as in the concept sketch.
+     GEOMETRY, measured rather than assumed (this defeated two earlier passes):
+     a negative-z-index pseudo-element paints AFTER its parent's own background
+     in CSS painting order, so `::after` — not the element box — is the face the
+     learner actually sees on top. The element box only shows as the sliver
+     peeking out at the bottom-left. The text, however, is laid out in the
+     element box, i.e. one full stack-offset BELOW and LEFT of the visible front
+     face — which is why the lesson count kept landing on the front card's
+     bottom edge and flattening the 3D effect (BUG-078, third report).
+     So the offset is declared once here and the text is shifted by exactly the
+     same amount as the front face. Change --stack-x/y and everything follows. */
+  /* Ask Anything and Notes have no top-right path button or mastery dot to
+     clear, so the reason .card-cat is left-aligned does not apply to them and
+     their header reads as misaligned against the card it sits on. Centre it. */
+  .card.new-card .card-cat, .card.notes-card .card-cat {
+    left:50%; right:auto; transform:translateX(-50%);
+    max-width:calc(100% - 32px); text-align:center;
+  }
+  .custom-category-card { --stack-x:14px; --stack-y:16px; }
   .custom-category-card::before,.custom-category-card::after {
     content:"";position:absolute;inset:0;border:1.5px solid var(--line);border-radius:inherit;
     background:var(--card);pointer-events:none;z-index:-1;box-shadow:0 8px 24px rgba(44,36,28,.06);
   }
-  .custom-category-card::before { transform:translate(7px,-8px); }
-  .custom-category-card::after { transform:translate(14px,-16px); }
+  .custom-category-card::before { transform:translate(calc(var(--stack-x) * .5),calc(var(--stack-y) * -.5)); }
+  .custom-category-card::after { transform:translate(var(--stack-x),calc(var(--stack-y) * -1)); }
   /* Folder cards have no top-right path button, so their eyebrow re-centers
-     (the base .card-cat is left-aligned only to clear that button on lessons). */
-  .custom-category-card .card-cat { left:50%;right:auto;transform:translateX(-50%);max-width:82%;color:var(--ink-soft);opacity:.82;top:12px; }
-  .custom-category-card .card-title { max-width:82%;text-align:center; }
-  .custom-category-count { position:absolute;left:0;right:0;bottom:12px;color:var(--ink-soft);font-size:10px;letter-spacing:.04em; }
+     (the base .card-cat is left-aligned only to clear that button on lessons).
+     Each of the three below is centred on the FRONT FACE, not the element box. */
+  .custom-category-card .card-cat {
+    left:calc(50% + var(--stack-x));right:auto;transform:translateX(-50%);
+    max-width:82%;color:var(--ink-soft);opacity:.82;top:calc(12px - var(--stack-y));
+  }
+  .custom-category-card .card-title {
+    max-width:82%;text-align:center;
+    transform:translate(var(--stack-x),calc(var(--stack-y) * -1));
+  }
+  .custom-category-count {
+    position:absolute;left:0;right:0;bottom:calc(12px + var(--stack-y));
+    transform:translateX(var(--stack-x));
+    color:var(--ink-soft);font-size:10px;letter-spacing:.04em;
+  }
   .source-card.custom-category-card { padding:22px;align-items:center; }
   .source-card.custom-category-card .source-card-title { margin:0;max-width:82%;text-align:center;font:600 max(18px,calc(var(--cardW,262px)*.075))/1.22 Georgia,serif; }
   .source-category-return .source-card-host { color:var(--accent-700); }
@@ -1457,11 +1494,17 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v44 · Jul 26";
+const BUILD = "v45 · Jul 26";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v45", date: "Jul 26", changes: [
+    "Folder cards: the title, header and lesson count now sit properly on the top card of the stack instead of drifting onto its bottom edge, so the stacked-cards effect reads correctly.",
+    "The 'Ask anything' and Notes headers are now centred on their cards.",
+    "Card titles adapt: a title like 'Stonehenge: building and meaning of a neolithic movement' keeps 'Stonehenge' at full size and sets the rest smaller, so the subject is readable at a glance. Long titles without a colon step down in size to fit.",
+    "Two ways the card carousel could get stuck (unable to swipe sideways while up-and-down still worked) have been closed, and every panel now resets the swipe state when it closes.",
+  ]},
   { tag: "v44", date: "Jul 26", changes: [
     "Actually fixed the re-entry question. v43 checked whether a checkpoint was complete — but leaving a lesson ran a separate review that could mark checkpoint 1 complete on its own, without you ever having demonstrated it. So the app still thought you'd finished it.",
     "Coming back to a lesson now depends only on what you actually proved in the conversation itself. A review's opinion no longer counts.",
@@ -2441,6 +2484,33 @@ async function startBriefing(lesson) {
 /* ================= tiny helpers ================= */
 const $ = id => document.getElementById(id);
 const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+/* Card titles: the generated ones are usually "Subject: a longer explanatory
+   clause" ("Stonehenge: building and meaning of a neolithic movement"). The
+   subject is what the learner recognises the card by, so it keeps full size and
+   the clause after the colon drops back, instead of shrinking the whole title
+   until none of it is quick to read. Only splits on a colon that actually
+   separates a short lead-in from a longer remainder — a title that merely
+   contains a colon late on is left alone. */
+function splitCardTitle(title) {
+  const text = String(title || "").trim();
+  const at = text.indexOf(":");
+  if (at < 2 || at > 34) return { lead:text, sub:"" };
+  const lead = text.slice(0, at).trim();
+  const sub = text.slice(at + 1).trim();
+  if (!sub || sub.length < 4 || lead.length > sub.length) return { lead:text, sub:"" };
+  return { lead, sub };
+}
+function cardTitleHtml(title) {
+  const { lead, sub } = splitCardTitle(title);
+  return sub ? `${esc(lead)}<span class="title-sub">${esc(sub)}</span>` : esc(lead);
+}
+// a long title with no colon to break on still has to fit, so it steps down
+function cardTitleSizeClass(title) {
+  const { lead, sub } = splitCardTitle(title);
+  if (sub) return ""; // the split already bought the space
+  const length = String(title || "").trim().length;
+  return length > 62 ? "len-xlong" : length > 40 ? "len-long" : "";
+}
 const attr = s => esc(String(s)).replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 function md(s) { // minimal markdown: paragraphs, bold, italics, inline code
   return esc(s)
@@ -3072,7 +3142,7 @@ function renderHome() {
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6v4m10-4v4M7 10h10M12 10v5"/><circle cx="7" cy="4" r="2"/><circle cx="17" cy="4" r="2"/><circle cx="12" cy="18" r="2"/></svg>
       </button>
       <div class="card-cat">${esc(l.category || "")}</div>
-      <div class="card-title serif">${esc(l.title)}</div>
+      <div class="card-title serif ${cardTitleSizeClass(l.title)}">${cardTitleHtml(l.title)}</div>
       <div class="card-hint">${state.continueHintDismissed ? "" : "tap to continue &middot; "}drag &#9650; for paths</div>
     `;
     const pathButton = card.querySelector(".card-path-button");
@@ -3201,6 +3271,8 @@ function layoutWheel(animate = true, refreshGuide = true) {
   if (refreshGuide) updateLayerGuide();
 }
 
+// assigned by the carousel setup below; called by every overlay close path
+let resetCarouselGesture = () => {};
 let wheelLayoutFrame = 0;
 let wheelLayoutNeedsGuide = false;
 function scheduleWheelLayout(refreshGuide = false) {
@@ -3352,6 +3424,7 @@ function pathControlAtPoint(x, y) {
     if (organizerConsumedPointers.has(e.pointerId)) {
       activePointers.delete(e.pointerId);
       down = false; moved = true; gestureAxis = null;
+      activePointers.delete(e.pointerId); // see the note on the unconditional delete below
       if (target >= 0 && wheel.cards[target]) wheel.cards[target].style.translate = "";
       return;
     }
@@ -3362,7 +3435,15 @@ function pathControlAtPoint(x, y) {
       if (!press.canceled) openLessonPath(press.lessonId);
       return;
     }
-    if (wheel.methodInteracting) { down = false; wheel.methodInteracting = false; return; }
+    /* A finger must be forgotten on the way out through EVERY branch. Two of
+       these paths (the hold/lift gesture, and method interaction) used to
+       return before this line, so the pointer stayed in `activePointers`
+       forever. The next touch then made the map size 2, which is this file's
+       signal for "second finger — cancel the single-finger drag", and
+       horizontal dragging was dead for good while vertical page scroll kept
+       working. That is the exact reported symptom, and the same disease as the
+       pinch-zoom freeze removed in v40 (BUG-075/BUG-079). */
+    if (wheel.methodInteracting) { down = false; wheel.methodInteracting = false; activePointers.delete(e.pointerId); return; }
     activePointers.delete(e.pointerId);
     if (!down) return;
     down = false;
@@ -3421,14 +3502,25 @@ function pathControlAtPoint(x, y) {
     gestureAxis = null;
   });
   area.addEventListener("pointercancel", e => {
+    activePointers.delete(e.pointerId);
     if (pathPress && pathPress.pointerId === e.pointerId) {
       pathPress = null;
       return;
     }
-    activePointers.delete(e.pointerId);
     down = false; gestureAxis = null;
     if (target >= 0 && wheel.cards[target]) wheel.cards[target].style.translate = "";
   });
+  /* Belt and braces for the class of bug above: any overlay that can open from
+     a gesture on the carousel calls this on close, so the drag state machine
+     starts every time from a known-good state instead of depending on a
+     pointerup that an overlay may have swallowed. Cheap, and it makes the
+     freeze unreachable rather than merely fixed at the two known leaks. */
+  resetCarouselGesture = () => {
+    activePointers.clear();
+    down = false; moved = false; gestureAxis = null; pathPress = null;
+    wheel.methodInteracting = false;
+    if (target >= 0 && wheel.cards[target]) wheel.cards[target].style.translate = "";
+  };
   // Laptop trackpad: horizontal movement spins the carousel. Vertical wheel
   // movement stays with the page and never changes the organizational layer.
   area.addEventListener("wheel", e => {
@@ -3850,6 +3942,7 @@ function openLessonPath(id = currentLessonId) {
   });
 }
 function closeLessonPath() {
+  resetCarouselGesture(); // never leave the carousel drag state wedged behind a closed overlay
   $("lesson-path-backdrop").classList.remove("open");
   $("lesson-path-backdrop").setAttribute("aria-hidden","true");
   $("lesson-path-panel").classList.remove("open");
@@ -4945,6 +5038,7 @@ function openCategoryOrganizer(lessonId = null,section = "explore") {
   $("category-organizer").setAttribute("aria-hidden","false");
 }
 function closeCategoryOrganizer() {
+  resetCarouselGesture(); // the hold that opened this may have swallowed its pointerup
   $("category-organizer").classList.remove("open");
   $("category-organizer").setAttribute("aria-hidden","true");
   $("category-organizer-list").querySelectorAll(".drop-target").forEach(row => row.classList.remove("drop-target"));
@@ -5094,6 +5188,7 @@ function renderSourceLibrary() {
 let sourcePreviewLessonId = null;
 let sourcePreviewObjectUrl = "";
 function closeSourcePreview() {
+  resetCarouselGesture(); // never leave the carousel drag state wedged behind a closed overlay
   $("source-preview-sheet").classList.remove("open");
   $("source-preview-sheet").setAttribute("aria-hidden","true");
   if (sourcePreviewObjectUrl) URL.revokeObjectURL(sourcePreviewObjectUrl);
@@ -5169,6 +5264,7 @@ function openSourceTree(id) {
   }
 }
 function closeSourceTree() {
+  resetCarouselGesture(); // never leave the carousel drag state wedged behind a closed overlay
   $("source-tree-sheet").classList.remove("open");
   $("source-tree-sheet").setAttribute("aria-hidden","true");
 }
