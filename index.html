@@ -633,9 +633,19 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     transform:translate(var(--stack-x),calc(var(--stack-y) * -1));
   }
   .custom-category-count {
-    position:absolute;left:0;right:0;bottom:calc(12px + var(--stack-y));
+    /* 12px of clearance measured to the FRONT face read as still touching it on
+       a real phone, because the two rear edges sit immediately below and the eye
+       groups them. 22px gives the count its own space and lets the stack read as
+       depth rather than as text spilling off the card. */
+    position:absolute;left:0;right:0;bottom:calc(22px + var(--stack-y));
     transform:translateX(var(--stack-x));
     color:var(--ink-soft);font-size:10px;letter-spacing:.04em;
+  }
+  /* The Upload page renders folders through the source-card markup instead, so
+     it needs the identical front-face shift or it keeps the original bug. */
+  .source-card.custom-category-card .source-card-host,
+  .source-card.custom-category-card .source-card-title {
+    transform:translate(var(--stack-x),calc(var(--stack-y) * -1));
   }
   .source-card.custom-category-card { padding:22px;align-items:center; }
   .source-card.custom-category-card .source-card-title { margin:0;max-width:82%;text-align:center;font:600 max(18px,calc(var(--cardW,262px)*.075))/1.22 Georgia,serif; }
@@ -1494,11 +1504,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v45 · Jul 26";
+const BUILD = "v46 · Jul 26";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v46", date: "Jul 26", changes: [
+    "More breathing room under the folder card's lesson count, so it reads as sitting on the top card rather than against its edge.",
+    "The same folder-card fix now also applies on the Upload page, which uses a different version of the card and had been missed.",
+  ]},
   { tag: "v45", date: "Jul 26", changes: [
     "Folder cards: the title, header and lesson count now sit properly on the top card of the stack instead of drifting onto its bottom edge, so the stacked-cards effect reads correctly.",
     "The 'Ask anything' and Notes headers are now centred on their cards.",
