@@ -1457,11 +1457,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v43 · Jul 26";
+const BUILD = "v44 · Jul 26";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v44", date: "Jul 26", changes: [
+    "Actually fixed the re-entry question. v43 checked whether a checkpoint was complete — but leaving a lesson ran a separate review that could mark checkpoint 1 complete on its own, without you ever having demonstrated it. So the app still thought you'd finished it.",
+    "Coming back to a lesson now depends only on what you actually proved in the conversation itself. A review's opinion no longer counts.",
+    "Lessons from before this change are treated as nothing-proved, so they restart rather than wrongly asking what you remember.",
+  ]},
   { tag: "v43", date: "Jul 26", changes: [
     "Reopening a lesson no longer asks what you remember about a discussion that never happened. Coming back now depends on whether you actually completed a checkpoint.",
     "If you completed a checkpoint, the tutor asks about that one as a warm-up and moves straight into the next one in the same reply.",
@@ -2100,19 +2105,26 @@ function lessonCheckpoint(lesson) {
    checkpoint is the only thing the learner has actually demonstrated. */
 function lessonCheckpointWindow(lesson) {
   const nodes = Array.isArray(lesson && lesson.knowledgeTree) ? lesson.knowledgeTree : [];
-  const completedIds = Array.isArray(lesson && lesson.completedPathNodeIds) ? lesson.completedPathNodeIds : [];
-  const completed = new Set(completedIds);
+  const completed = new Set(Array.isArray(lesson && lesson.completedPathNodeIds) ? lesson.completedPathNodeIds : []);
+  /* Demonstrated, not merely "assessed as probably fine". Only what the learner
+     proved in conversation may drive re-entry — see the note in
+     finalizeTutorReply. Older lessons have no such record, and it is NOT
+     back-filled from completedPathNodeIds: that array may contain checkpoints
+     the close assessment awarded on its own, which is the exact thing being
+     guarded against. Those lessons restart rather than falsely recap. */
+  const demonstratedIds = (Array.isArray(lesson && lesson.demonstratedNodeIds) ? lesson.demonstratedNodeIds : [])
+    .filter(id => nodes.some(node => node.id === id));
   const current = lessonCheckpoint(lesson);
   const index = current ? nodes.findIndex(node => node.id === current.id) : -1;
-  // completion order, not route order — the learner's own path through it
-  const lastCompleted = completedIds.slice().reverse().map(id => nodes.find(node => node.id === id)).find(Boolean)
-    || nodes.filter(node => completed.has(node.id)).pop() || null;
+  // demonstration order, not route order — the learner's own path through it
+  const lastDemonstrated = demonstratedIds.slice().reverse().map(id => nodes.find(node => node.id === id)).find(Boolean) || null;
   return {
     previous: index > 0 ? nodes[index - 1] : null,
     current,
     next: index >= 0 && index + 1 < nodes.length ? nodes[index + 1] : null,
-    lastCompleted,
-    completedCount: nodes.filter(node => completed.has(node.id)).length,
+    lastDemonstrated,
+    demonstratedCount: demonstratedIds.length,
+    completedCount: nodes.filter(node => completed.has(node.id)).length, // assessment estimate — progress UI only
   };
 }
 function lessonRouteComplete(lesson) {
@@ -2181,7 +2193,21 @@ function finalizeTutorReply(text, lesson, options = {}) {
   const clean = visibleTutorStream(raw).trim();
   if (valid) {
     lesson.lastTutorCheckpointId = active.id;
-    if (mastery === "demonstrated") completed.add(active.id);
+    if (mastery === "demonstrated") {
+      completed.add(active.id);
+      /* The authoritative record of what the learner actually proved, in the
+         conversation, under the mastery gate. It exists separately from
+         `completedPathNodeIds` because the close assessment OVERWRITES that
+         array wholesale from a separate model's 0.72 score threshold — so a
+         lesson the learner never demonstrated anything in can come back from
+         a close with checkpoints marked complete. Progress bars can live with
+         that estimate; re-entry cannot, because it decides whether to ask the
+         learner to recall something (BUG-084/BUG-086). Append-only, and only
+         ever written here. */
+      const demonstrated = Array.isArray(lesson.demonstratedNodeIds) ? lesson.demonstratedNodeIds : [];
+      if (!demonstrated.includes(active.id)) demonstrated.push(active.id);
+      lesson.demonstratedNodeIds = demonstrated;
+    }
     lesson.completedPathNodeIds = [...completed];
     const next = nodes.find(node => !completed.has(node.id));
     lesson.currentPathNodeId = next ? next.id : "";
@@ -4184,8 +4210,7 @@ function openChat(id, noVoice) {
      asked what they remembered about a discussion that had never happened.
      A completed checkpoint is the only thing the learner has actually proved,
      so it is the only thing re-entry is allowed to ask them to recall. */
-  const completedCheckpoints = lessonCheckpointWindow(lesson).completedCount;
-  const hasLearnerTurn = completedCheckpoints > 0;
+  const hasLearnerTurn = lessonCheckpointWindow(lesson).demonstratedCount > 0;
   // The opening question was generated and shown, but the learner never
   // got to answer it at all (e.g. recovering after a technical failure
   // before their very first reply) — re-present that exact question for
@@ -4300,12 +4325,12 @@ const REENTRY_PROMPT = "[New sitting. Without greeting, recap, or web search, as
 function lessonRestartMessage(lesson, lastMsg) {
   const window = lessonCheckpointWindow(lesson);
   const stored = String(lesson.knowledgeTreeStartingQuestion || "").trim();
-  if (!window.completedCount && stored) return { role:"assistant", content:stored };
+  if (!window.demonstratedCount && stored) return { role:"assistant", content:stored };
   return lastMsg;
 }
 function reentryPromptFor(lesson) {
   const window = lessonCheckpointWindow(lesson);
-  const done = window.lastCompleted;
+  const done = window.lastDemonstrated;
   if (!done) return REENTRY_PROMPT;
   const resumeTarget = window.current && window.current.id !== done.id ? window.current : window.next;
   return `[New sitting. The learner has already demonstrated the checkpoint "${done.title}". Without greeting or recap, ask one short natural question that gets them to put "${done.title}" back into their own words — this is a warm-up, not a re-test, so keep it light and specific to that idea.`
