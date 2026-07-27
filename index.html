@@ -1545,11 +1545,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v47 · Jul 26";
+const BUILD = "v48 · Jul 26";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v48", date: "Jul 26", changes: [
+    "Spoken lessons now tell iPhone that this is playback audio, so the tutor is still heard when the phone is on silent or in a Focus mode. Before this the audio played perfectly but inaudibly, with no error - text on screen, no voice.",
+    "The microphone and the tutor voice now each declare what they need, so asking a question cannot leave the reply routed to the earpiece.",
+  ]},
   { tag: "v47", date: "Jul 26", changes: [
     "The version you are running now shows under the Worldview title on the home screen. Tap it to see what changed in each update.",
   ]},
@@ -5918,6 +5922,15 @@ function enterVoice(autoListen = true, excludeLastFromHistory = false, pinNextMe
   updateCheckpointUI(lesson);
   // unlock speech synthesis with a silent utterance (needed on iOS; harmless elsewhere)
   try { speechSynthesis.cancel(); const un = new SpeechSynthesisUtterance(" "); un.volume = 0; speechSynthesis.speak(un); } catch (e) {}
+  /* Declare what this audio is FOR before unlocking it. Without this iOS uses
+     an ambient-style session, which the hardware ring/silent switch mutes —
+     playback still "succeeds", currentTime advances, no error is raised, and
+     the lesson runs in total silence. That is indistinguishable from a broken
+     voice service from the learner's side, and it is the shape of the reported
+     "text appeared, no speech" in a car with the phone silenced. "playback"
+     ignores the silent switch; the mic path re-declares "play-and-record" when
+     it actually needs input. Feature-detected — a no-op where unsupported. */
+  setOwnedAudioSession("playback");
   // unlock the audio element too — iOS only allows play() begun in a user gesture
   try { ttsAudio.src = SILENT_WAV; ttsAudio.volume = VOICE_TARGET_GAIN; ttsAudio.play().catch(() => {}); } catch (e) {}
   // and the relay's Web Audio context, for the same reason — it must be
@@ -6260,6 +6273,9 @@ async function repairVoiceTranscriptWithContext(text,lesson) {
 function disableOwnedMicTrack() {
   if (!voice.mediaStream) return;
   voice.mediaStream.getAudioTracks().forEach(track => { track.enabled = false; });
+  // the learner has stopped talking and the tutor is about to: go back to a
+  // pure playback session, which is louder and not routed to the earpiece
+  setOwnedAudioSession("playback");
 }
 function setOwnedAudioSession(type) {
   try {
@@ -6310,6 +6326,9 @@ async function ensureOwnedMicStream() {
   if (voice.mediaStreamPromise) return voice.mediaStreamPromise;
   const acquireGeneration = ++voice.mediaAcquireGeneration;
   const request = (async () => {
+    // while the mic is live the session must allow both directions, or asking
+    // for input can silence the tutor's output on iOS
+    setOwnedAudioSession("play-and-record");
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: true,
