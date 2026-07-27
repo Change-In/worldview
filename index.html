@@ -179,6 +179,27 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     letter-spacing:.06em; opacity:.7; cursor:pointer;
   }
   .home-build:hover, .home-build:focus-visible { opacity:1; }
+  /* Choose the tutor before starting, not after — the model is a property of
+     the conversation you are about to have, and it is pinned to the lesson. */
+  .tutor-model-picker { display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin:10px 0 0; }
+  .tutor-model-picker button {
+    flex:0 1 auto; padding:6px 11px; border:1px solid var(--line); border-radius:999px;
+    background:transparent; color:var(--ink-soft); cursor:pointer;
+    font:600 11px/1.25 -apple-system,"Segoe UI",system-ui,sans-serif; letter-spacing:.02em;
+  }
+  .tutor-model-picker button .tm-sub { display:block; font-weight:500; font-size:9.5px; opacity:.75; letter-spacing:.04em; }
+  .tutor-model-picker button.active { border-color:var(--accent); background:var(--accent-soft,rgba(180,85,45,.12)); color:var(--accent-700,var(--accent)); }
+  /* Speakerphone toggle: filled = out loud, outline = held to your ear. */
+  .voice-speaker-button {
+    width:40px; height:40px; display:grid; place-items:center;
+    border:1.5px solid var(--line); border-radius:12px;
+    background:transparent; color:var(--ink-soft); cursor:pointer;
+  }
+  .voice-speaker-button[aria-pressed="true"] { border-color:var(--accent); background:var(--accent); color:#fff; }
+  .voice-speaker-button[aria-pressed="false"] .spk-wave { opacity:.22; }
+  /* A tutor message can be tapped to hear it again. */
+  .vmsg.assistant { cursor:pointer; }
+  .vmsg.assistant.replaying { box-shadow:0 0 0 2px var(--accent); border-radius:10px; }
   #version-sheet {
     position:fixed; inset:0; z-index:80; display:none;
     background:color-mix(in srgb,var(--ink) 42%,transparent);
@@ -1402,6 +1423,13 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     <button id="voice-close" aria-label="Return to main menu">&#8592;</button>
     <div id="voice-heading"><div id="voice-title"></div><div id="voice-checkpoint"></div><div id="voice-model-switch" class="conversation-model-switch" aria-label="Developer tutor model"></div></div>
     <div id="voice-top-actions">
+      <button id="voice-speaker-button" class="voice-speaker-button" type="button" aria-pressed="true" aria-label="Speakerphone" title="Speakerphone">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 9v6h4l5 4V5L8 9H4z"/>
+          <path class="spk-wave" d="M16.5 8.5a5 5 0 0 1 0 7"/>
+          <path class="spk-wave" d="M19 6a8.5 8.5 0 0 1 0 12"/>
+        </svg>
+      </button>
       <button id="voice-history-button" class="conversation-history-button" type="button" aria-label="Open previous lesson sittings" title="Previous sittings">&#8630;</button>
       <button id="voice-quiz-button" class="quiz-button" type="button" hidden>Quiz me</button>
       <button id="voice-path-button" class="lesson-path-button" type="button" aria-label="Open lesson path" title="Lesson path">
@@ -1545,11 +1573,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v48 · Jul 26";
+const BUILD = "v49 · Jul 27";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v49", date: "Jul 27", changes: [
+    "Choose your tutor before you begin: Claude or Gemini, picked on the Ask Anything card. A lesson keeps the model it was started with, so changing your choice never alters a conversation already under way.",
+    "A speakerphone button in spoken lessons. Filled means it plays out loud; tap it for earpiece, like holding the phone to your head. This is what was making the volume seem to change on its own.",
+    "Tap any of the tutor's messages to hear it spoken again.",
+  ]},
   { tag: "v48", date: "Jul 26", changes: [
     "Spoken lessons now tell iPhone that this is playback audio, so the tutor is still heard when the phone is on silent or in a Focus mode. Before this the audio played perfectly but inaudibly, with no error - text on screen, no voice.",
     "The microphone and the tutor voice now each declare what they need, so asking a question cannot leave the reply routed to the earpiece.",
@@ -1784,7 +1817,7 @@ const VERSIONS = [
 const LS_KEY = "worldview-v1";
 let cloudSyncReady = false, cloudHydrating = false, cloudSyncTimer = 0, cloudSyncInFlight = null, cloudAccount = null, backendEntitled = false;
 let localSaveWarningShown = false;
-let state = { apiKey: "", testerInvite: "", monthlyBudget: 5, model: "claude-sonnet-5", tutorThinking: "fast", developerMode: false, developerUnlocked:false, ttsProvider: "auto", deepgramKey: "", deepgramModel: "aura-2-arcas-en", lessons: [], notes: [], customCategories: [], voiceURI: "", voiceDefault: true, speechLanguage: "en", elKey: "", cartKey: "", cartVoice: "", cardScale: 1, theme:"system", libraryUpdatedAt:0, voiceTimingLog: [], voiceRelayEnabled: false };
+let state = { apiKey: "", testerInvite: "", monthlyBudget: 5, model: "claude-sonnet-5", tutorThinking: "fast", developerMode: false, developerUnlocked:false, ttsProvider: "auto", deepgramKey: "", deepgramModel: "aura-2-arcas-en", lessons: [], notes: [], customCategories: [], voiceURI: "", voiceDefault: true, speechLanguage: "en", elKey: "", cartKey: "", cartVoice: "", cardScale: 1, theme:"system", libraryUpdatedAt:0, voiceTimingLog: [], voiceRelayEnabled: false, speakerphone: true };
 try { Object.assign(state, JSON.parse(localStorage.getItem(LS_KEY) || "{}")); } catch (e) {}
 if (state.developerMode) state.developerUnlocked = true;
 if (!Array.isArray(state.lessons)) state.lessons = [];
@@ -2830,8 +2863,59 @@ function resetInvalidTesterAccess(error) {
   return true;
 }
 
+/* ---- which brain is teaching ----
+   Every tutor model receives the identical packet built by buildSystem(), so
+   the checkpoint contract, the mastery gate and the learner state work the same
+   whoever is answering. Only the transport differs. */
+const TUTOR_MODELS = [
+  { key:"claude-sonnet-5",  label:"Claude",  sub:"Sonnet 5",   provider:"anthropic" },
+  { key:"gemini-2.5-flash", label:"Gemini",  sub:"2.5 Flash",  provider:"google" },
+  { key:"claude-haiku-4-5", label:"Haiku",   sub:"4.5 · fast", provider:"anthropic", developerOnly:true },
+];
+function tutorModelEntry(key) { return TUTOR_MODELS.find(model => model.key === key) || TUTOR_MODELS[0]; }
+function tutorProviderFor(key) { return tutorModelEntry(key).provider; }
+function selectableTutorModels() { return TUTOR_MODELS.filter(model => !model.developerOnly || state.developerMode); }
+/* Non-Anthropic providers go through the lab-tutor route, which already holds
+   the server-side keys and speaks each provider's own request format. It
+   answers with a whole reply rather than a stream, so the text arrives in one
+   piece — the speech queue then handles it exactly as it handles a completed
+   stream. Slightly later first word, no other behavioural difference. */
+async function altProviderChat(model, system, messages, onText, maxTokens) {
+  const systemText = Array.isArray(system)
+    ? system.map(block => (block && typeof block.text === "string" ? block.text : "")).join("\n\n")
+    : String(system || "");
+  const flatMessages = messages.map(message => ({
+    role: message.role === "assistant" ? "assistant" : "user",
+    content: typeof message.content === "string"
+      ? message.content
+      : (Array.isArray(message.content) ? message.content.map(part => part && part.text || "").join("\n") : String(message.content || "")),
+  })).filter(message => message.content.trim());
+  const response = await backendFetch("lab-tutor", {
+    headers:{ "content-type":"application/json" },
+    body:JSON.stringify({ provider:tutorProviderFor(model), model, system:systemText, messages:flatMessages, max_tokens:maxTokens || 768 }),
+  });
+  if (!response.ok) throw await responseError(response);
+  const json = await response.json();
+  const text = String(json.text || "");
+  if (!text.trim()) throw new Error("That model returned an empty reply.");
+  if (onText) onText(text, text);
+  return {
+    text,
+    usage:{ input:Number(json.inputTokens) || 0, output:Number(json.outputTokens) || 0, cacheWrite:0, cacheRead:0, searches:0 },
+    sources:[],
+    truncated:false,
+  };
+}
+/* A lesson keeps the model it was started with, so switching the default does
+   not change the voice of a conversation already in progress. */
+function activeTutorModel() {
+  const lesson = getLesson(currentLessonId);
+  const chosen = (lesson && lesson.tutorModel) || state.model;
+  return TUTOR_MODELS.some(model => model.key === chosen) ? chosen : "claude-sonnet-5";
+}
 async function streamChat(system, messages, onText, onSearch, modelOverride, maxTokens, requestPolicy = {}) {
-  const model = modelOverride || state.model;
+  const model = modelOverride || activeTutorModel();
+  if (tutorProviderFor(model) !== "anthropic") return altProviderChat(model, system, messages, onText, maxTokens);
   const payload = {
     model, max_tokens: maxTokens || 768, stream: true, system, messages,
   };
@@ -2913,6 +2997,7 @@ const PRICES = {
   "claude-opus-4-8":  [5, 25],
   "claude-sonnet-5":  Date.now() < SONNET5_PROMO_END ? [2, 10] : [3, 15],
   "claude-haiku-4-5": [1, 5],
+  "gemini-2.5-flash": [0.3, 2.5],
 };
 function addCost(lesson, model, usage, purpose = "tutor_turn") {
   if (!lesson || !usage) return;
@@ -3163,12 +3248,14 @@ function renderHome() {
     nc.innerHTML = `
       <div class="card-cat">ask anything</div>
       <input id="topic-input" type="text" placeholder="What are you curious about?" enterkeyhint="go">
+      <div id="tutor-model-picker" class="tutor-model-picker" role="group" aria-label="Which tutor answers"></div>
       <div class="new-card-actions">
         <button id="start-btn" type="button">Begin</button>
       </div>
       <button id="new-card-folders" type="button" aria-label="Create or organize folders"><span>+</span> Folders</button>
     `;
     c.appendChild(nc);
+    renderTutorModelPicker();
     wheel.cards.push(nc); wheel.ids.push(null);
   }
 
@@ -3652,6 +3739,7 @@ async function beginLesson(topic, methodKey, starterText, parentId, sourceUrl, s
   if (!aiAvailable()) { openSettings(); toast("Enter the access code, then Save."); return; }
   const lesson = {
     id: uid(), topic, method: methodKey, starterText,
+    tutorModel: activeTutorModel(), // pinned at creation; changing the default later leaves this lesson alone
     title: topic.length > 40 ? topic.slice(0, 40) + "…" : topic,
     category: "", messages: [], paths: [], updatedAt: Date.now(),
     sessionCount: 1, sessionOpenedAt:Date.now(), activeSessionStartIndex:0, conversationSessions:[],
@@ -4288,10 +4376,29 @@ function clearLessonResponsePending(lesson) {
   if (lesson && lesson.responsePending) delete lesson.responsePending;
 }
 
-const DEVELOPER_TUTOR_MODELS = [
-  { key:"claude-sonnet-5",label:"Sonnet 5" },
-  { key:"claude-haiku-4-5",label:"Haiku 4.5" },
-];
+const DEVELOPER_TUTOR_MODELS = TUTOR_MODELS.map(model => ({ key:model.key, label:model.label + " " + model.sub }));
+/* The pre-entry picker. Sets the default the NEXT lesson is created with;
+   lessons already under way keep the model they started with. */
+function renderTutorModelPicker() {
+  const host = $("tutor-model-picker");
+  if (!host) return;
+  const models = selectableTutorModels();
+  if (models.length < 2) { host.innerHTML = ""; return; }
+  const current = TUTOR_MODELS.some(model => model.key === state.model) ? state.model : "claude-sonnet-5";
+  host.innerHTML = models.map(model =>
+    `<button type="button" data-tutor-model="${attr(model.key)}" class="${model.key === current ? "active" : ""}" aria-pressed="${model.key === current}">`
+    + `${esc(model.label)}<span class="tm-sub">${esc(model.sub)}</span></button>`).join("");
+  host.querySelectorAll("[data-tutor-model]").forEach(button => {
+    button.onclick = event => {
+      event.stopPropagation();
+      state.model = button.dataset.tutorModel;
+      save();
+      renderTutorModelPicker();
+      renderConversationModelSwitches();
+      if ($("set-model")) $("set-model").value = state.model;
+    };
+  });
+}
 function renderConversationModelSwitches() {
   ["chat-model-switch","voice-model-switch"].forEach(id => {
     const container = $(id);
@@ -5918,6 +6025,7 @@ function enterVoice(autoListen = true, excludeLastFromHistory = false, pinNextMe
   $("voice-overlay").style.display = "flex";
   lockVoiceKeyboard();
   $("voice-title").textContent = lesson.title || lesson.topic || "Lesson";
+  renderSpeakerButton();
   renderConversationModelSwitches();
   updateCheckpointUI(lesson);
   // unlock speech synthesis with a silent utterance (needed on iOS; harmless elsewhere)
@@ -5930,7 +6038,7 @@ function enterVoice(autoListen = true, excludeLastFromHistory = false, pinNextMe
      "text appeared, no speech" in a car with the phone silenced. "playback"
      ignores the silent switch; the mic path re-declares "play-and-record" when
      it actually needs input. Feature-detected — a no-op where unsupported. */
-  setOwnedAudioSession("playback");
+  applyVoiceAudioRoute();
   // unlock the audio element too — iOS only allows play() begun in a user gesture
   try { ttsAudio.src = SILENT_WAV; ttsAudio.volume = VOICE_TARGET_GAIN; ttsAudio.play().catch(() => {}); } catch (e) {}
   // and the relay's Web Audio context, for the same reason — it must be
@@ -5980,6 +6088,27 @@ document.addEventListener("focusin", event => {
 },true);
 
 /* ---- conversation rendering inside voice mode ---- */
+/* Replay a tutor message the learner has already heard (VOI-039). This is the
+   same machinery voiceRepeatPending() uses for an unanswered opening question:
+   the text is already stored, so replaying costs nothing beyond re-synthesis.
+   It deliberately does not create a turn, touch the checkpoint, or count as a
+   learner interaction — it is a listening aid, not part of the conversation. */
+function replaySpokenMessage(message, element) {
+  const lesson = getLesson(currentLessonId);
+  if (!lesson || !message || !String(message.content || "").trim()) return;
+  if (voice.statusMode === "thinking" || voice.statusMode === "transcribing" || streaming) {
+    toast("Wait for this reply to finish, then tap it to hear it again.");
+    return;
+  }
+  // whatever is speaking now stops first; never two voices at once
+  interruptSpeech();
+  document.querySelectorAll(".vmsg.replaying").forEach(node => node.classList.remove("replaying"));
+  if (element) {
+    element.classList.add("replaying");
+    setTimeout(() => element.classList.remove("replaying"), 1200);
+  }
+  voiceRepeatPending(lesson, message);
+}
 function buildVoiceHistory(lesson, excludeLast) {
   const sc = $("voice-scroll");
   sc.innerHTML = "";
@@ -5990,6 +6119,14 @@ function buildVoiceHistory(lesson, excludeLast) {
     const d = document.createElement("div");
     d.className = "vmsg " + m.role;
     d.textContent = m.content;
+    // tap the tutor's message to hear it again (VOI-039)
+    if (m.role === "assistant") {
+      d.setAttribute("role","button");
+      d.setAttribute("tabindex","0");
+      d.title = "Tap to hear this again";
+      d.addEventListener("click", () => replaySpokenMessage(m, d));
+      d.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); replaySpokenMessage(m, d); } });
+    }
     sc.appendChild(d);
   });
   sc.scrollTop = sc.scrollHeight;
@@ -6270,12 +6407,40 @@ async function repairVoiceTranscriptWithContext(text,lesson) {
   } catch (error) { console.warn("Transcript context check failed",error); }
   return { text, changed:false, confidence:"uncertain" };
 }
+/* ---- speakerphone vs earpiece (VOI-038) ----
+   The web platform gives no direct "route to the loudspeaker" control. What it
+   does give is the session TYPE, and on iOS that determines the route:
+   "playback" goes out of the loudspeaker and ignores the ring/silent switch,
+   while "play-and-record" — the mode required while the mic is live — defaults
+   to the earpiece. That mapping is exactly what was making the volume jump
+   around by itself (BUG-087), so it is also what makes a deliberate toggle
+   possible. The learner's choice wins for playback; recording still switches
+   temporarily because it has to, and hands back afterwards. */
+function speakerphoneOn() { return state.speakerphone !== false; }
+function applyVoiceAudioRoute() {
+  setOwnedAudioSession(speakerphoneOn() ? "playback" : "play-and-record");
+}
+function renderSpeakerButton() {
+  const button = $("voice-speaker-button");
+  if (!button) return;
+  const on = speakerphoneOn();
+  button.setAttribute("aria-pressed", String(on));
+  button.setAttribute("aria-label", on ? "Speakerphone on — tap for earpiece" : "Earpiece — tap for speakerphone");
+  button.title = on ? "Playing out loud" : "Playing to the earpiece";
+}
+function toggleSpeakerphone() {
+  state.speakerphone = !speakerphoneOn();
+  save();
+  applyVoiceAudioRoute();
+  renderSpeakerButton();
+  toast(speakerphoneOn() ? "Speakerphone on." : "Earpiece — hold the phone to your ear.");
+}
 function disableOwnedMicTrack() {
   if (!voice.mediaStream) return;
   voice.mediaStream.getAudioTracks().forEach(track => { track.enabled = false; });
   // the learner has stopped talking and the tutor is about to: go back to a
   // pure playback session, which is louder and not routed to the earpiece
-  setOwnedAudioSession("playback");
+  applyVoiceAudioRoute();
 }
 function setOwnedAudioSession(type) {
   try {
@@ -6567,7 +6732,7 @@ async function transcribeOwnedVoice(blob, mime) {
 async function finalizeOwnedVoiceCapture(epoch, chunks, mime, sendAfter) {
   const measuredSignal = voice.recAudioSeen;
   disableOwnedMicTrack();
-  setOwnedAudioSession("playback");
+  applyVoiceAudioRoute();
   stopOwnedMicMeter();
   if (!voice.active || voice.captureEpoch !== epoch) return;
   voice.mediaRecorder = null;
@@ -8982,6 +9147,7 @@ function closeVersionSheet() {
 }
 if ($("version-close")) $("version-close").addEventListener("click", closeVersionSheet);
 if ($("version-sheet")) $("version-sheet").addEventListener("click", event => { if (event.target === $("version-sheet")) closeVersionSheet(); });
+if ($("voice-speaker-button")) $("voice-speaker-button").addEventListener("click", event => { event.stopPropagation(); toggleSpeakerphone(); });
 if ($("voice-timing-clear")) $("voice-timing-clear").addEventListener("click",() => { state.voiceTimingLog = []; save(); renderVoiceTimingReadout(); });
 $("set-developer").addEventListener("change",event => {
   if (!state.developerUnlocked) return;
