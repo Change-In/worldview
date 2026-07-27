@@ -200,25 +200,29 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   /* A tutor message can be tapped to hear it again. */
   .vmsg.assistant { cursor:pointer; }
   .vmsg.assistant.replaying { box-shadow:0 0 0 2px var(--accent); border-radius:10px; }
-  #version-sheet {
+  #models-sheet .role { padding:13px 0; border-top:1px solid var(--line); }
+  #models-sheet .role h3 { margin:0 0 2px; font:700 11px/1.3 -apple-system,system-ui,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:var(--accent-700,var(--accent)); }
+  #models-sheet .role p { margin:0 0 8px; font-size:12.5px; line-height:1.5; color:var(--ink-soft); }
+  #models-sheet .role .fixed-model { display:inline-block; padding:4px 10px; border:1px solid var(--line); border-radius:999px; font-size:11.5px; color:var(--ink); }
+  #version-sheet, #models-sheet {
     position:fixed; inset:0; z-index:80; display:none;
     background:color-mix(in srgb,var(--ink) 42%,transparent);
     align-items:flex-end; justify-content:center;
   }
-  #version-sheet.open { display:flex; }
-  #version-sheet .version-panel {
+  #version-sheet.open, #models-sheet.open { display:flex; }
+  #version-sheet .version-panel, #models-sheet .version-panel {
     width:min(560px,100%); max-height:82vh; overflow:auto;
     background:var(--paper); color:var(--ink);
     border-radius:18px 18px 0 0; padding:18px 20px calc(24px + env(safe-area-inset-bottom));
     -webkit-overflow-scrolling:touch;
   }
-  #version-sheet h2 { margin:0 0 4px; font:600 19px/1.2 Georgia,serif; }
-  #version-sheet .version-now { margin:0 0 16px; color:var(--ink-soft); font-size:12.5px; }
+  #version-sheet h2, #models-sheet h2 { margin:0 0 4px; font:600 19px/1.2 Georgia,serif; }
+  #version-sheet .version-now, #models-sheet .version-now { margin:0 0 16px; color:var(--ink-soft); font-size:12.5px; }
   #version-sheet .version-entry { padding:12px 0; border-top:1px solid var(--line); }
   #version-sheet .version-entry h3 { margin:0 0 6px; font:700 12px/1.3 -apple-system,system-ui,sans-serif; letter-spacing:.08em; text-transform:uppercase; color:var(--accent-700,var(--accent)); }
   #version-sheet .version-entry ul { margin:0; padding-left:18px; }
   #version-sheet .version-entry li { margin:0 0 6px; font-size:13.5px; line-height:1.5; color:var(--ink); }
-  #version-sheet .version-close { display:block; width:100%; margin-top:16px; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--card); color:var(--ink); font-weight:650; cursor:pointer; }
+  #version-sheet .version-close, #models-sheet .version-close { display:block; width:100%; margin-top:16px; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--card); color:var(--ink); font-weight:650; cursor:pointer; }
   #home-header h1 {
     font-size: 20px; letter-spacing: 0.12em; text-transform: uppercase;
     font-weight: 600;
@@ -980,7 +984,11 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       border-radius:999px; box-shadow:var(--shadow-sm);
     }
     #lesson-layer-guide { display:none!important; }
-    #mobile-category-button { display:flex; align-items:center; gap:7px; position:absolute; right:12px; top:auto; bottom:58px; z-index:14; border:1px solid rgba(189,90,48,.55); background:color-mix(in srgb,var(--card) 94%,transparent); color:var(--accent-700); border-radius:999px; padding:9px 11px; font-size:10px; }
+    /* Sits directly above the deck on the right, so it reads as the label for
+       the cards below it rather than as a floating control (owner's ask). */
+    #mobile-category-button { display:flex; align-items:center; gap:7px; position:absolute; right:12px; left:auto; bottom:auto; top:calc(50% - var(--cardH,320px) / 2 - 6px); z-index:14; border:1px solid rgba(189,90,48,.55); background:color-mix(in srgb,var(--card) 94%,transparent); color:var(--accent-700); border-radius:999px; padding:9px 11px; font-size:10px; }
+    /* The model roster lives where the deck label used to be. */
+    #models-button { display:flex; align-items:center; gap:7px; position:absolute; right:12px; bottom:58px; z-index:14; border:1px solid var(--line); background:color-mix(in srgb,var(--card) 94%,transparent); color:var(--ink-soft); border-radius:999px; padding:9px 12px; font-size:10px; font-weight:650; letter-spacing:.06em; text-transform:uppercase; }
     #mobile-category-button::before { content:""; width:8px; height:8px; border-radius:50%; background:var(--accent); }
     #mobile-category-sheet { position:fixed; inset:0; z-index:80; align-items:flex-end; background:rgba(44,36,28,.25); }
     #mobile-category-sheet.open { display:flex; }
@@ -1207,6 +1215,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     <button id="rail-sources" class="rail-item" type="button">Upload</button>
   </nav>
   <button id="mobile-category-button" type="button" aria-haspopup="dialog">Most recent</button>
+  <button id="models-button" type="button" aria-haspopup="dialog">Models</button>
   <div id="home-header">
     <button id="home-menu" class="menu-button" type="button" aria-label="Open menu">&#9776;</button>
     <div class="home-brand">
@@ -1219,6 +1228,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     <button id="theme-toggle" class="menu-button" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
       <svg id="theme-toggle-icon" viewBox="0 0 24 24" width="21" height="21" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></svg>
     </button>
+  </div>
+
+  <div id="models-sheet" aria-hidden="true">
+    <div class="version-panel" role="dialog" aria-label="Models">
+      <h2>Models</h2>
+      <p class="version-now">Which model does what. Only the tutor is yours to choose for now — the others are fixed while they are still being tested.</p>
+      <div id="models-list"></div>
+      <button id="models-close" type="button" class="version-close">Close</button>
+    </div>
   </div>
 
   <div id="version-sheet" aria-hidden="true">
@@ -1573,11 +1591,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v49 · Jul 27";
+const BUILD = "v50 · Jul 27";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v50", date: "Jul 27", changes: [
+    "The Ask Anything card is back to how it was - the model buttons are gone from it.",
+    "Most recent now sits directly above the lesson cards on the right, so it reads as the label for the deck below it.",
+    "A new Models button in the bottom right shows which model does what - tutor, lesson map, understanding check, speech - and lets you choose your tutor before starting a lesson.",
+  ]},
   { tag: "v49", date: "Jul 27", changes: [
     "Choose your tutor before you begin: Claude or Gemini, picked on the Ask Anything card. A lesson keeps the model it was started with, so changing your choice never alters a conversation already under way.",
     "A speakerphone button in spoken lessons. Filled means it plays out loud; tap it for earpiece, like holding the phone to your head. This is what was making the volume seem to change on its own.",
@@ -3248,14 +3271,12 @@ function renderHome() {
     nc.innerHTML = `
       <div class="card-cat">ask anything</div>
       <input id="topic-input" type="text" placeholder="What are you curious about?" enterkeyhint="go">
-      <div id="tutor-model-picker" class="tutor-model-picker" role="group" aria-label="Which tutor answers"></div>
       <div class="new-card-actions">
         <button id="start-btn" type="button">Begin</button>
       </div>
       <button id="new-card-folders" type="button" aria-label="Create or organize folders"><span>+</span> Folders</button>
     `;
     c.appendChild(nc);
-    renderTutorModelPicker();
     wheel.cards.push(nc); wheel.ids.push(null);
   }
 
@@ -4377,23 +4398,31 @@ function clearLessonResponsePending(lesson) {
 }
 
 const DEVELOPER_TUTOR_MODELS = TUTOR_MODELS.map(model => ({ key:model.key, label:model.label + " " + model.sub }));
-/* The pre-entry picker. Sets the default the NEXT lesson is created with;
-   lessons already under way keep the model they started with. */
-function renderTutorModelPicker() {
-  const host = $("tutor-model-picker");
+/* The Models sheet: which model holds which job, and the one choice that is
+   currently the learner's to make. Chosen before a lesson starts — a lesson
+   pins its tutor at creation, so this sets what the NEXT one uses. */
+function renderModelsSheet() {
+  const host = $("models-list");
   if (!host) return;
-  const models = selectableTutorModels();
-  if (models.length < 2) { host.innerHTML = ""; return; }
   const current = TUTOR_MODELS.some(model => model.key === state.model) ? state.model : "claude-sonnet-5";
-  host.innerHTML = models.map(model =>
+  const tutorButtons = selectableTutorModels().map(model =>
     `<button type="button" data-tutor-model="${attr(model.key)}" class="${model.key === current ? "active" : ""}" aria-pressed="${model.key === current}">`
     + `${esc(model.label)}<span class="tm-sub">${esc(model.sub)}</span></button>`).join("");
+  const fixed = (title, description, model) =>
+    `<div class="role"><h3>${esc(title)}</h3><p>${esc(description)}</p><span class="fixed-model">${esc(model)}</span></div>`;
+  host.innerHTML =
+    `<div class="role"><h3>Tutor</h3><p>Asks the questions and decides when you have shown you understand a checkpoint. This is the one you choose. A lesson keeps whichever tutor it was started with.</p>`
+    + `<div class="tutor-model-picker">${tutorButtons}</div></div>`
+    + fixed("Lesson map", "Reads your question and builds the checkpoints the lesson follows, before any teaching starts.", "Claude Opus 4.8")
+    + fixed("Understanding check", "Reviews a finished sitting and writes what you can now explain, plus what is still missing.", "Claude Haiku 4.5")
+    + fixed("Speech", "Reads the tutor's replies aloud, and turns what you say into text.", "Deepgram Aura-2 / Nova-3")
+    + `<div class="role"><h3>Not yet yours to pick</h3><p>The three above are fixed while they are being tested. If you want any of them selectable, say which — the routing already exists, it is the comparison that does not yet.</p></div>`;
   host.querySelectorAll("[data-tutor-model]").forEach(button => {
     button.onclick = event => {
       event.stopPropagation();
       state.model = button.dataset.tutorModel;
       save();
-      renderTutorModelPicker();
+      renderModelsSheet();
       renderConversationModelSwitches();
       if ($("set-model")) $("set-model").value = state.model;
     };
@@ -9147,6 +9176,17 @@ function closeVersionSheet() {
 }
 if ($("version-close")) $("version-close").addEventListener("click", closeVersionSheet);
 if ($("version-sheet")) $("version-sheet").addEventListener("click", event => { if (event.target === $("version-sheet")) closeVersionSheet(); });
+if ($("models-button")) $("models-button").addEventListener("click", () => {
+  renderModelsSheet();
+  $("models-sheet").classList.add("open");
+  $("models-sheet").setAttribute("aria-hidden","false");
+});
+function closeModelsSheet() {
+  $("models-sheet").classList.remove("open");
+  $("models-sheet").setAttribute("aria-hidden","true");
+}
+if ($("models-close")) $("models-close").addEventListener("click", closeModelsSheet);
+if ($("models-sheet")) $("models-sheet").addEventListener("click", event => { if (event.target === $("models-sheet")) closeModelsSheet(); });
 if ($("voice-speaker-button")) $("voice-speaker-button").addEventListener("click", event => { event.stopPropagation(); toggleSpeakerphone(); });
 if ($("voice-timing-clear")) $("voice-timing-clear").addEventListener("click",() => { state.voiceTimingLog = []; save(); renderVoiceTimingReadout(); });
 $("set-developer").addEventListener("change",event => {
