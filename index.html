@@ -206,10 +206,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   /* A tutor message can be tapped to hear it again. */
   .vmsg.assistant { cursor:pointer; }
   .vmsg.assistant.replaying { box-shadow:0 0 0 2px var(--accent); border-radius:10px; }
-  #models-sheet .role { padding:13px 0; border-top:1px solid var(--line); }
-  #models-sheet .role h3 { margin:0 0 2px; font:700 11px/1.3 -apple-system,system-ui,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:var(--accent-700,var(--accent)); }
-  #models-sheet .role p { margin:0 0 8px; font-size:12.5px; line-height:1.5; color:var(--ink-soft); }
-  #models-sheet .role .fixed-model { display:inline-block; padding:4px 10px; border:1px solid var(--line); border-radius:999px; font-size:11.5px; color:var(--ink); }
+  #models-sheet .role { border-top:1px solid var(--line); }
+  #models-sheet .role > summary { list-style:none; cursor:pointer; display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:14px 0; }
+  #models-sheet .role > summary::-webkit-details-marker { display:none; }
+  #models-sheet .role > summary > span { font:700 11px/1.3 -apple-system,system-ui,sans-serif; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-soft); }
+  #models-sheet .role > summary > b { font:600 13.5px/1.3 -apple-system,system-ui,sans-serif; color:var(--ink); }
+  #models-sheet .role .tutor-model-picker { justify-content:flex-start; padding:0 0 14px; margin:0; }
   #version-sheet, #models-sheet {
     position:fixed; inset:0; z-index:80; display:none;
     background:color-mix(in srgb,var(--ink) 42%,transparent);
@@ -1242,7 +1244,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   <div id="models-sheet" aria-hidden="true">
     <div class="version-panel" role="dialog" aria-label="Models">
       <h2>Models</h2>
-      <p class="version-now">Which model does what. Only the tutor is yours to choose for now — the others are fixed while they are still being tested.</p>
+      <p class="version-now">Tap a row to change it.</p>
       <div id="models-list"></div>
       <button id="models-close" type="button" class="version-close">Close</button>
     </div>
@@ -1601,11 +1603,17 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v51 · Jul 27";
+const BUILD = "v52 · Jul 27";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v52", date: "Jul 27", changes: [
+    "The Models page is now three collapsed rows - tutor, lesson map, speech - each showing only what it is set to. Tap a row to change it.",
+    "Added GPT 5.6 Luna as a tutor and GPT 5.6 Terra for the lesson map.",
+    "Speech can now be set to Apple's built-in voice instead of the Worldview voice.",
+    "Profile now reads notes, conversations, completed - and lists your completed lessons underneath. Areas explored is gone.",
+  ]},
   { tag: "v51", date: "Jul 27", changes: [
     "Fixed popups and the recording bar showing in light colours while the app is in night mode - they were unreadable.",
     "Checkpoint progress now has a single meaning everywhere. The lesson map, the tutor and the question you get when you reopen a lesson all read the same record: what you actually explained out loud. They could previously disagree, which is why a finished lesson could say you were done and still ask you the very first question.",
@@ -2932,9 +2940,20 @@ function resetInvalidTesterAccess(error) {
 const TUTOR_MODELS = [
   { key:"claude-sonnet-5",  label:"Claude",  sub:"Sonnet 5",   provider:"anthropic" },
   { key:"gemini-2.5-flash", label:"Gemini",  sub:"2.5 Flash",  provider:"google" },
+  { key:"gpt-5.6-luna",     label:"GPT",     sub:"5.6 Luna",   provider:"openai" },
   { key:"claude-haiku-4-5", label:"Haiku",   sub:"4.5 · fast", provider:"anthropic", developerOnly:true },
 ];
-function tutorModelEntry(key) { return TUTOR_MODELS.find(model => model.key === key) || TUTOR_MODELS[0]; }
+// the planner that builds a lesson's checkpoints before any teaching starts
+const PLANNER_MODELS = [
+  { key:"claude-opus-4-8", label:"Claude", sub:"Opus 4.8", provider:"anthropic" },
+  { key:"gpt-5.6-terra",   label:"GPT",    sub:"5.6 Terra", provider:"openai" },
+];
+// how replies are spoken
+const SPEECH_MODELS = [
+  { key:"deepgram", label:"Worldview", sub:"Aura-2" },
+  { key:"device",   label:"Apple",     sub:"this device" },
+];
+function tutorModelEntry(key) { return TUTOR_MODELS.concat(PLANNER_MODELS).find(model => model.key === key) || TUTOR_MODELS[0]; }
 function tutorProviderFor(key) { return tutorModelEntry(key).provider; }
 function selectableTutorModels() { return TUTOR_MODELS.filter(model => !model.developerOnly || state.developerMode); }
 /* Non-Anthropic providers go through the lab-tutor route, which already holds
@@ -3060,6 +3079,8 @@ const PRICES = {
   "claude-sonnet-5":  Date.now() < SONNET5_PROMO_END ? [2, 10] : [3, 15],
   "claude-haiku-4-5": [1, 5],
   "gemini-2.5-flash": [0.3, 2.5],
+  "gpt-5.6-luna": [2, 8],
+  "gpt-5.6-terra": [2, 8],
 };
 function addCost(lesson, model, usage, purpose = "tutor_turn") {
   if (!lesson || !usage) return;
@@ -3107,6 +3128,24 @@ function updateCostLabel(lesson) {
 // can explicitly choose a stronger model for work where structure quality is
 // the product, such as the lesson dependency graph.
 async function jsonCall(system, userText, schema, maxTokens = 512, costLesson = null, model = "claude-haiku-4-5", effort = "", purpose = "background") {
+  /* Anthropic enforces the schema natively. Other providers go through the
+     lab-tutor route and are ASKED for the same JSON, which they may get wrong —
+     so a failure here falls straight back to the Anthropic default rather than
+     taking a lesson down with it. Lesson creation is the one path that must not
+     depend on an experiment. */
+  if (PLANNER_MODELS.some(entry => entry.key === model && entry.provider !== "anthropic")) {
+    try {
+      const instruction = system + "\n\nReply with JSON only — no prose, no code fence — matching exactly this JSON Schema:\n" + JSON.stringify(schema);
+      const result = await altProviderChat(model, instruction, [{ role:"user", content:userText }], null, maxTokens);
+      const cleaned = String(result.text || "").replace(/^```(?:json)?\s*/i,"").replace(/```\s*$/,"").trim();
+      const parsed = JSON.parse(cleaned);
+      if (costLesson && result.usage) { addCost(costLesson, model, result.usage, purpose); save(); }
+      return parsed;
+    } catch (error) {
+      console.warn("Planner fell back to Claude:", error && error.message);
+      model = "claude-opus-4-8";
+    }
+  }
   const outputConfig = { format: { type: "json_schema", schema } };
   if (effort && model !== "claude-haiku-4-5") outputConfig.effort = effort;
   const res = await anthropicRequest({
@@ -4004,7 +4043,7 @@ Write a diagnostic opening question that directly tests the starting foundation'
           }, required:["id","title","role","prerequisites","mastery_goal"], additionalProperties:false } },
           linear_path:{type:"array",minItems:1,items:{type:"string"}}
         }, required: ["title", "category", "source_overview", "starting_node_id", "starting_question", "concept_graph", "linear_path"], additionalProperties: false },
-      4096, lesson, "claude-opus-4-8", "medium", "lesson_plan"
+      4096, lesson, state.plannerModel || "claude-opus-4-8", "medium", "lesson_plan"
     );
     const rawNodeCount = Array.isArray(meta && meta.concept_graph) ? meta.concept_graph.length : 0;
     progress("validating-graph",{nodeCount:rawNodeCount});
@@ -4471,24 +4510,28 @@ function renderModelsSheet() {
   const tutorButtons = selectableTutorModels().map(model =>
     `<button type="button" data-tutor-model="${attr(model.key)}" class="${model.key === current ? "active" : ""}" aria-pressed="${model.key === current}">`
     + `${esc(model.label)}<span class="tm-sub">${esc(model.sub)}</span></button>`).join("");
-  const fixed = (title, description, model) =>
-    `<div class="role"><h3>${esc(title)}</h3><p>${esc(description)}</p><span class="fixed-model">${esc(model)}</span></div>`;
+  const chosen = (list, current, attribute) => list.map(model =>
+    `<button type="button" data-${attribute}="${attr(model.key)}" class="${model.key === current ? "active" : ""}" aria-pressed="${model.key === current}">`
+    + `${esc(model.label)}<span class="tm-sub">${esc(model.sub)}</span></button>`).join("");
+  // collapsed by default — the label and the current choice are all that shows
+  const role = (title, now, buttons) =>
+    `<details class="role"><summary><span>${esc(title)}</span><b>${esc(now)}</b></summary>`
+    + `<div class="tutor-model-picker">${buttons}</div></details>`;
+  const nameOf = (list, key) => { const found = list.find(model => model.key === key); return found ? found.label + " " + found.sub : key; };
+  const planner = state.plannerModel || "claude-opus-4-8";
+  const speech = state.ttsProvider === "device" ? "device" : "deepgram";
   host.innerHTML =
-    `<div class="role"><h3>Tutor</h3><p>Asks the questions and decides when you have shown you understand a checkpoint. This is the one you choose. A lesson keeps whichever tutor it was started with.</p>`
-    + `<div class="tutor-model-picker">${tutorButtons}</div></div>`
-    + fixed("Lesson map", "Reads your question and builds the checkpoints the lesson follows, before any teaching starts.", "Claude Opus 4.8")
-    + fixed("Understanding check", "Reviews a finished sitting and writes what you can now explain, plus what is still missing.", "Claude Haiku 4.5")
-    + fixed("Speech", "Reads the tutor's replies aloud, and turns what you say into text.", "Deepgram Aura-2 / Nova-3")
-    + `<div class="role"><h3>Not yet yours to pick</h3><p>The three above are fixed while they are being tested. If you want any of them selectable, say which — the routing already exists, it is the comparison that does not yet.</p></div>`;
+    role("Tutor", nameOf(TUTOR_MODELS, current), tutorButtons)
+    + role("Lesson map", nameOf(PLANNER_MODELS, planner), chosen(PLANNER_MODELS, planner, "planner-model"))
+    + role("Speech", nameOf(SPEECH_MODELS, speech), chosen(SPEECH_MODELS, speech, "speech-model"));
   host.querySelectorAll("[data-tutor-model]").forEach(button => {
-    button.onclick = event => {
-      event.stopPropagation();
-      state.model = button.dataset.tutorModel;
-      save();
-      renderModelsSheet();
-      renderConversationModelSwitches();
-      if ($("set-model")) $("set-model").value = state.model;
-    };
+    button.onclick = () => { state.model = button.dataset.tutorModel; save(); renderModelsSheet(); renderConversationModelSwitches(); if ($("set-model")) $("set-model").value = state.model; };
+  });
+  host.querySelectorAll("[data-planner-model]").forEach(button => {
+    button.onclick = () => { state.plannerModel = button.dataset.plannerModel; save(); renderModelsSheet(); };
+  });
+  host.querySelectorAll("[data-speech-model]").forEach(button => {
+    button.onclick = () => { state.ttsProvider = button.dataset.speechModel === "device" ? "device" : "deepgram"; save(); renderModelsSheet(); };
   });
 }
 function renderConversationModelSwitches() {
@@ -5083,8 +5126,40 @@ function renderProfile(resetSelection = false) {
 
   const stats = document.createElement("div");
   stats.className = "worldview-stats";
-  stats.innerHTML = `<div class="worldview-stat"><strong>${state.lessons.length}</strong><span>conversation${state.lessons.length === 1 ? "" : "s"}</span></div><div class="worldview-stat"><strong>${Object.keys(cats).length}</strong><span>area${Object.keys(cats).length === 1 ? "" : "s"} explored</span></div><div class="worldview-stat"><strong>${state.notes.length}</strong><span>note${state.notes.length === 1 ? "" : "s"} saved</span></div>`;
+  /* notes · conversations · completed (LES-037). "Areas explored" is gone: it
+     only ever went up, so it never asked anything of the learner. Completed
+     sitting lower than conversations is the point — what is unfinished should
+     be visible without being scolded about. */
+  const finished = state.lessons.filter(lessonRouteComplete);
+  stats.innerHTML = `<div class="worldview-stat"><strong>${state.notes.length}</strong><span>note${state.notes.length === 1 ? "" : "s"}</span></div>`
+    + `<div class="worldview-stat"><strong>${state.lessons.length}</strong><span>conversation${state.lessons.length === 1 ? "" : "s"}</span></div>`
+    + `<div class="worldview-stat${finished.length < state.lessons.length ? " worldview-stat-open" : ""}"><strong>${finished.length}</strong><span>completed</span></div>`;
   scroll.appendChild(stats);
+
+  const completedSection = document.createElement("section");
+  completedSection.className = "worldview-section";
+  completedSection.innerHTML = `<h3>Completed</h3>`;
+  if (finished.length) {
+    const list = document.createElement("div");
+    list.className = "worldview-completed";
+    finished.forEach(lesson => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "worldview-completed-row";
+      row.innerHTML = `<strong>${esc(lesson.title || lesson.topic || "Lesson")}</strong><span>${esc(lesson.category || "Uncategorized")}</span>`;
+      row.onclick = () => openChat(lesson.id);
+      list.appendChild(row);
+    });
+    completedSection.appendChild(list);
+  } else {
+    const empty = document.createElement("p");
+    empty.className = "worldview-completed-empty";
+    empty.textContent = state.lessons.length
+      ? "None yet. A lesson counts once you've explained every checkpoint in it out loud."
+      : "None yet.";
+    completedSection.appendChild(empty);
+  }
+  scroll.appendChild(completedSection);
 
   const categorySection = document.createElement("section");
   categorySection.className = "worldview-section";
