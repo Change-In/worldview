@@ -883,11 +883,13 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 
   /* ---------- Profile (top page of the home deck) ---------- */
   #profile-header {
-    padding: 18px 24px 10px; text-align: center;
+    /* clear the Profile/Explore/Upload rail pinned at the left edge */
+    padding: 18px 24px 10px 104px; text-align: center;
   }
   #profile-header h2 { font-size: 19px; letter-spacing: 0.1em; text-transform: uppercase; }
   #profile-header p { color: var(--ink-soft); font-size: 13px; margin-top: 4px; font-style: italic; }
   #profile-scroll { flex: 1; overflow-y: auto; padding: 10px max(20px, calc((100% - 680px) / 2)) 24px; touch-action:pan-y; }
+  @media (max-width:720px) { #profile-scroll { padding-top: 26px; } }
   .worldview-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-bottom: 26px; }
   .worldview-stat { padding: 15px 8px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--card); text-align: center; }
   .worldview-stat strong { display: block; font-family: Georgia, "Times New Roman", serif; font-size: 25px; font-weight: 500; }
@@ -941,6 +943,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .settings-check[hidden], #settings-developer-group[hidden], #settings-premium-group[hidden], #settings-tester-group[hidden], #settings-data-group[hidden] { display:none!important; }
   .settings-check input { width:auto!important; accent-color:var(--accent); transform:scale(1.2); }
   #settings-developer-group[hidden] { display:none; }
+  .worldview-completed-empty { margin:8px 0 0; color:var(--ink-soft); font-size:13px; line-height:1.5; }
+  #profile-category-detail { display:grid; gap:8px; margin-top:12px; }
   #lesson-path-repair { margin:10px 0 0; padding:11px 13px; border:1px solid var(--line); border-radius:12px; background:var(--card); }
   #lesson-path-repair p { margin:0 0 9px; font-size:12.5px; line-height:1.5; color:var(--ink-soft); }
   #lesson-path-repair button { width:100%; padding:10px; border:1px solid var(--accent); border-radius:10px; background:transparent; color:var(--accent-700,var(--accent)); font-weight:650; font-size:13px; cursor:pointer; }
@@ -998,6 +1002,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     /* Sits directly above the deck on the right, so it reads as the label for
        the cards below it rather than as a floating control (owner's ask). */
     #mobile-category-button { display:flex; align-items:center; gap:7px; position:absolute; right:12px; left:auto; bottom:auto; top:calc(50% - var(--cardH,320px) / 2 - 6px); z-index:14; border:1px solid rgba(189,90,48,.55); background:color-mix(in srgb,var(--card) 94%,transparent); color:var(--accent-700); border-radius:999px; padding:9px 11px; font-size:10px; }
+    #mobile-category-button.deck-label-hidden { opacity:0; pointer-events:none; transform:translateY(-6px); }
+    #mobile-category-button { transition:opacity .22s ease, transform .22s ease; }
     /* The model roster lives where the deck label used to be. */
     #models-button { display:flex; align-items:center; gap:7px; position:absolute; right:12px; bottom:58px; z-index:14; border:1px solid var(--line); background:color-mix(in srgb,var(--card) 94%,transparent); color:var(--ink-soft); border-radius:999px; padding:9px 12px; font-size:10px; font-weight:650; letter-spacing:.06em; text-transform:uppercase; }
     #mobile-category-button::before { content:""; width:8px; height:8px; border-radius:50%; background:var(--accent); }
@@ -1603,11 +1609,18 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v52 · Jul 27";
+const BUILD = "v53 · Jul 27";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v53", date: "Jul 27", changes: [
+    "Setting speech to Apple now actually works - the app was overriding your choice.",
+    "Most recent stays hidden until you scroll past the first lesson.",
+    "Completed lessons leave the Explore deck and live on Profile instead, grouped by category. Tap a category to see them.",
+    "Removed the Where your curiosity has gone list, and gave the Profile page room so the side menu no longer sits on top of the text.",
+    "Scroll up on the What is new page to close it.",
+  ]},
   { tag: "v52", date: "Jul 27", changes: [
     "The Models page is now three collapsed rows - tutor, lesson map, speech - each showing only what it is set to. Tap a row to change it.",
     "Added GPT 5.6 Luna as a tutor and GPT 5.6 Terra for the lesson map.",
@@ -3378,6 +3391,9 @@ function renderHome() {
   const visibleLessons = [...state.lessons].reverse().filter(lesson => {
     if (isSourceLesson(lesson) || !lessonMatchesLayer(lesson)) return false;
     if (!wheel.layerCategory && (lesson.customCategoryIds || []).length) return false;
+    /* A finished lesson leaves the deck. Explore is for what is still open;
+       completed work lives on Profile, inside its category. */
+    if (!wheel.layerCategory && lessonRouteComplete(lesson)) return false;
     return true;
   });
   visibleLessons.forEach(l => {
@@ -3480,6 +3496,7 @@ $("note-input").addEventListener("keydown", e => { if (e.key === "Enter") addNot
    rebuild a 3D scene on every finger sample. Only nearby cards are touched;
    this keeps a library of 50 lessons about as cheap to drag as five. */
 function layoutWheel(animate = true, refreshGuide = true) {
+  updateDeckLabelVisibility();
   const spacing = wheel.cardW * 0.78;
   const transition = animate ? "transform .32s cubic-bezier(.22,.8,.25,1), opacity .28s ease" : "none";
   const nextRendered = new Set();
@@ -3520,6 +3537,16 @@ function layoutWheel(animate = true, refreshGuide = true) {
 }
 
 // assigned by the carousel setup below; called by every overlay close path
+/* The deck label ("Most recent") belongs to the lesson cards, so it stays out
+   of the way until you are actually among them — it should not be sitting in
+   the corner the moment Explore opens, above the Ask Anything card. */
+function updateDeckLabelVisibility() {
+  const button = $("mobile-category-button");
+  if (!button) return;
+  const firstLesson = wheel.ids.findIndex(id => !!id);
+  const past = firstLesson >= 0 && wheel.pos > firstLesson + 0.5;
+  button.classList.toggle("deck-label-hidden", !past);
+}
 let resetCarouselGesture = () => {};
 let wheelLayoutFrame = 0;
 let wheelLayoutNeedsGuide = false;
@@ -5136,43 +5163,39 @@ function renderProfile(resetSelection = false) {
     + `<div class="worldview-stat${finished.length < state.lessons.length ? " worldview-stat-open" : ""}"><strong>${finished.length}</strong><span>completed</span></div>`;
   scroll.appendChild(stats);
 
+  /* Completed lessons, grouped by the category they already carry. Tap a
+     category to see what is inside it. The old "where your curiosity has gone"
+     list is gone — it counted every conversation whether or not anything came
+     of it, which is the opposite of what this page is now for. */
   const completedSection = document.createElement("section");
   completedSection.className = "worldview-section";
   completedSection.innerHTML = `<h3>Completed</h3>`;
-  if (finished.length) {
-    const list = document.createElement("div");
-    list.className = "worldview-completed";
-    finished.forEach(lesson => {
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = "worldview-completed-row";
-      row.innerHTML = `<strong>${esc(lesson.title || lesson.topic || "Lesson")}</strong><span>${esc(lesson.category || "Uncategorized")}</span>`;
-      row.onclick = () => openChat(lesson.id);
-      list.appendChild(row);
-    });
-    completedSection.appendChild(list);
-  } else {
+  scroll.appendChild(completedSection);
+
+  if (!finished.length) {
     const empty = document.createElement("p");
     empty.className = "worldview-completed-empty";
     empty.textContent = state.lessons.length
-      ? "None yet. A lesson counts once you've explained every checkpoint in it out loud."
-      : "None yet.";
+      ? "Nothing yet. A lesson lands here once you have explained every checkpoint in it out loud."
+      : "Nothing yet.";
     completedSection.appendChild(empty);
+    return;
   }
-  scroll.appendChild(completedSection);
 
-  const categorySection = document.createElement("section");
-  categorySection.className = "worldview-section";
-  categorySection.innerHTML = `<h3>Where your curiosity has gone</h3>`;
+  const doneByCategory = {};
+  finished.forEach(lesson => {
+    const category = lesson.category || "Uncategorized";
+    (doneByCategory[category] = doneByCategory[category] || []).push(lesson);
+  });
+  if (profileCategory && !doneByCategory[profileCategory]) profileCategory = null;
+
   const categoryRow = document.createElement("div");
   categoryRow.className = "worldview-categories";
-  categorySection.appendChild(categoryRow);
-  scroll.appendChild(categorySection);
+  completedSection.appendChild(categoryRow);
 
-  const detail = document.createElement("section");
+  const detail = document.createElement("div");
   detail.id = "profile-category-detail";
-  detail.className = "worldview-section";
-  scroll.appendChild(detail);
+  completedSection.appendChild(detail);
 
   const renderCategoryDetail = () => {
     categoryRow.querySelectorAll(".worldview-category").forEach(button => {
@@ -5180,35 +5203,27 @@ function renderProfile(resetSelection = false) {
       button.classList.toggle("active", active);
       button.setAttribute("aria-pressed", String(active));
     });
-    if (!profileCategory) {
-      detail.hidden = true;
-      detail.innerHTML = "";
-      return;
-    }
+    if (!profileCategory) { detail.hidden = true; detail.innerHTML = ""; return; }
     detail.hidden = false;
-    detail.innerHTML = `<h3>${esc(profileCategory)}</h3><div class="worldview-lessons"></div>`;
-    const lessonList = detail.querySelector(".worldview-lessons");
-    [...cats[profileCategory]].sort((a,b) => (b.updatedAt || 0) - (a.updatedAt || 0)).forEach(lesson => {
+    detail.innerHTML = "";
+    [...doneByCategory[profileCategory]].sort((a,b) => (b.updatedAt || 0) - (a.updatedAt || 0)).forEach(lesson => {
       const button = document.createElement("button");
       button.className = "recent-lesson";
       button.type = "button";
       const turns = Math.ceil((lesson.messages || []).filter(message => !message.synthetic).length / 2);
       button.innerHTML = `<span class="recent-lesson-copy"><span class="recent-lesson-title">${esc(lesson.title || lesson.topic || "Conversation")}</span><span class="recent-lesson-meta">${turns} exchange${turns === 1 ? "" : "s"} &middot; ${relativeTime(lesson.updatedAt)}</span></span><span class="recent-arrow" aria-hidden="true">&rsaquo;</span>`;
       button.onclick = () => openChat(lesson.id);
-      lessonList.appendChild(button);
+      detail.appendChild(button);
     });
   };
 
-  Object.keys(cats).sort().forEach(category => {
+  Object.keys(doneByCategory).sort().forEach(category => {
     const chip = document.createElement("button");
     chip.className = "worldview-category";
     chip.type = "button";
     chip.dataset.category = category;
-    chip.innerHTML = `${esc(category)}<span>${cats[category].length}</span>`;
-    chip.onclick = () => {
-      profileCategory = profileCategory === category ? null : category;
-      renderCategoryDetail();
-    };
+    chip.innerHTML = `${esc(category)}<span>${doneByCategory[category].length}</span>`;
+    chip.onclick = () => { profileCategory = profileCategory === category ? null : category; renderCategoryDetail(); };
     categoryRow.appendChild(chip);
   });
   renderCategoryDetail();
@@ -7881,10 +7896,13 @@ function startRelayWordSync(item) {
 }
 function ttsProvider() {
   const selected = state.ttsProvider || "auto";
-  // Learners always use Worldview's server voice. A stale hidden device
-  // override from an older build must not silently replace Aura-2.
-  if (!state.developerMode && backendAccessEnabled() && !deepgramBroken) return "deepgram";
+  /* An explicit choice wins. This guard used to return the server voice for
+     every non-developer regardless, which was right when the only way to be set
+     to "device" was a stale hidden override from an old build — but the Models
+     sheet now makes it a deliberate, visible control, so ignoring it just made
+     the setting look broken. */
   if (selected === "device") return "device";
+  if (!state.developerMode && backendAccessEnabled() && !deepgramBroken) return "deepgram";
   if (selected === "deepgram" && (backendAccessEnabled() || state.deepgramKey) && !deepgramBroken) return "deepgram";
   if (selected === "cartesia" && state.cartKey && !cartBroken) return "cartesia";
   if (backendAccessEnabled() && !deepgramBroken) return "deepgram";
@@ -9313,6 +9331,20 @@ function closeVersionSheet() {
   $("version-sheet").setAttribute("aria-hidden","true");
 }
 if ($("version-close")) $("version-close").addEventListener("click", closeVersionSheet);
+/* Scroll up past the top of the sheet to dismiss it — the gesture the rest of
+   the app already uses to leave a surface, rather than hunting for a button. */
+if ($("version-sheet")) {
+  const panel = $("version-sheet").querySelector(".version-panel");
+  let startY = 0, pulling = false;
+  panel.addEventListener("pointerdown", event => { startY = event.clientY; pulling = panel.scrollTop <= 0; });
+  panel.addEventListener("pointermove", event => {
+    if (!pulling) return;
+    const drag = event.clientY - startY;
+    if (drag < -70) { pulling = false; closeVersionSheet(); }
+  });
+  panel.addEventListener("pointerup", () => { pulling = false; });
+  panel.addEventListener("pointercancel", () => { pulling = false; });
+}
 if ($("version-sheet")) $("version-sheet").addEventListener("click", event => { if (event.target === $("version-sheet")) closeVersionSheet(); });
 if ($("models-button")) $("models-button").addEventListener("click", () => {
   renderModelsSheet();
