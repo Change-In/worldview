@@ -18,6 +18,10 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <style>
   :root {
     --ink: #2c241c;           /* warm charcoal */
+    /* An inverted surface (toasts, the active recording pill) must flip WITH the
+       theme. These were hardcoded to var(--ink) + #fff, which in dark mode is
+       cream-on-white and unreadable — reported live. */
+    --notice-bg:#2c241c; --notice-ink:#fdf8f0;
     --ink-soft: #6f6355;
     --paper: #f8f4ec;         /* cream */
     --card: #fdfaf5;
@@ -39,6 +43,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     --ink:#f4ece0;
     --ink-soft:#b6a894;
     --paper:#241f1a;
+    --notice-bg:#f4ece0; --notice-ink:#201914;
     --card:#332c25;
     --line:rgba(244,236,224,.14);
     --accent:#e2895a;
@@ -56,6 +61,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       --ink:#f4ece0;
       --ink-soft:#b6a894;
       --paper:#241f1a;
+      --notice-bg:#f4ece0; --notice-ink:#201914;
       --card:#332c25;
       --line:rgba(244,236,224,.14);
       --accent:#e2895a;
@@ -933,6 +939,9 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .settings-check[hidden], #settings-developer-group[hidden], #settings-premium-group[hidden], #settings-tester-group[hidden], #settings-data-group[hidden] { display:none!important; }
   .settings-check input { width:auto!important; accent-color:var(--accent); transform:scale(1.2); }
   #settings-developer-group[hidden] { display:none; }
+  #lesson-path-repair { margin:10px 0 0; padding:11px 13px; border:1px solid var(--line); border-radius:12px; background:var(--card); }
+  #lesson-path-repair p { margin:0 0 9px; font-size:12.5px; line-height:1.5; color:var(--ink-soft); }
+  #lesson-path-repair button { width:100%; padding:10px; border:1px solid var(--accent); border-radius:10px; background:transparent; color:var(--accent-700,var(--accent)); font-weight:650; font-size:13px; cursor:pointer; }
   .developer-status { margin:10px 0 2px;padding:10px 12px;border-left:2px solid var(--accent);color:var(--ink-soft);font-size:12px;line-height:1.45; }
   .voice-timing-panel { margin:14px 0 2px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--paper); }
   .voice-timing-head { display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;font-weight:700;color:var(--ink);margin-bottom:8px; }
@@ -1029,7 +1038,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 
   #toast {
     position: fixed; top: calc(env(safe-area-inset-top) + 14px); left: 50%; transform: translateX(-50%);
-    background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 10px; font-size: 14px;
+    background: var(--notice-bg); color: var(--notice-ink); padding: 10px 18px; border-radius: 10px; font-size: 14px;
     z-index: 100; display: none; max-width: 86%; text-align: center;
   }
 
@@ -1108,7 +1117,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft);
     transition:background .18s ease,color .18s ease,transform .18s ease,border-color .18s ease;
   }
-  #voice-status.locked, #voice-status.recording { background:var(--ink);color:#fff;border-color:var(--ink);transform:scale(.992); }
+  #voice-status.locked, #voice-status.recording { background:var(--notice-bg);color:var(--notice-ink);border-color:var(--notice-bg);transform:scale(.992); }
   #voice-status.starting { border-style:dashed; }
   #voice-lock-guide { --lock-progress:0;position:absolute;left:50%;bottom:70px;transform:translate(-50%,14px) scale(.96);display:flex;flex-direction:column;align-items:center;gap:4px;opacity:0;pointer-events:none;transition:opacity .16s ease,transform .16s ease; }
   #voice-lock-guide.show { opacity:1;transform:translate(-50%,0) scale(1); }
@@ -1485,6 +1494,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       <button id="lesson-path-close" type="button" aria-label="Close lesson path">&times;</button>
     </div>
     <div id="lesson-path-progress"></div>
+    <div id="lesson-path-repair" hidden></div>
   </div>
   <div id="lesson-path-scroll"><div id="lesson-path-nodes"></div><p class="lesson-path-footnote">This route is a guide, not a script. Your questions can change the depth while the tutor keeps the prerequisites in view.</p></div>
 </aside>
@@ -1591,11 +1601,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v50 · Jul 27";
+const BUILD = "v51 · Jul 27";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v51", date: "Jul 27", changes: [
+    "Fixed popups and the recording bar showing in light colours while the app is in night mode - they were unreadable.",
+    "Checkpoint progress now has a single meaning everywhere. The lesson map, the tutor and the question you get when you reopen a lesson all read the same record: what you actually explained out loud. They could previously disagree, which is why a finished lesson could say you were done and still ask you the very first question.",
+    "If a lesson has a full conversation but no checkpoints recorded, its lesson map now offers an I completed this lesson button to correct it.",
+  ]},
   { tag: "v50", date: "Jul 27", changes: [
     "The Ask Anything card is back to how it was - the model buttons are gone from it.",
     "Most recent now sits directly above the lesson cards on the right, so it reads as the label for the deck below it.",
@@ -2254,7 +2269,7 @@ const RESEARCH_NOTE = `Use the saved briefing as grounding. Search only for a ne
 
 function lessonCheckpoint(lesson) {
   const nodes = Array.isArray(lesson && lesson.knowledgeTree) ? lesson.knowledgeTree : [];
-  const completed = new Set(Array.isArray(lesson && lesson.completedPathNodeIds) ? lesson.completedPathNodeIds : []);
+  const completed = new Set(lessonDemonstratedIds(lesson));
   if (nodes.length && nodes.every(node => completed.has(node.id))) return null;
   const id = lesson && (lesson.currentPathNodeId || lesson.lastTutorCheckpointId);
   return nodes.find(node => node.id === id) || nodes[0] || null;
@@ -2264,6 +2279,30 @@ function lessonCheckpoint(lesson) {
    connect back to, next is what the current question should be leaning toward.
    `lastCompleted` is what re-entry is allowed to ask about: a completed
    checkpoint is the only thing the learner has actually demonstrated. */
+/* What the learner actually demonstrated, in the conversation, under the
+   mastery gate — the only progress signal the app treats as evidence. */
+function lessonDemonstratedIds(lesson) {
+  const nodes = Array.isArray(lesson && lesson.knowledgeTree) ? lesson.knowledgeTree : [];
+  return (Array.isArray(lesson && lesson.demonstratedNodeIds) ? lesson.demonstratedNodeIds : [])
+    .filter(id => nodes.some(node => node.id === id));
+}
+/* A lesson taught before the demonstrated record existed (or one where the
+   tutor never emitted its markers) shows no progress even though the learner
+   did the work. Rather than silently trusting the assessment's guess, this
+   makes the correction explicit and the learner's own call. */
+function repairLessonCheckpoints(lesson) {
+  const nodes = Array.isArray(lesson && lesson.knowledgeTree) ? lesson.knowledgeTree : [];
+  if (!nodes.length) return;
+  lesson.demonstratedNodeIds = nodes.map(node => node.id);
+  lesson.completedPathNodeIds = nodes.map(node => node.id);
+  lesson.currentPathNodeId = "";
+  lesson.pathComplete = true;
+  lesson.checkpointsRepairedAt = Date.now();
+  save();
+  updateCheckpointUI(lesson);
+  renderLessonPath(lesson);
+  toast("Marked every checkpoint in this lesson as understood.");
+}
 function lessonCheckpointWindow(lesson) {
   const nodes = Array.isArray(lesson && lesson.knowledgeTree) ? lesson.knowledgeTree : [];
   const completed = new Set(Array.isArray(lesson && lesson.completedPathNodeIds) ? lesson.completedPathNodeIds : []);
@@ -2291,7 +2330,7 @@ function lessonCheckpointWindow(lesson) {
 function lessonRouteComplete(lesson) {
   const nodes = Array.isArray(lesson && lesson.knowledgeTree) ? lesson.knowledgeTree : [];
   if (!nodes.length) return false;
-  const completed = new Set(Array.isArray(lesson && lesson.completedPathNodeIds) ? lesson.completedPathNodeIds : []);
+  const completed = new Set(lessonDemonstratedIds(lesson));
   return nodes.every(node => completed.has(node.id));
 }
 function updateCheckpointUI(lesson) {
@@ -2404,7 +2443,7 @@ function buildSystem(lesson) {
     : "";
   const compactState = lesson.rollingContext && lesson.rollingContext.learnerSummary || lesson.learnerSummary;
   const continuity = lesson.rollingContext && lesson.rollingContext.continuity;
-  const completedNodeIds = new Set(Array.isArray(lesson.completedPathNodeIds) ? lesson.completedPathNodeIds : []);
+  const completedNodeIds = new Set(lessonDemonstratedIds(lesson));
   const routeComplete = trustedPlan && Array.isArray(lesson.knowledgeTree) && lesson.knowledgeTree.length
     && lesson.knowledgeTree.every(node => completedNodeIds.has(node.id));
   const reportedCheckpointId = lesson.currentPathNodeId || (!routeComplete ? (lesson.lastTutorCheckpointId || lesson.knowledgeTreeStartId) : null);
@@ -4049,7 +4088,16 @@ async function ensureUniqueLessonPath(lesson) {
 function renderLessonPath(lesson) {
   if (!lesson) return;
   const nodes = Array.isArray(lesson.knowledgeTree) && !scriptedKnowledgeTree(lesson.knowledgeTree) ? lesson.knowledgeTree : [];
-  const completed = new Set(Array.isArray(lesson.completedPathNodeIds) ? lesson.completedPathNodeIds : []);
+  /* ONE source of truth for progress. This panel used to read
+     `completedPathNodeIds`, which the close assessment overwrites from its own
+     0.72 score, while re-entry reads `demonstratedNodeIds`, which only the
+     in-conversation mastery gate writes. Two answers to the same question
+     produced the contradiction reported live: the tutor said the route was
+     finished, re-entry restarted at checkpoint one, and this panel showed
+     something different again. Everything now reads what the learner actually
+     demonstrated; `repairLessonCheckpoints()` exists for lessons that predate
+     the record. */
+  const completed = new Set(lessonDemonstratedIds(lesson));
   const currentId = lesson.currentPathNodeId || (nodes.find(node => !completed.has(node.id)) || nodes[0] || {}).id;
   $("lesson-path-title").textContent = lesson.title || lesson.topic || "Lesson path";
   $("lesson-path-overview").textContent = lessonPathMigrations.has(lesson.id)
@@ -4058,6 +4106,21 @@ function renderLessonPath(lesson) {
   const assessed = Number.isFinite(Number(lesson.masteryScore));
   const percent = assessed ? Math.round(Math.max(0,Math.min(1,Number(lesson.masteryScore))) * 100) : 0;
   $("lesson-path-progress").innerHTML = `<span>${assessed ? `${percent}% understood` : "not assessed yet"}</span><span class="lesson-path-progress-track"><span class="lesson-path-progress-fill" style="--path-progress:${percent}%"></span></span><span>${completed.size}/${nodes.length}</span>`;
+  /* A lesson with a real conversation behind it but nothing recorded is the
+     shape of the reported failure: the learner did the work and the tutor
+     never marked it. Offer the correction here rather than leaving the panel
+     silently disagreeing with the conversation — and make it the learner's
+     explicit call, not an assumption made on their behalf. */
+  const repairHost = $("lesson-path-repair");
+  if (repairHost) {
+    const learnerTurns = (Array.isArray(lesson.messages) ? lesson.messages : []).filter(m => m.role === "user" && !m.synthetic).length;
+    const stale = nodes.length && !completed.size && learnerTurns >= 3;
+    repairHost.hidden = !stale;
+    if (stale) {
+      repairHost.innerHTML = `<p>This lesson has a full conversation but no checkpoints recorded — the tutor never marked them as you went. If you did work through it, you can correct that here.</p><button id="lesson-path-repair-btn" type="button">I completed this lesson</button>`;
+      $("lesson-path-repair-btn").onclick = () => repairLessonCheckpoints(lesson);
+    }
+  }
   if (!nodes.length) {
     /* Two different waits used to look like one failure. `lessonPathMigrations`
        only tracks a RETRY of an existing lesson — a lesson being planned for
