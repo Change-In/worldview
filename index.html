@@ -1609,11 +1609,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v53 · Jul 27";
+const BUILD = "v54 · Jul 27";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v54", date: "Jul 27", changes: [
+    "Your chosen tutor now stays chosen after a reload, and developer comparisons change the actual next tutor turn.",
+    "Lesson progress only moves forward when you explain a checkpoint; a background assessment cannot skip ahead.",
+    "A failed lesson-map refresh no longer leaves a path that looks valid but the tutor cannot safely follow.",
+  ]},
   { tag: "v53", date: "Jul 27", changes: [
     "Setting speech to Apple now actually works - the app was overriding your choice.",
     "Most recent stays hidden until you scroll past the first lesson.",
@@ -2225,7 +2230,6 @@ if (window.WORLDVIEW_DATA && Array.isArray(window.WORLDVIEW_DATA.lessons)) {
 }
 // one-time: older saves defaulted to Opus; switch existing users to the cheaper Sonnet 5 default
 if (!state.modelV2) { state.model = "claude-sonnet-5"; state.modelV2 = true; save(); }
-if (!["claude-sonnet-5","claude-haiku-4-5"].includes(state.model)) { state.model = "claude-sonnet-5"; save(); }
 // one-time beta migration: spoken, read-along conversation is the default;
 // Settings still lets a tester opt back into text-first lessons.
 if (!state.spokenTurnsV1) { state.voiceDefault = true; state.spokenTurnsV1 = true; save(); }
@@ -2290,10 +2294,11 @@ const RESEARCH_NOTE = `Use the saved briefing as grounding. Search only for a ne
 
 function lessonCheckpoint(lesson) {
   const nodes = Array.isArray(lesson && lesson.knowledgeTree) ? lesson.knowledgeTree : [];
-  const completed = new Set(lessonDemonstratedIds(lesson));
-  if (nodes.length && nodes.every(node => completed.has(node.id))) return null;
-  const id = lesson && (lesson.currentPathNodeId || lesson.lastTutorCheckpointId);
-  return nodes.find(node => node.id === id) || nodes[0] || null;
+  const demonstrated = new Set(lessonDemonstratedIds(lesson));
+  if (!nodes.length || nodes.every(node => demonstrated.has(node.id))) return null;
+  // Assessment estimates and stale saved pointers are useful for reporting,
+  // but only a live demonstrated checkpoint may decide what is taught next.
+  return nodes.find(node => !demonstrated.has(node.id)) || null;
 }
 /* The tutor should know where it is in the journey, not just which square it
    is standing on (LES-033, owner's framing). Previous gives it something to
@@ -2326,7 +2331,7 @@ function repairLessonCheckpoints(lesson) {
 }
 function lessonCheckpointWindow(lesson) {
   const nodes = Array.isArray(lesson && lesson.knowledgeTree) ? lesson.knowledgeTree : [];
-  const completed = new Set(Array.isArray(lesson && lesson.completedPathNodeIds) ? lesson.completedPathNodeIds : []);
+  const assessedCompleted = new Set(Array.isArray(lesson && lesson.completedPathNodeIds) ? lesson.completedPathNodeIds : []);
   /* Demonstrated, not merely "assessed as probably fine". Only what the learner
      proved in conversation may drive re-entry — see the note in
      finalizeTutorReply. Older lessons have no such record, and it is NOT
@@ -2345,7 +2350,7 @@ function lessonCheckpointWindow(lesson) {
     next: index >= 0 && index + 1 < nodes.length ? nodes[index + 1] : null,
     lastDemonstrated,
     demonstratedCount: demonstratedIds.length,
-    completedCount: nodes.filter(node => completed.has(node.id)).length, // assessment estimate — progress UI only
+    completedCount: nodes.filter(node => assessedCompleted.has(node.id)).length, // assessment estimate — progress UI only
   };
 }
 function lessonRouteComplete(lesson) {
@@ -2402,7 +2407,8 @@ function finalizeTutorReply(text, lesson, options = {}) {
   const reported = marker ? marker[1].toLowerCase() : "";
   let mastery = marker && marker[2] ? marker[2].toLowerCase() : "hold";
   const nodes = Array.isArray(lesson && lesson.knowledgeTree) ? lesson.knowledgeTree : [];
-  const completed = new Set(Array.isArray(lesson && lesson.completedPathNodeIds) ? lesson.completedPathNodeIds : []);
+  const assessedCompleted = new Set(Array.isArray(lesson && lesson.completedPathNodeIds) ? lesson.completedPathNodeIds : []);
+  const demonstrated = new Set(lessonDemonstratedIds(lesson));
   const active = lessonCheckpoint(lesson);
   const valid = !!(active && reported === active.id && nodes.some(node => node.id === reported));
   const hasPriorTutorReply = Array.isArray(lesson && lesson.messages)
@@ -2415,7 +2421,7 @@ function finalizeTutorReply(text, lesson, options = {}) {
   if (valid) {
     lesson.lastTutorCheckpointId = active.id;
     if (mastery === "demonstrated") {
-      completed.add(active.id);
+      assessedCompleted.add(active.id);
       /* The authoritative record of what the learner actually proved, in the
          conversation, under the mastery gate. It exists separately from
          `completedPathNodeIds` because the close assessment OVERWRITES that
@@ -2425,13 +2431,13 @@ function finalizeTutorReply(text, lesson, options = {}) {
          that estimate; re-entry cannot, because it decides whether to ask the
          learner to recall something (BUG-084/BUG-086). Append-only, and only
          ever written here. */
-      const demonstrated = Array.isArray(lesson.demonstratedNodeIds) ? lesson.demonstratedNodeIds : [];
-      if (!demonstrated.includes(active.id)) demonstrated.push(active.id);
-      lesson.demonstratedNodeIds = demonstrated;
+      demonstrated.add(active.id);
+      lesson.demonstratedNodeIds = nodes.filter(node => demonstrated.has(node.id)).map(node => node.id);
     }
-    lesson.completedPathNodeIds = [...completed];
-    const next = nodes.find(node => !completed.has(node.id));
+    lesson.completedPathNodeIds = [...assessedCompleted];
+    const next = nodes.find(node => !demonstrated.has(node.id));
     lesson.currentPathNodeId = next ? next.id : "";
+    lesson.pathComplete = nodes.length > 0 && nodes.every(node => demonstrated.has(node.id));
     lesson.lastTutorCheckpointAt = Date.now();
     updateCheckpointUI(lesson);
   }
@@ -2467,7 +2473,8 @@ function buildSystem(lesson) {
   const completedNodeIds = new Set(lessonDemonstratedIds(lesson));
   const routeComplete = trustedPlan && Array.isArray(lesson.knowledgeTree) && lesson.knowledgeTree.length
     && lesson.knowledgeTree.every(node => completedNodeIds.has(node.id));
-  const reportedCheckpointId = lesson.currentPathNodeId || (!routeComplete ? (lesson.lastTutorCheckpointId || lesson.knowledgeTreeStartId) : null);
+  const authoritativeCheckpoint = lessonCheckpoint(lesson);
+  const reportedCheckpointId = authoritativeCheckpoint ? authoritativeCheckpoint.id : null;
   const resumeCheckpoint = trustedPlan && Array.isArray(lesson.knowledgeTree) && reportedCheckpointId
     ? lesson.knowledgeTree.find(node => node.id === reportedCheckpointId)
     : null;
@@ -2494,7 +2501,7 @@ function buildSystem(lesson) {
       learnerStateParts.push("Next checkpoint: none — the current checkpoint is the last on the route.");
     }
   }
-  if (routeComplete) learnerStateParts.push("Route status: all planned checkpoints were previously assessed as understood. Ask what the learner wants to explore next or which idea they want to revisit; do not automatically repeat the capstone.");
+  if (routeComplete) learnerStateParts.push("Route status: the learner demonstrated every planned checkpoint. Ask what they want to explore next or which idea they want to revisit; do not automatically repeat the capstone.");
   if (lesson.masteryNextGap) learnerStateParts.push(`Next assessed gap: ${lesson.masteryNextGap}`);
   const learnerState = learnerStateParts.length
     ? `\n\n--- Current learner state ---\n${learnerStateParts.join("\n")}\nUse only as background; do not recap it or infer more mastery.`
@@ -2850,7 +2857,7 @@ function tutorTurnNeedsSearch(lesson,messages) {
   return /https?:\/\/|\b(today|latest|currently|current news|recently|this week|this month|look (?:it )?up|search|verify|fact[- ]check|new release|price|schedule)\b/i.test(text);
 }
 function tutorRequestPolicy(lesson,messages,allowSearch = null) {
-  const model = state.model;
+  const model = tutorModelForLesson(lesson);
   const sonnetMode = state.tutorThinking || "fast";
   return {
     allowSearch: allowSearch == null ? tutorTurnNeedsSearch(lesson,messages) : !!allowSearch,
@@ -2961,6 +2968,22 @@ const PLANNER_MODELS = [
   { key:"claude-opus-4-8", label:"Claude", sub:"Opus 4.8", provider:"anthropic" },
   { key:"gpt-5.6-terra",   label:"GPT",    sub:"5.6 Terra", provider:"openai" },
 ];
+// Keep saved choices valid without silently discarding supported models.
+// The prior migration only knew about Claude, so a selected Gemini or GPT
+// default reverted to Sonnet after every reload.
+function normalizeModelSelections() {
+  let changed = false;
+  if (!TUTOR_MODELS.some(model => model.key === state.model)) {
+    state.model = "claude-sonnet-5";
+    changed = true;
+  }
+  if (!PLANNER_MODELS.some(model => model.key === state.plannerModel)) {
+    state.plannerModel = "claude-opus-4-8";
+    changed = true;
+  }
+  if (changed) save();
+}
+normalizeModelSelections();
 // how replies are spoken
 const SPEECH_MODELS = [
   { key:"deepgram", label:"Worldview", sub:"Aura-2" },
@@ -3000,13 +3023,14 @@ async function altProviderChat(model, system, messages, onText, maxTokens) {
     truncated:false,
   };
 }
-/* A lesson keeps the model it was started with, so switching the default does
-   not change the voice of a conversation already in progress. */
-function activeTutorModel() {
-  const lesson = getLesson(currentLessonId);
+/* A lesson keeps the model it was started with. Developer comparison can
+   deliberately update that pin for the next turn without changing other
+   lessons or the normal default-for-new-lessons control. */
+function tutorModelForLesson(lesson) {
   const chosen = (lesson && lesson.tutorModel) || state.model;
   return TUTOR_MODELS.some(model => model.key === chosen) ? chosen : "claude-sonnet-5";
 }
+function activeTutorModel() { return tutorModelForLesson(getLesson(currentLessonId)); }
 async function streamChat(system, messages, onText, onSearch, modelOverride, maxTokens, requestPolicy = {}) {
   const model = modelOverride || activeTutorModel();
   if (tutorProviderFor(model) !== "anthropic") return altProviderChat(model, system, messages, onText, maxTokens);
@@ -4023,9 +4047,45 @@ async function fetchMeta(lesson, options = {}) {
   try { return await task; }
   finally { if (lessonPlanning.get(lesson.id) === task) lessonPlanning.delete(lesson.id); }
 }
+/* A failed refresh must never leave the visual path and the tutor packet in
+   different states. Keep a complete, accepted route as one recoverable unit;
+   a merely nonempty legacy/error tree is not safe to preserve because
+   buildSystem() intentionally refuses to trust it. */
+function acceptedKnowledgePlanSnapshot(lesson) {
+  const tree = Array.isArray(lesson && lesson.knowledgeTree) ? lesson.knowledgeTree : [];
+  const graph = Array.isArray(lesson && lesson.conceptGraph) ? lesson.conceptGraph : [];
+  const graphIds = new Set(graph.map(node => node && node.id).filter(Boolean));
+  const treeIds = new Set(tree.map(node => node && node.id).filter(Boolean));
+  const startId = String(lesson && lesson.knowledgeTreeStartId || "");
+  const completeNode = node => !!(node && node.id && node.title && node.why_needed);
+  if (!trustedKnowledgePlan(lesson && lesson.knowledgeTreePromptVersion)
+      || !tree.length || !graph.length || !startId || !graphIds.has(startId)
+      || !String(lesson && lesson.knowledgeTreeStartingQuestion || "").trim()
+      || treeIds.size !== tree.length || graphIds.size !== graph.length || treeIds.size !== graphIds.size
+      || !tree.every(node => completeNode(node) && graphIds.has(node.id))
+      || !graph.every(completeNode)) return null;
+  return cloudClone({
+    title:lesson.title,
+    category:lesson.category,
+    sourceOverview:lesson.sourceOverview,
+    conceptGraph:graph,
+    knowledgeTree:tree,
+    knowledgeTreeStartId:lesson.knowledgeTreeStartId,
+    currentPathNodeId:lesson.currentPathNodeId,
+    lastTutorCheckpointId:lesson.lastTutorCheckpointId,
+    knowledgeTreeStartingQuestion:lesson.knowledgeTreeStartingQuestion,
+    knowledgeTreePromptVersion:lesson.knowledgeTreePromptVersion,
+    knowledgeTreeCreatedAt:lesson.knowledgeTreeCreatedAt,
+    completedPathNodeIds:lesson.completedPathNodeIds,
+    demonstratedNodeIds:lesson.demonstratedNodeIds,
+    pathProgress:lesson.pathProgress,
+    pathComplete:lesson.pathComplete,
+  });
+}
 async function fetchMetaRequest(lesson, options = {}) {
   const preserveIdentity = !!options.preserveIdentity;
   const quiet = !!options.quiet;
+  const previousPlan = acceptedKnowledgePlanSnapshot(lesson);
   const generation = { id:uid(),trigger:options.trigger || "manual",version:KNOWLEDGE_PLAN_VERSION,startedAt:Date.now(),status:"running",phase:"requesting-map" };
   lesson.lastPlanning = generation;
   save();
@@ -4100,22 +4160,33 @@ Write a diagnostic opening question that directly tests the starting foundation'
     if (!quiet) renderHome();
     return true;
   } catch (e) {
-    generation.status = "rejected";
-    generation.phase = "failed";
+    generation.status = previousPlan ? "retained" : "rejected";
+    generation.phase = previousPlan ? "ready" : "failed";
     generation.finishedAt = Date.now();
     generation.error = String(e && e.message || "Planning failed").slice(0,240);
-    if (scriptedKnowledgeTree(lesson.knowledgeTree)) lesson.knowledgeTree = [];
-    if (!Array.isArray(lesson.knowledgeTree)) lesson.knowledgeTree = [];
-    if (!lesson.knowledgeTree.length) lesson.conceptGraph = [];
-    lesson.sourceOverview = lesson.sourceOverview || (lesson.briefing ? lesson.briefing.split(/(?<=[.!?])\s/)[0].slice(0,220) : "A source-guided lesson ordered from prerequisites to the source's main idea.");
-    lesson.knowledgeTreeStartId = lesson.knowledgeTree[0] && lesson.knowledgeTree[0].id || "";
-    lesson.knowledgeTreeStartingQuestion = "Before we explain it, what do you think would have to be true for this to happen?";
-    lesson.knowledgeTreePromptVersion = "dependency-graph-v2-error";
-    lesson.knowledgeTreeError = String(e && e.message || "Planning failed");
-    lesson.knowledgeTreeCreatedAt = Date.now();
+    if (previousPlan) {
+      Object.assign(lesson,previousPlan);
+      delete lesson.knowledgeTreeError;
+    } else {
+      /* Do not leave a nonempty but untrusted tree visible. That would look
+         like a usable map while buildSystem() omits its route and checkpoint
+         contract, so the tutor could no longer record progress. */
+      lesson.knowledgeTree = [];
+      lesson.conceptGraph = [];
+      lesson.sourceOverview = lesson.sourceOverview || (lesson.briefing ? lesson.briefing.split(/(?<=[.!?])\s/)[0].slice(0,220) : "A source-guided lesson ordered from prerequisites to the source's main idea.");
+      lesson.knowledgeTreeStartId = "";
+      lesson.currentPathNodeId = "";
+      lesson.lastTutorCheckpointId = "";
+      lesson.knowledgeTreeStartingQuestion = "";
+      lesson.knowledgeTreePromptVersion = "dependency-graph-v2-error";
+      lesson.knowledgeTreeError = String(e && e.message || "Planning failed");
+      lesson.knowledgeTreeCreatedAt = Date.now();
+    }
     save();
-    if (typeof options.onProgress === "function") options.onProgress("failed");
-    return false;
+    if (typeof options.onProgress === "function") {
+      options.onProgress(previousPlan ? "ready" : "failed",previousPlan ? {nodeCount:previousPlan.knowledgeTree.length,retained:true} : {});
+    }
+    return !!previousPlan;
   }
 }
 
@@ -4164,7 +4235,7 @@ function renderLessonPath(lesson) {
      demonstrated; `repairLessonCheckpoints()` exists for lessons that predate
      the record. */
   const completed = new Set(lessonDemonstratedIds(lesson));
-  const currentId = lesson.currentPathNodeId || (nodes.find(node => !completed.has(node.id)) || nodes[0] || {}).id;
+  const currentId = (lessonCheckpoint(lesson) || {}).id || "";
   $("lesson-path-title").textContent = lesson.title || lesson.topic || "Lesson path";
   $("lesson-path-overview").textContent = lessonPathMigrations.has(lesson.id)
     ? "Creating a path shaped to this lesson…"
@@ -4567,7 +4638,8 @@ function renderConversationModelSwitches() {
     if (!container) return;
     container.classList.toggle("show",!!state.developerMode);
     if (!state.developerMode) { container.innerHTML = "";return; }
-    container.innerHTML = DEVELOPER_TUTOR_MODELS.map(model => `<button type="button" data-model="${model.key}" class="${state.model === model.key ? "active" : ""}">${model.label}</button>`).join("");
+    const selectedModel = tutorModelForLesson(getLesson(currentLessonId));
+    container.innerHTML = DEVELOPER_TUTOR_MODELS.map(model => `<button type="button" data-model="${model.key}" class="${selectedModel === model.key ? "active" : ""}">${model.label}</button>`).join("");
     container.querySelectorAll("button").forEach(button => {
       button.onclick = event => {
         event.stopPropagation();
@@ -4576,6 +4648,11 @@ function renderConversationModelSwitches() {
           return;
         }
         state.model = button.dataset.model;
+        const lesson = getLesson(currentLessonId);
+        if (lesson) {
+          lesson.tutorModel = state.model;
+          lesson.updatedAt = Date.now();
+        }
         save();
         renderConversationModelSwitches();
         if ($("set-model")) $("set-model").value = state.model;
@@ -4800,7 +4877,7 @@ async function reenterCheck(lesson, existingBubble) {
     lesson.messages.push({ role: "user", content: reentryPrompt, synthetic: true });
     lesson.messages.push({ role: "assistant", content: cleanFull, apiContent: full, reentry: true });
     lesson.updatedAt = Date.now();
-    addCost(lesson, state.model, usage);
+    addCost(lesson, tutorModelForLesson(lesson), usage);
     recordTutorContext(lesson,"text-reentry",system,apiMessages,usage);
     save();
     updateCostLabel(lesson);
@@ -4906,7 +4983,7 @@ async function runTextLessonResponse(lesson, thinkingBubble) {
     clearLessonResponsePending(lesson);
     lesson.paths = []; // conversation changed → regenerate paths next time
     lesson.updatedAt = Date.now();
-    addCost(lesson, state.model, usage);
+    addCost(lesson, tutorModelForLesson(lesson), usage);
     recordTutorContext(lesson,"text",system,apiMessages,usage);
     save();
     updateCostLabel(lesson);
@@ -5026,15 +5103,13 @@ function assessLessonUnderstanding(lesson,sessionId = "") {
       });
       lesson.pathProgress = pathProgress;
       lesson.completedPathNodeIds = completed;
-      lesson.currentPathNodeId = (pathNodes[completed.length] || {}).id || null;
-      lesson.pathComplete = pathNodes.length > 0 && completed.length === pathNodes.length;
       lesson.assessedUserCount = learnerBoundary;
       lesson.summaryThroughMessageIndex = summaryBoundary;
       delete lesson.rollingContext;
       lesson.assessmentVersion = "learner-state-v3-sessions";
       lesson.assessmentUpdatedAt = Date.now();
       save();
-      trackLessonMetric(lesson,{ eventId:`assessment:${lesson.id}:${lesson.assessmentUpdatedAt}`, bucket:"lifecycle", complete:lesson.pathComplete, masteryScore:lesson.masteryScore });
+      trackLessonMetric(lesson,{ eventId:`assessment:${lesson.id}:${lesson.assessmentUpdatedAt}`, bucket:"lifecycle", complete:lessonRouteComplete(lesson), masteryScore:lesson.masteryScore });
       if ($("view-home").classList.contains("active")) { renderHome(); renderProfile(); }
       if (lessonPathLessonId === lesson.id && $("lesson-path-panel").classList.contains("open")) renderLessonPath(lesson);
     } catch (error) {
@@ -5064,7 +5139,7 @@ function closeLessonSession(lesson) {
   }
   lesson.closedAt = Date.now();
   save();
-  trackLessonMetric(lesson,{ eventId:`close:${lesson.id}:${lesson.closedAt}`, bucket:"lifecycle", complete:!!lesson.pathComplete, masteryScore:lesson.masteryScore });
+  trackLessonMetric(lesson,{ eventId:`close:${lesson.id}:${lesson.closedAt}`, bucket:"lifecycle", complete:lessonRouteComplete(lesson), masteryScore:lesson.masteryScore });
   assessLessonUnderstanding(lesson,session && session.id);
 }
 function exitLessonToHome() {
@@ -7473,7 +7548,7 @@ function beginSpokenTurnTracking(lesson,purpose) {
   const capture = voice.captureTiming;
   voice.captureTiming = null;
   voice.turnTiming = {
-    purpose, startedAt:Date.now(), startedPerf:performance.now(), provider:"", model:state.model || "",
+    purpose, startedAt:Date.now(), startedPerf:performance.now(), provider:"", model:tutorModelForLesson(lesson),
     captureStartedAt:capture && capture.captureStartedAt || undefined,
     pressToMicReadyMs:capture && capture.micReadyMs,
     releaseToTranscriptMs:capture && capture.releaseToTranscriptMs,
@@ -7628,7 +7703,7 @@ async function voiceSend(text, reuseExistingTurn = false) {
     clearLessonResponsePending(lesson);
     lesson.paths = [];
     lesson.updatedAt = Date.now();
-    addCost(lesson, state.model, usage);
+    addCost(lesson, tutorModelForLesson(lesson), usage);
     recordTutorContext(lesson,"voice",system,apiMessages,usage);
     save();
     scheduleLessonCompaction(lesson);
@@ -7702,7 +7777,7 @@ async function voiceReenter(lesson) {
     lesson.messages.push({ role: "user", content: reentryPrompt, apiContent: reentryApiContent, synthetic: true });
     lesson.messages.push({ role: "assistant", content: cleanFull, apiContent: full, reentry: true });
     lesson.updatedAt = Date.now();
-    addCost(lesson, state.model, usage);
+    addCost(lesson, tutorModelForLesson(lesson), usage);
     recordTutorContext(lesson,"voice-reentry",system,apiMessages,usage);
     save();
     scheduleLessonCompaction(lesson);
