@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#f7f1e7">
+  <title>Fable Orchestration Desk</title>
+  <script>
+    (function () {
+      try {
+        const appState = JSON.parse(localStorage.getItem("worldview-v1") || "{}");
+        const preference = appState.theme || "system";
+        const dark = preference === "dark" || (preference === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+      } catch (error) {
+        document.documentElement.dataset.theme = "light";
+      }
+    })();
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f7f1e7;
+      --paper: rgba(255, 252, 247, .77);
+      --paper-solid: #fffaf3;
+      --ink: #272019;
+      --muted: #75695c;
+      --line: rgba(74, 52, 35, .16);
+      --signal: #cf5d35;
+      --signal-strong: #9a3d1f;
+      --mint: #276b65;
+      --mint-soft: #d6ece6;
+      --sun: #efb74f;
+      --shadow: 0 22px 70px rgba(74, 43, 23, .14);
+      --shadow-small: 0 10px 30px rgba(74, 43, 23, .10);
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --page: #171512;
+      --paper: rgba(35, 31, 26, .80);
+      --paper-solid: #27221d;
+      --ink: #f7eee4;
+      --muted: #c4b3a2;
+      --line: rgba(247, 238, 228, .14);
+      --signal: #f28b60;
+      --signal-strong: #ffc2a7;
+      --mint: #84c9bc;
+      --mint-soft: rgba(132, 201, 188, .16);
+      --sun: #f6cf75;
+      --shadow: 0 22px 70px rgba(0, 0, 0, .38);
+      --shadow-small: 0 10px 30px rgba(0, 0, 0, .28);
+    }
+    * { box-sizing: border-box; }
+    html { min-height: 100%; background: var(--page); }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      overflow-x: hidden;
+      background: var(--page);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input, textarea { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--signal) 45%, transparent);
+      outline-offset: 3px;
+    }
+    .orb {
+      position: fixed;
+      z-index: 0;
+      border-radius: 999px;
+      pointer-events: none;
+      filter: blur(2px);
+      opacity: .75;
+    }
+    .orb.one { width: 42vw; height: 42vw; min-width: 360px; min-height: 360px; left: -18vw; top: -16vw; background: radial-gradient(circle at 58% 58%, color-mix(in srgb, var(--sun) 58%, transparent), transparent 68%); }
+    .orb.two { width: 38vw; height: 38vw; min-width: 320px; min-height: 320px; right: -12vw; top: 12rem; background: radial-gradient(circle at 43% 45%, color-mix(in srgb, var(--mint) 42%, transparent), transparent 70%); }
+    .orb.three { width: 35vw; height: 35vw; min-width: 280px; min-height: 280px; left: 30%; bottom: -20vw; background: radial-gradient(circle, color-mix(in srgb, var(--signal) 24%, transparent), transparent 70%); }
+    .desk {
+      position: relative;
+      z-index: 1;
+      width: min(1160px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: max(22px, env(safe-area-inset-top)) 0 max(42px, env(safe-area-inset-bottom));
+    }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+    .back {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .back-arrow { color: var(--signal); font-size: 19px; line-height: 1; }
+    .owner-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    .owner-badge::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 0 5px color-mix(in srgb, var(--mint) 18%, transparent); }
+    .hero { max-width: 790px; padding: 80px 0 46px; }
+    .eyebrow { margin: 0 0 14px; color: var(--signal-strong); font-size: 11px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
+    h1 { max-width: 680px; margin: 0; font: 500 clamp(42px, 7vw, 78px)/.97 Georgia, "Times New Roman", serif; letter-spacing: -.055em; }
+    .hero-copy { max-width: 545px; margin: 22px 0 0; color: var(--muted); font-size: clamp(16px, 2vw, 19px); line-height: 1.55; }
+    .section { margin-top: 22px; padding: clamp(20px, 4vw, 34px); border: 1px solid var(--line); border-radius: 28px; background: var(--paper); box-shadow: var(--shadow); backdrop-filter: blur(18px); }
+    .section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
+    .section-number { margin: 0 0 7px; color: var(--signal-strong); font-size: 10px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+    h2 { margin: 0; font: 500 clamp(25px, 3vw, 36px)/1.06 Georgia, "Times New Roman", serif; letter-spacing: -.035em; }
+    .section-copy { max-width: 390px; margin: 4px 0 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+    .privacy-note { max-width: 250px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; text-align: right; }
+    .preflight-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(250px, .7fr); gap: 16px; }
+    .question-card, .outcome-card { padding: 20px; border-radius: 20px; background: var(--paper-solid); border: 1px solid var(--line); }
+    .question-label { display: block; margin: 0 0 11px; color: var(--signal-strong); font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    .task-chip { display: inline-flex; align-items: center; max-width: 100%; margin-bottom: 12px; padding: 5px 9px; border-radius: 999px; background: var(--mint-soft); color: var(--mint); font-size: 11px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .question { min-height: 68px; margin: 0; font: 500 clamp(22px, 3vw, 31px)/1.12 Georgia, "Times New Roman", serif; letter-spacing: -.03em; }
+    .question-card textarea, .outcome-card input, .editor input {
+      width: 100%; border: 1px solid var(--line); border-radius: 13px; background: color-mix(in srgb, var(--paper) 66%, transparent); color: var(--ink); }
+    .question-card textarea { min-height: 118px; margin-top: 18px; padding: 13px 14px; resize: vertical; line-height: 1.45; }
+    .outcome-card { display: flex; flex-direction: column; justify-content: space-between; }
+    .outcome-card p { margin: 0; font: 500 20px/1.2 Georgia, "Times New Roman", serif; letter-spacing: -.025em; }
+    .outcome-card input { min-height: 48px; margin-top: 16px; padding: 11px 13px; }
+    .preflight-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; }
+    .primary, .secondary, .text-button, .card-button { border: 0; border-radius: 999px; transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
+    .primary { padding: 12px 17px; background: var(--signal); color: #fffaf6; font-weight: 800; box-shadow: 0 10px 22px color-mix(in srgb, var(--signal) 30%, transparent); }
+    .primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 14px 28px color-mix(in srgb, var(--signal) 36%, transparent); }
+    .primary:disabled { cursor: not-allowed; opacity: .43; box-shadow: none; }
+    .secondary { padding: 11px 15px; border: 1px solid var(--line); background: transparent; color: var(--ink); font-weight: 750; }
+    .secondary:hover, .card-button:hover { background: color-mix(in srgb, var(--signal) 10%, transparent); }
+    .helper { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .task-section { padding-bottom: 24px; }
+    .task-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 11px; }
+    .task-card { position: relative; min-height: 242px; display: flex; flex-direction: column; padding: 17px; overflow: hidden; border: 1px solid var(--line); border-radius: 20px; background: var(--paper-solid); box-shadow: var(--shadow-small); }
+    .task-card::after { content: ""; position: absolute; width: 105px; height: 105px; right: -42px; bottom: -47px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--accent, var(--signal)) 25%, transparent), transparent 66%); pointer-events: none; }
+    .task-card.active { border-color: color-mix(in srgb, var(--signal) 60%, var(--line)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--signal) 30%, transparent), var(--shadow-small); }
+    .task-index { color: var(--signal-strong); font-size: 10px; font-weight: 800; letter-spacing: .13em; }
+    .task-card h3 { margin: 20px 0 8px; font: 500 23px/1.02 Georgia, "Times New Roman", serif; letter-spacing: -.035em; }
+    .task-card p { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+    .destination { margin-top: auto !important; padding-top: 19px; color: var(--mint) !important; font-size: 11px !important; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .task-actions { display: flex; gap: 8px; margin-top: 13px; }
+    .card-button { min-height: 37px; padding: 8px 10px; background: color-mix(in srgb, var(--signal) 12%, transparent); color: var(--signal-strong); font-size: 12px; font-weight: 800; }
+    .card-button.ghost { background: transparent; color: var(--muted); }
+    .task-card:nth-child(2)::after { background: radial-gradient(circle, color-mix(in srgb, var(--sun) 36%, transparent), transparent 66%); }
+    .task-card:nth-child(3)::after { background: radial-gradient(circle, color-mix(in srgb, var(--mint) 30%, transparent), transparent 66%); }
+    .task-card:nth-child(4)::after { background: radial-gradient(circle, color-mix(in srgb, var(--signal) 35%, transparent), transparent 66%); }
+    .task-card:nth-child(5)::after { background: radial-gradient(circle, color-mix(in srgb, var(--sun) 25%, transparent), transparent 66%); }
+    .reset { flex: none; padding: 8px 0; border: 0; background: transparent; color: var(--muted); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+    .locked { position: relative; z-index: 1; width: min(620px, calc(100% - 40px)); margin: min(22vh, 180px) auto 0; padding: 32px; border: 1px solid var(--line); border-radius: 28px; background: var(--paper); box-shadow: var(--shadow); }
+    .locked h1 { font-size: clamp(36px, 7vw, 58px); }
+    .locked p { max-width: 470px; margin: 18px 0 0; color: var(--muted); line-height: 1.55; }
+    .locked .back { margin-top: 26px; }
+    dialog { width: min(480px, calc(100% - 32px)); border: 1px solid var(--line); border-radius: 24px; background: var(--paper-solid); color: var(--ink); box-shadow: var(--shadow); }
+    dialog::backdrop { background: rgba(25, 18, 12, .48); backdrop-filter: blur(4px); }
+    .editor { padding: 8px; }
+    .editor h2 { margin: 0 0 7px; font-size: 30px; }
+    .editor p { margin: 0 0 20px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .editor label { display: block; margin-top: 14px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .editor input { min-height: 48px; margin-top: 7px; padding: 11px 12px; font-size: 15px; text-transform: none; letter-spacing: normal; font-weight: 400; }
+    .editor-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 22px; }
+    .editor-error { min-height: 20px; margin: 10px 0 -3px !important; color: var(--signal-strong) !important; }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    @media (max-width: 900px) { .task-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 650px) {
+      .desk { width: min(100% - 24px, 560px); }
+      .hero { padding: 52px 2px 28px; }
+      .section { padding: 18px; border-radius: 23px; }
+      .section-head { display: block; }
+      .privacy-note { max-width: none; margin-top: 13px; text-align: left; }
+      .preflight-grid { grid-template-columns: 1fr; }
+      .task-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .task-card { min-height: 219px; }
+      .task-card:last-child { grid-column: span 2; }
+      .task-card:last-child h3 { max-width: 185px; }
+      .orb.one { left: -55vw; top: -26vw; }
+      .orb.two { right: -58vw; top: 28rem; }
+    }
+    @media (max-width: 380px) { .task-grid { grid-template-columns: 1fr; } .task-card:last-child { grid-column: auto; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="orb one" aria-hidden="true"></div>
+  <div class="orb two" aria-hidden="true"></div>
+  <div class="orb three" aria-hidden="true"></div>
+
+  <main id="desk" class="desk" hidden>
+    <header class="topbar">
+      <a class="back" href="./"><span class="back-arrow" aria-hidden="true">←</span> Back to Worldview</a>
+      <span class="owner-badge">owner space · local</span>
+    </header>
+
+    <section class="hero" aria-labelledby="desk-title">
+      <p class="eyebrow">Fable orchestration desk</p>
+      <h1 id="desk-title">Start with the question.<br>Then make the move.</h1>
+      <p class="hero-copy">A small launchpad for the work that needs your judgment: the chat, session report, labs, and everything else that connects them.</p>
+    </section>
+
+    <section id="preflight" class="section" aria-labelledby="preflight-title">
+      <div class="section-head">
+        <div>
+          <p class="section-number">01 / Before you begin</p>
+          <h2 id="preflight-title">Give the next move a shape.</h2>
+          <p class="section-copy">Choose a destination below. This desk asks the right question first, then opens its link.</p>
+        </div>
+        <p class="privacy-note">Configured links stay on this device. Kickoff answers disappear when this page closes; neither is sent to Worldview or added to a report.</p>
+      </div>
+      <div class="preflight-grid">
+        <div class="question-card">
+          <span class="question-label">Question to carry in</span>
+          <span id="active-task-chip" class="task-chip">Choose a destination</span>
+          <p id="active-question" class="question">What needs to be made clear before you begin?</p>
+          <label class="visually-hidden" for="kickoff-note">Your working answer</label>
+          <textarea id="kickoff-note" placeholder="Write the context you want to carry into this work…" spellcheck="true"></textarea>
+        </div>
+        <div class="outcome-card">
+          <div>
+            <span class="question-label">Definition of done</span>
+            <p>What would make this a useful next step?</p>
+          </div>
+          <label class="visually-hidden" for="outcome-note">Definition of done</label>
+          <input id="outcome-note" type="text" placeholder="A decision, an answer, evidence…" autocomplete="off">
+        </div>
+      </div>
+      <div class="preflight-actions">
+        <button id="open-destination" class="primary" type="button" disabled>Choose a destination</button>
+        <button id="copy-kickoff" class="secondary" type="button" disabled>Copy kickoff</button>
+        <p id="preflight-helper" class="helper">Choose a card, answer both prompts, and the destination unlocks.</p>
+      </div>
+    </section>
+
+    <section class="section task-section" aria-labelledby="destinations-title">
+      <div class="section-head">
+        <div>
+          <p class="section-number">02 / Destinations</p>
+          <h2 id="destinations-title">Your working constellation.</h2>
+          <p class="section-copy">Each card keeps a distinct kind of work from blurring into the next one.</p>
+        </div>
+        <button id="clear-desk" class="reset" type="button">Clear this desk</button>
+      </div>
+      <div id="task-grid" class="task-grid" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <section id="locked" class="locked" hidden aria-labelledby="locked-title">
+    <p class="eyebrow">Owner space</p>
+    <h1 id="locked-title">This desk opens from developer Settings.</h1>
+    <p>It has no public destinations or shared data. Return to Worldview, open it from the developer Settings area on your owner device, then come back here.</p>
+    <a class="back" href="./"><span class="back-arrow" aria-hidden="true">←</span> Return to Worldview</a>
+  </section>
+
+  <dialog id="link-editor" aria-labelledby="editor-title">
+    <form id="link-form" class="editor" method="dialog">
+      <p class="section-number">Destination link</p>
+      <h2 id="editor-title">Set up a destination.</h2>
+      <p id="editor-copy">This link stays only in this browser. Use a reviewed HTTPS link, or a same-site path such as <code>lab/</code>.</p>
+      <label for="editor-url">Link</label>
+      <input id="editor-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…">
+      <p id="editor-error" class="editor-error" aria-live="polite"></p>
+      <div class="editor-actions">
+        <button id="editor-remove" class="secondary" type="button">Remove</button>
+        <button id="editor-cancel" class="secondary" type="button">Cancel</button>
+        <button class="primary" type="submit">Save link</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    "use strict";
+
+    const APP_STATE_KEY = "worldview-v1";
+    const DESK_STATE_KEY = "worldview-orchestration-desk-v1";
+    const DESK_DRAFT_KEY = "worldview-orchestration-drafts-v1";
+    const TASKS = [
+      {
+        id: "chat",
+        number: "01",
+        title: "Chat",
+        detail: "Work through the decision with the assistant in front of you.",
+        question: "What decision or question are you taking into this chat?"
+      },
+      {
+        id: "session-report",
+        number: "02",
+        title: "Fable session report",
+        detail: "Record the change, the proof, the risk, and the exact next test.",
+        question: "What changed, what remains unverified, and what should the next reader know?"
+      },
+      {
+        id: "lab-dt3",
+        number: "03",
+        title: "Lab DT3",
+        detail: "Keep the claim, the test, and the evidence visible together.",
+        question: "What claim are you testing, and which result would change the plan?"
+      },
+      {
+        id: "lab-two",
+        number: "04",
+        title: "Lab 2 · execution",
+        detail: "Run the current Fable lab without losing the evidence you need from it.",
+        question: "Which bench are you running, and what exact evidence will let you stop?",
+        defaultUrl: "lab/index.html"
+      },
+      {
+        id: "other",
+        number: "05",
+        title: "Other orchestration",
+        detail: "Give any adjacent work a place without turning this desk into a task manager.",
+        question: "What needs to be made clear before anyone else starts this work?"
+      }
+    ];
+
+    const $ = id => document.getElementById(id);
+    const taskGrid = $("task-grid");
+    const desk = $("desk");
+    const locked = $("locked");
+    const activeTaskChip = $("active-task-chip");
+    const activeQuestion = $("active-question");
+    const kickoffNote = $("kickoff-note");
+    const outcomeNote = $("outcome-note");
+    const openDestination = $("open-destination");
+    const copyKickoffButton = $("copy-kickoff");
+    const preflightHelper = $("preflight-helper");
+    const editor = $("link-editor");
+    const linkForm = $("link-form");
+    const editorUrl = $("editor-url");
+    const editorCopy = $("editor-copy");
+    const editorError = $("editor-error");
+    const editorRemove = $("editor-remove");
+    let editingTaskId = "";
+
+    function readJson(key, fallback) {
+      try {
+        const value = JSON.parse(localStorage.getItem(key) || "");
+        return value && typeof value === "object" ? value : fallback;
+      } catch (error) {
+        return fallback;
+      }
+    }
+
+    function readSessionJson(key, fallback) {
+      try {
+        const value = JSON.parse(sessionStorage.getItem(key) || "");
+        return value && typeof value === "object" ? value : fallback;
+      } catch (error) {
+        return fallback;
+      }
+    }
+
+    function ownerUnlocked() {
+      const appState = readJson(APP_STATE_KEY, {});
+      return !!(appState.developerMode && appState.developerUnlocked);
+    }
+
+    function defaultDeskState() {
+      return { links: {}, activeTaskId: "" };
+    }
+
+    let deskState = readJson(DESK_STATE_KEY, defaultDeskState());
+    if (!deskState.links || typeof deskState.links !== "object") deskState.links = {};
+    if (typeof deskState.activeTaskId !== "string") deskState.activeTaskId = "";
+    let draftState = readSessionJson(DESK_DRAFT_KEY, {});
+    if (!draftState || typeof draftState !== "object") draftState = {};
+
+    function saveDeskState() {
+      try { localStorage.setItem(DESK_STATE_KEY, JSON.stringify(deskState)); }
+      catch (error) { preflightHelper.textContent = "This browser could not save the desk locally."; }
+    }
+
+    function saveDraftState() {
+      try { sessionStorage.setItem(DESK_DRAFT_KEY, JSON.stringify(draftState)); }
+      catch (error) { preflightHelper.textContent = "This browser could not hold the kickoff notes for this visit."; }
+    }
+
+    function taskById(id) { return TASKS.find(task => task.id === id) || null; }
+
+    function taskLink(task) {
+      if (!task) return "";
+      const saved = typeof deskState.links[task.id] === "string" ? deskState.links[task.id].trim() : "";
+      return saved || task.defaultUrl || "";
+    }
+
+    function safeUrl(raw) {
+      const value = String(raw || "").trim();
+      if (!value) return { ok: false, reason: "Add a link first." };
+      try {
+        const url = new URL(value, location.href);
+        const sameSite = url.origin === location.origin;
+        if (url.username || url.password) return { ok: false, reason: "Links cannot include a username or password." };
+        if (!sameSite && url.protocol !== "https:") return { ok: false, reason: "Use an HTTPS link or a same-site path." };
+        if (!sameSite && !/^https:$/.test(url.protocol)) return { ok: false, reason: "That link type is not supported." };
+        if (sameSite && !/^https?:$/.test(url.protocol)) return { ok: false, reason: "That link type is not supported." };
+        return { ok: true, url };
+      } catch (error) {
+        return { ok: false, reason: "That does not look like a valid link." };
+      }
+    }
+
+    function destinationLabel(task) {
+      const result = safeUrl(taskLink(task));
+      if (!result.ok) return "No link yet";
+      if (result.url.origin === location.origin) return "Fable workspace";
+      return result.url.hostname.replace(/^www\./, "");
+    }
+
+    function draftFor(task) {
+      const raw = task && draftState[task.id];
+      return raw && typeof raw === "object" ? raw : { kickoff: "", outcome: "" };
+    }
+
+    function setActiveTask(id, moveToPrompt) {
+      deskState.activeTaskId = id;
+      saveDeskState();
+      render();
+      if (moveToPrompt) {
+        $("preflight").scrollIntoView({ behavior: "smooth", block: "start" });
+        setTimeout(() => kickoffNote.focus({ preventScroll: true }), 250);
+      }
+    }
+
+    function renderTasks() {
+      taskGrid.replaceChildren();
+      TASKS.forEach(task => {
+        const card = document.createElement("article");
+        card.className = "task-card" + (task.id === deskState.activeTaskId ? " active" : "");
+        const index = document.createElement("span");
+        index.className = "task-index";
+        index.textContent = task.number;
+        const title = document.createElement("h3");
+        title.textContent = task.title;
+        const detail = document.createElement("p");
+        detail.textContent = task.detail;
+        const destination = document.createElement("p");
+        destination.className = "destination";
+        destination.textContent = destinationLabel(task);
+        const actions = document.createElement("div");
+        actions.className = "task-actions";
+        const prepare = document.createElement("button");
+        prepare.className = "card-button";
+        prepare.type = "button";
+        prepare.textContent = taskLink(task) ? "Prepare" : "Add link";
+        prepare.addEventListener("click", () => {
+          if (!taskLink(task)) openEditor(task.id);
+          else setActiveTask(task.id, true);
+        });
+        const edit = document.createElement("button");
+        edit.className = "card-button ghost";
+        edit.type = "button";
+        edit.textContent = "Edit";
+        edit.addEventListener("click", () => openEditor(task.id));
+        actions.append(prepare, edit);
+        card.append(index, title, detail, destination, actions);
+        taskGrid.append(card);
+      });
+    }
+
+    function renderPreflight() {
+      const task = taskById(deskState.activeTaskId);
+      const draft = draftFor(task);
+      activeTaskChip.textContent = task ? task.title : "Choose a destination";
+      activeQuestion.textContent = task ? task.question : "What needs to be made clear before you begin?";
+      kickoffNote.value = draft.kickoff || "";
+      outcomeNote.value = draft.outcome || "";
+      const link = task && safeUrl(taskLink(task));
+      const ready = !!(task && link && link.ok && kickoffNote.value.trim() && outcomeNote.value.trim());
+      openDestination.disabled = !ready;
+      copyKickoffButton.disabled = !(task && (kickoffNote.value.trim() || outcomeNote.value.trim()));
+      if (!task) {
+        openDestination.textContent = "Choose a destination";
+        preflightHelper.textContent = "Choose a card, answer both prompts, and the destination unlocks.";
+      } else if (!link || !link.ok) {
+        openDestination.disabled = false;
+        openDestination.textContent = "Add a destination";
+        preflightHelper.textContent = "Add a reviewed HTTPS link or a same-site path before you begin.";
+      } else if (!ready) {
+        openDestination.textContent = "Answer both prompts to unlock";
+        preflightHelper.textContent = "The link unlocks after both answers are present. They disappear when you close this page.";
+      } else {
+        openDestination.textContent = "Open " + task.title + " ↗";
+        preflightHelper.textContent = "Your kickoff stays only for this visit. The destination opens here; use Back to return.";
+      }
+    }
+
+    function render() {
+      renderTasks();
+      renderPreflight();
+    }
+
+    function storeDraft() {
+      const task = taskById(deskState.activeTaskId);
+      if (!task) return;
+      draftState[task.id] = { kickoff: kickoffNote.value, outcome: outcomeNote.value };
+      saveDraftState();
+      const link = safeUrl(taskLink(task));
+      const ready = !!(link.ok && kickoffNote.value.trim() && outcomeNote.value.trim());
+      openDestination.disabled = !ready;
+      copyKickoffButton.disabled = !(kickoffNote.value.trim() || outcomeNote.value.trim());
+      if (ready) {
+        openDestination.textContent = "Open " + task.title + " ↗";
+        preflightHelper.textContent = "Your kickoff stays only for this visit. The destination opens here; use Back to return.";
+      } else if (link.ok) {
+        openDestination.textContent = "Answer both prompts to unlock";
+        preflightHelper.textContent = "The link unlocks after both answers are present. They disappear when you close this page.";
+      }
+    }
+
+    function openEditor(id) {
+      const task = taskById(id);
+      if (!task) return;
+      editingTaskId = id;
+      const customLink = typeof deskState.links[id] === "string" ? deskState.links[id] : "";
+      editorUrl.value = customLink || task.defaultUrl || "";
+      editorCopy.textContent = task.title + " stays local to this browser. Use a reviewed HTTPS link, or a same-site path such as lab/index.html.";
+      editorError.textContent = "";
+      editorRemove.hidden = !customLink;
+      if (typeof editor.showModal === "function") editor.showModal();
+      else editor.setAttribute("open", "");
+      setTimeout(() => editorUrl.focus(), 50);
+    }
+
+    function closeEditor() {
+      if (typeof editor.close === "function") editor.close();
+      else editor.removeAttribute("open");
+      editingTaskId = "";
+    }
+
+    function kickoffText(task) {
+      const draft = draftFor(task);
+      return [
+        task.title,
+        "Question: " + task.question,
+        "Working answer: " + (draft.kickoff || "—"),
+        "Useful next step: " + (draft.outcome || "—")
+      ].join("\n");
+    }
+
+    async function copyKickoff() {
+      const task = taskById(deskState.activeTaskId);
+      if (!task) return;
+      const value = kickoffText(task);
+      try {
+        await navigator.clipboard.writeText(value);
+        preflightHelper.textContent = "Kickoff copied. Paste it wherever this work begins.";
+      } catch (error) {
+        preflightHelper.textContent = "Your browser blocked copying. Select the notes and copy them manually.";
+      }
+    }
+
+    function openSelectedDestination() {
+      const task = taskById(deskState.activeTaskId);
+      const result = task && safeUrl(taskLink(task));
+      if (!task) return;
+      if (!result || !result.ok) { openEditor(task.id); return; }
+      if (!kickoffNote.value.trim() || !outcomeNote.value.trim()) return;
+      location.assign(result.url.href);
+    }
+
+    kickoffNote.addEventListener("input", storeDraft);
+    outcomeNote.addEventListener("input", storeDraft);
+    openDestination.addEventListener("click", openSelectedDestination);
+    copyKickoffButton.addEventListener("click", copyKickoff);
+    const clearDeskButton = $("clear-desk");
+    let clearArmed = false, clearTimer = 0;
+    function resetClearAction(message) {
+      clearArmed = false;
+      clearDeskButton.textContent = "Clear this desk";
+      clearTimer = 0;
+      if (message) preflightHelper.textContent = message;
+    }
+    clearDeskButton.addEventListener("click", () => {
+      if (!clearArmed) {
+        clearArmed = true;
+        clearDeskButton.textContent = "Tap again to clear";
+        preflightHelper.textContent = "Tap Clear again within eight seconds to remove this device's saved links and this visit's kickoff notes.";
+        clearTimer = setTimeout(() => resetClearAction("Clear cancelled. Your locally saved links are still here."), 8000);
+        return;
+      }
+      if (clearTimer) clearTimeout(clearTimer);
+      deskState = defaultDeskState();
+      draftState = {};
+      try { localStorage.removeItem(DESK_STATE_KEY); } catch (error) {}
+      try { sessionStorage.removeItem(DESK_DRAFT_KEY); } catch (error) {}
+      resetClearAction("Desk cleared from this device.");
+      render();
+    });
+    $("editor-cancel").addEventListener("click", closeEditor);
+    editorRemove.addEventListener("click", () => {
+      if (!editingTaskId) return;
+      delete deskState.links[editingTaskId];
+      saveDeskState();
+      closeEditor();
+      render();
+    });
+    linkForm.addEventListener("submit", event => {
+      event.preventDefault();
+      if (!editingTaskId) return;
+      const result = safeUrl(editorUrl.value);
+      if (!result.ok) { editorError.textContent = result.reason; return; }
+      deskState.links[editingTaskId] = editorUrl.value.trim();
+      saveDeskState();
+      closeEditor();
+      render();
+    });
+    editor.addEventListener("cancel", event => { event.preventDefault(); closeEditor(); });
+
+    if (ownerUnlocked()) {
+      desk.hidden = false;
+      render();
+    } else {
+      locked.hidden = false;
+    }
+  </script>
+</body>
+</html>

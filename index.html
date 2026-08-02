@@ -949,6 +949,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #lesson-path-repair p { margin:0 0 9px; font-size:12.5px; line-height:1.5; color:var(--ink-soft); }
   #lesson-path-repair button { width:100%; padding:10px; border:1px solid var(--accent); border-radius:10px; background:transparent; color:var(--accent-700,var(--accent)); font-weight:650; font-size:13px; cursor:pointer; }
   .developer-status { margin:10px 0 2px;padding:10px 12px;border-left:2px solid var(--accent);color:var(--ink-soft);font-size:12px;line-height:1.45; }
+  #orchestration-launcher { display:flex;align-items:center;justify-content:space-between;gap:14px;margin:14px 0 2px;padding:14px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 10%,var(--paper)),var(--paper)); }
+  .orchestration-launcher-copy { min-width:0; }
+  .orchestration-launcher-copy strong { display:block;font:600 15px/1.15 Georgia,serif;color:var(--ink); }
+  .orchestration-launcher-copy span { display:block;margin-top:4px;color:var(--ink-soft);font-size:11.5px;line-height:1.4; }
+  #open-orchestration { flex:none;display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:8px 11px;border:0;border-radius:999px;background:var(--accent);color:#fff;font-size:12px;font-weight:750;text-decoration:none; }
+  #open-orchestration:hover { filter:brightness(.96); }
   .voice-timing-panel { margin:14px 0 2px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--paper); }
   .voice-timing-head { display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;font-weight:700;color:var(--ink);margin-bottom:8px; }
   .voice-timing-head button { padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink-soft);font-size:11px;cursor:pointer; }
@@ -1547,6 +1553,10 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       <div id="voice-timing-readout" class="voice-timing-readout"></div>
       <p class="voice-timing-legend">think = your words to the tutor's first text &middot; queue = first sentence ready to speak &middot; <strong>sound</strong> = first audio you could actually hear &middot; route = which path spoke (relay = the persistent socket, rest = the per-sentence fallback). "race" means the relay missed its 2.5s budget and the fallback was fired alongside it.</p>
     </div>
+    <div id="orchestration-launcher">
+      <div class="orchestration-launcher-copy"><strong>Orchestration desk</strong><span>Launch your working links with a short preflight.</span></div>
+      <a id="open-orchestration" href="orchestration.html">Open desk</a>
+    </div>
     <div class="legacy-voice-settings">
     <label>Appearance</label>
     <select id="set-theme">
@@ -1609,11 +1619,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v56 · Jul 30";
+const BUILD = "v58 · Aug 2";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v58", date: "Aug 2", changes: [
+    "Owner-enabled Developer Settings now opens a private-on-this-device Orchestration Desk for chat, session-report, and lab work.",
+    "The desk asks two focused preflight questions before opening a destination, and keeps its configured links only in this browser.",
+  ]},
   { tag: "v56", date: "Jul 30", changes: [
     "The tutor now builds its next question from what you actually said instead of completing a partial answer for you.",
     "When you genuinely have no foothold, it gives one small relationship and immediately asks you to use it — no mini-lecture.",
@@ -10344,8 +10358,8 @@ function organizeSettingsPanel() {
   const thinkingHint = $("set-thinking") && $("set-thinking").nextElementSibling;
   const ttsProvider = fieldNodes("set-ttsprovider"), deepgramKey = fieldNodes("set-deepgramkey"), deepgramModel = fieldNodes("set-deepgrammodel");
   const developerStatus = panel.querySelector(".developer-status");
-  const voiceTiming = $("voice-timing-panel");
-  const developer = group("Developer model lab", [...model, ...thinking, thinkingHint, ...ttsProvider, ...deepgramKey, ...deepgramModel, developerStatus, voiceTiming]);
+  const voiceTiming = $("voice-timing-panel"), orchestrationLauncher = $("orchestration-launcher");
+  const developer = group("Developer model lab", [orchestrationLauncher, ...model, ...thinking, thinkingHint, ...ttsProvider, ...deepgramKey, ...deepgramModel, developerStatus, voiceTiming]);
   developer.id = "settings-developer-group";
   const tester = fieldNodes("set-testercode");
   const connection = group("Tester access", [...tester], true, true);
