@@ -4,175 +4,168 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Worldview — Four-Model Lab</title>
-<style>
-  :root {
-    --paper:#F6EFE4; --card:#FFFCF6; --ink:#2C241C; --ink-soft:#7A6E5F;
-    --line:#E4D9C6; --accent:#B4552D; --accent-soft:#F3E2D6;
-    --ok:#3E7C4F; --ok-bg:#E2EFE5; --warn:#C9A227; --warn-bg:#F7EFD5;
-    --bad:#A8442B; --bad-bg:#F5E1DA; --mock:#F1E9DB;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --paper:#221D18; --card:#2C2620; --ink:#F0E8DC; --ink-soft:#A79A88;
-      --line:#453C31; --accent:#D97B4F; --accent-soft:#463228;
-      --ok:#7FB88D; --ok-bg:#25352A; --warn:#D9B44A; --warn-bg:#3E3620;
-      --bad:#E08D72; --bad-bg:#3E2823; --mock:#332C25;
-    }
-  }
-  :root[data-theme="dark"] {
-    --paper:#221D18; --card:#2C2620; --ink:#F0E8DC; --ink-soft:#A79A88;
-    --line:#453C31; --accent:#D97B4F; --accent-soft:#463228;
-    --ok:#7FB88D; --ok-bg:#25352A; --warn:#D9B44A; --warn-bg:#3E3620;
-    --bad:#E08D72; --bad-bg:#3E2823; --mock:#332C25;
-  }
-  :root[data-theme="light"] {
-    --paper:#F6EFE4; --card:#FFFCF6; --ink:#2C241C; --ink-soft:#7A6E5F;
-    --line:#E4D9C6; --accent:#B4552D; --accent-soft:#F3E2D6;
-    --ok:#3E7C4F; --ok-bg:#E2EFE5; --warn:#C9A227; --warn-bg:#F7EFD5;
-    --bad:#A8442B; --bad-bg:#F5E1DA; --mock:#F1E9DB;
-  }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--paper); color:var(--ink); font:15px/1.6 -apple-system,"Segoe UI",system-ui,sans-serif; }
-  header.top { position:sticky; top:0; z-index:20; background:var(--paper); border-bottom:1px solid var(--line); padding:12px 18px 10px; }
-  .top-inner { max-width:1180px; margin:0 auto; display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
-  h1 { margin:0; font:600 21px/1.2 Georgia,serif; }
-  h1 .motto { color:var(--accent); font-style:italic; font-weight:400; }
-  .top-note { color:var(--ink-soft); font-size:12px; }
-  .wrap { max-width:1180px; margin:0 auto; padding:20px 18px 90px; }
-  .panel { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px 18px; margin:0 0 20px; }
-  .panel h2 { margin:0 0 10px; font:600 15px/1.3 Georgia,serif; letter-spacing:.02em; }
-  p.hint { color:var(--ink-soft); font-size:13px; margin:6px 0 0; }
-  label { display:block; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); margin:12px 0 5px; }
-  input, textarea, select { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--paper); color:var(--ink); font:inherit; }
-  textarea { resize:vertical; min-height:78px; }
-  button { padding:10px 15px; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--ink); font:inherit; font-weight:650; cursor:pointer; }
-  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
-  button:disabled { opacity:.5; cursor:not-allowed; }
-  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-  .pill { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:700; }
-  .pill.ok { background:var(--ok-bg); color:var(--ok); }
-  .pill.bad { background:var(--bad-bg); color:var(--bad); }
-  .pill.warn { background:var(--warn-bg); color:var(--warn); }
-
-  .providers { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:12px; margin-top:12px; }
-  .prov { border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:var(--paper); }
-  .prov-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-  .prov-head strong { font-size:14px; }
-  .prov input { margin-top:8px; font-size:13px; padding:7px 10px; }
-  .prov .why { color:var(--ink-soft); font-size:11px; margin-top:6px; line-height:1.45; }
-
-  .transcript { display:flex; flex-direction:column; gap:10px; }
-  .turn { border-radius:12px; padding:10px 13px; font-size:14px; }
-  .turn.user { background:var(--accent-soft); }
-  .turn.assistant { background:var(--mock); border:1px solid var(--line); }
-  .turn .who { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:4px; }
-  .turn .who b { color:var(--accent); }
-
-  .candidates { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin-top:12px; }
-  .cand { border:1px solid var(--line); border-radius:12px; background:var(--paper); display:flex; flex-direction:column; overflow:hidden; }
-  .cand.picked { border-color:var(--ok); box-shadow:0 0 0 2px var(--ok-bg); }
-  .cand.failed { opacity:.75; }
-  .cand-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 11px; border-bottom:1px solid var(--line); font-size:12px; }
-  .cand-head b { font-size:13px; }
-  .cand-body { padding:11px; font-size:14px; white-space:pre-wrap; flex:1; min-height:70px; }
-  .cand-body.err { color:var(--bad); font-size:12.5px; }
-  .cand-foot { padding:9px 11px; border-top:1px solid var(--line); display:flex; gap:8px; align-items:center; justify-content:space-between; }
-  .cand-foot .meta { color:var(--ink-soft); font-size:11px; }
-  .cand-foot button { padding:6px 12px; font-size:12px; }
-
-  .memo-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; }
-  .memo-row .rec-state { font-size:12px; color:var(--ink-soft); }
-  .rounds { margin-top:6px; }
-  .round-log { border-top:1px solid var(--line); padding:10px 0; font-size:13px; }
-  .round-log .rl-head { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
-  .round-log .rl-head b { color:var(--accent); }
-  .round-log audio { margin-top:7px; width:100%; max-width:340px; }
-  .cost { font-size:12px; color:var(--ink-soft); }
-  .gate { max-width:460px; margin:60px auto; }
-  .hidden { display:none !important; }
-  .banner { padding:11px 14px; border-radius:12px; font-size:13px; margin:0 0 14px; }
-  .banner.bad { background:var(--bad-bg); color:var(--bad); }
-  .banner.warn { background:var(--warn-bg); color:var(--warn); }
-  code { background:var(--mock); padding:1px 5px; border-radius:5px; font-size:12.5px; }
-  @media (max-width:640px) { .wrap { padding:14px 12px 70px; } .panel { padding:13px 14px; } }
-</style>
+<title>Worldview — Model Lab</title>
+<link rel="stylesheet" href="./lab.css">
 </head>
 <body>
 
-<header class="top">
-  <div class="top-inner">
-    <h1>Worldview <span class="motto">four-model lab</span></h1>
-    <span class="top-note">Owner tool · not linked from the learner app · every round spends real provider credits</span>
+<header class="lab-topbar" id="lab-new-topbar">
+  <a class="lab-back" href="../index.html" aria-label="Return to Worldview">←</a>
+  <div>
+    <p class="eyebrow">Worldview developer tool</p>
+    <h1>Model Lab <span>· sandbox</span></h1>
   </div>
+  <div id="lab-health" class="lab-health" aria-live="polite">Locked</div>
 </header>
 
-<!-- ---------- access gate ---------- -->
-<div id="gate" class="wrap gate">
-  <div class="panel">
-    <h2>Tester access</h2>
-    <p class="hint">This page calls the same Supabase gateway the app uses, so it needs the tester code. The code is kept in this browser only and is never shown in any export.</p>
-    <label for="code">Access code</label>
-    <input id="code" type="password" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Private alpha code">
-    <div class="row" style="margin-top:12px"><button id="enter" class="primary" type="button">Open the lab</button></div>
-    <p id="gate-msg" class="hint"></p>
+<section id="lab-gate" class="lab-gate" aria-labelledby="lab-gate-title">
+  <div class="gate-orbit" aria-hidden="true"></div>
+  <div class="gate-card">
+    <p class="eyebrow">Server-held credentials</p>
+    <h2 id="lab-gate-title">Open the developer lab</h2>
+    <p>The tester code unlocks the existing Supabase gateway. Provider keys are never entered or shown here.</p>
+    <label for="lab-code">Tester access code</label>
+    <input id="lab-code" type="password" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Private alpha code">
+    <button id="lab-enter" class="button button-primary" type="button">Open lab</button>
+    <p id="lab-gate-message" class="form-message" role="status"></p>
   </div>
-</div>
+</section>
 
-<!-- ---------- lab ---------- -->
-<main id="lab" class="wrap hidden">
-  <div id="notice" class="banner warn hidden"></div>
-
-  <section class="panel">
-    <h2>Providers</h2>
-    <p class="hint">All four get the identical shared history and the identical production tutor system prompt — that is the whole comparison. Model ids are editable so a newly released model can be tried without a redeploy.</p>
-    <div id="providers" class="providers"></div>
+<main id="lab-shell" class="lab-shell" hidden>
+  <section class="lab-hero" aria-labelledby="lab-title">
+    <div>
+      <p class="eyebrow">Experiment control room</p>
+      <h2 id="lab-title">One packet. Many possible minds.</h2>
+      <p>Every run stays sandbox-only. The learner’s progress, prompts, and defaults remain unchanged.</p>
+    </div>
+    <div class="hero-stat"><strong id="lab-provider-count">0</strong><span>configured providers</span></div>
   </section>
 
-  <section class="panel">
-    <h2>The conversation</h2>
-    <p class="hint">The reply you pick becomes the single canonical assistant turn in the shared history: on the next round every model receives it as if it had said it itself.</p>
-    <div id="transcript" class="transcript"></div>
-    <label for="say">Your turn (as the learner)</label>
-    <textarea id="say" placeholder="Ask the opening question, or answer the tutor…"></textarea>
-    <div class="row" style="margin-top:10px">
-      <button id="send" class="primary" type="button">Send to all four</button>
-      <button id="reset" type="button">New conversation</button>
-      <span id="status" class="cost"></span>
+  <nav class="lab-tabs" role="tablist" aria-label="Lab benches">
+    <button class="lab-tab is-active" id="tab-lesson" type="button" role="tab" aria-selected="true" aria-controls="panel-lesson" data-tab="lesson">Lesson<br>generation</button>
+    <button class="lab-tab" id="tab-tutor" type="button" role="tab" aria-selected="false" aria-controls="panel-tutor" data-tab="tutor">Socratic<br>tutor</button>
+    <button class="lab-tab" id="tab-brain" type="button" role="tab" aria-selected="false" aria-controls="panel-brain" data-tab="brain">Brain<br><small>shadow</small></button>
+    <button class="lab-tab" id="tab-stt" type="button" role="tab" aria-selected="false" aria-controls="panel-stt" data-tab="stt">Transcription</button>
+    <button class="lab-tab" id="tab-results" type="button" role="tab" aria-selected="false" aria-controls="panel-results" data-tab="results">Results<br>&amp; flow</button>
+  </nav>
+
+  <section id="panel-lesson" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-lesson" data-panel="lesson">
+    <div class="bench-head">
+      <div><p class="eyebrow">Bench A · sandbox planner</p><h2>Lesson generation</h2></div>
+      <p class="bench-note">Sandbox route sketch, not the production Gate 0 planner. It does not create, change, or save a learner lesson.</p>
+    </div>
+    <div class="bench-grid">
+      <section class="lab-card input-card">
+        <label for="lesson-topic">What do you want to learn?</label>
+        <textarea id="lesson-topic" class="topic-input" rows="3" maxlength="2000" placeholder="Why does a bridge sway in wind?"></textarea>
+        <p class="privacy-note">A pasted link is treated as topic text in this version; the Lab does not fetch or read the page yet.</p>
+        <label for="lesson-preset">Prompt preset</label>
+        <select id="lesson-preset"></select>
+        <div class="packet-title"><span>Visible system packet</span><span id="lesson-edited" class="edited-badge" hidden>Edited</span></div>
+        <textarea id="lesson-prompt" class="packet-editor" rows="15" maxlength="12000" spellcheck="false"></textarea>
+        <p id="lesson-prompt-count" class="field-count"></p>
+        <div class="inline-actions"><button id="lesson-reset" class="button button-quiet" type="button">Reset preset</button><span id="lesson-prompt-state" class="form-message"></span></div>
+      </section>
+      <section class="lab-card lane-card">
+        <div class="card-heading"><div><p class="eyebrow">Experiment lanes</p><h3>Choose models to run</h3></div><span class="cost-warning">Each replicate spends one tutor call</span></div>
+        <div id="lesson-lanes" class="lanes" aria-live="polite"></div>
+        <button class="button button-add" type="button" data-add-lane="lesson">+ Add model run</button>
+        <button class="button button-primary button-run" type="button" data-run="lesson">Run lesson experiment</button>
+        <p id="lesson-run-message" class="form-message" role="status"></p>
+      </section>
     </div>
   </section>
 
-  <section id="candidates-panel" class="panel hidden">
-    <h2>Round <span id="round-no">1</span> — pick the best reply</h2>
-    <div id="candidates" class="candidates"></div>
-    <div class="memo-row">
-      <button id="memo" type="button">Record voice memo</button>
-      <span id="memo-state" class="rec-state">No memo for this round.</span>
+  <section id="panel-tutor" class="tab-panel" role="tabpanel" aria-labelledby="tab-tutor" data-panel="tutor" hidden>
+    <div class="bench-head">
+      <div><p class="eyebrow">Bench B · snapshot replay</p><h2>Socratic tutor</h2></div>
+      <p class="bench-note">Sandbox approximation, not the exact production packet. It never writes lesson state.</p>
     </div>
-    <label for="note">Written note (optional)</label>
-    <textarea id="note" placeholder="Why this one? What was wrong with the others?"></textarea>
+    <div class="bench-grid">
+      <section class="lab-card input-card">
+        <div class="field-row"><label for="tutor-lesson">Saved lesson on this device</label><button id="tutor-refresh" class="text-button" type="button">Refresh</button></div>
+        <select id="tutor-lesson"></select>
+        <label for="tutor-turn">New learner turn</label>
+        <textarea id="tutor-turn" rows="3" maxlength="4000" placeholder="What would you like the learner to say next?"></textarea>
+        <p class="privacy-note">The selected snapshot—including up to 10 recent conversation turns—is sent to every model you run. Use only lessons you are comfortable sharing with those providers.</p>
+        <div class="packet-title"><span>Visible tutor packet</span><span id="tutor-edited" class="edited-badge" hidden>Edited</span></div>
+        <textarea id="tutor-prompt" class="packet-editor" rows="15" maxlength="40000" spellcheck="false"></textarea>
+        <p id="tutor-prompt-count" class="field-count"></p>
+        <div class="inline-actions"><button id="tutor-reset" class="button button-quiet" type="button">Recompose packet</button><span id="tutor-prompt-state" class="form-message"></span></div>
+      </section>
+      <section class="lab-card lane-card">
+        <div class="card-heading"><div><p class="eyebrow">Same packet</p><h3>Compare tutor replies</h3></div><span class="cost-warning">No reply becomes learner history</span></div>
+        <div id="tutor-lanes" class="lanes" aria-live="polite"></div>
+        <button class="button button-add" type="button" data-add-lane="tutor">+ Add model run</button>
+        <button class="button button-primary button-run" type="button" data-run="tutor">Run tutor experiment</button>
+        <p id="tutor-run-message" class="form-message" role="status"></p>
+      </section>
+    </div>
   </section>
 
-  <section class="panel">
-    <h2>Collected rounds</h2>
-    <div class="row">
-      <button id="export" type="button">Export everything</button>
-      <button id="clear" type="button">Clear all rounds</button>
-      <span id="totals" class="cost"></span>
+  <section id="panel-brain" class="tab-panel" role="tabpanel" aria-labelledby="tab-brain" data-panel="brain" hidden>
+    <div class="bench-head">
+      <div><p class="eyebrow">Bench C · proposed only</p><h2>Brain</h2></div>
+      <p class="bench-note">Shadow diagnostics only. This is not a production Brain and its result has no authority.</p>
     </div>
-    <p class="hint">Export writes one JSON file with every candidate, every pick, notes and token counts, plus each voice memo as a separate audio file. Nothing here is uploaded anywhere.</p>
-    <div id="rounds" class="rounds"></div>
+    <div class="brain-warning"><strong>Not a production system.</strong> The read-only lesson snapshot—including recent turns—is sent to every selected provider. It never writes learner state; use only lessons safe to share.</div>
+    <div class="bench-grid">
+      <section class="lab-card input-card">
+        <div class="field-row"><label for="brain-lesson">Lesson snapshot</label><button id="brain-refresh" class="text-button" type="button">Refresh</button></div>
+        <select id="brain-lesson"></select>
+        <label for="brain-focus">Diagnostic focus</label>
+        <textarea id="brain-focus" rows="3" maxlength="2000" placeholder="For example: Is the learner reasoning from a usable foothold?"></textarea>
+        <label for="brain-preset">Prompt preset</label>
+        <select id="brain-preset"></select>
+        <div class="packet-title"><span>Visible diagnostic packet</span><span id="brain-edited" class="edited-badge" hidden>Edited</span></div>
+        <textarea id="brain-prompt" class="packet-editor" rows="13" maxlength="12000" spellcheck="false"></textarea>
+        <p id="brain-prompt-count" class="field-count"></p>
+        <div class="inline-actions"><button id="brain-reset" class="button button-quiet" type="button">Reset preset</button><span id="brain-prompt-state" class="form-message"></span></div>
+      </section>
+      <section class="lab-card lane-card">
+        <div class="card-heading"><div><p class="eyebrow">Shadow outputs</p><h3>Run a diagnostic</h3></div><span class="cost-warning">Read-only experiment</span></div>
+        <div id="brain-lanes" class="lanes" aria-live="polite"></div>
+        <button class="button button-add" type="button" data-add-lane="brain">+ Add model run</button>
+        <button class="button button-primary button-run" type="button" data-run="brain">Run shadow diagnostic</button>
+        <p id="brain-run-message" class="form-message" role="status"></p>
+      </section>
+    </div>
+  </section>
+
+  <section id="panel-stt" class="tab-panel" role="tabpanel" aria-labelledby="tab-stt" data-panel="stt" hidden>
+    <div class="bench-head">
+      <div><p class="eyebrow">Bench D · retained recording</p><h2>Transcription</h2></div>
+      <p class="bench-note">Upload one recording and compare the existing server-supported STT routes. No microphone capture occurs in the Lab.</p>
+    </div>
+    <div class="bench-grid">
+      <section class="lab-card input-card">
+        <label for="stt-file">Audio recording</label>
+        <input id="stt-file" type="file" accept="audio/*,.m4a,.ogg,.webm,.wav,.mp3">
+        <p id="stt-file-name" class="file-note">No file selected.</p>
+        <label for="stt-language">Language</label>
+        <select id="stt-language"><option value="en">English</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option><option value="pt">Portuguese</option><option value="it">Italian</option><option value="nl">Dutch</option><option value="sv">Swedish</option><option value="no">Norwegian</option><option value="da">Danish</option></select>
+        <p class="privacy-note">The selected file is sent only to the chosen transcription routes. It is not stored by this page or included in the JSON export.</p>
+      </section>
+      <section class="lab-card lane-card">
+        <div class="card-heading"><div><p class="eyebrow">Supported routes</p><h3>Compare transcripts</h3></div><span class="cost-warning">One route starts selected; each extra route spends another call</span></div>
+        <div id="stt-models" class="stt-models"></div>
+        <button id="stt-run" class="button button-primary button-run" type="button">Run transcription comparison</button>
+        <p id="stt-run-message" class="form-message" role="status"></p>
+      </section>
+    </div>
+  </section>
+
+  <section id="panel-results" class="tab-panel" role="tabpanel" aria-labelledby="tab-results" data-panel="results" hidden>
+    <div class="results-head"><div><p class="eyebrow">Page-session results</p><h2>Results &amp; flow</h2><p>Results disappear on reload or navigation. Export before leaving if you want to keep them.</p></div><div class="results-actions"><button id="export-results" class="button button-quiet" type="button">Export JSON</button><button id="clear-results" class="button button-danger" type="button">Clear results</button></div></div>
+    <div class="results-summary"><span id="results-count">0 outputs</span><span id="results-cost">Estimated total $0.00</span></div>
+    <div id="results-list" class="results-list" aria-live="polite"></div>
+    <section class="flow-card" aria-labelledby="flow-title"><div class="card-heading"><div><p class="eyebrow">Live request ledger</p><h3 id="flow-title">What moved, from where, and when</h3></div></div><ol id="flow-list" class="flow-list"></ol></section>
   </section>
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
-/* ============================================================
-   Worldview four-model lab (T-08 / TOOL-002)
-   Standalone, unlisted, owner-only. Deliberately NOT part of the
-   learner app: it spends provider credits and shows raw model output.
-   Provider keys live only in Supabase; this page never sees one.
-   ============================================================ */
+/* Owner-only Model Lab. Provider credentials stay in Supabase; this page
+   only holds the public project configuration used by its protected routes. */
 
 const SUPABASE_URL = "https://eqppapoepynjvsfnoodj.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT";
@@ -183,11 +176,9 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT
    that changes in the app, change it here too — an unfaithful copy would make
    every comparison in this lab meaningless.
 
-   What this still does NOT include, because the lab has no lesson behind it:
-   the teaching route, the hidden checkpoint-marker contract, the saved source
-   briefing, current learner state, and its compact response gate. In production
-   those are added by buildSystem() once a lesson has been planned. So this compares tutor VOICE
-   on a cold topic — it is not yet a full replica of a planned lesson turn. */
+   The v62 Tutor bench appends a bounded read-only lesson snapshot to this
+   constant. That snapshot is deliberately not the byte-exact production
+   buildSystem() packet: the Lab has no mastery or checkpoint authority. */
 const TUTOR_SYSTEM = `You are a precise Socratic tutor inside a minimal mobile learning app called Worldview. The learner should do more reasoning than you do talking. Begin at the most fundamental useful idea, then advance one small step at a time through one clear, answerable question per reply. Before asking a question that depends on a prerequisite, verify from the learner's own earlier messages that they understand that prerequisite; if the evidence is missing, probe or establish it first without jargon. Treat the learner's statements — not your own past explanations — as the evidence of what they know. Keep replies short: usually 1-3 sentences and one question. Every ordinary non-safety reply ends with exactly one question mark. Never pair a yes/no setup with a second "why" question; ask the reasoning question directly. Questions should make the learner explain a mechanism, predict, compare, test a cause, or revise their model; do not ask for trivia, steer toward a hidden one-word term, embed the missing causal link in the question, or make them guess what you are thinking.
 
 Privately distinguish three states before replying. A usable foothold is any relevant reason, mechanism, prediction, comparison, example, or misconception the learner offers, even when partial or wrong. A relevant attempt remains a usable foothold when hedged with "maybe" or "I'm not sure"; genuine no-foothold applies only when no usable attempt is present. Briefly identify the exact usable piece or conflict, add none of the missing target answer, and ask one focused question that makes them extend, test, or revise their own model. Ambiguous or thin evidence means you cannot tell what the learner intends; ask one short clarification and add no target information. A genuine no-foothold means the learner explicitly has no idea, clearly lacks a prerequisite or definition needed to reason, or remains stuck after meaningfully different strategies. Only then give one atomic scaffold — one definition, relationship, contrast, or example, not one of each — and immediately ask them to use it in a prediction, comparison, causal explanation, or changed example. The scaffold before the question must be one short sentence containing one new explanatory claim, normally no more than 20 words; choose the earliest missing prerequisite and stop. Introduce no additional claim anywhere in that reply: the question's setup counts, so it must not smuggle in more scene-setting, facts, examples, or causal links. Never stack historical scene-setting, multiple examples, a reason list, a checklist of missing facts, the whole causal chain, or a mini-lecture.
@@ -206,337 +197,7 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
-const PROVIDERS = [
-  { id:"anthropic", label:"Claude",  model:"claude-sonnet-5" },
-  { id:"google",    label:"Gemini",  model:"gemini-2.5-flash" },
-  { id:"openai",    label:"ChatGPT", model:"gpt-4.1" },
-  { id:"xai",       label:"Grok",    model:"grok-3" },
-];
-
-/* Rough published per-million-token prices, only ever used for the "about this
-   much" note next to a round. Wrong-but-close is fine here; a precise ledger
-   would be a claim this page cannot actually back up. */
-const RATES = {
-  anthropic:{ in:3,    out:15 },
-  google:   { in:0.30, out:2.50 },
-  openai:   { in:2,    out:8 },
-  xai:      { in:3,    out:15 },
-};
-
-const $ = id => document.getElementById(id);
-const store = {
-  get code() { return localStorage.getItem("wv-lab-code") || ""; },
-  set code(v) { localStorage.setItem("wv-lab-code", v); },
-  get models() { try { return JSON.parse(localStorage.getItem("wv-lab-models") || "{}"); } catch (e) { return {}; } },
-  set models(v) { localStorage.setItem("wv-lab-models", JSON.stringify(v)); },
-};
-
-const client = window.supabase && window.supabase.createClient
-  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-      auth:{ persistSession:true, autoRefreshToken:true, storageKey:"worldview-lab-auth" },
-    })
-  : null;
-
-async function accessToken(forceRefresh = false) {
-  if (!client) throw new Error("The Supabase client script did not load.");
-  let session = null;
-  if (forceRefresh) {
-    const refreshed = await client.auth.refreshSession();
-    session = refreshed.data && refreshed.data.session;
-  } else {
-    const current = await client.auth.getSession();
-    session = current.data && current.data.session;
-  }
-  if (!session) {
-    const signedIn = await client.auth.signInAnonymously({ options:{ data:{ client:"worldview-lab" } } });
-    if (signedIn.error) throw signedIn.error;
-    session = signedIn.data.session;
-  }
-  if (!session || !session.access_token) throw new Error("Sign-in did not return a session.");
-  return session.access_token;
-}
-
-async function labFetch(body, retryAuth = true) {
-  const token = await accessToken(false);
-  const response = await fetch(SUPABASE_URL + "/functions/v1/lab-tutor", {
-    method:"POST",
-    headers:{
-      "content-type":"application/json",
-      apikey:SUPABASE_PUBLISHABLE_KEY,
-      authorization:"Bearer " + token,
-      "x-worldview-access":store.code,
-    },
-    body:JSON.stringify(body),
-  });
-  if (response.status === 401 && retryAuth) { await accessToken(true); return labFetch(body, false); }
-  const json = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = new Error((json.error && json.error.message) || ("HTTP " + response.status));
-    error.type = json.error && json.error.type;
-    throw error;
-  }
-  return json;
-}
-
-/* ---------- state ---------- */
-let history = [];   // the single shared conversation: {role, content}
-let rounds = [];    // {n, prompt, candidates[], pickedProvider, note, memo:Blob|null}
-let pending = null; // the round being judged
-let configured = {};
-
-/* ---------- rendering ---------- */
-const escapeHtml = v => String(v == null ? "" : v).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-
-function renderProviders() {
-  const models = store.models;
-  $("providers").innerHTML = PROVIDERS.map(p => {
-    const state = configured[p.id];
-    const pill = state === undefined ? `<span class="pill warn">checking…</span>`
-      : state.configured ? `<span class="pill ok">key present</span>`
-      : `<span class="pill bad">no key on server</span>`;
-    const why = state && !state.configured
-      ? `<div class="why">Add it with <code>supabase secrets set ${escapeHtml(state.acceptedSecretNames[0])}=…</code> (also accepted: ${state.acceptedSecretNames.map(escapeHtml).join(", ")}). Until then this column is skipped.</div>`
-      : "";
-    return `<div class="prov">
-      <div class="prov-head"><strong>${escapeHtml(p.label)}</strong>${pill}</div>
-      <input data-model="${p.id}" value="${escapeHtml(models[p.id] || p.model)}" aria-label="${escapeHtml(p.label)} model id" spellcheck="false">
-      ${why}
-    </div>`;
-  }).join("");
-  document.querySelectorAll("[data-model]").forEach(input => {
-    input.addEventListener("change", () => {
-      const next = store.models; next[input.dataset.model] = input.value.trim(); store.models = next;
-    });
-  });
-}
-
-function renderTranscript() {
-  if (!history.length) {
-    $("transcript").innerHTML = `<p class="hint">Nothing yet. Your first message starts the shared conversation.</p>`;
-    return;
-  }
-  $("transcript").innerHTML = history.map(turn => {
-    const who = turn.role === "user" ? "You (learner)"
-      : `Tutor — winner: <b>${escapeHtml(turn.wonBy || "?")}</b>`;
-    return `<div class="turn ${turn.role}"><div class="who">${who}</div>${escapeHtml(turn.content)}</div>`;
-  }).join("");
-}
-
-function roundCost(candidates) {
-  return candidates.reduce((sum, c) => {
-    if (!c.ok) return sum;
-    const rate = RATES[c.provider] || { in:0, out:0 };
-    return sum + ((c.inputTokens || 0) / 1e6) * rate.in + ((c.outputTokens || 0) / 1e6) * rate.out;
-  }, 0);
-}
-const money = n => n < 0.01 ? "<$0.01" : "$" + n.toFixed(2);
-
-function renderCandidates() {
-  const panel = $("candidates-panel");
-  if (!pending) { panel.classList.add("hidden"); return; }
-  panel.classList.remove("hidden");
-  $("round-no").textContent = pending.n;
-  $("candidates").innerHTML = pending.candidates.map(c => {
-    const picked = pending.pickedProvider === c.provider ? " picked" : "";
-    const body = c.ok
-      ? `<div class="cand-body">${escapeHtml(c.text)}</div>`
-      : `<div class="cand-body err">${escapeHtml(c.error)}</div>`;
-    const meta = c.ok
-      ? `${c.ms}ms · ${c.inputTokens == null ? "?" : c.inputTokens} in / ${c.outputTokens == null ? "?" : c.outputTokens} out`
-      : "no reply";
-    return `<div class="cand${picked}${c.ok ? "" : " failed"}">
-      <div class="cand-head"><b>${escapeHtml(c.label)}</b><span class="meta cost">${escapeHtml(c.model)}</span></div>
-      ${body}
-      <div class="cand-foot"><span class="meta">${escapeHtml(meta)}</span>
-        ${c.ok ? `<button data-pick="${escapeHtml(c.provider)}" ${picked ? "disabled" : ""}>${picked ? "Chosen" : "Pick this"}</button>` : ""}
-      </div>
-    </div>`;
-  }).join("");
-  document.querySelectorAll("[data-pick]").forEach(button => {
-    button.addEventListener("click", () => pickWinner(button.dataset.pick));
-  });
-  $("status").textContent = "Round cost ≈ " + money(roundCost(pending.candidates));
-}
-
-function renderRounds() {
-  const done = rounds.filter(r => r.pickedProvider);
-  $("totals").textContent = done.length
-    ? done.length + " judged round" + (done.length > 1 ? "s" : "") + " · total ≈ " + money(rounds.reduce((s, r) => s + roundCost(r.candidates), 0))
-    : "";
-  $("rounds").innerHTML = rounds.map(r => {
-    const memo = r.memo ? `<audio controls src="${URL.createObjectURL(r.memo)}"></audio>` : "";
-    return `<div class="round-log">
-      <div class="rl-head"><span>Round ${r.n}</span>
-        <span>winner: <b>${escapeHtml(r.pickedProvider ? labelFor(r.pickedProvider) : "not picked")}</b></span>
-        <span class="cost">≈ ${money(roundCost(r.candidates))}</span></div>
-      <div class="cost">You said: ${escapeHtml(r.prompt.slice(0, 160))}${r.prompt.length > 160 ? "…" : ""}</div>
-      ${r.note ? `<div class="cost">Note: ${escapeHtml(r.note)}</div>` : ""}
-      ${memo}
-    </div>`;
-  }).reverse().join("") || `<p class="hint">No rounds yet.</p>`;
-}
-const labelFor = id => (PROVIDERS.find(p => p.id === id) || {}).label || id;
-
-/* ---------- the round ---------- */
-async function send() {
-  const text = $("say").value.trim();
-  if (!text) return;
-  if (pending && !pending.pickedProvider) { $("status").textContent = "Pick a winning reply before starting the next round."; return; }
-  $("send").disabled = true;
-  $("status").textContent = "Asking all configured providers…";
-
-  const askable = PROVIDERS.filter(p => !configured[p.id] || configured[p.id].configured);
-  history = history.concat([{ role:"user", content:text }]);
-  $("say").value = "";
-  renderTranscript();
-
-  const models = store.models;
-  // Identical shared history to every provider — built once, on purpose.
-  const shared = history.map(turn => ({ role:turn.role, content:turn.content }));
-  const results = await Promise.all(askable.map(async p => {
-    const model = (models[p.id] || p.model).trim();
-    try {
-      const json = await labFetch({ provider:p.id, model, system:TUTOR_SYSTEM, messages:shared, max_tokens:600 });
-      return { provider:p.id, label:p.label, model, ok:!!json.text, text:json.text, error:json.text ? "" : "The model returned an empty reply.",
-               inputTokens:json.inputTokens, outputTokens:json.outputTokens, ms:json.ms };
-    } catch (error) {
-      return { provider:p.id, label:p.label, model, ok:false, text:"", error:error.message || "request failed" };
-    }
-  }));
-
-  pending = { n:rounds.length + 1, prompt:text, candidates:results, pickedProvider:"", note:"", memo:null, at:new Date().toISOString() };
-  rounds.push(pending);
-  $("note").value = "";
-  $("memo-state").textContent = "No memo for this round.";
-  $("send").disabled = false;
-  renderCandidates();
-  renderRounds();
-  if (results.every(r => !r.ok)) $("status").textContent = "Every provider failed this round — see the messages above.";
-}
-
-function pickWinner(provider) {
-  if (!pending) return;
-  const winner = pending.candidates.find(c => c.provider === provider);
-  if (!winner || !winner.ok) return;
-  pending.pickedProvider = provider;
-  /* The point of the whole tool: one canonical assistant turn. Every provider's
-     next request contains this reply as its own, so ChatGPT continues from a
-     question Gemini may have asked. */
-  history = history.concat([{ role:"assistant", content:winner.text, wonBy:winner.label }]);
-  renderTranscript();
-  renderCandidates();
-  renderRounds();
-  $("status").textContent = labelFor(provider) + " is now the tutor's turn for every model.";
-}
-
-/* ---------- voice memo ---------- */
-let recorder = null, chunks = [];
-async function toggleMemo() {
-  if (!pending) return;
-  if (recorder && recorder.state === "recording") { recorder.stop(); return; }
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
-    chunks = [];
-    recorder = new MediaRecorder(stream);
-    recorder.ondataavailable = event => { if (event.data && event.data.size) chunks.push(event.data); };
-    recorder.onstop = () => {
-      stream.getTracks().forEach(track => track.stop());
-      const target = pending;
-      target.memo = new Blob(chunks, { type:recorder.mimeType || "audio/webm" });
-      $("memo").textContent = "Record voice memo";
-      $("memo-state").textContent = "Memo saved for round " + target.n + ".";
-      renderRounds();
-    };
-    recorder.start();
-    $("memo").textContent = "Stop recording";
-    $("memo-state").textContent = "Recording…";
-  } catch (error) {
-    $("memo-state").textContent = "Microphone unavailable: " + (error.message || error.name);
-  }
-}
-
-/* ---------- export ---------- */
-function download(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-function exportAll() {
-  if (!rounds.length) return;
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  const payload = {
-    exportedAt:new Date().toISOString(),
-    tool:"worldview-four-model-lab",
-    systemPrompt:TUTOR_SYSTEM,
-    conversation:history,
-    rounds:rounds.map(r => ({
-      round:r.n, at:r.at, learnerTurn:r.prompt, pickedProvider:r.pickedProvider, note:r.note,
-      memoFile:r.memo ? `lab-${stamp}-round-${r.n}-memo.webm` : null,
-      candidates:r.candidates.map(c => ({
-        provider:c.provider, label:c.label, model:c.model, ok:c.ok, text:c.text, error:c.error,
-        inputTokens:c.inputTokens, outputTokens:c.outputTokens, ms:c.ms,
-      })),
-      estimatedCostUsd:Number(roundCost(r.candidates).toFixed(4)),
-    })),
-  };
-  download(new Blob([JSON.stringify(payload, null, 2)], { type:"application/json" }), `lab-${stamp}.json`);
-  rounds.forEach(r => { if (r.memo) download(r.memo, `lab-${stamp}-round-${r.n}-memo.webm`); });
-}
-
-/* ---------- boot ---------- */
-async function probeProviders() {
-  await Promise.all(PROVIDERS.map(async p => {
-    try { configured[p.id] = await labFetch({ provider:p.id, probe:true }); }
-    catch (error) { configured[p.id] = { configured:false, acceptedSecretNames:[p.id.toUpperCase() + "_API_KEY"], error:error.message }; }
-  }));
-  renderProviders();
-  const missing = PROVIDERS.filter(p => configured[p.id] && !configured[p.id].configured);
-  const notice = $("notice");
-  if (missing.length) {
-    notice.classList.remove("hidden");
-    notice.innerHTML = `<strong>${missing.length} of 4 providers have no key on the server yet</strong> — ${missing.map(p => escapeHtml(p.label)).join(", ")}. `
-      + `Rounds will run with the rest, and those columns are skipped rather than shown as failures. `
-      + `Each missing provider's card shows the exact <code>supabase secrets set</code> name it expects.`;
-  } else notice.classList.add("hidden");
-}
-
-async function openLab() {
-  const code = $("code").value.trim();
-  if (!code) { $("gate-msg").textContent = "Enter the tester code."; return; }
-  store.code = code;
-  $("enter").disabled = true;
-  $("gate-msg").textContent = "Checking…";
-  try {
-    await labFetch({ provider:"anthropic", probe:true });
-    $("gate").classList.add("hidden");
-    $("lab").classList.remove("hidden");
-    renderTranscript(); renderRounds();
-    await probeProviders();
-    $("status").textContent = "";
-  } catch (error) {
-    $("gate-msg").textContent = error.type === "access_denied"
-      ? "That code was not accepted."
-      : "Could not reach the lab: " + (error.message || "unknown error");
-  } finally { $("enter").disabled = false; }
-}
-
-$("enter").addEventListener("click", openLab);
-$("code").addEventListener("keydown", event => { if (event.key === "Enter") openLab(); });
-$("send").addEventListener("click", send);
-$("memo").addEventListener("click", toggleMemo);
-$("note").addEventListener("input", () => { if (pending) { pending.note = $("note").value; renderRounds(); } });
-$("export").addEventListener("click", exportAll);
-$("clear").addEventListener("click", () => {
-  if (!rounds.length || !confirm("Delete every collected round, note and memo on this device?")) return;
-  rounds = []; pending = null; renderCandidates(); renderRounds();
-});
-$("reset").addEventListener("click", () => {
-  if (history.length && !confirm("Start a new shared conversation? Collected rounds are kept.")) return;
-  history = []; pending = null; renderTranscript(); renderCandidates();
-  $("status").textContent = "";
-});
-if (store.code) $("code").value = store.code;
 </script>
+<script src="./lab.js" defer></script>
 </body>
 </html>

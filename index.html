@@ -1635,11 +1635,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v61 · Aug 2";
+const BUILD = "v62 · Aug 2";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v62", date: "Aug 2", changes: [
+    "Developer Lab is now a real component workbench with separate lesson-generation, Socratic tutor, Brain-shadow, transcription, and results areas.",
+    "Experiments use addable provider and model dropdowns with a bounded quantity; provider API keys stay on the server and are never typed into the Lab.",
+    "Lesson and Brain tests can use a read-only snapshot of an existing lesson without changing learner progress.",
+  ]},
   { tag: "v61", date: "Aug 2", changes: [
     "Developer lab now stays visible at the top right of the home page; the lab itself keeps its access gate.",
     "Models is back as a clear, formatted choice inside Settings instead of a loose home-page button.",
