@@ -586,7 +586,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #developer-lab-launcher { position:fixed; top:14px; right:64px; z-index:35; display:inline-flex; align-items:center; gap:7px; border:1px solid rgba(189,90,48,.65); background:color-mix(in srgb,var(--card) 92%,transparent); color:var(--accent-700); border-radius:999px; padding:7px 12px; box-shadow:var(--shadow-sm); font-size:11px; font-weight:700; letter-spacing:.03em; text-decoration:none; }
   #developer-lab-launcher::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 3px rgba(189,90,48,.14); }
   #developer-lab-launcher:hover { background:var(--card); border-color:var(--accent); }
-  #developer-lab-launcher[hidden] { display:none!important; }
+  .settings-action { display:flex;align-items:center;justify-content:space-between;gap:14px;margin:3px 0 2px;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--paper); }
+  .settings-action-copy { min-width:0; }
+  .settings-action-copy strong { display:block;font:600 15px/1.15 Georgia,serif;color:var(--ink); }
+  .settings-action-copy span { display:block;margin-top:4px;color:var(--ink-soft);font-size:11.5px;line-height:1.4; }
+  .settings-action button { flex:none;min-height:38px;padding:8px 11px;border:0;border-radius:999px;background:var(--accent);color:#fff;font-size:12px;font-weight:750;cursor:pointer; }
+  .settings-action button:hover { filter:brightness(.96); }
   .drawer-item, .rail-item { transition:background .2s ease,color .2s ease,transform .2s ease; }
   @media(max-width:700px){ .section-rail{left:3px}.rail-item{font-size:10px;padding-left:15px}.rail-settings{left:6px} }
 
@@ -1246,7 +1251,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     <button id="rail-sources" class="rail-item" type="button">Upload</button>
   </nav>
   <button id="mobile-category-button" type="button" aria-haspopup="dialog">Most recent</button>
-  <a id="developer-lab-launcher" href="lab/" hidden>Developer model lab</a>
+  <a id="developer-lab-launcher" href="lab/">Developer lab</a>
   <div id="home-header">
     <button id="home-menu" class="menu-button" type="button" aria-label="Open menu">&#9776;</button>
     <div class="home-brand">
@@ -1526,6 +1531,10 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     <h3>Settings</h3>
     <label>Access code</label>
     <input id="set-testercode" class="secret-input" type="text" placeholder="Private alpha code" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore disabled>
+    <div id="settings-models-launcher" class="settings-action">
+      <div class="settings-action-copy"><strong>Models</strong><span>Choose what runs each part of a new conversation.</span></div>
+      <button id="open-models" type="button">Choose</button>
+    </div>
     <label>Tutor model</label>
     <select id="set-model">
       <option value="claude-sonnet-5">Claude Sonnet 5 (default &mdash; smart &amp; affordable)</option>
@@ -1626,11 +1635,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v60 · Aug 2";
+const BUILD = "v61 · Aug 2";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v61", date: "Aug 2", changes: [
+    "Developer lab now stays visible at the top right of the home page; the lab itself keeps its access gate.",
+    "Models is back as a clear, formatted choice inside Settings instead of a loose home-page button.",
+  ]},
   { tag: "v60", date: "Aug 2", changes: [
     "The owner-only Developer model lab now has a deliberate top-right link on the home page, including the web layout.",
     "Removed the generic Models home button and the desktop Most recent heading that floated above the middle card; the phone folder pill remains.",
@@ -10520,13 +10533,13 @@ function organizeSettingsPanel() {
     intro.after(details); return details;
   }
   const fieldNodes = id => { const field=$(id), label=field && field.previousElementSibling; return [label,field]; };
-  const model = fieldNodes("set-model"), thinking = fieldNodes("set-thinking"), speechLanguage = fieldNodes("set-speechlanguage"), theme = fieldNodes("set-theme");
+  const model = fieldNodes("set-model"), thinking = fieldNodes("set-thinking"), speechLanguage = fieldNodes("set-speechlanguage"), theme = fieldNodes("set-theme"), modelsLauncher = $("settings-models-launcher");
   const voiceDefault = $("set-voicedefault") && $("set-voicedefault").closest("label"); if (voiceDefault) voiceDefault.className = "settings-check";
   const developerToggle = $("set-developer") && $("set-developer").closest("label");
   if (developerToggle) { developerToggle.className = "settings-check"; developerToggle.hidden = !(state.developerUnlocked && state.developerMode); }
   const speechLanguageHint = $("set-speechlanguage") && $("set-speechlanguage").nextElementSibling;
   if (speechLanguageHint) speechLanguageHint.remove();
-  const learning = group("Learning & conversation", [...theme, ...speechLanguage, voiceDefault, developerToggle], true, true);
+  const learning = group("Learning & conversation", [modelsLauncher, ...theme, ...speechLanguage, voiceDefault, developerToggle], true, true);
   const thinkingHint = $("set-thinking") && $("set-thinking").nextElementSibling;
   const ttsProvider = fieldNodes("set-ttsprovider"), deepgramKey = fieldNodes("set-deepgramkey"), deepgramModel = fieldNodes("set-deepgrammodel");
   const developerStatus = panel.querySelector(".developer-status");
@@ -10555,8 +10568,6 @@ organizeSettingsPanel();
 const SECRET_SETTING_IDS = ["set-testercode","set-cartkey","set-elkey","set-deepgramkey"];
 function syncDeveloperSettingsVisibility() {
   const developer = !!state.developerMode;
-  const labLauncher = $("developer-lab-launcher");
-  if (labLauncher) labLauncher.hidden = !(state.developerUnlocked && state.developerMode);
   const developerToggle = $("set-developer") && $("set-developer").closest("label");
   if (developerToggle) developerToggle.hidden = !(state.developerUnlocked && state.developerMode);
   const group = $("settings-developer-group");
@@ -10733,6 +10744,11 @@ if ($("version-sheet")) {
 }
 if ($("version-sheet")) $("version-sheet").addEventListener("click", event => { if (event.target === $("version-sheet")) closeVersionSheet(); });
 if ($("models-button")) $("models-button").addEventListener("click", () => {
+  renderModelsSheet();
+  $("models-sheet").classList.add("open");
+  $("models-sheet").setAttribute("aria-hidden","false");
+});
+if ($("open-models")) $("open-models").addEventListener("click", () => {
   renderModelsSheet();
   $("models-sheet").classList.add("open");
   $("models-sheet").setAttribute("aria-hidden","false");
