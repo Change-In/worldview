@@ -352,6 +352,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #category-active-label { display:flex; align-items:center; gap:7px; position:absolute; left:calc(50% - (var(--cardW,262px) / 2)); top:calc(50% - (var(--cardH,320px) / 2) - 30px); z-index:4; }
   #category-active-label span { width:9px;height:9px;border-radius:50%;background:var(--accent); }
   #category-active-label b { color:var(--ink);font-family:Georgia,serif;font-size:13px; }
+  @media(min-width:701px){ #category-active-label{display:none} }
   @media(max-width:700px){ #lesson-layer-guide.category-map{right:25px;transform:translateY(-50%) scale(.82)} #lesson-layer-guide.overview.category-map{transform:translateY(-50%) scale(1.05)}
     /* Mobile already has its own current-folder indicator, the bottom-right
        "Most recent" pill — showing this top label too would be the exact
@@ -582,6 +583,10 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .rail-item.active { color:var(--ink); font-weight:650; }
   .rail-item.active::before { background:var(--accent); box-shadow:0 0 0 3px rgba(189,90,48,.16); }
   .rail-settings { position:absolute; left:12px; top:14px; z-index:13; border:1px solid rgba(189,90,48,.55); background:color-mix(in srgb,var(--card) 72%,transparent); color:var(--accent-700); border-radius:999px; padding:7px 11px; cursor:pointer; }
+  #developer-lab-launcher { position:fixed; top:14px; right:64px; z-index:35; display:inline-flex; align-items:center; gap:7px; border:1px solid rgba(189,90,48,.65); background:color-mix(in srgb,var(--card) 92%,transparent); color:var(--accent-700); border-radius:999px; padding:7px 12px; box-shadow:var(--shadow-sm); font-size:11px; font-weight:700; letter-spacing:.03em; text-decoration:none; }
+  #developer-lab-launcher::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 3px rgba(189,90,48,.14); }
+  #developer-lab-launcher:hover { background:var(--card); border-color:var(--accent); }
+  #developer-lab-launcher[hidden] { display:none!important; }
   .drawer-item, .rail-item { transition:background .2s ease,color .2s ease,transform .2s ease; }
   @media(max-width:700px){ .section-rail{left:3px}.rail-item{font-size:10px;padding-left:15px}.rail-settings{left:6px} }
 
@@ -1007,8 +1012,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     #mobile-category-button { display:flex; align-items:center; gap:7px; position:absolute; right:12px; left:auto; bottom:auto; top:calc(50% - var(--cardH,320px) / 2 - 6px); z-index:14; border:1px solid rgba(189,90,48,.55); background:color-mix(in srgb,var(--card) 94%,transparent); color:var(--accent-700); border-radius:999px; padding:9px 11px; font-size:10px; }
     #mobile-category-button.deck-label-hidden { opacity:0; pointer-events:none; transform:translateY(-6px); }
     #mobile-category-button { transition:opacity .22s ease, transform .22s ease; }
-    /* The model roster lives where the deck label used to be. */
-    #models-button { display:flex; align-items:center; gap:7px; position:absolute; right:12px; bottom:58px; z-index:14; border:1px solid var(--line); background:color-mix(in srgb,var(--card) 94%,transparent); color:var(--ink-soft); border-radius:999px; padding:9px 12px; font-size:10px; font-weight:650; letter-spacing:.06em; text-transform:uppercase; }
+    #developer-lab-launcher { top:calc(env(safe-area-inset-top) + 56px); right:10px; font-size:10px; padding:6px 9px; }
     #mobile-category-button::before { content:""; width:8px; height:8px; border-radius:50%; background:var(--accent); }
     #mobile-category-sheet { position:fixed; inset:0; z-index:80; align-items:flex-end; background:rgba(44,36,28,.25); }
     #mobile-category-sheet.open { display:flex; }
@@ -1242,7 +1246,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     <button id="rail-sources" class="rail-item" type="button">Upload</button>
   </nav>
   <button id="mobile-category-button" type="button" aria-haspopup="dialog">Most recent</button>
-  <button id="models-button" type="button" aria-haspopup="dialog">Models</button>
+  <a id="developer-lab-launcher" href="lab/" hidden>Developer model lab</a>
   <div id="home-header">
     <button id="home-menu" class="menu-button" type="button" aria-label="Open menu">&#9776;</button>
     <div class="home-brand">
@@ -1622,11 +1626,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v59 · Aug 2";
+const BUILD = "v60 · Aug 2";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v60", date: "Aug 2", changes: [
+    "The owner-only Developer model lab now has a deliberate top-right link on the home page, including the web layout.",
+    "Removed the generic Models home button and the desktop Most recent heading that floated above the middle card; the phone folder pill remains.",
+  ]},
   { tag: "v59", date: "Aug 2", changes: [
     "Spoken replies now stay fully visible while they arrive, and holding Record no longer shifts the conversation.",
     "Recording starts without waiting for the sound meter, keeps a short ending buffer, and automatically retries a failed transcription without discarding your audio.",
@@ -10547,6 +10555,8 @@ organizeSettingsPanel();
 const SECRET_SETTING_IDS = ["set-testercode","set-cartkey","set-elkey","set-deepgramkey"];
 function syncDeveloperSettingsVisibility() {
   const developer = !!state.developerMode;
+  const labLauncher = $("developer-lab-launcher");
+  if (labLauncher) labLauncher.hidden = !(state.developerUnlocked && state.developerMode);
   const developerToggle = $("set-developer") && $("set-developer").closest("label");
   if (developerToggle) developerToggle.hidden = !(state.developerUnlocked && state.developerMode);
   const group = $("settings-developer-group");
@@ -10560,6 +10570,7 @@ function syncDeveloperSettingsVisibility() {
   if (tester) tester.hidden = backendAccessEnabled() && !developer;
   document.querySelectorAll(".owner-provider-field").forEach(node => { node.hidden = !developer; });
 }
+syncDeveloperSettingsVisibility();
 async function requestAccountLink() {
   const input = $("account-email"), button = $("account-link");
   const email = String(input && input.value || "").trim().toLowerCase();
