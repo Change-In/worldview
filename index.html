@@ -163,6 +163,33 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   @media (max-height:700px) { #intro-demo{place-items:start center}.intro-card{padding-top:22px}.intro-card h2{font-size:29px}.intro-path{margin:18px 0}.intro-card>p{font-size:13px} }
   @media (prefers-reduced-motion:reduce) { .intro-card,.intro-path::before,.intro-step span{animation:none!important} }
 
+  /* Ask for microphone access before the first lesson so permission and a
+     learner's first recorded words are never the same gesture. */
+  #mic-primer {
+    position:fixed;inset:0;z-index:212;display:none;place-items:center;
+    padding:max(22px,env(safe-area-inset-top)) 22px max(22px,env(safe-area-inset-bottom));
+    overflow-y:auto;background:color-mix(in srgb,var(--paper) 97%,transparent);backdrop-filter:blur(12px);
+  }
+  #mic-primer.open { display:grid; }
+  .mic-primer-card {
+    width:min(430px,100%);padding:clamp(28px,7vw,44px);border:1.5px solid var(--line);
+    border-radius:24px;background:var(--card);box-shadow:0 22px 70px rgba(44,36,28,.15);
+    text-align:center;animation:introCardIn .36s cubic-bezier(.22,.8,.25,1) both;
+  }
+  .mic-primer-icon { width:68px;height:68px;margin:0 auto 18px;display:grid;place-items:center;border-radius:50%;background:var(--notice-bg);color:var(--notice-ink); }
+  .mic-primer-icon svg { width:30px;height:30px; }
+  .mic-primer-card h2 { margin:0 0 10px;font:600 clamp(28px,7vw,38px)/1.05 Georgia,serif; }
+  .mic-primer-card > p { margin:0 auto;color:var(--ink-soft);font-size:15px;line-height:1.55;max-width:340px; }
+  .mic-primer-actions { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:25px; }
+  .mic-primer-actions button { min-height:50px;border-radius:14px;font-size:14px;font-weight:650;cursor:pointer; }
+  #mic-primer-enable { border:0;background:var(--accent);color:#fff; }
+  #mic-primer-later { border:1.5px solid var(--line);background:var(--paper);color:var(--ink); }
+  #mic-primer-enable:disabled { opacity:.55;cursor:wait; }
+  #mic-primer-status { min-height:20px;margin-top:13px;color:var(--ink-soft);font-size:12px;line-height:1.45; }
+  #mic-primer-status.is-error { color:var(--accent-700); }
+  @media (max-width:420px) { .mic-primer-actions{grid-template-columns:1fr} }
+  @media (max-height:520px) { #mic-primer{place-items:start center}.mic-primer-card{padding:22px}.mic-primer-icon{width:52px;height:52px;margin-bottom:12px}.mic-primer-actions{margin-top:17px} }
+
   /* ---------- Views ---------- */
   .view { flex: 1; display: none; flex-direction: column; min-height: 0; }
   .view.active { display: flex; }
@@ -1134,19 +1161,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     width:100%; min-height:60px;
     display: flex; align-items: center; justify-content: center; gap: 10px;
     padding: 12px 18px; border: 1.5px solid var(--line); border-radius: 999px;
-    background: var(--card); cursor: pointer; touch-action: none;
+    background: var(--card); cursor: pointer; touch-action: manipulation;
     font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft);
     transition:background .18s ease,color .18s ease,transform .18s ease,border-color .18s ease;
   }
   #voice-status.locked, #voice-status.recording { background:var(--notice-bg);color:var(--notice-ink);border-color:var(--notice-bg);transform:scale(.992); }
   #voice-status.starting { border-style:dashed; }
-  #voice-lock-guide { --lock-progress:0;position:absolute;left:50%;bottom:70px;transform:translate(-50%,14px) scale(.96);display:flex;flex-direction:column;align-items:center;gap:4px;opacity:0;pointer-events:none;transition:opacity .16s ease,transform .16s ease; }
-  #voice-lock-guide.show { opacity:1;transform:translate(-50%,0) scale(1); }
-  #voice-lock-rail { position:relative;width:38px;height:76px;border:1px solid rgba(189,90,48,.55);border-radius:22px;background:color-mix(in srgb,var(--card) 96%,transparent);box-shadow:0 8px 24px rgba(44,36,28,.12);overflow:hidden; }
-  #voice-lock-fill { position:absolute;left:0;right:0;bottom:0;height:calc(var(--lock-progress) * 100%);background:rgba(189,90,48,.2);transition:height .05s linear; }
-  #voice-lock-puck { position:absolute;left:50%;bottom:7px;transform:translate(-50%,calc(var(--lock-progress) * -48px));width:24px;height:24px;display:grid;place-items:center;border-radius:50%;background:var(--accent);color:var(--ink);font-size:13px;transition:transform .05s linear,background .14s ease; }
-  #voice-lock-guide.locked #voice-lock-puck { background:var(--ink);color:#fff; }
-  #voice-lock-guide small { color:var(--accent-700);font-size:10px;letter-spacing:.08em;white-space:nowrap;text-transform:uppercase; }
   #voice-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
   #voice-dot.pulse { animation: vpulse 1.4s ease-in-out infinite; }
   #voice-dot.held { transform: scale(1.6); animation: none; background: var(--ink); }
@@ -1239,6 +1259,24 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     </form>
     <button id="intro-example" type="button">Try an example: How does lightning form?</button>
     <button id="intro-skip" type="button">Explore first</button>
+  </section>
+</div>
+
+<div id="mic-primer" role="dialog" aria-modal="true" aria-labelledby="mic-primer-title" aria-hidden="true">
+  <section class="mic-primer-card">
+    <div class="mic-primer-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6"></path>
+      </svg>
+    </div>
+    <div class="intro-wordmark">Voice setup</div>
+    <h2 id="mic-primer-title">Make the first tap count.</h2>
+    <p>Allow the microphone now, so your first tap in a lesson starts recording instead of stopping for a permission question.</p>
+    <div class="mic-primer-actions">
+      <button id="mic-primer-enable" type="button">Enable microphone</button>
+      <button id="mic-primer-later" type="button">Not now</button>
+    </div>
+    <div id="mic-primer-status" role="status" aria-live="polite"></div>
   </section>
 </div>
 
@@ -1493,8 +1531,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   </div>
   <div id="voice-scroll"></div>
   <div id="voice-control-zone">
-    <div id="voice-lock-guide" aria-hidden="true"><div id="voice-lock-rail"><div id="voice-lock-fill"></div><div id="voice-lock-puck">&#128274;</div></div><small>slide up to lock</small></div>
-    <button id="voice-status" type="button" aria-label="Start talking"><span id="voice-dot"></span><span id="voice-status-text">hold to talk &middot; slide up to lock</span></button>
+    <button id="voice-status" type="button" aria-label="Tap to talk"><span id="voice-dot"></span><span id="voice-status-text">tap to talk</span></button>
   </div>
 </div>
 
@@ -1534,6 +1571,10 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     <div id="settings-models-launcher" class="settings-action">
       <div class="settings-action-copy"><strong>Models</strong><span>Choose what runs each part of a new conversation.</span></div>
       <button id="open-models" type="button">Choose</button>
+    </div>
+    <div id="settings-microphone-launcher" class="settings-action">
+      <div class="settings-action-copy"><strong>Microphone</strong><span>Set up access before your next spoken lesson.</span></div>
+      <button id="open-mic-primer" type="button">Set up</button>
     </div>
     <label>Tutor model</label>
     <select id="set-model">
@@ -1596,7 +1637,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     <div class="hint">Voice transcription assumes this language instead of trying to guess from a short answer.</div>
     <label>Voice + transcription key (Cartesia)</label>
     <input id="set-cartkey" class="secret-input" type="text" placeholder="sk_car_..." autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore disabled>
-    <div class="hint">Used for spoken replies and reliable hold-to-talk transcription. Keep this key private; a shared tester build needs a small protected token service instead.</div>
+    <div class="hint">Used for spoken replies and reliable tap-to-talk or Space-key transcription. Keep this key private; a shared tester build needs a small protected token service instead.</div>
     <label>Cartesia voice ID (optional)</label>
     <input id="set-cartvoice" type="text" placeholder="defaults to a preset voice" autocomplete="off">
     <div class="hint">Browse voices at cartesia.ai/voices (or your dashboard's Voice Library once signed in) and paste one's ID here — e.g. to use a voice named "Daniel" if one exists in the library.</div>
@@ -1635,11 +1676,24 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v62 · Aug 2";
+const BUILD = "v64 · Aug 5";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v64", date: "Aug 5", changes: [
+    "The Developer Lab now offers each provider's current models — including Claude Opus 5, the Gemini 3 line and Grok 4.5 — and any lane can take an exact model id typed by hand, so a model released tomorrow needs no update.",
+    "Every experiment shows what it will cost before you run it, not just after.",
+    "Each Lab bench explains what its AI actually does inside Worldview, and can copy that explanation plus the current prompt into a briefing you take to a separate voice chat to work out a new version.",
+    "A lesson prompt can be tried against several topics at once, and every reply is checked automatically against the questioning rules.",
+    "Kept Lab comparisons can be scored out of five, and the archive now holds sixty instead of sixteen.",
+  ] },
+  { tag: "v63", date: "Aug 4", changes: [
+    "The Developer Lab can now run several named prompt versions against the same input, then keep the strongest results and notes in a local comparison library.",
+    "Saved Notes can be tried in the Lab and handed back to Worldview to build through the normal trusted lesson flow.",
+    "Worldview now offers microphone setup when the site opens, before a lesson depends on it.",
+    "Spoken lessons are testing a simpler control: tap once to record, then tap again to send. Laptop Space remains hold-to-talk.",
+  ]},
   { tag: "v62", date: "Aug 2", changes: [
     "Developer Lab is now a real component workbench with separate lesson-generation, Socratic tutor, Brain-shadow, transcription, and results areas.",
     "Experiments use addable provider and model dropdowns with a bounded quantity; provider API keys stay on the server and are never typed into the Lab.",
@@ -1941,7 +1995,7 @@ const VERSIONS = [
 const LS_KEY = "worldview-v1";
 let cloudSyncReady = false, cloudHydrating = false, cloudSyncTimer = 0, cloudSyncInFlight = null, cloudAccount = null, backendEntitled = false;
 let localSaveWarningShown = false;
-let state = { apiKey: "", testerInvite: "", monthlyBudget: 5, model: "claude-sonnet-5", tutorThinking: "fast", developerMode: false, developerUnlocked:false, ttsProvider: "auto", sttModel:"deepgram-nova-3", deepgramKey: "", deepgramModel: "aura-2-arcas-en", lessons: [], notes: [], customCategories: [], voiceURI: "", voiceDefault: true, speechLanguage: "en", elKey: "", cartKey: "", cartVoice: "", cardScale: 1, theme:"system", libraryUpdatedAt:0, voiceTimingLog: [], voiceRelayEnabled: false, speakerphone: true };
+let state = { apiKey: "", testerInvite: "", monthlyBudget: 5, model: "claude-sonnet-5", tutorThinking: "fast", developerMode: false, developerUnlocked:false, ttsProvider: "auto", sttModel:"deepgram-nova-3", deepgramKey: "", deepgramModel: "aura-2-arcas-en", lessons: [], notes: [], customCategories: [], voiceURI: "", voiceDefault: true, speechLanguage: "en", elKey: "", cartKey: "", cartVoice: "", cardScale: 1, theme:"system", libraryUpdatedAt:0, voiceTimingLog: [], voiceRelayEnabled: false, speakerphone: true, micPrimerVersion:"", micPrimerChoice:"" };
 try { Object.assign(state, JSON.parse(localStorage.getItem(LS_KEY) || "{}")); } catch (e) {}
 if (state.developerMode) state.developerUnlocked = true;
 if (!Array.isArray(state.lessons)) state.lessons = [];
@@ -7364,20 +7418,20 @@ function setVoiceStatus(mode) {
   control.classList.toggle("recording", mode === "pressing" || mode === "locked" || (mode === "starting" && voice.captureMode === "hold"));
   control.classList.toggle("starting", mode === "starting" || mode === "reconnecting" || mode === "finishing" || mode === "transcribing" || mode === "planning");
   dot.className = "";
-  if (mode === "ready") { txt.textContent = matchMedia("(pointer:fine)").matches ? "hold Space or press to talk" : "hold to talk · slide up to lock"; }
+  if (mode === "ready") { txt.textContent = matchMedia("(pointer:fine)").matches ? "tap to talk · hold Space" : "tap to talk"; }
   else if (mode === "planning") { dot.classList.add("pulse"); txt.textContent = "mapping this lesson…"; }
   else if (mode === "starting") { dot.classList.add("pulse"); txt.textContent = "starting microphone…"; }
   else if (mode === "reconnecting") { dot.classList.add("pulse"); txt.textContent = "reconnecting microphone…"; }
   else if (mode === "captured") { dot.classList.add("held"); txt.textContent = "tap to send"; }
   else if (mode === "listening") { dot.classList.add("pulse"); txt.textContent = "listening · tap when finished"; }
   else if (mode === "pressing") { dot.classList.add("pulse"); txt.textContent = "recording · release to send"; }
-  else if (mode === "locked") { dot.classList.add("pulse"); txt.textContent = "locked · tap when finished"; }
+  else if (mode === "locked") { dot.classList.add("pulse"); txt.textContent = "recording · tap to send"; }
   else if (mode === "finishing") { dot.classList.add("held"); txt.textContent = "finishing your thought…"; }
   else if (mode === "transcribing") { dot.classList.add("pulse"); txt.textContent = "transcribing… tap to cancel"; }
   else if (mode === "retry") { dot.classList.add("held"); txt.textContent = "tap to retry transcription"; }
   else if (mode === "response-retry") { dot.classList.add("held"); txt.textContent = "tap to retry response"; }
   else if (mode === "reentry-retry") { dot.classList.add("held"); txt.textContent = "tap to start this sitting"; }
-  else if (mode === "paused") { dot.classList.add("held"); txt.textContent = "mic paused · hold to resume"; }
+  else if (mode === "paused") { dot.classList.add("held"); txt.textContent = "mic paused · tap to resume"; }
   else if (mode === "thinking") { txt.textContent = "thinking…"; }
   else if (mode === "speaking") { dot.classList.add("pulse"); txt.textContent = "speaking · tap to interrupt"; }
   control.setAttribute("aria-label", txt.textContent);
@@ -7740,7 +7794,7 @@ function resetVoiceLockVisual() {
 }
 function statusForActiveCapture() {
   if (voice.locked || voice.captureMode === "toggle") return "locked";
-  if (voice.captureMode === "hold") return "pressing";
+  if (voice.captureMode === "hold" || voice.captureMode === "space") return "pressing";
   return "listening";
 }
 function releaseVoiceAudioOutput() {
@@ -7902,6 +7956,17 @@ function prepareOwnedMicMeterInBackground(stream, epoch) {
     if (voice.captureEngine === "owned" && voice.listening) startOwnedMicLevelMeter(epoch);
   });
 }
+function ownedMicrophoneConstraints() {
+  return {
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      channelCount: 1,
+    },
+    video: false,
+  };
+}
 async function ensureOwnedMicStream(epoch = voice.captureEpoch) {
   const live = voice.mediaStream && voice.mediaStream.getAudioTracks().some(track => track.readyState === "live" && !track.muted);
   if (live) {
@@ -7919,15 +7984,7 @@ async function ensureOwnedMicStream(epoch = voice.captureEpoch) {
     // while the mic is live the session must allow both directions, or asking
     // for input can silence the tutor's output on iOS
     setOwnedAudioSession("play-and-record");
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        channelCount: 1,
-      },
-      video: false,
-    });
+    const stream = await navigator.mediaDevices.getUserMedia(ownedMicrophoneConstraints());
     if (!voice.active || acquireGeneration !== voice.mediaAcquireGeneration) {
       stream.getTracks().forEach(track => track.stop());
       throw new DOMException("Microphone request superseded", "AbortError");
@@ -7939,7 +7996,7 @@ async function ensureOwnedMicStream(epoch = voice.captureEpoch) {
         if (voice.mediaStream !== stream) return;
         if (voice.captureWanted || voice.listening) {
           pauseVoiceCapture("");
-          toast("The phone stopped delivering microphone audio. Hold once to reconnect.", 5200);
+          toast("The phone stopped delivering microphone audio. Tap the control to reconnect.", 5200);
         }
       };
       track.addEventListener("ended", disconnect, { once: true });
@@ -7956,10 +8013,11 @@ function updateOwnedRecordingLabel() {
   if (voice.captureEngine !== "owned" || !voice.mediaStartedAt) return;
   const seconds = Math.max(0, Math.floor((Date.now() - voice.mediaStartedAt) / 1000));
   const clock = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2,"0")}`;
+  const heldByKeyboard = voice.captureMode === "space" || voice.captureMode === "hold";
   if (seconds >= 2 && voice.mediaAnalyser && voice.mediaAudioContext && voice.mediaAudioContext.state === "running" && voice.mediaMeterFrames >= 5 && !voice.recAudioSeen) {
-    $("voice-status-text").textContent = `no mic signal ${clock} · release to reconnect`;
-  } else if (voice.statusMode === "locked") $("voice-status-text").textContent = `recording ${clock} · tap when finished`;
-  else $("voice-status-text").textContent = `recording ${clock} · release to send`;
+    $("voice-status-text").textContent = heldByKeyboard ? `no mic signal ${clock} · release to retry` : `no mic signal ${clock} · tap to retry`;
+  } else if (heldByKeyboard) $("voice-status-text").textContent = `recording ${clock} · release to send`;
+  else $("voice-status-text").textContent = `recording ${clock} · tap to send`;
 }
 function startOwnedMicLevelMeter(epoch) {
   if (voice.mediaLevelRAF) return;
@@ -8291,7 +8349,7 @@ async function finalizeOwnedVoiceCapture(epoch, chunks, mime, sendAfter) {
     voice.sendOnEnd = false;
     releaseOwnedMicStream();
     setVoiceStatus(voice.pending.trim() ? "captured" : "ready");
-    toast("The phone opened the mic but returned no audio. Hold once more to reconnect.", 5200);
+    toast("The phone opened the mic but returned no audio. Tap the control to reconnect.", 5200);
     return;
   }
   voice.retainedBlob = blob;
@@ -8318,7 +8376,7 @@ async function finalizeOwnedVoiceCapture(epoch, chunks, mime, sendAfter) {
     if (sendAfter) completeVoiceCapture();
     else {
       setVoiceStatus("captured");
-      toast("Your words were kept. Tap to send or hold to keep talking.", 4200);
+      toast("Your words were kept. Tap to send.", 4200);
     }
   } catch (error) {
     if (!voice.active || voice.captureEpoch !== epoch || error.name === "AbortError") return;
@@ -8400,7 +8458,7 @@ async function startOwnedVoiceCapture() {
       clearTimeout(voice.ownedStopTimer);
       voice.ownedStopTimer = null;
       setVoiceStatus(voice.pending.trim() ? "captured" : "ready");
-      toast("The microphone is ready. Hold once more and speak.", 3600);
+      toast("The microphone is ready. Tap once more and speak.", 3600);
       return;
     }
     setOwnedAudioSession("play-and-record");
@@ -8487,7 +8545,7 @@ async function startOwnedVoiceCapture() {
     resetVoiceLockVisual();
     setVoiceStatus(voice.pending.trim() ? "captured" : "ready");
     const denied = error.name === "NotAllowedError" || error.name === "SecurityError";
-    toast(denied ? "Microphone access is blocked. Allow it for this site, then hold again." : "The phone could not open its microphone (" + error.message + ").", 7000);
+    toast(denied ? "Microphone access is blocked. Allow it for this site, then tap again." : "The phone could not open its microphone (" + error.message + ").", 7000);
   }
 }
 const OWNED_RELEASE_TAIL_MS = 300;
@@ -8545,7 +8603,7 @@ function requestOwnedRecorderStop(sendAfter) {
     disableOwnedMicTrack();
     stopOwnedMicMeter();
     setVoiceStatus(voice.pending.trim() ? "captured" : "ready");
-    toast("The microphone did not finish opening. Hold again after responding to the browser permission prompt.", 6200);
+    toast("The microphone did not finish opening. Tap again after responding to the browser permission prompt.", 6200);
   }, recorder ? 2600 + (sendAfter ? OWNED_RELEASE_TAIL_MS : 0) : 15000);
   return true;
 }
@@ -8609,7 +8667,7 @@ function scheduleRecognitionRestart() {
     voice.locked = false;
     resetVoiceLockVisual();
     setVoiceStatus((voice.pending + voice.interim).trim() ? "captured" : "paused");
-    toast("The microphone could not reconnect. Hold the button to try again; anything already heard is still here.",6500);
+    toast("The microphone could not reconnect. Tap the control to try again; anything already heard is still here.",6500);
     return;
   }
   setVoiceStatus("reconnecting");
@@ -8644,7 +8702,7 @@ function completeVoiceCapture() {
   if (text) { voiceSend(text); return; }
   if (voiceLiveUserEl) { voiceLiveUserEl.remove(); voiceLiveUserEl = null; }
   if (voice.active) setVoiceStatus("ready");
-  toast("I didn’t catch anything. Hold the button and try again.",3600);
+  toast("I didn’t catch anything. Tap the control and try again.",3600);
 }
 function startListening(resume = false) {
   if (!voice.active || voice.speaking || !voice.captureWanted) return;
@@ -8712,7 +8770,7 @@ function startListening(resume = false) {
     if (fatal) {
       voice.captureWanted = false; voice.sendOnEnd = false; voice.locked = false; resetVoiceLockVisual();
       setVoiceStatus(voice.pending.trim() ? "captured" : "ready");
-      const message = error === "audio-capture" ? "No microphone is available. Check this phone’s microphone access." : "Microphone access is blocked. Allow it for this site, then hold to try again.";
+      const message = error === "audio-capture" ? "No microphone is available. Check this phone’s microphone access." : "Microphone access is blocked. Allow it for this site, then tap to try again.";
       toast(message,6500);
       return;
     }
@@ -10270,121 +10328,11 @@ function refreshWordClasses() {
   ov.addEventListener("mousemove", move);
   ov.addEventListener("mouseup", up);
 })();
-/* Phone recording gesture: press starts immediately; slide upward 72px to
-   latch hands-free; release sends unless latched. It owns only the bottom
-   control, so the transcript remains naturally scrollable. */
-(function attachVoiceLockGesture() {
-  const control = $("voice-status");
-  const guide = $("voice-lock-guide");
-  const LOCK_PX = 72, DISARM_PX = 52;
-  let tracking=false,pointerId=null,sx=0,sy=0,startedAt=0,action="",lockedDuringGesture=false,resumedCaptured=false;
-  function suppressSyntheticClick() { voice.suppressControlClickUntil = Date.now() + 550; }
-  control.addEventListener("pointerdown", event => {
-    if (event.button != null && event.button !== 0) return;
-    if (!voice.active || ["thinking","starting","finishing"].includes(voice.statusMode)) return;
-    tracking=true;pointerId=event.pointerId;sx=event.clientX;sy=event.clientY;startedAt=Date.now();lockedDuringGesture=false;resumedCaptured=false;
-    try { control.setPointerCapture(pointerId); } catch (e) {}
-    if (voice.speaking) {
-      const canRecordOnThisPress = voice.streamDone;
-      interruptSpeech();
-      if (!canRecordOnThisPress) { action="interrupt";suppressSyntheticClick();return; }
-    }
-    if (voice.statusMode === "transcribing") {
-      action="cancel-transcription";suppressSyntheticClick();return;
-    }
-    if (voice.statusMode === "retry" && voice.retainedBlob) {
-      action="retry";suppressSyntheticClick();return;
-    }
-    if (voice.statusMode === "response-retry") {
-      action="retry-response";suppressSyntheticClick();return;
-    }
-    if (voice.statusMode === "reentry-retry") {
-      action="retry-reentry";suppressSyntheticClick();return;
-    }
-    if (voice.captureWanted || voice.listening || voice.rec) {
-      action="finish";suppressSyntheticClick();return;
-    }
-    action="record";
-    guide.classList.add("show");
-    guide.classList.remove("locked");
-    guide.style.setProperty("--lock-progress","0");
-    // A quick press on captured words still sends them. Keeping the finger
-    // down resumes the same thought, so a background/pointer cancellation
-    // never forces the learner to discard the partial transcript.
-    resumedCaptured = voice.statusMode === "captured";
-    beginVoiceCapture("hold", resumedCaptured);
-    suppressSyntheticClick();
-  });
-  control.addEventListener("pointermove", event => {
-    if (!tracking || event.pointerId !== pointerId || action !== "record") return;
-    const dy=Math.max(0,sy-event.clientY),dx=Math.abs(event.clientX-sx);
-    const progress=Math.max(0,Math.min(1,dy/LOCK_PX));
-    guide.style.setProperty("--lock-progress",String(progress));
-    const verticalIntent = dy > dx * 1.15;
-    if (!lockedDuringGesture && progress >= 1 && verticalIntent) {
-      lockedDuringGesture=true;voice.locked=true;voice.captureMode="locked";
-      guide.classList.add("locked");setVoiceStatus("locked");
-      try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {}
-    } else if (lockedDuringGesture && (dy < DISARM_PX || !verticalIntent)) {
-      lockedDuringGesture=false;voice.locked=false;voice.captureMode="hold";
-      guide.classList.remove("locked");
-      setVoiceStatus(voice.listening ? "pressing" : "starting");
-    }
-  });
-  function finish(event,cancelled=false) {
-    if (!tracking || (event.pointerId != null && event.pointerId !== pointerId)) return;
-    const dy=Math.max(0,sy-(event.clientY == null ? sy : event.clientY));
-    const dx=Math.abs((event.clientX == null ? sx : event.clientX)-sx);
-    const shortTap=Date.now()-startedAt<260 && dx<12 && dy<12;
-    tracking=false;
-    try { control.releasePointerCapture(pointerId); } catch (e) {}
-    pointerId=null;
-    if (action === "record") {
-      if (!voice.captureWanted && !voice.rec) {
-        resetVoiceLockVisual();
-        if (resumedCaptured && shortTap && (voice.pending + voice.interim).trim()) completeVoiceCapture();
-      } else if (cancelled && !lockedDuringGesture) {
-        pauseVoiceCapture("Recording paused safely. Hold again to continue.");
-      } else if (lockedDuringGesture) {
-        voice.locked=true;voice.captureMode="locked";setVoiceStatus("locked");
-        setTimeout(resetVoiceLockVisual,420);
-      } else if (shortTap && resumedCaptured) {
-        finishVoiceCapture();
-      } else if (shortTap) {
-        voice.locked=true;voice.captureMode="toggle";setVoiceStatus("locked");
-        guide.classList.add("locked");guide.style.setProperty("--lock-progress","1");
-        setTimeout(resetVoiceLockVisual,420);
-      } else {
-        finishVoiceCapture();
-      }
-    } else if (action === "finish" && !cancelled) {
-      finishVoiceCapture();
-    } else if (action === "retry" && !cancelled) {
-      retryOwnedTranscription();
-    } else if (action === "retry-response" && !cancelled) {
-      voiceSend("", true);
-    } else if (action === "retry-reentry" && !cancelled) {
-      const lesson=getLesson(currentLessonId); if(lesson) voiceReenter(lesson);
-    } else if (action === "cancel-transcription" && !cancelled) {
-      cancelOwnedTranscriptionForRetry();
-    }
-    action="";lockedDuringGesture=false;resumedCaptured=false;
-    if (!voice.locked) resetVoiceLockVisual();
-  }
-  control.addEventListener("pointerup",event => finish(event,false));
-  control.addEventListener("pointercancel",event => finish(event,true));
-  window.addEventListener("pointerup", event => { if (tracking) finish(event,false); }, true);
-  window.addEventListener("pointercancel", event => { if (tracking) finish(event,true); }, true);
-  control.addEventListener("lostpointercapture", event => {
-    if (tracking && !lockedDuringGesture) finish({ pointerId, clientX:sx, clientY:sy }, true);
-  });
-  control.addEventListener("click",event => {
-    if (Date.now() < voice.suppressControlClickUntil) { event.preventDefault();event.stopPropagation();return; }
-    // Keyboard/assistive activation has no pointer sequence; keep a complete
-    // tap-to-toggle path for accessibility and laptop use.
-    handleVoiceControl(event);
-  });
-})();
+/* Phone control experiment: one completed tap starts capture and the next tap
+   sends it. Pointer release has no recording meaning, so a permission dialog,
+   ordinary finger drift, or a long tap cannot accidentally finish a turn.
+   Laptop Space remains true push-to-talk below. */
+$("voice-status").addEventListener("click",handleVoiceControl);
 /* A deliberate swipe from the phone's left edge exits the spoken lesson.
    It never owns ordinary transcript swipes, so vertical reading remains native. */
 (function attachVoiceEdgeExit() {
@@ -10538,13 +10486,13 @@ function organizeSettingsPanel() {
     intro.after(details); return details;
   }
   const fieldNodes = id => { const field=$(id), label=field && field.previousElementSibling; return [label,field]; };
-  const model = fieldNodes("set-model"), thinking = fieldNodes("set-thinking"), speechLanguage = fieldNodes("set-speechlanguage"), theme = fieldNodes("set-theme"), modelsLauncher = $("settings-models-launcher");
+  const model = fieldNodes("set-model"), thinking = fieldNodes("set-thinking"), speechLanguage = fieldNodes("set-speechlanguage"), theme = fieldNodes("set-theme"), modelsLauncher = $("settings-models-launcher"), microphoneLauncher = $("settings-microphone-launcher");
   const voiceDefault = $("set-voicedefault") && $("set-voicedefault").closest("label"); if (voiceDefault) voiceDefault.className = "settings-check";
   const developerToggle = $("set-developer") && $("set-developer").closest("label");
   if (developerToggle) { developerToggle.className = "settings-check"; developerToggle.hidden = !(state.developerUnlocked && state.developerMode); }
   const speechLanguageHint = $("set-speechlanguage") && $("set-speechlanguage").nextElementSibling;
   if (speechLanguageHint) speechLanguageHint.remove();
-  const learning = group("Learning & conversation", [modelsLauncher, ...theme, ...speechLanguage, voiceDefault, developerToggle], true, true);
+  const learning = group("Learning & conversation", [modelsLauncher, microphoneLauncher, ...theme, ...speechLanguage, voiceDefault, developerToggle], true, true);
   const thinkingHint = $("set-thinking") && $("set-thinking").nextElementSibling;
   const ttsProvider = fieldNodes("set-ttsprovider"), deepgramKey = fieldNodes("set-deepgramkey"), deepgramModel = fieldNodes("set-deepgrammodel");
   const developerStatus = panel.querySelector(".developer-status");
@@ -10666,6 +10614,7 @@ function openSettings() {
   $("set-speechlanguage").value = speechLanguageCode();
   $("set-voicedefault").checked = !!state.voiceDefault;
   $("set-developer").checked = !!state.developerMode;
+  $("open-mic-primer").textContent = state.micPrimerVersion === MIC_PRIMER_VERSION ? "Review" : "Set up";
   syncDeveloperSettingsVisibility();
   updateCloudAccountUI();
   $("settings").classList.add("open");
@@ -10795,6 +10744,78 @@ $("settings-save").onclick = () => {
 
 /* ================= One-screen introduction ================= */
 const INTRO_VERSION = "intro-v3";
+const MIC_PRIMER_VERSION = "mic-primer-v1";
+let micPrimerRequestGeneration = 0;
+let micPrimerRequestTimer = 0;
+let micPrimerReturnFocus = null;
+
+function micPrimerNeeded() {
+  return state.micPrimerVersion !== MIC_PRIMER_VERSION;
+}
+function setMicPrimerOpen(open) {
+  const primer = $("mic-primer");
+  if (open && !primer.contains(document.activeElement)) micPrimerReturnFocus = document.activeElement;
+  primer.classList.toggle("open",open);
+  primer.setAttribute("aria-hidden",open ? "false" : "true");
+  document.querySelectorAll(".view").forEach(view => { view.inert = open; });
+  if (open) {
+    const supported = !!(location.protocol !== "file:" && window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    $("mic-primer-enable").disabled = !supported;
+    $("mic-primer-status").className = supported ? "" : "is-error";
+    $("mic-primer-status").textContent = supported ? "" : "Microphone setup needs the secure website or installed app.";
+    requestAnimationFrame(() => (supported ? $("mic-primer-enable") : $("mic-primer-later")).focus({preventScroll:true}));
+  } else if (micPrimerReturnFocus && micPrimerReturnFocus.isConnected && typeof micPrimerReturnFocus.focus === "function") {
+    const target = micPrimerReturnFocus;
+    micPrimerReturnFocus = null;
+    requestAnimationFrame(() => target.focus({preventScroll:true}));
+  }
+}
+function finishMicPrimer(choice) {
+  clearTimeout(micPrimerRequestTimer);
+  micPrimerRequestTimer = 0;
+  micPrimerRequestGeneration += 1;
+  state.micPrimerVersion = MIC_PRIMER_VERSION;
+  state.micPrimerChoice = choice;
+  save();
+  setMicPrimerOpen(false);
+  if (state.introSeenVersion !== INTRO_VERSION) setTimeout(() => setIntroOpen(true),120);
+}
+async function enableMicrophoneFromPrimer() {
+  if (location.protocol === "file:" || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.isSecureContext) return;
+  const generation = ++micPrimerRequestGeneration;
+  const button = $("mic-primer-enable");
+  const status = $("mic-primer-status");
+  button.disabled = true;
+  status.className = "";
+  status.textContent = "Waiting for your browser’s permission question…";
+  clearTimeout(micPrimerRequestTimer);
+  micPrimerRequestTimer = setTimeout(() => {
+    if (generation !== micPrimerRequestGeneration) return;
+    status.className = "is-error";
+    status.textContent = "The permission question is still waiting. You can answer it or choose Not now.";
+  },20000);
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia(ownedMicrophoneConstraints());
+    stream.getTracks().forEach(track => track.stop());
+    if (generation !== micPrimerRequestGeneration) return;
+    clearTimeout(micPrimerRequestTimer);
+    micPrimerRequestTimer = 0;
+    try { setOwnedAudioSession("auto"); } catch (error) {}
+    status.textContent = "Microphone ready. Worldview will only listen after you tap the lesson control.";
+    setTimeout(() => { if (generation === micPrimerRequestGeneration) finishMicPrimer("enabled"); },650);
+  } catch (error) {
+    if (generation !== micPrimerRequestGeneration) return;
+    clearTimeout(micPrimerRequestTimer);
+    micPrimerRequestTimer = 0;
+    button.disabled = false;
+    const denied = error && (error.name === "NotAllowedError" || error.name === "SecurityError");
+    status.className = "is-error";
+    status.textContent = denied
+      ? "Microphone access is off. You can allow it later in this site’s settings."
+      : `The microphone could not be prepared${error && error.message ? `: ${error.message}` : "."}`;
+  }
+}
+
 function setIntroOpen(open,remember = false) {
   const intro = $("intro-demo");
   intro.classList.toggle("open",open);
@@ -10838,6 +10859,41 @@ $("intro-example").onclick = () => {
 $("intro-skip").onclick = () => finishIntro(false);
 $("intro-replay").onclick = () => { closeSettings(true);setIntroOpen(true); };
 $("intro-demo").addEventListener("keydown",event => { if (event.key === "Escape") finishIntro(false); });
+$("mic-primer-enable").addEventListener("click",enableMicrophoneFromPrimer);
+$("mic-primer-later").addEventListener("click",() => finishMicPrimer("later"));
+$("open-mic-primer").addEventListener("click",() => { closeSettings(true);setMicPrimerOpen(true); });
+$("mic-primer").addEventListener("keydown",event => { if (event.key === "Escape") finishMicPrimer("later"); });
+
+/* A Lab result can hand only its original topic back to the real app. The
+   sandbox output and prompt never become trusted lesson data. Keeping the
+   handoff in sessionStorage avoids putting a private Note in URL history; the
+   learner still sees the topic in Ask Anything and deliberately taps Begin,
+   which uses the normal production planner and library save path. */
+const LAB_LESSON_HANDOFF_KEY = "worldview-lab-lesson-handoff-v1";
+function consumeLabLessonHandoff() {
+  let handoff = null;
+  try {
+    const raw = sessionStorage.getItem(LAB_LESSON_HANDOFF_KEY);
+    sessionStorage.removeItem(LAB_LESSON_HANDOFF_KEY);
+    if (raw) handoff = JSON.parse(raw);
+  } catch (error) {
+    try { sessionStorage.removeItem(LAB_LESSON_HANDOFF_KEY); } catch (ignored) {}
+  }
+  const topic = typeof handoff?.topic === "string" ? handoff.topic.trim() : "";
+  const createdAt = typeof handoff?.createdAt === "number" ? handoff.createdAt : Date.parse(handoff?.createdAt || "");
+  const age = Date.now() - createdAt;
+  if (handoff?.version !== 1 || !handoff?.nonce || !topic || topic.length > 2000 || !Number.isFinite(age) || age < 0 || age > 60 * 60 * 1000) return;
+  wheel.layerCategory = null;
+  wheel.layerIndex = 0;
+  renderHome();
+  wheel.pos = Math.min(1,wheel.cards.length - 1);
+  layoutWheel(false);
+  const input = $("topic-input");
+  if (!input) return;
+  input.value = topic;
+  syncStartButton();
+  setTimeout(() => toast("Your Lab pick is ready. Tap Begin to build the real lesson and add it to your library.",6200),240);
+}
 
 /* ================= boot ================= */
 // warn if opened as a raw file — that's why the mic keeps prompting in voice mode
@@ -10851,6 +10907,7 @@ renderHome();
 renderProfile();       // populate the Profile page (top of the home deck)
 homeLandOnExplore();   // but open on Explore, not Profile
 requestAnimationFrame(homeLandOnExplore); // again after layout settles
+consumeLabLessonHandoff();
 if (backendClient) {
   backendClient.auth.onAuthStateChange((event,session) => {
     if (["SIGNED_IN","INITIAL_SESSION","USER_UPDATED"].includes(event) && session) {
@@ -10861,7 +10918,8 @@ if (backendClient) {
 }
 try { matchMedia("(prefers-color-scheme:dark)").addEventListener("change",() => { if ((state.theme || "system") === "system") applyTheme(); }); } catch (error) {}
 const introNeededAtBoot = state.introSeenVersion !== INTRO_VERSION;
-if (introNeededAtBoot) setTimeout(() => setIntroOpen(true),80);
+if (micPrimerNeeded()) setTimeout(() => setMicPrimerOpen(true),80);
+else if (introNeededAtBoot) setTimeout(() => setIntroOpen(true),80);
 save();
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
@@ -10881,7 +10939,7 @@ document.addEventListener("visibilitychange", () => {
     if (!settling) setVoiceStatus((voice.pending + voice.interim).trim() ? "captured" : "paused");
     toast(settling
       ? "Your recording is still being finished. It has not been discarded."
-      : "The mic paused while the app was away. Hold to resume; anything already heard was kept.",5600);
+      : "The mic paused while the app was away. Tap to resume; anything already heard was kept.",5600);
   }
   // returning to an active voice session after backgrounding: iOS can pause
   // and independently resume the device's speechSynthesis queue AND the

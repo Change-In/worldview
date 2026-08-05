@@ -52,19 +52,26 @@
   <section id="panel-lesson" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-lesson" data-panel="lesson">
     <div class="bench-head">
       <div><p class="eyebrow">Bench A · sandbox planner</p><h2>Lesson generation</h2></div>
-      <p class="bench-note">Sandbox route sketch, not the production Gate 0 planner. It does not create, change, or save a learner lesson.</p>
+      <p class="bench-note">Sandbox route sketch, not the production Gate 0 planner. After a result, Create real lesson returns only the original topic to Worldview—never the sandbox output.</p>
     </div>
+    <details class="role-panel" data-role-panel="lesson"></details>
     <div class="bench-grid">
       <section class="lab-card input-card">
+        <div class="field-row"><label for="lesson-note">Test a saved Note</label><button id="lesson-notes-refresh" class="text-button" type="button">Refresh</button></div>
+        <select id="lesson-note"></select>
+        <p class="privacy-note">Choosing a Note copies its text into the topic below. The saved Note is never changed or removed.</p>
         <label for="lesson-topic">What do you want to learn?</label>
-        <textarea id="lesson-topic" class="topic-input" rows="3" maxlength="2000" placeholder="Why does a bridge sway in wind?"></textarea>
+        <textarea id="lesson-topic" class="topic-input" rows="4" maxlength="2000" placeholder="Why does a bridge sway in wind?&#10;How did Napoleon actually move 600,000 men?&#10;What is a transformer really doing?"></textarea>
+        <p class="privacy-note"><strong>One topic per line.</strong> Every model lane runs against every topic, so you can see whether a prompt holds up across a spread of ideas instead of one lucky example. Up to 4 topics, and lanes × topics × samples still has to fit inside the 8-call cap.</p>
         <p class="privacy-note">A pasted link is treated as topic text in this version; the Lab does not fetch or read the page yet.</p>
-        <label for="lesson-preset">Prompt preset</label>
-        <select id="lesson-preset"></select>
-        <div class="packet-title"><span>Visible system packet</span><span id="lesson-edited" class="edited-badge" hidden>Edited</span></div>
+        <label for="lesson-preset">Prompt version</label>
+        <div class="version-picker"><select id="lesson-preset"></select><button class="button button-quiet" type="button" data-load-prompt="lesson">Load</button></div>
+        <div class="packet-title"><span>Editable instruction core</span><span id="lesson-edited" class="edited-badge" hidden>Edited</span></div>
         <textarea id="lesson-prompt" class="packet-editor" rows="15" maxlength="12000" spellcheck="false"></textarea>
         <p id="lesson-prompt-count" class="field-count"></p>
-        <div class="inline-actions"><button id="lesson-reset" class="button button-quiet" type="button">Reset preset</button><span id="lesson-prompt-state" class="form-message"></span></div>
+        <div class="version-save"><input id="lesson-version-name" type="text" maxlength="80" placeholder="Name this version"><button class="button button-save-version" type="button" data-save-prompt="lesson">Save as new version</button></div>
+        <div class="inline-actions"><button class="button button-danger-soft" type="button" data-delete-prompt="lesson">Delete saved version</button><button class="button button-workshop" type="button" data-workshop="lesson">Copy workshop briefing</button></div>
+        <p id="lesson-prompt-state" class="form-message"></p>
       </section>
       <section class="lab-card lane-card">
         <div class="card-heading"><div><p class="eyebrow">Experiment lanes</p><h3>Choose models to run</h3></div><span class="cost-warning">Each replicate spends one tutor call</span></div>
@@ -81,6 +88,7 @@
       <div><p class="eyebrow">Bench B · snapshot replay</p><h2>Socratic tutor</h2></div>
       <p class="bench-note">Sandbox approximation, not the exact production packet. It never writes lesson state.</p>
     </div>
+    <details class="role-panel" data-role-panel="tutor"></details>
     <div class="bench-grid">
       <section class="lab-card input-card">
         <div class="field-row"><label for="tutor-lesson">Saved lesson on this device</label><button id="tutor-refresh" class="text-button" type="button">Refresh</button></div>
@@ -88,10 +96,15 @@
         <label for="tutor-turn">New learner turn</label>
         <textarea id="tutor-turn" rows="3" maxlength="4000" placeholder="What would you like the learner to say next?"></textarea>
         <p class="privacy-note">The selected snapshot—including up to 10 recent conversation turns—is sent to every model you run. Use only lessons you are comfortable sharing with those providers.</p>
-        <div class="packet-title"><span>Visible tutor packet</span><span id="tutor-edited" class="edited-badge" hidden>Edited</span></div>
+        <label for="tutor-preset">Prompt version</label>
+        <div class="version-picker"><select id="tutor-preset"></select><button class="button button-quiet" type="button" data-load-prompt="tutor">Load</button></div>
+        <div class="packet-title"><span>Editable tutor instruction core</span><span id="tutor-edited" class="edited-badge" hidden>Edited</span></div>
         <textarea id="tutor-prompt" class="packet-editor" rows="15" maxlength="40000" spellcheck="false"></textarea>
         <p id="tutor-prompt-count" class="field-count"></p>
-        <div class="inline-actions"><button id="tutor-reset" class="button button-quiet" type="button">Recompose packet</button><span id="tutor-prompt-state" class="form-message"></span></div>
+        <div class="version-save"><input id="tutor-version-name" type="text" maxlength="80" placeholder="Name this version"><button class="button button-save-version" type="button" data-save-prompt="tutor">Save as new version</button></div>
+        <div class="inline-actions"><button class="button button-danger-soft" type="button" data-delete-prompt="tutor">Delete saved version</button><button class="button button-workshop" type="button" data-workshop="tutor">Copy workshop briefing</button></div>
+        <p id="tutor-prompt-state" class="form-message"></p>
+        <details class="context-preview"><summary>Read-only lesson context added at run time</summary><pre id="tutor-context-preview"></pre><p>This context is used for the live request only. It is not saved in prompt versions, kept comparisons, or exports.</p></details>
       </section>
       <section class="lab-card lane-card">
         <div class="card-heading"><div><p class="eyebrow">Same packet</p><h3>Compare tutor replies</h3></div><span class="cost-warning">No reply becomes learner history</span></div>
@@ -108,6 +121,7 @@
       <div><p class="eyebrow">Bench C · proposed only</p><h2>Brain</h2></div>
       <p class="bench-note">Shadow diagnostics only. This is not a production Brain and its result has no authority.</p>
     </div>
+    <details class="role-panel" data-role-panel="brain"></details>
     <div class="brain-warning"><strong>Not a production system.</strong> The read-only lesson snapshot—including recent turns—is sent to every selected provider. It never writes learner state; use only lessons safe to share.</div>
     <div class="bench-grid">
       <section class="lab-card input-card">
@@ -115,12 +129,14 @@
         <select id="brain-lesson"></select>
         <label for="brain-focus">Diagnostic focus</label>
         <textarea id="brain-focus" rows="3" maxlength="2000" placeholder="For example: Is the learner reasoning from a usable foothold?"></textarea>
-        <label for="brain-preset">Prompt preset</label>
-        <select id="brain-preset"></select>
-        <div class="packet-title"><span>Visible diagnostic packet</span><span id="brain-edited" class="edited-badge" hidden>Edited</span></div>
+        <label for="brain-preset">Prompt version</label>
+        <div class="version-picker"><select id="brain-preset"></select><button class="button button-quiet" type="button" data-load-prompt="brain">Load</button></div>
+        <div class="packet-title"><span>Editable diagnostic instruction core</span><span id="brain-edited" class="edited-badge" hidden>Edited</span></div>
         <textarea id="brain-prompt" class="packet-editor" rows="13" maxlength="12000" spellcheck="false"></textarea>
         <p id="brain-prompt-count" class="field-count"></p>
-        <div class="inline-actions"><button id="brain-reset" class="button button-quiet" type="button">Reset preset</button><span id="brain-prompt-state" class="form-message"></span></div>
+        <div class="version-save"><input id="brain-version-name" type="text" maxlength="80" placeholder="Name this version"><button class="button button-save-version" type="button" data-save-prompt="brain">Save as new version</button></div>
+        <div class="inline-actions"><button class="button button-danger-soft" type="button" data-delete-prompt="brain">Delete saved version</button><button class="button button-workshop" type="button" data-workshop="brain">Copy workshop briefing</button></div>
+        <p id="brain-prompt-state" class="form-message"></p>
       </section>
       <section class="lab-card lane-card">
         <div class="card-heading"><div><p class="eyebrow">Shadow outputs</p><h3>Run a diagnostic</h3></div><span class="cost-warning">Read-only experiment</span></div>
@@ -156,9 +172,17 @@
   </section>
 
   <section id="panel-results" class="tab-panel" role="tabpanel" aria-labelledby="tab-results" data-panel="results" hidden>
-    <div class="results-head"><div><p class="eyebrow">Page-session results</p><h2>Results &amp; flow</h2><p>Results disappear on reload or navigation. Export before leaving if you want to keep them.</p></div><div class="results-actions"><button id="export-results" class="button button-quiet" type="button">Export JSON</button><button id="clear-results" class="button button-danger" type="button">Clear results</button></div></div>
-    <div class="results-summary"><span id="results-count">0 outputs</span><span id="results-cost">Estimated total $0.00</span></div>
+    <div class="results-head"><div><p class="eyebrow">Page-session results</p><h2>Results &amp; flow</h2><p>Unkept results disappear on reload. Exports contain your prompts, typed fixtures, outputs, and evaluation notes, so review the file before sharing it.</p></div><div class="results-actions"><button id="export-results" class="button button-quiet" type="button">Export JSON</button><button id="clear-results" class="button button-danger" type="button">Clear results</button></div></div>
+    <div class="results-summary"><span id="results-count">0 outputs</span><span id="results-cost">Estimated total $0.00</span><span id="results-rate-note" class="rate-note"></span></div>
     <div id="results-list" class="results-list" aria-live="polite"></div>
+    <section class="comparison-library" aria-labelledby="comparison-title">
+      <div class="comparison-head">
+        <div><p class="eyebrow">Device-local archive</p><h3 id="comparison-title">Comparison library</h3><p>Keep the outputs worth studying, mark favorites, and add private evaluation notes. Saved entries remain only in this browser.</p></div>
+        <div class="comparison-controls"><span id="comparison-count">0 kept</span><button id="clear-comparisons" class="button button-danger" type="button">Clear kept comparisons</button></div>
+      </div>
+      <p id="workspace-message" class="form-message" role="status"></p>
+      <div id="comparison-list" class="comparison-grid" aria-live="polite"></div>
+    </section>
     <section class="flow-card" aria-labelledby="flow-title"><div class="card-heading"><div><p class="eyebrow">Live request ledger</p><h3 id="flow-title">What moved, from where, and when</h3></div></div><ol id="flow-list" class="flow-list"></ol></section>
   </section>
 </main>
