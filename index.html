@@ -155,6 +155,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #intro-start { width: 100%; min-height: 50px; border: 0; border-radius: 13px; background: var(--accent); color: #fff; font-size: 15px; font-weight: 650; cursor: pointer; }
   #intro-start:disabled { opacity:.38;cursor:default; }
   #intro-example { margin:12px auto 0;padding:7px 11px;border:0;background:none;color:var(--ink-soft);font-size:12px;text-decoration:underline;text-underline-offset:3px;cursor:pointer; }
+  .intro-protection { margin:22px 0 18px;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--paper);text-align:left; }
+  .intro-protection strong { display:block;font-size:14px; }
+  .intro-protection p { margin:4px 0 11px;color:var(--ink-soft);font-size:12px;line-height:1.45; }
+  #intro-account { width:100%;min-height:42px;border:0;border-radius:11px;background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer; }
+  #intro-account.connected { border:1px solid var(--line);background:var(--card);color:var(--ink); }
+  #intro-install-help { margin:12px auto 0!important;font-size:12px!important;line-height:1.45!important; }
+  #intro-install { margin:8px auto 0;padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:var(--paper);color:var(--ink);font-size:12px;font-weight:650;cursor:pointer; }
+  #intro-install[hidden] { display:none; }
   #intro-skip { margin-top: 12px; padding: 8px 14px; border: 0; background: none; color: var(--ink-soft); font-size: 12px; cursor: pointer; }
   @keyframes introCardIn { from { opacity:0; transform:translateY(18px) scale(.985) } }
   @keyframes introLine { from { transform:scaleX(0); opacity:.25 } }
@@ -1256,11 +1264,18 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       <div class="intro-step"><span></span>Think aloud</div>
       <div class="intro-step"><span></span>Understand</div>
     </div>
+    <div class="intro-protection">
+      <strong>Keep every lesson and Note</strong>
+      <p id="intro-account-copy">Connect an email once. You stay signed in, and your library can be restored on another device.</p>
+      <button id="intro-account" type="button">Protect my learning</button>
+    </div>
     <form id="intro-question" class="intro-question">
       <input id="intro-topic" type="text" placeholder="What are you curious about?" autocomplete="off" enterkeyhint="go" aria-label="What are you curious about?">
       <button id="intro-start" type="submit" disabled>Begin</button>
     </form>
     <button id="intro-example" type="button">Try an example: How does lightning form?</button>
+    <p id="intro-install-help"></p>
+    <button id="intro-install" type="button" hidden>Install Worldview</button>
     <button id="intro-skip" type="button">Explore first</button>
   </section>
 </div>
@@ -1507,8 +1522,9 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       <button id="nav-source" class="drawer-item" type="button"><span class="drawer-icon">&#8595;</span><span>Upload</span></button>
     </nav>
     <div class="drawer-spacer"></div>
+    <button id="nav-account" class="drawer-item" type="button"><span class="drawer-icon">&#9729;</span><span id="nav-account-label">Protect Notes</span></button>
     <button id="nav-settings" class="drawer-item drawer-settings" type="button"><span class="drawer-icon">&#9881;</span><span>Settings</span></button>
-    <div class="drawer-foot">Sign in once in Settings to keep lessons connected across your devices.</div>
+    <div id="drawer-account-status" class="drawer-foot">Connect an email once to keep lessons connected across your devices.</div>
   </aside>
 </div>
 
@@ -1658,11 +1674,11 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     </div>
     <label>Backup &amp; sync (across browsers / phone)</label>
     <div class="row2">
-      <button id="export-btn" type="button">&#8681; Save lessons</button>
-      <button id="import-btn" type="button">&#8679; Load lessons</button>
+      <button id="export-btn" type="button">&#8681; Save lessons &amp; Notes</button>
+      <button id="import-btn" type="button">&#8679; Load backup</button>
     </div>
     <input id="import-file" type="file" accept=".js,.json,application/json,text/javascript" style="display:none">
-    <div class="hint">Save all your lessons (and their paid research) to a file, then Load it in another browser or on your phone so nothing is lost.</div>
+    <div class="hint">Download a second copy of your lessons, Notes, folders, and progress. Load it if cloud recovery is ever unavailable.</div>
     <button id="intro-replay" type="button">View introduction</button>
     <button id="settings-save">Save</button>
   </div>
@@ -1679,11 +1695,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v66 · Aug 6";
+const BUILD = "v67 · Aug 6";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v67", date: "Aug 6", changes: [
+    "Email protection and backup status now appear in the welcome screen and menu instead of being buried in Settings.",
+    "The welcome screen explains how to add Worldview to your phone's Home Screen.",
+    "Save and Load backup files are visible again as a second recovery option.",
+  ] },
   { tag: "v66", date: "Aug 6", changes: [
     "The Most recent control now appears as soon as you begin moving across the Explore deck, instead of making you reach a lesson card first.",
     "Leaving a lesson now shuts down every voice route immediately, including a reply that was about to begin speaking.",
@@ -2357,19 +2378,35 @@ function scheduleCloudSync(delay = 850) {
 }
 function updateCloudAccountUI(status = "") {
   const label = $("account-status");
-  if (!label) return;
   if (!cloudAccount) {
-    label.textContent = status === "error" ? "Backup unavailable. Local lessons are safe." : "Preparing lesson backup…";
+    if (label) label.textContent = status === "error" ? "Backup unavailable. Local lessons are safe on this device." : "Preparing lesson backup…";
     const signOut = $("account-signout");
     if (signOut) signOut.hidden = true;
+    if ($("intro-account-copy")) $("intro-account-copy").textContent = status === "error"
+      ? "Cloud backup is temporarily unavailable. Keep this device and use Save lessons in Settings as a second copy."
+      : "Connect an email once. You stay signed in, and your library can be restored on another device.";
+    if ($("intro-account")) { $("intro-account").textContent = "Protect my learning"; $("intro-account").classList.remove("connected"); }
+    if ($("nav-account-label")) $("nav-account-label").textContent = "Protect Notes";
+    if ($("drawer-account-status")) $("drawer-account-status").textContent = "Connect an email once to keep lessons connected across your devices.";
     return;
   }
   const email = cloudAccount && cloudAccount.email;
-  label.textContent = email
+  if (label) label.textContent = email
     ? `${email} · ${status === "error" ? "sync needs another try" : status === "synced" ? "synced" : "connected"}`
     : `${status === "error" ? "Backup needs another try" : "Backed up on this device. Add email for recovery."}`;
   const signOut = $("account-signout");
   if (signOut) signOut.hidden = !email;
+  if ($("intro-account-copy")) $("intro-account-copy").textContent = email
+    ? `Your lessons and Notes restore with ${email}.`
+    : "This browser has a private backup, but only an email lets you recover it after changing devices or website addresses.";
+  if ($("intro-account")) {
+    $("intro-account").textContent = email ? `Protected as ${email}` : "Add recovery email";
+    $("intro-account").classList.toggle("connected",!!email);
+  }
+  if ($("nav-account-label")) $("nav-account-label").textContent = email ? "Library protected" : "Protect Notes";
+  if ($("drawer-account-status")) $("drawer-account-status").textContent = email
+    ? `${email} · ${status === "error" ? "sync needs another try" : "synced"}`
+    : "This device is backed up anonymously. Add email so it can be recovered elsewhere.";
 }
 async function loadBackendEntitlement(userId) {
   if (!backendClient || !userId) return false;
@@ -7031,6 +7068,7 @@ $("drawer-close").onclick = closeDrawer;
 $("drawer-backdrop").onclick = e => { if (e.target === $("drawer-backdrop")) closeDrawer(); };
 $("nav-new").onclick = () => showHomeLauncher(true);
 $("nav-source").onclick = openSourceSheet;
+$("nav-account").onclick = openAccountSettings;
 $("nav-settings").onclick = () => { closeDrawer(); openSettings(); };
 $("source-close").onclick = closeSourceSheet;
 $("source-start").onclick = startSourceLesson;
@@ -10540,7 +10578,7 @@ function organizeSettingsPanel() {
   connection.id = "settings-tester-group";
   const accountCard = document.createElement("div");
   accountCard.className = "settings-account-card";
-  accountCard.innerHTML = `<p id="account-status" class="settings-account-status">Preparing lesson backup…</p><div class="settings-account-row"><input id="account-email" type="email" autocomplete="email" inputmode="email" placeholder="Email for lesson backup" aria-label="Email address for lesson recovery"><button id="account-link" type="button">Connect</button></div><button id="account-signout" type="button" hidden>Sign out</button>`;
+  accountCard.innerHTML = `<p id="account-status" class="settings-account-status">Preparing lesson backup…</p><div class="settings-account-row"><input id="account-email" type="email" autocomplete="email" inputmode="email" placeholder="Email for lesson backup" aria-label="Email address for lesson recovery"><button id="account-link" type="button">Connect</button></div><p class="settings-account-status">Moving from the previous address? Open the previous Worldview icon on this same phone and connect your email there first. Then connect the same email here.</p><button id="account-signout" type="button" hidden>Sign out</button>`;
   const account = group("Account & lesson backup",[accountCard],true,true);
   account.id = "settings-account-group";
   const voiceNodes = [];
@@ -10565,7 +10603,7 @@ function syncDeveloperSettingsVisibility() {
   const premium = $("settings-premium-group");
   if (premium) premium.hidden = true;
   const data = $("settings-data-group");
-  if (data) data.hidden = true;
+  if (data) data.hidden = false;
   const tester = $("settings-tester-group");
   if (tester) tester.hidden = backendAccessEnabled() && !developer;
   document.querySelectorAll(".owner-provider-field").forEach(node => { node.hidden = !developer; });
@@ -10656,6 +10694,17 @@ function openSettings() {
   $("settings").classList.add("open");
   $("settings-panel").scrollTop = 0; // always open showing the top
   settingsSnap = settingsFields();
+}
+function openAccountSettings() {
+  if ($("intro-demo").classList.contains("open")) setIntroOpen(false,false);
+  closeDrawer();
+  openSettings();
+  const group = $("settings-account-group");
+  if (group) {
+    group.open = true;
+    setTimeout(() => group.scrollIntoView({behavior:"smooth",block:"start"}),80);
+  }
+  setTimeout(() => { if ($("account-email") && !cloudAccount?.email) $("account-email").focus({preventScroll:true}); },260);
 }
 $("gear").onclick = openSettings;
 // dirty = fields changed since the panel was OPENED (comparing against saved
@@ -10779,11 +10828,38 @@ $("settings-save").onclick = () => {
 };
 
 /* ================= One-screen introduction ================= */
-const INTRO_VERSION = "intro-v3";
+const INTRO_VERSION = "intro-v4";
 const MIC_PRIMER_VERSION = "mic-primer-v1";
 let micPrimerRequestGeneration = 0;
 let micPrimerRequestTimer = 0;
 let micPrimerReturnFocus = null;
+let deferredInstallPrompt = null;
+
+function worldviewInstalled() {
+  return matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+}
+function updateInstallHelp() {
+  const help = $("intro-install-help"), button = $("intro-install");
+  if (!help || !button) return;
+  if (worldviewInstalled()) {
+    help.textContent = "Worldview is already installed on this Home Screen.";
+    button.hidden = true;
+    return;
+  }
+  const ua = navigator.userAgent || "";
+  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const android = /Android/i.test(ua);
+  if (ios) help.textContent = "iPhone or iPad: tap Share, then Add to Home Screen.";
+  else if (android) help.textContent = "Android: tap Install below, or use the browser menu → Add to Home screen.";
+  else help.textContent = "On your phone, use the browser menu → Add to Home screen.";
+  button.hidden = !deferredInstallPrompt;
+}
+window.addEventListener("beforeinstallprompt",event => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  updateInstallHelp();
+});
+window.addEventListener("appinstalled",() => { deferredInstallPrompt = null;updateInstallHelp(); });
 
 function micPrimerNeeded() {
   return state.micPrimerVersion !== MIC_PRIMER_VERSION;
@@ -10858,7 +10934,11 @@ function setIntroOpen(open,remember = false) {
   intro.setAttribute("aria-hidden",open ? "false" : "true");
   document.querySelectorAll(".view").forEach(view => { view.inert = open; });
   if (remember) { state.introSeenVersion = INTRO_VERSION; save(); }
-  if (open) requestAnimationFrame(() => (innerWidth > 700 ? $("intro-topic") : $("intro-example")).focus({preventScroll:true}));
+  if (open) {
+    updateInstallHelp();
+    updateCloudAccountUI();
+    requestAnimationFrame(() => (innerWidth > 700 ? $("intro-topic") : $("intro-account")).focus({preventScroll:true}));
+  }
 }
 function finishIntro(openQuestion = false) {
   setIntroOpen(false,true);
@@ -10891,6 +10971,14 @@ $("intro-example").onclick = () => {
   $("intro-topic").value = "How does lightning form?";
   $("intro-start").disabled = false;
   $("intro-topic").focus();
+};
+$("intro-account").onclick = openAccountSettings;
+$("intro-install").onclick = async () => {
+  if (!deferredInstallPrompt) { updateInstallHelp();return; }
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  updateInstallHelp();
 };
 $("intro-skip").onclick = () => finishIntro(false);
 $("intro-replay").onclick = () => { closeSettings(true);setIntroOpen(true); };
