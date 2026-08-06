@@ -876,7 +876,25 @@ function renderLanes(kind) {
     quantitySelect.value = String(lane.quantity);
     quantitySelect.addEventListener("change", () => { lane.quantity = Number(quantitySelect.value); renderLanes(kind); });
     quantityField.append(quantitySelect);
-    fields.append(providerField, modelField, promptField, quantityField);
+
+    /* BUG-127: the whole point of the toggle is answering "what does grounding
+       actually buy this route?", so it belongs on the lane, not on the run —
+       the useful comparison is the same prompt and topic with research on in
+       one lane and off in another. ChatGPT has no provable search on this
+       route, so the control is disabled rather than silently ignored. */
+    const supportsResearch = lane.provider !== "openai";
+    const researchField = element("div", { className: "lane-research" });
+    researchField.append(element("label", { text: "Research" }));
+    const researchLabel = element("label", { className: "lane-research-toggle" });
+    const researchInput = element("input", { type: "checkbox", attrs: { "aria-label": `Lane ${index + 1} web research` } });
+    researchInput.checked = supportsResearch && !!lane.research;
+    researchInput.disabled = !supportsResearch;
+    if (!supportsResearch) lane.research = false;
+    researchInput.addEventListener("change", () => { lane.research = researchInput.checked; renderRunEstimate(kind); });
+    researchLabel.append(researchInput, element("span", { text: supportsResearch ? "Search the web first" : "Not available on ChatGPT" }));
+    researchField.append(researchLabel);
+
+    fields.append(providerField, modelField, promptField, quantityField, researchField);
     card.append(fields, extra);
     root.append(card);
   });
@@ -954,6 +972,16 @@ function renderRunEstimate(kind) {
       ? " Spend cannot be estimated — no stored rate for the selected model(s)."
       : ` Costs at most about $${known.toFixed(known < 0.01 ? 4 : 3)}${unpriced ? `, plus ${unpriced} unpriced sample${unpriced === 1 ? "" : "s"}` : ""}.`;
   node.append(element("span", { className: "lane-estimate", text: costText }));
+  /* Research is billed by the provider per search, on top of tokens, and those
+     per-search rates are not in the rate table — so it is named as an extra
+     rather than folded into a number that would then be wrong. */
+  const researchLanes = labState.lanes[kind].filter((lane) => lane.research).length;
+  if (researchLanes) {
+    node.append(element("span", {
+      className: "lane-estimate",
+      text: ` ${researchLanes} lane${researchLanes === 1 ? "" : "s"} will search the web first: expect longer runs and a per-search provider charge on top of the token estimate above, which this figure does not include.`,
+    }));
+  }
   node.classList.toggle("is-over", total > 8);
 }
 
@@ -1235,7 +1263,11 @@ async function runTextExperiment(kind) {
           };
           try {
             logFlow(`Sent ${kind} ${runLabel}`, "lab-tutor → configured provider");
-            const result = await labFetch({ provider: lane.provider, model: lane.model, system: lane.system, messages: fixture.messages, max_tokens: maxOutputTokens(kind) });
+            const result = await labFetch({
+              provider: lane.provider, model: lane.model, system: lane.system,
+              messages: fixture.messages, max_tokens: maxOutputTokens(kind),
+              ...(lane.research ? { research: true, research_max_uses: 2 } : {}),
+            });
             const elapsed = Math.round(performance.now() - started);
             const text = asText(result.text);
             pushOutput({
@@ -1244,6 +1276,10 @@ async function runTextExperiment(kind) {
               model: result.model || lane.model, text, inputTokens: numeric(result.inputTokens), outputTokens: numeric(result.outputTokens),
               latencyMs: numeric(result.ms) ?? elapsed, cost: estimateTextCost(lane.model, result.inputTokens, result.outputTokens),
               checks: policyFindings(kind, text),
+              researchRequested: !!result.researchRequested,
+              researchApplied: !!result.researchApplied,
+              searches: numeric(result.searches),
+              citations: Array.isArray(result.citations) ? result.citations.slice(0, 20) : [],
             });
             logFlow(`Received ${kind} ${runLabel}`, "configured provider → lab-tutor → browser");
           } catch (error) {
@@ -1252,6 +1288,7 @@ async function runTextExperiment(kind) {
               ...shared,
               id: makeId(), at: now(), provider: lane.provider, providerLabel: info.label, model: lane.model,
               text: `Request failed: ${error.message || "Unknown error"}`, latencyMs: elapsed, cost: null, failed: true,
+              researchRequested: !!lane.research, researchApplied: false,
             });
             logFlow(`Failed ${kind} ${runLabel}: ${clip(error.message, 120)}`, "configured provider / lab-tutor");
           }
@@ -1589,6 +1626,22 @@ function renderResults() {
     );
     const timing = element("div");
     timing.append(element("span", { text: `${prettyDate(output.at)} · sample ${output.replicate || 1} · ${output.latencyMs ?? "?"}ms` }));
+    /* Requested vs applied are deliberately different pills. "Research on but
+       nothing searched" is a result worth seeing, not something to round up
+       into a grounded label. */
+    if (output.researchRequested) {
+      const grounded = !!output.researchApplied;
+      const searches = numeric(output.searches);
+      const cited = Array.isArray(output.citations) ? output.citations.length : 0;
+      timing.append(element("span", {
+        className: `research-pill ${grounded ? "is-grounded" : "is-ungrounded"}`,
+        text: grounded
+          ? `researched · ${searches ?? "?"} search${searches === 1 ? "" : "es"} · ${cited} source${cited === 1 ? "" : "s"}`
+          : "research requested · none performed",
+      }));
+    } else if (!output.failed) {
+      timing.append(element("span", { className: "research-pill", text: "no research" }));
+    }
     meta.append(heading, timing);
     const provenance = element("div", {
       className: "result-provenance",
@@ -1618,6 +1671,24 @@ function renderResults() {
     }
     card.append(meta, provenance, text);
     if (checks) card.append(checks);
+    // What the model actually read is the evidence that separates a grounded
+    // route from a confident one, so it is shown, not just counted.
+    if (Array.isArray(output.citations) && output.citations.length) {
+      const sources = element("details", { className: "result-sources" });
+      sources.append(element("summary", { text: `Sources read (${output.citations.length})` }));
+      const list = element("ul");
+      for (const citation of output.citations) {
+        const item = element("li");
+        const link = element("a", { text: citation.title || citation.url });
+        link.href = citation.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer nofollow";
+        item.append(link);
+        list.append(item);
+      }
+      sources.append(list);
+      card.append(sources);
+    }
     card.append(footer, actions);
     root.append(card);
   }
@@ -1652,6 +1723,10 @@ function exportableOutput(output) {
     inputTokens: output.inputTokens,
     outputTokens: output.outputTokens,
     latencyMs: output.latencyMs,
+    researchRequested: Boolean(output.researchRequested),
+    researchApplied: Boolean(output.researchApplied),
+    searches: output.searches ?? null,
+    citations: Array.isArray(output.citations) ? output.citations : [],
     duration: output.duration,
     language: output.language,
     cost: output.cost,

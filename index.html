@@ -476,14 +476,17 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .card.new-card .new-card-actions #start-btn { flex: 1; max-width: 132px; }
   /* Folders lives on the Ask Anything card's bottom-right corner (moved off the
      old floating pill that made Explore feel cluttered). */
-  #new-card-folders {
+  #new-card-folders, #new-card-leave-folder {
     position: absolute; right: 14px; bottom: 14px; width: auto;
     display: inline-flex; align-items: center; gap: 5px;
     padding: 7px 12px; border: 1px solid rgba(189,90,48,.5); border-radius: 999px;
     background: color-mix(in srgb, var(--card) 82%, transparent); color: var(--accent-700);
     font-size: max(10px, calc(var(--cardW, 262px) * 0.04)); font-weight: 650; letter-spacing: 0.01em; cursor: pointer;
   }
-  #new-card-folders span { font-size: 1.15em; line-height: 1; }
+  #new-card-folders span, #new-card-leave-folder span { font-size: 1.15em; line-height: 1; }
+  /* Leaving a folder is the one control that must never be missable, so it
+     reads as filled rather than outlined. */
+  #new-card-leave-folder { border-color: var(--accent); background: var(--accent); color: #fff; }
 
   /* notes + what's-new views — a plain list; shared header style */
   .view-header {
@@ -1676,11 +1679,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v64 · Aug 5";
+const BUILD = "v65 · Aug 6";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v65", date: "Aug 6", changes: [
+    "A folder is no longer a dead end. Opening one keeps the ask-anything card and Notes, adds a clear “← All lessons” way back, and files anything you start there into that folder.",
+    "The folder name in the top right now appears as soon as the first lesson card reaches the middle, instead of waiting until you had already scrolled past it.",
+    "Developer Lab: each model lane has a research switch, so you can run the same prompt with and without web grounding and see the sources it actually read, the searches it actually made, and how much longer it took.",
+  ] },
   { tag: "v64", date: "Aug 5", changes: [
     "The Developer Lab now offers each provider's current models — including Claude Opus 5, the Gemini 3 line and Grok 4.5 — and any lane can take an exact model id typed by hand, so a model released tomorrow needs no update.",
     "Every experiment shows what it will cost before you run it, not just after.",
@@ -3864,7 +3872,13 @@ function renderHome() {
   let nc = null;
 
   const insidePersonalCategory = !!(wheel.layerCategory && wheel.layerCategory.startsWith("custom:"));
-  if (!insidePersonalCategory) {
+  const layerEntry = categoryLayerEntries().find(entry => entry.key === wheel.layerCategory);
+  const layerName = (layerEntry && layerEntry.label) || "this folder";
+  /* A folder is a filter, not a different app. It keeps the same Notes card
+     and the same ask-anything card as the main shelf — a folder you can only
+     read out of is a dead end, and the deck pill alone was not a visible
+     enough way back (BUG-129). A lesson started here is filed here. */
+  {
     const noc = document.createElement("div");
     noc.className = "card notes-card";
     noc.dataset.kind = "notes";
@@ -3879,12 +3893,14 @@ function renderHome() {
     nc = document.createElement("div");
     nc.className = "card new-card";
     nc.innerHTML = `
-      <div class="card-cat">ask anything</div>
+      <div class="card-cat">${insidePersonalCategory ? `ask &middot; filed in ${esc(layerName)}` : "ask anything"}</div>
       <input id="topic-input" type="text" placeholder="What are you curious about?" enterkeyhint="go">
       <div class="new-card-actions">
         <button id="start-btn" type="button">Begin</button>
       </div>
-      <button id="new-card-folders" type="button" aria-label="Create or organize folders"><span>+</span> Folders</button>
+      ${insidePersonalCategory
+        ? `<button id="new-card-leave-folder" type="button" aria-label="Leave ${esc(layerName)} and show all lessons"><span>&#8592;</span> All lessons</button>`
+        : `<button id="new-card-folders" type="button" aria-label="Create or organize folders"><span>+</span> Folders</button>`}
     `;
     c.appendChild(nc);
     wheel.cards.push(nc); wheel.ids.push(null);
@@ -4062,8 +4078,13 @@ function layoutWheel(animate = true, refreshGuide = true) {
 function updateDeckLabelVisibility() {
   const button = $("mobile-category-button");
   if (!button) return;
+  /* Inside a folder the pill is also the way out, so it is never hidden.
+     Otherwise it appears as soon as the FIRST lesson card comes to centre —
+     it used to wait until you were already past it, which read as arriving
+     one card late (BUG-130). */
+  if (wheel.layerCategory) { button.classList.remove("deck-label-hidden"); return; }
   const firstLesson = wheel.ids.findIndex(id => !!id);
-  const past = firstLesson >= 0 && wheel.pos > firstLesson + 0.5;
+  const past = firstLesson >= 0 && wheel.pos > firstLesson - 0.5;
   button.classList.toggle("deck-label-hidden", !past);
 }
 let resetCarouselGesture = () => {};
@@ -4278,6 +4299,7 @@ function pathControlAtPoint(x, y) {
           const hit = (id) => { const b = $(id); const r = b && b.getBoundingClientRect(); return r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; };
           if (hit("start-btn")) startLesson();
           else if (hit("new-card-folders")) openCategoryOrganizer(null, "explore");
+          else if (hit("new-card-leave-folder")) applyCategoryKey(null);
           return;
         }
         if (el.dataset.kind === "notes") { wheel.pos = idx; layoutWheel(); showNotes(); return; }
@@ -4391,6 +4413,12 @@ async function beginLesson(topic, methodKey, starterText, parentId, sourceUrl, s
     sourceUrl: sourceUrl || undefined,
     sourceMedia: sourceMedia || undefined,
   };
+  // Started while standing inside a folder? File it there, or it would vanish
+  // from the shelf the learner is looking at the moment it is created.
+  if (wheel.layerCategory && wheel.layerCategory.startsWith("custom:")) {
+    const categoryId = wheel.layerCategory.slice(7);
+    if (state.customCategories.some(category => category.id === categoryId)) lesson.customCategoryIds = [categoryId];
+  }
   state.lessons.push(lesson);
   save();
   trackLessonMetric(lesson,{ eventId:`lesson-start:${lesson.id}`, bucket:"lifecycle", complete:false });
