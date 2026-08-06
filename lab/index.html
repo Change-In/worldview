@@ -12,8 +12,8 @@
 <header class="lab-topbar" id="lab-new-topbar">
   <a class="lab-back" href="../index.html" aria-label="Return to Worldview">←</a>
   <div>
-    <p class="eyebrow">Worldview developer tool</p>
-    <h1>Model Lab <span>· sandbox</span></h1>
+    <p class="eyebrow">Worldview</p>
+    <h1>Model Lab</h1>
   </div>
   <div id="lab-health" class="lab-health" aria-live="polite">Locked</div>
 </header>
@@ -21,12 +21,10 @@
 <section id="lab-gate" class="lab-gate" aria-labelledby="lab-gate-title">
   <div class="gate-orbit" aria-hidden="true"></div>
   <div class="gate-card">
-    <p class="eyebrow">Server-held credentials</p>
-    <h2 id="lab-gate-title">Open the developer lab</h2>
-    <p>The tester code unlocks the existing Supabase gateway. Provider keys are never entered or shown here.</p>
-    <label for="lab-code">Tester access code</label>
-    <input id="lab-code" type="password" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Private alpha code">
-    <button id="lab-enter" class="button button-primary" type="button">Open lab</button>
+    <h2 id="lab-gate-title">Model Lab</h2>
+    <label for="lab-code">Alpha code</label>
+    <input id="lab-code" type="password" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Alpha code">
+    <button id="lab-enter" class="button button-primary" type="button">Open</button>
     <p id="lab-gate-message" class="form-message" role="status"></p>
   </div>
 </section>
@@ -34,16 +32,14 @@
 <main id="lab-shell" class="lab-shell" hidden>
   <section class="lab-hero" aria-labelledby="lab-title">
     <div>
-      <p class="eyebrow">Experiment control room</p>
-      <h2 id="lab-title">One packet. Many possible minds.</h2>
-      <p>Every run stays sandbox-only. The learner’s progress, prompts, and defaults remain unchanged.</p>
+      <h2 id="lab-title">Model Lab</h2>
     </div>
     <div class="hero-stat"><strong id="lab-provider-count">0</strong><span>configured providers</span></div>
   </section>
 
   <nav class="lab-tabs" role="tablist" aria-label="Lab benches">
-    <button class="lab-tab is-active" id="tab-lesson" type="button" role="tab" aria-selected="true" aria-controls="panel-lesson" data-tab="lesson">Lesson<br>generation</button>
-    <button class="lab-tab" id="tab-tutor" type="button" role="tab" aria-selected="false" aria-controls="panel-tutor" data-tab="tutor">Socratic<br>tutor</button>
+    <button class="lab-tab is-active" id="tab-lesson" type="button" role="tab" aria-selected="true" aria-controls="panel-lesson" data-tab="lesson">Lesson</button>
+    <button class="lab-tab" id="tab-tutor" type="button" role="tab" aria-selected="false" aria-controls="panel-tutor" data-tab="tutor">Tutor</button>
     <button class="lab-tab" id="tab-brain" type="button" role="tab" aria-selected="false" aria-controls="panel-brain" data-tab="brain">Brain<br><small>shadow</small></button>
     <button class="lab-tab" id="tab-stt" type="button" role="tab" aria-selected="false" aria-controls="panel-stt" data-tab="stt">Transcription</button>
     <button class="lab-tab" id="tab-results" type="button" role="tab" aria-selected="false" aria-controls="panel-results" data-tab="results">Results<br>&amp; flow</button>
@@ -51,19 +47,16 @@
 
   <section id="panel-lesson" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-lesson" data-panel="lesson">
     <div class="bench-head">
-      <div><p class="eyebrow">Bench A · sandbox planner</p><h2>Lesson generation</h2></div>
-      <p class="bench-note">Sandbox route sketch, not the production Gate 0 planner. After a result, Create real lesson returns only the original topic to Worldview—never the sandbox output.</p>
+      <div><h2>Lesson</h2></div>
     </div>
     <details class="role-panel" data-role-panel="lesson"></details>
     <div class="bench-grid">
       <section class="lab-card input-card">
         <div class="field-row"><label for="lesson-note">Test a saved Note</label><button id="lesson-notes-refresh" class="text-button" type="button">Refresh</button></div>
         <select id="lesson-note"></select>
-        <p class="privacy-note">Choosing a Note copies its text into the topic below. The saved Note is never changed or removed.</p>
         <label for="lesson-topic">What do you want to learn?</label>
         <textarea id="lesson-topic" class="topic-input" rows="4" maxlength="2000" placeholder="Why does a bridge sway in wind?&#10;How did Napoleon actually move 600,000 men?&#10;What is a transformer really doing?"></textarea>
-        <p class="privacy-note"><strong>One topic per line.</strong> Every model lane runs against every topic, so you can see whether a prompt holds up across a spread of ideas instead of one lucky example. Up to 4 topics, and lanes × topics × samples still has to fit inside the 8-call cap.</p>
-        <p class="privacy-note">A pasted link is treated as topic text in this version; the Lab does not fetch or read the page yet.</p>
+        <p class="privacy-note">One topic per line · 4 max · 8 calls total</p>
         <label for="lesson-preset">Prompt version</label>
         <div class="version-picker"><select id="lesson-preset"></select><button class="button button-quiet" type="button" data-load-prompt="lesson">Load</button></div>
         <div class="packet-title"><span>Editable instruction core</span><span id="lesson-edited" class="edited-badge" hidden>Edited</span></div>
@@ -74,7 +67,7 @@
         <p id="lesson-prompt-state" class="form-message"></p>
       </section>
       <section class="lab-card lane-card">
-        <div class="card-heading"><div><p class="eyebrow">Experiment lanes</p><h3>Choose models to run</h3></div><span class="cost-warning">Each replicate spends one tutor call</span></div>
+        <div class="card-heading"><div><p class="eyebrow">Experiment lanes</p><h3>Choose models to run</h3></div><span class="cost-warning">1 call per sample</span></div>
         <div id="lesson-lanes" class="lanes" aria-live="polite"></div>
         <button class="button button-add" type="button" data-add-lane="lesson">+ Add model run</button>
         <button class="button button-primary button-run" type="button" data-run="lesson">Run lesson experiment</button>
@@ -85,8 +78,7 @@
 
   <section id="panel-tutor" class="tab-panel" role="tabpanel" aria-labelledby="tab-tutor" data-panel="tutor" hidden>
     <div class="bench-head">
-      <div><p class="eyebrow">Bench B · snapshot replay</p><h2>Socratic tutor</h2></div>
-      <p class="bench-note">Sandbox approximation, not the exact production packet. It never writes lesson state.</p>
+      <div><h2>Tutor</h2></div>
     </div>
     <details class="role-panel" data-role-panel="tutor"></details>
     <div class="bench-grid">
@@ -95,7 +87,7 @@
         <select id="tutor-lesson"></select>
         <label for="tutor-turn">New learner turn</label>
         <textarea id="tutor-turn" rows="3" maxlength="4000" placeholder="What would you like the learner to say next?"></textarea>
-        <p class="privacy-note">The selected snapshot—including up to 10 recent conversation turns—is sent to every model you run. Use only lessons you are comfortable sharing with those providers.</p>
+        <p class="privacy-note">Sends the last 10 turns to each chosen model.</p>
         <label for="tutor-preset">Prompt version</label>
         <div class="version-picker"><select id="tutor-preset"></select><button class="button button-quiet" type="button" data-load-prompt="tutor">Load</button></div>
         <div class="packet-title"><span>Editable tutor instruction core</span><span id="tutor-edited" class="edited-badge" hidden>Edited</span></div>
@@ -104,10 +96,10 @@
         <div class="version-save"><input id="tutor-version-name" type="text" maxlength="80" placeholder="Name this version"><button class="button button-save-version" type="button" data-save-prompt="tutor">Save as new version</button></div>
         <div class="inline-actions"><button class="button button-danger-soft" type="button" data-delete-prompt="tutor">Delete saved version</button><button class="button button-workshop" type="button" data-workshop="tutor">Copy workshop briefing</button></div>
         <p id="tutor-prompt-state" class="form-message"></p>
-        <details class="context-preview"><summary>Read-only lesson context added at run time</summary><pre id="tutor-context-preview"></pre><p>This context is used for the live request only. It is not saved in prompt versions, kept comparisons, or exports.</p></details>
+        <details class="context-preview"><summary>Run-only context · not saved</summary><pre id="tutor-context-preview"></pre></details>
       </section>
       <section class="lab-card lane-card">
-        <div class="card-heading"><div><p class="eyebrow">Same packet</p><h3>Compare tutor replies</h3></div><span class="cost-warning">No reply becomes learner history</span></div>
+        <div class="card-heading"><div><p class="eyebrow">Same packet</p><h3>Compare tutor replies</h3></div><span class="cost-warning">Sandbox only</span></div>
         <div id="tutor-lanes" class="lanes" aria-live="polite"></div>
         <button class="button button-add" type="button" data-add-lane="tutor">+ Add model run</button>
         <button class="button button-primary button-run" type="button" data-run="tutor">Run tutor experiment</button>

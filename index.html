@@ -124,52 +124,49 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #splash-mark { width: 64px; height: 64px; }
   #splash-mark path { stroke: #fff; stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 
-  /* First-run explanation: one calm idea, not a tutorial maze. */
+  /* First run: a compact launch surface, not a tutorial. */
   #intro-demo {
     position: fixed; inset: 0; z-index: 210; display: none; place-items: center;
-    padding: max(22px,env(safe-area-inset-top)) 22px max(22px,env(safe-area-inset-bottom));
+    padding: max(14px,env(safe-area-inset-top)) 14px max(14px,env(safe-area-inset-bottom));
     background: color-mix(in srgb,var(--paper) 97%,transparent); backdrop-filter: blur(10px); overflow-y:auto;
   }
   #intro-demo.open { display: grid; }
   .intro-card {
-    position: relative; width: min(520px,100%); padding: clamp(28px,7vw,52px) clamp(22px,7vw,48px) 26px;
+    position: relative; width: min(480px,100%); padding: clamp(20px,5vw,36px) clamp(17px,5vw,34px) 18px;
     border: 1.5px solid var(--line); border-radius: 22px; background: var(--card);
     box-shadow: 0 22px 70px rgba(44,36,28,.13); text-align: center;
     animation: introCardIn .42s cubic-bezier(.22,.8,.25,1) both;
   }
   .intro-wordmark { color: var(--ink-soft); font-size: 10px; letter-spacing: .2em; text-transform: uppercase; }
-  .intro-card h2 { margin: 15px auto 13px; max-width: 410px; font: 600 clamp(30px,8vw,46px)/1.04 Georgia,serif; }
-  .intro-card > p { margin: 0 auto; max-width: 410px; color: var(--ink-soft); font-size: clamp(14px,3.8vw,17px); line-height: 1.55; }
-  .intro-path { position: relative; display: grid; grid-template-columns: repeat(3,1fr); align-items: start; gap: 12px; margin: 34px 0 30px; }
-  .intro-path::before {
-    content: ""; position: absolute; left: 16.5%; right: 16.5%; top: 13px; height: 1.5px;
-    background: linear-gradient(90deg,var(--accent),var(--accent)); transform-origin: left; animation: introLine 1.1s .25s both;
-  }
-  .intro-step { position: relative; z-index: 1; color: var(--ink-soft); font-size: 11px; letter-spacing: .05em; }
-  .intro-step span { display: block; width: 27px; height: 27px; margin: 0 auto 9px; border: 2px solid var(--accent); border-radius: 50%; background: var(--card); animation: introNode .38s both; }
-  .intro-step:nth-child(2) span { animation-delay: .47s; }
-  .intro-step:nth-child(3) span { animation-delay: .76s; background: var(--accent); border-color: var(--accent); }
-  .intro-question { display:grid;grid-template-columns:1fr auto;gap:9px;margin:0; }
-  #intro-topic { min-width:0;height:50px;border:1.5px solid var(--line);border-radius:13px;background:var(--paper);color:var(--ink);padding:0 15px;font-size:16px;outline:none; }
+  .intro-card h2 { margin: 9px auto 6px; max-width: 410px; font: 600 clamp(31px,8vw,44px)/1.04 Georgia,serif; }
+  .intro-card > p { margin: 0 auto; max-width: 410px; color: var(--ink-soft); font-size: clamp(14px,3.8vw,16px); line-height: 1.4; }
+  .intro-account-setup { margin:17px 0 12px; }
+  .intro-account-row,.intro-code-row { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px; }
+  .intro-code-row.link-fallback { grid-template-columns:1fr; }
+  .intro-code-row.link-fallback input { display:none; }
+  .intro-account-row[hidden],.intro-code-row[hidden],#intro-account-connected[hidden] { display:none; }
+  #intro-account-email,#intro-account-code { min-width:0;height:45px;border:1.5px solid var(--line);border-radius:12px;background:var(--paper);color:var(--ink);padding:0 13px;font-size:15px;outline:none; }
+  #intro-account-code { letter-spacing:.18em;font-variant-numeric:tabular-nums; }
+  #intro-account-email:focus,#intro-account-code:focus { border-color:var(--accent);box-shadow:0 0 0 3px rgba(23,77,91,.1); }
+  #intro-account,#intro-account-verify { min-height:45px;padding:0 14px;border:0;border-radius:12px;background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer; }
+  #intro-account:disabled,#intro-account-verify:disabled { opacity:.55;cursor:wait; }
+  #intro-account-connected { min-height:45px;display:flex;align-items:center;justify-content:center;padding:0 13px;border:1px solid var(--line);border-radius:12px;background:var(--paper);color:var(--ink);font-size:13px;font-weight:650; }
+  #intro-account-status { min-height:0;margin:7px 2px 0!important;color:var(--ink-soft);font-size:11px!important;line-height:1.35!important; }
+  #intro-account-status:empty { display:none; }
+  .intro-question { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin:0; }
+  #intro-topic { min-width:0;height:48px;border:1.5px solid var(--line);border-radius:12px;background:var(--paper);color:var(--ink);padding:0 13px;font-size:15px;outline:none; }
   #intro-topic:focus { border-color:var(--accent);box-shadow:0 0 0 3px rgba(23,77,91,.1); }
-  #intro-start { width: 100%; min-height: 50px; border: 0; border-radius: 13px; background: var(--accent); color: #fff; font-size: 15px; font-weight: 650; cursor: pointer; }
+  #intro-start { min-width:76px; min-height:48px; border:0; border-radius:12px; background:var(--accent); color:#fff; font-size:14px; font-weight:700; cursor:pointer; }
   #intro-start:disabled { opacity:.38;cursor:default; }
-  #intro-example { margin:12px auto 0;padding:7px 11px;border:0;background:none;color:var(--ink-soft);font-size:12px;text-decoration:underline;text-underline-offset:3px;cursor:pointer; }
-  .intro-protection { margin:22px 0 18px;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--paper);text-align:left; }
-  .intro-protection strong { display:block;font-size:14px; }
-  .intro-protection p { margin:4px 0 11px;color:var(--ink-soft);font-size:12px;line-height:1.45; }
-  #intro-account { width:100%;min-height:42px;border:0;border-radius:11px;background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer; }
-  #intro-account.connected { border:1px solid var(--line);background:var(--card);color:var(--ink); }
-  #intro-install-help { margin:12px auto 0!important;font-size:12px!important;line-height:1.45!important; }
-  #intro-install { margin:8px auto 0;padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:var(--paper);color:var(--ink);font-size:12px;font-weight:650;cursor:pointer; }
+  #intro-install { width:100%;min-height:42px;margin:9px auto 0;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:var(--paper);color:var(--ink);font-size:12px;font-weight:650;cursor:pointer; }
   #intro-install[hidden] { display:none; }
-  #intro-skip { margin-top: 12px; padding: 8px 14px; border: 0; background: none; color: var(--ink-soft); font-size: 12px; cursor: pointer; }
+  #intro-skip { width:100%;min-height:45px;margin-top:9px;padding:8px 14px;border:1.5px solid var(--accent);border-radius:12px;background:transparent;color:var(--accent-700);font-size:13px;font-weight:750;cursor:pointer; }
   @keyframes introCardIn { from { opacity:0; transform:translateY(18px) scale(.985) } }
   @keyframes introLine { from { transform:scaleX(0); opacity:.25 } }
   @keyframes introNode { from { transform:scale(.45); opacity:0 } }
-  @media (max-width:520px) { .intro-question{grid-template-columns:1fr} }
-  @media (max-height:700px) { #intro-demo{place-items:start center}.intro-card{padding-top:22px}.intro-card h2{font-size:29px}.intro-path{margin:18px 0}.intro-card>p{font-size:13px} }
-  @media (prefers-reduced-motion:reduce) { .intro-card,.intro-path::before,.intro-step span{animation:none!important} }
+  @media (max-width:350px) { .intro-account-row,.intro-code-row{grid-template-columns:1fr}.intro-question{grid-template-columns:1fr auto} }
+  @media (max-height:610px) { #intro-demo{place-items:start center}.intro-card{padding-top:16px}.intro-card h2{font-size:28px}.intro-account-setup{margin-top:12px} }
+  @media (prefers-reduced-motion:reduce) { .intro-card{animation:none!important} }
 
   /* Ask for microphone access before the first lesson so permission and a
      learner's first recorded words are never the same gesture. */
@@ -624,6 +621,9 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #developer-lab-launcher { position:fixed; top:14px; right:64px; z-index:35; display:inline-flex; align-items:center; gap:7px; border:1px solid rgba(189,90,48,.65); background:color-mix(in srgb,var(--card) 92%,transparent); color:var(--accent-700); border-radius:999px; padding:7px 12px; box-shadow:var(--shadow-sm); font-size:11px; font-weight:700; letter-spacing:.03em; text-decoration:none; }
   #developer-lab-launcher::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 3px rgba(189,90,48,.14); }
   #developer-lab-launcher:hover { background:var(--card); border-color:var(--accent); }
+  #models-button { position:absolute;right:14px;bottom:14px;z-index:14;display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:8px 12px;border:1px solid rgba(189,90,48,.55);border-radius:999px;background:color-mix(in srgb,var(--card) 94%,transparent);box-shadow:var(--shadow-sm);color:var(--accent-700);font-size:10px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;cursor:pointer; }
+  #models-button::before { content:"";width:7px;height:7px;border-radius:50%;background:var(--accent); }
+  #models-button:hover { background:var(--card);border-color:var(--accent); }
   .settings-action { display:flex;align-items:center;justify-content:space-between;gap:14px;margin:3px 0 2px;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--paper); }
   .settings-action-copy { min-width:0; }
   .settings-action-copy strong { display:block;font:600 15px/1.15 Georgia,serif;color:var(--ink); }
@@ -959,7 +959,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #profile-empty { text-align: center; color: var(--ink-soft); font-style: italic; margin-top: 60px; padding: 0 30px; line-height: 1.6; }
   /* ---------- Settings sheet ---------- */
   #settings {
-    position: fixed; inset: 0; z-index: 50; background: var(--overlay);
+    position: fixed; inset: 0; z-index: 50;
+    background:linear-gradient(var(--paper),var(--paper)) top/100% env(safe-area-inset-top) no-repeat,var(--overlay);
     display: none; align-items: flex-end;
   }
   #settings.open { display: flex; }
@@ -1016,7 +1017,11 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .settings-account-card,.usage-card { padding:14px;border:1px solid rgba(126,160,170,.55);border-radius:12px;background:var(--paper); }
   .settings-account-status { margin:0 0 10px;color:var(--ink-soft);font-size:12px;line-height:1.45; }
   .settings-account-row { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px; }
+  .settings-account-row.link-fallback { grid-template-columns:1fr; }
+  .settings-account-row.link-fallback input { display:none; }
+  .settings-account-row[hidden] { display:none; }
   .settings-account-row button,.settings-account-card>button { padding:10px 13px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font-weight:650;cursor:pointer; }
+  .settings-account-row button:disabled { opacity:.55;cursor:wait; }
   .settings-account-card>button { width:100%;margin-top:9px; }
   .usage-head,.usage-line { display:flex;justify-content:space-between;gap:12px;align-items:baseline; }
   .usage-head strong { font:600 18px Georgia,serif; }
@@ -1049,6 +1054,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       width:34px; height:34px; background:color-mix(in srgb,var(--card) 88%,transparent);
       border-radius:999px; box-shadow:var(--shadow-sm);
     }
+    #models-button { position:fixed;right:10px;bottom:calc(env(safe-area-inset-bottom) + 12px); }
     #lesson-layer-guide { display:none!important; }
     /* Sits directly above the deck on the right, so it reads as the label for
        the cards below it rather than as a floating control (owner's ask). */
@@ -1257,26 +1263,26 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <div id="intro-demo" role="dialog" aria-modal="true" aria-labelledby="intro-title" aria-hidden="true">
   <section class="intro-card">
     <div class="intro-wordmark">Worldview</div>
-    <h2 id="intro-title">Follow a question until it makes sense.</h2>
-    <p>Ask about anything. Worldview maps the ideas underneath your question, then gives you one useful question at a time so you can reason your way through them.</p>
-    <div class="intro-path" aria-label="Ask, think aloud, understand">
-      <div class="intro-step"><span></span>Ask</div>
-      <div class="intro-step"><span></span>Think aloud</div>
-      <div class="intro-step"><span></span>Understand</div>
-    </div>
-    <div class="intro-protection">
-      <strong>Keep every lesson and Note</strong>
-      <p id="intro-account-copy">Connect an email once. You stay signed in, and your library can be restored on another device.</p>
-      <button id="intro-account" type="button">Protect my learning</button>
-    </div>
+    <h2 id="intro-title">Learn everything.</h2>
+    <p>Type anything you&rsquo;re curious about.</p>
+    <form id="intro-account-form" class="intro-account-setup">
+      <div id="intro-email-step" class="intro-account-row">
+        <input id="intro-account-email" type="email" autocomplete="email" inputmode="email" placeholder="Recovery email" aria-label="Recovery email">
+        <button id="intro-account" type="submit">Add recovery email</button>
+      </div>
+      <div id="intro-code-step" class="intro-code-row" hidden>
+        <input id="intro-account-code" type="text" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Email code" aria-label="Email verification code">
+        <button id="intro-account-verify" type="button">Confirm</button>
+      </div>
+      <div id="intro-account-connected" hidden></div>
+      <p id="intro-account-status" role="status" aria-live="polite"></p>
+    </form>
     <form id="intro-question" class="intro-question">
       <input id="intro-topic" type="text" placeholder="What are you curious about?" autocomplete="off" enterkeyhint="go" aria-label="What are you curious about?">
       <button id="intro-start" type="submit" disabled>Begin</button>
     </form>
-    <button id="intro-example" type="button">Try an example: How does lightning form?</button>
-    <p id="intro-install-help"></p>
-    <button id="intro-install" type="button" hidden>Install Worldview</button>
-    <button id="intro-skip" type="button">Explore first</button>
+    <button id="intro-install" type="button" hidden>Add to Home Screen</button>
+    <button id="intro-skip" type="button">Explore</button>
   </section>
 </div>
 
@@ -1288,8 +1294,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       </svg>
     </div>
     <div class="intro-wordmark">Voice setup</div>
-    <h2 id="mic-primer-title">Make the first tap count.</h2>
-    <p>Allow the microphone now, so your first tap in a lesson starts recording instead of stopping for a permission question.</p>
+    <h2 id="mic-primer-title">Use your voice.</h2>
+    <p>Allow microphone access for spoken lessons.</p>
     <div class="mic-primer-actions">
       <button id="mic-primer-enable" type="button">Enable microphone</button>
       <button id="mic-primer-later" type="button">Not now</button>
@@ -1307,12 +1313,13 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     <button id="rail-sources" class="rail-item" type="button">Upload</button>
   </nav>
   <button id="mobile-category-button" type="button" aria-haspopup="dialog">Most recent</button>
+  <button id="models-button" type="button" aria-haspopup="dialog">Models</button>
   <a id="developer-lab-launcher" href="lab/">Developer lab</a>
   <div id="home-header">
     <button id="home-menu" class="menu-button" type="button" aria-label="Open menu">&#9776;</button>
     <div class="home-brand">
       <h1 class="serif">Worldview</h1>
-      <p>one conversation at a time</p>
+      <p>learn everything</p>
       <!-- so it is never a guess which build the phone is actually running -->
       <button id="home-build" class="home-build" type="button" title="What's new in this version"></button>
     </div>
@@ -1587,12 +1594,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     <h3>Settings</h3>
     <label>Access code</label>
     <input id="set-testercode" class="secret-input" type="text" placeholder="Private alpha code" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore disabled>
-    <div id="settings-models-launcher" class="settings-action">
-      <div class="settings-action-copy"><strong>Models</strong><span>Choose what runs each part of a new conversation.</span></div>
-      <button id="open-models" type="button">Choose</button>
-    </div>
     <div id="settings-microphone-launcher" class="settings-action">
-      <div class="settings-action-copy"><strong>Microphone</strong><span>Set up access before your next spoken lesson.</span></div>
+      <div class="settings-action-copy"><strong>Microphone</strong><span>Spoken lessons</span></div>
       <button id="open-mic-primer" type="button">Set up</button>
     </div>
     <label>Tutor model</label>
@@ -1695,11 +1698,17 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v67 · Aug 6";
+const BUILD = "v68 · Aug 6";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v68", date: "Aug 6", changes: [
+    "The first screen is shorter, fits the phone, and puts recovery email directly in the setup flow.",
+    "Returning from email confirmation now refreshes the installed app, and lessons and Notes save automatically with retry.",
+    "Models is back on Home; Most recent stays hidden until a lesson exists; Settings now matches the phone theme.",
+    "The Model Lab keeps its safeguards while removing explanatory clutter.",
+  ] },
   { tag: "v67", date: "Aug 6", changes: [
     "Email protection and backup status now appear in the welcome screen and menu instead of being buried in Settings.",
     "The welcome screen explains how to add Worldview to your phone's Home Screen.",
@@ -2027,6 +2036,7 @@ const VERSIONS = [
 ];
 const LS_KEY = "worldview-v1";
 let cloudSyncReady = false, cloudHydrating = false, cloudSyncTimer = 0, cloudSyncInFlight = null, cloudAccount = null, backendEntitled = false;
+let cloudRetryDelay = 0, accountTransitionInProgress = false;
 let localSaveWarningShown = false;
 let state = { apiKey: "", testerInvite: "", monthlyBudget: 5, model: "claude-sonnet-5", tutorThinking: "fast", developerMode: false, developerUnlocked:false, ttsProvider: "auto", sttModel:"deepgram-nova-3", deepgramKey: "", deepgramModel: "aura-2-arcas-en", lessons: [], notes: [], customCategories: [], voiceURI: "", voiceDefault: true, speechLanguage: "en", elKey: "", cartKey: "", cartVoice: "", cardScale: 1, theme:"system", libraryUpdatedAt:0, voiceTimingLog: [], voiceRelayEnabled: false, speakerphone: true, micPrimerVersion:"", micPrimerChoice:"" };
 try { Object.assign(state, JSON.parse(localStorage.getItem(LS_KEY) || "{}")); } catch (e) {}
@@ -2065,7 +2075,9 @@ function save() {
       setTimeout(() => { if (typeof toast === "function") toast("This browser is out of local storage. Sign in so your latest lessons can be backed up.",7000); },0);
     }
   }
-  if (savedLocally && cloudSyncReady && !cloudHydrating) scheduleCloudSync();
+  /* Cloud is the normal save path. A full localStorage bucket must not stop a
+     signed-in learner's latest edit from reaching the server. */
+  if (cloudSyncReady && !cloudHydrating) scheduleCloudSync();
   return savedLocally;
 }
 const THEME_ICON_SUN = '<circle cx="12" cy="12" r="4.2"/><path d="M12 3v2M12 19v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M3 12h2M19 12h2M4.6 19.4l1.4-1.4M18 6l1.4-1.4"/>';
@@ -2357,56 +2369,52 @@ async function sourceMediaBlob(lesson) {
 }
 async function cloudSyncNow() {
   if (!cloudSyncReady || cloudHydrating || cloudSyncInFlight || !backendClient || !cloudAccount) return cloudSyncInFlight;
+  const account = cloudAccount;
+  let syncedRevision = 0;
+  let succeeded = false;
   cloudSyncInFlight = (async () => {
-    await syncSourceMediaToCloud(cloudAccount);
+    await syncSourceMediaToCloud(account);
+    if (!cloudAccount || cloudAccount.id !== account.id || !cloudSyncReady) return;
+    syncedRevision = Number(state.libraryUpdatedAt) || Date.now();
     const snapshot = cloudSnapshot();
     const result = await backendClient.from("user_app_state").upsert({
-      user_id:cloudAccount.id,schema_version:CLOUD_SCHEMA_VERSION,snapshot,
-      client_updated_at:Number(state.libraryUpdatedAt) || Date.now(),updated_at:new Date().toISOString(),
+      user_id:account.id,schema_version:CLOUD_SCHEMA_VERSION,snapshot,
+      client_updated_at:syncedRevision,updated_at:new Date().toISOString(),
     },{onConflict:"user_id"});
     if (result.error) throw result.error;
+    succeeded = true;
+    cloudRetryDelay = 0;
     updateCloudAccountUI("synced");
   })().catch(error => {
     console.warn("Cloud sync failed",error);
+    cloudRetryDelay = Math.min(cloudRetryDelay ? cloudRetryDelay * 2 : 4000,60000);
     updateCloudAccountUI("error");
-  }).finally(() => { cloudSyncInFlight = null; });
+  }).finally(() => {
+    cloudSyncInFlight = null;
+    if (!cloudSyncReady || cloudHydrating || !cloudAccount || cloudAccount.id !== account.id) return;
+    /* A save can happen while an upload is in flight. Always follow it with
+       the newer snapshot; failed uploads retry without asking the learner. */
+    if (!succeeded || Number(state.libraryUpdatedAt) > syncedRevision) scheduleCloudSync(succeeded ? 80 : cloudRetryDelay);
+  });
   return cloudSyncInFlight;
 }
-function scheduleCloudSync(delay = 850) {
+function scheduleCloudSync(delay = 250) {
   clearTimeout(cloudSyncTimer);
   cloudSyncTimer = setTimeout(() => cloudSyncNow(),delay);
 }
 function updateCloudAccountUI(status = "") {
   const label = $("account-status");
-  if (!cloudAccount) {
-    if (label) label.textContent = status === "error" ? "Backup unavailable. Local lessons are safe on this device." : "Preparing lesson backup…";
-    const signOut = $("account-signout");
-    if (signOut) signOut.hidden = true;
-    if ($("intro-account-copy")) $("intro-account-copy").textContent = status === "error"
-      ? "Cloud backup is temporarily unavailable. Keep this device and use Save lessons in Settings as a second copy."
-      : "Connect an email once. You stay signed in, and your library can be restored on another device.";
-    if ($("intro-account")) { $("intro-account").textContent = "Protect my learning"; $("intro-account").classList.remove("connected"); }
-    if ($("nav-account-label")) $("nav-account-label").textContent = "Protect Notes";
-    if ($("drawer-account-status")) $("drawer-account-status").textContent = "Connect an email once to keep lessons connected across your devices.";
-    return;
-  }
   const email = cloudAccount && cloudAccount.email;
   if (label) label.textContent = email
-    ? `${email} · ${status === "error" ? "sync needs another try" : status === "synced" ? "synced" : "connected"}`
-    : `${status === "error" ? "Backup needs another try" : "Backed up on this device. Add email for recovery."}`;
+    ? `${email} · ${status === "error" ? "save retrying" : "saved"}`
+    : status === "error" ? "Cloud save needs another try." : "Add recovery email";
   const signOut = $("account-signout");
   if (signOut) signOut.hidden = !email;
-  if ($("intro-account-copy")) $("intro-account-copy").textContent = email
-    ? `Your lessons and Notes restore with ${email}.`
-    : "This browser has a private backup, but only an email lets you recover it after changing devices or website addresses.";
-  if ($("intro-account")) {
-    $("intro-account").textContent = email ? `Protected as ${email}` : "Add recovery email";
-    $("intro-account").classList.toggle("connected",!!email);
-  }
   if ($("nav-account-label")) $("nav-account-label").textContent = email ? "Library protected" : "Protect Notes";
   if ($("drawer-account-status")) $("drawer-account-status").textContent = email
-    ? `${email} · ${status === "error" ? "sync needs another try" : "synced"}`
-    : "This device is backed up anonymously. Add email so it can be recovered elsewhere.";
+    ? `${email} · ${status === "error" ? "save retrying" : "saved"}`
+    : "Add recovery email";
+  renderAccountSetupUI(status);
 }
 async function loadBackendEntitlement(userId) {
   if (!backendClient || !userId) return false;
@@ -2424,6 +2432,7 @@ async function initCloudPersistence() {
     await loadBackendEntitlement(user.id);
     const remote = await backendClient.from("user_app_state").select("snapshot,client_updated_at").eq("user_id",user.id).maybeSingle();
     if (remote.error) throw remote.error;
+    if (generation !== cloudInitGeneration || !cloudAccount || cloudAccount.id !== user.id) return;
     cloudHydrating = true;
     if (remote.data && remote.data.snapshot) mergeCloudSnapshot(remote.data.snapshot);
     try { localStorage.setItem(LS_KEY,JSON.stringify(state)); } catch (error) {}
@@ -2434,6 +2443,7 @@ async function initCloudPersistence() {
     updateCloudAccountUI(remote.data ? "synced" : "");
     scheduleCloudSync(100);
   } catch (error) {
+    if (generation !== cloudInitGeneration) return;
     cloudHydrating = false;
     console.warn("Cloud library is unavailable",error);
     updateCloudAccountUI("error");
@@ -4119,13 +4129,13 @@ function layoutWheel(animate = true, refreshGuide = true) {
 function updateDeckLabelVisibility() {
   const button = $("mobile-category-button");
   if (!button) return;
-  /* Inside a folder the pill is also the way out, so it is never hidden.
-     On the main shelf it appears as soon as the learner starts to move
-     horizontally — the control should be available with the deck, not wait
-     until a particular lesson card reaches the centre. */
+  /* Inside a folder the pill is also the way out, so it is never hidden. On
+     the main shelf there is nothing "recent" to choose until a real lesson
+     exists; once one does, reveal the pill as that first lesson enters focus. */
   if (wheel.layerCategory) { button.classList.remove("deck-label-hidden"); return; }
-  const past = wheel.pos > 0.08;
-  button.classList.toggle("deck-label-hidden", !past);
+  const firstLessonIndex = wheel.cards.findIndex(card => card.classList.contains("lesson-card"));
+  const show = firstLessonIndex >= 0 && wheel.pos >= Math.max(0,firstLessonIndex - .55);
+  button.classList.toggle("deck-label-hidden", !show);
 }
 let resetCarouselGesture = () => {};
 let wheelLayoutFrame = 0;
@@ -4443,6 +4453,11 @@ function createLessonPlanningProgress(lesson, planningBubble, wantsVoice) {
 
 async function beginLesson(topic, methodKey, starterText, parentId, sourceUrl, sourceMedia) {
   if (!aiAvailable()) { openSettings(); toast("Enter the access code, then Save."); return; }
+  if (state.voiceDefault && micPrimerNeeded()) {
+    pendingLessonStart = [topic,methodKey,starterText,parentId,sourceUrl,sourceMedia];
+    setMicPrimerOpen(true);
+    return;
+  }
   const lesson = {
     id: uid(), topic, method: methodKey, starterText,
     tutorModel: activeTutorModel(), // pinned at creation; changing the default later leaves this lesson alone
@@ -10560,13 +10575,13 @@ function organizeSettingsPanel() {
     intro.after(details); return details;
   }
   const fieldNodes = id => { const field=$(id), label=field && field.previousElementSibling; return [label,field]; };
-  const model = fieldNodes("set-model"), thinking = fieldNodes("set-thinking"), speechLanguage = fieldNodes("set-speechlanguage"), theme = fieldNodes("set-theme"), modelsLauncher = $("settings-models-launcher"), microphoneLauncher = $("settings-microphone-launcher");
+  const model = fieldNodes("set-model"), thinking = fieldNodes("set-thinking"), speechLanguage = fieldNodes("set-speechlanguage"), theme = fieldNodes("set-theme"), microphoneLauncher = $("settings-microphone-launcher");
   const voiceDefault = $("set-voicedefault") && $("set-voicedefault").closest("label"); if (voiceDefault) voiceDefault.className = "settings-check";
   const developerToggle = $("set-developer") && $("set-developer").closest("label");
   if (developerToggle) { developerToggle.className = "settings-check"; developerToggle.hidden = !(state.developerUnlocked && state.developerMode); }
   const speechLanguageHint = $("set-speechlanguage") && $("set-speechlanguage").nextElementSibling;
   if (speechLanguageHint) speechLanguageHint.remove();
-  const learning = group("Learning & conversation", [modelsLauncher, microphoneLauncher, ...theme, ...speechLanguage, voiceDefault, developerToggle], true, true);
+  const learning = group("Learning & conversation", [microphoneLauncher, ...theme, ...speechLanguage, voiceDefault, developerToggle], true, true);
   const thinkingHint = $("set-thinking") && $("set-thinking").nextElementSibling;
   const ttsProvider = fieldNodes("set-ttsprovider"), deepgramKey = fieldNodes("set-deepgramkey"), deepgramModel = fieldNodes("set-deepgrammodel");
   const developerStatus = panel.querySelector(".developer-status");
@@ -10578,8 +10593,8 @@ function organizeSettingsPanel() {
   connection.id = "settings-tester-group";
   const accountCard = document.createElement("div");
   accountCard.className = "settings-account-card";
-  accountCard.innerHTML = `<p id="account-status" class="settings-account-status">Preparing lesson backup…</p><div class="settings-account-row"><input id="account-email" type="email" autocomplete="email" inputmode="email" placeholder="Email for lesson backup" aria-label="Email address for lesson recovery"><button id="account-link" type="button">Connect</button></div><p class="settings-account-status">Moving from the previous address? Open the previous Worldview icon on this same phone and connect your email there first. Then connect the same email here.</p><button id="account-signout" type="button" hidden>Sign out</button>`;
-  const account = group("Account & lesson backup",[accountCard],true,true);
+  accountCard.innerHTML = `<p id="account-status" class="settings-account-status">Connecting…</p><div id="account-email-step" class="settings-account-row"><input id="account-email" type="email" autocomplete="email" inputmode="email" placeholder="Recovery email" aria-label="Recovery email"><button id="account-link" type="button">Add</button></div><div id="account-code-step" class="settings-account-row" hidden><input id="account-code" type="text" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Email code" aria-label="Email verification code"><button id="account-verify" type="button">Confirm</button></div><button id="account-signout" type="button" hidden>Sign out</button>`;
+  const account = group("Account",[accountCard],true,true);
   account.id = "settings-account-group";
   const voiceNodes = [];
   ["set-cartkey","set-cartvoice","set-elkey"].forEach(id => { const field=$(id); if(!field)return; const label=field.previousElementSibling, hint=field.nextElementSibling && field.nextElementSibling.classList.contains("hint") ? field.nextElementSibling : null; voiceNodes.push(label,field,hint); });
@@ -10603,54 +10618,161 @@ function syncDeveloperSettingsVisibility() {
   const premium = $("settings-premium-group");
   if (premium) premium.hidden = true;
   const data = $("settings-data-group");
-  if (data) data.hidden = false;
+  if (data) data.hidden = true;
   const tester = $("settings-tester-group");
   if (tester) tester.hidden = backendAccessEnabled() && !developer;
   document.querySelectorAll(".owner-provider-field").forEach(node => { node.hidden = !developer; });
 }
 syncDeveloperSettingsVisibility();
-async function requestAccountLink() {
-  const input = $("account-email"), button = $("account-link");
-  const email = String(input && input.value || "").trim().toLowerCase();
-  if (!email || !email.includes("@")) { toast("Enter the email you want to use to recover your lessons.");return; }
-  button.disabled = true;
+const ACCOUNT_PENDING_KEY = "worldview-account-pending-v1";
+/* Supabase's free default mailer does not permit OTP email templates. The
+   installed app therefore uses the confirmation link plus a foreground
+   identity refresh today. Set this true only after production SMTP and the
+   tracked {{ .Token }} templates are live. */
+const EMAIL_OTP_ENABLED = false;
+let accountPending = (() => {
+  try {
+    const value = JSON.parse(localStorage.getItem(ACCOUNT_PENDING_KEY) || "null");
+    return value && value.email && Date.now() - Number(value.sentAt || 0) < 30 * 60 * 1000 ? value : null;
+  } catch (error) { return null; }
+})();
+function setAccountPending(value) {
+  accountPending = value;
+  try {
+    if (value) localStorage.setItem(ACCOUNT_PENDING_KEY,JSON.stringify(value));
+    else localStorage.removeItem(ACCOUNT_PENDING_KEY);
+  } catch (error) {}
+}
+function renderAccountSetupUI(status = "") {
+  const email = cloudAccount && cloudAccount.email;
+  if (email && accountPending) setAccountPending(null);
+  const pending = !email && accountPending;
+  const introEmailStep = $("intro-email-step"), introCodeStep = $("intro-code-step"), introConnected = $("intro-account-connected"), introStatus = $("intro-account-status");
+  if (introEmailStep) introEmailStep.hidden = !!(email || pending);
+  if (introCodeStep) {
+    introCodeStep.hidden = !pending;
+    introCodeStep.classList.toggle("link-fallback",!!pending && !EMAIL_OTP_ENABLED);
+    if ($("intro-account-verify")) $("intro-account-verify").textContent = EMAIL_OTP_ENABLED ? "Confirm" : "Check account";
+  }
+  if (introConnected) { introConnected.hidden = !email;introConnected.textContent = email ? `Saved with ${email}` : ""; }
+  if (introStatus) introStatus.textContent = email ? "" : pending
+    ? EMAIL_OTP_ENABLED ? `Code sent to ${pending.email}` : "Check your email, then return here."
+    : status === "error" ? "Cloud save will retry." : "";
+  const settingsEmailStep = $("account-email-step"), settingsCodeStep = $("account-code-step");
+  if (settingsEmailStep) settingsEmailStep.hidden = !!(email || pending);
+  if (settingsCodeStep) {
+    settingsCodeStep.hidden = !pending;
+    settingsCodeStep.classList.toggle("link-fallback",!!pending && !EMAIL_OTP_ENABLED);
+    if ($("account-verify")) $("account-verify").textContent = EMAIL_OTP_ENABLED ? "Confirm" : "Check account";
+  }
+  [$("intro-account-email"),$("account-email")].forEach(input => { if (input && pending && !input.value) input.value = pending.email; });
+}
+function accountEmailFrom(source) {
+  const input = source === "intro" ? $("intro-account-email") : $("account-email");
+  return String(input && input.value || "").trim().toLowerCase();
+}
+async function requestAccountCode(source = "settings") {
+  const email = accountEmailFrom(source);
+  const buttons = [$("intro-account"),$("account-link")].filter(Boolean);
+  if (!email || !/^\S+@\S+\.\S+$/.test(email)) { toast("Enter a valid recovery email.");return; }
+  buttons.forEach(button => { button.disabled = true; });
   try {
     await cloudSyncNow();
     const user = cloudAccount || await cloudUser();
     const redirect = `${location.origin}${location.pathname}`;
-    let result;
     if (user && user.email && user.email.toLowerCase() === email) {
-      toast("This lesson library is already connected to that email.");
+      cloudAccount = user;
+      updateCloudAccountUI("synced");
+      toast("That email is already connected.");
       return;
     }
-    if (user && user.is_anonymous) {
-      result = await backendClient.auth.updateUser({ email },{ emailRedirectTo:redirect });
-      if (!result.error) {
-        toast("Check your email once to finish protecting these lessons.",6500);
-        updateCloudAccountUI();
-        return;
-      }
-      if (!/already|registered|exists/i.test(result.error.message || "")) throw result.error;
+    let result = null, mode = "email_change";
+    if (user) result = await backendClient.auth.updateUser({ email },{ emailRedirectTo:redirect });
+    if (!user || (result && result.error && /already|registered|exists/i.test(result.error.message || ""))) {
+      mode = "email";
+      result = await backendClient.auth.signInWithOtp({ email,options:{ emailRedirectTo:redirect,shouldCreateUser:false } });
     }
-    result = await backendClient.auth.signInWithOtp({ email,options:{ emailRedirectTo:redirect,shouldCreateUser:false } });
-    if (result.error) throw result.error;
-    toast("Open the sign-in link in your email. This browser will merge its lessons safely.",7000);
+    if (result && result.error) throw result.error;
+    setAccountPending({ email,mode,originalUserId:user && user.id || "",sentAt:Date.now() });
+    renderAccountSetupUI();
+    const nextControl = EMAIL_OTP_ENABLED
+      ? source === "intro" ? $("intro-account-code") : $("account-code")
+      : source === "intro" ? $("intro-account-verify") : $("account-verify");
+    if (nextControl) setTimeout(() => nextControl.focus({preventScroll:true}),50);
+    toast(EMAIL_OTP_ENABLED ? "Enter the code from your email here." : "Open the email link, then return to Worldview.",5500);
   } catch (error) {
-    toast("Email sign-in could not start: " + (error.message || "try again"),7000);
-  } finally { button.disabled = false; }
+    toast("Could not send the email: " + (error.message || "try again"),6500);
+  } finally { buttons.forEach(button => { button.disabled = false; }); }
+}
+async function verifyAccountCode(source = "settings") {
+  const input = source === "intro" ? $("intro-account-code") : $("account-code");
+  const token = String(input && input.value || "").replace(/\s/g,"");
+  if (!EMAIL_OTP_ENABLED) {
+    if (!accountPending) { toast("Add your recovery email first.");return; }
+    const pendingEmail = accountPending.email;
+    const buttons = [$("intro-account-verify"),$("account-verify")].filter(Boolean);
+    buttons.forEach(button => { button.disabled = true; });
+    try {
+      await initCloudPersistence();
+      if (cloudAccount?.email?.toLowerCase() === pendingEmail.toLowerCase()) {
+        setAccountPending(null);
+        updateCloudAccountUI("synced");
+        toast("Account ready. Your library saves automatically.",5000);
+      } else {
+        toast("Not connected yet. Open the email link, then return here.",5500);
+      }
+    } finally { buttons.forEach(button => { button.disabled = false; }); }
+    return;
+  }
+  if (!accountPending || token.length < 6) { toast("Enter the code from your email.");return; }
+  const buttons = [$("intro-account-verify"),$("account-verify")].filter(Boolean);
+  buttons.forEach(button => { button.disabled = true; });
+  const previousAccount = cloudAccount, previousReady = cloudSyncReady;
+  try {
+    await cloudSyncNow();
+    if (cloudSyncInFlight) await cloudSyncInFlight;
+    clearTimeout(cloudSyncTimer);cloudSyncTimer = 0;
+    accountTransitionInProgress = true;
+    cloudSyncReady = false;
+    cloudInitGeneration += 1;
+    const verified = await backendClient.auth.verifyOtp({ email:accountPending.email,token,type:accountPending.mode });
+    if (verified.error) throw verified.error;
+    const user = verified.data && verified.data.user;
+    if (!user) throw new Error("The account could not be confirmed.");
+    if (accountPending.mode === "email_change" && accountPending.originalUserId && user.id !== accountPending.originalUserId) {
+      throw new Error("The account identity changed unexpectedly.");
+    }
+    cloudAccount = null;backendEntitled = false;
+    setAccountPending(null);
+    accountTransitionInProgress = false;
+    await initCloudPersistence();
+    if (input) input.value = "";
+    updateCloudAccountUI("synced");
+    toast("Account ready. Your library saves automatically.",5000);
+  } catch (error) {
+    accountTransitionInProgress = false;
+    cloudAccount = previousAccount;
+    cloudSyncReady = previousReady;
+    renderAccountSetupUI();
+    if (cloudSyncReady) scheduleCloudSync();
+    toast("That code did not work: " + (error.message || "try again"),6500);
+  } finally { buttons.forEach(button => { button.disabled = false; }); }
 }
 async function signOutAccount() {
   if (!backendClient) return;
   await cloudSyncNow();
   const result = await backendClient.auth.signOut();
   if (result.error) { toast("Could not sign out: " + result.error.message);return; }
+  setAccountPending(null);
   cloudSyncReady = false;cloudAccount = null;backendEntitled = false;
   updateCloudAccountUI();
   toast("Signed out on this device. Your local lessons are still here.");
 }
-$("account-link").onclick = requestAccountLink;
+$("account-link").onclick = () => requestAccountCode("settings");
+$("account-verify").onclick = () => verifyAccountCode("settings");
 $("account-signout").onclick = signOutAccount;
-$("account-email").addEventListener("keydown",event => { if (event.key === "Enter") requestAccountLink(); });
+$("account-email").addEventListener("keydown",event => { if (event.key === "Enter") requestAccountCode("settings"); });
+$("account-code").addEventListener("keydown",event => { if (event.key === "Enter") verifyAccountCode("settings"); });
 $("set-theme").addEventListener("change",event => { state.theme = event.target.value;applyTheme();save(); });
 $("theme-toggle").addEventListener("click", () => {
   const dark = document.documentElement.dataset.theme === "dark"
@@ -10828,31 +10950,26 @@ $("settings-save").onclick = () => {
 };
 
 /* ================= One-screen introduction ================= */
-const INTRO_VERSION = "intro-v4";
+const INTRO_VERSION = "intro-v5";
 const MIC_PRIMER_VERSION = "mic-primer-v1";
 let micPrimerRequestGeneration = 0;
 let micPrimerRequestTimer = 0;
 let micPrimerReturnFocus = null;
 let deferredInstallPrompt = null;
+let pendingLessonStart = null;
 
 function worldviewInstalled() {
   return matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
 }
 function updateInstallHelp() {
-  const help = $("intro-install-help"), button = $("intro-install");
-  if (!help || !button) return;
+  const button = $("intro-install");
+  if (!button) return;
   if (worldviewInstalled()) {
-    help.textContent = "Worldview is already installed on this Home Screen.";
     button.hidden = true;
     return;
   }
-  const ua = navigator.userAgent || "";
-  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  const android = /Android/i.test(ua);
-  if (ios) help.textContent = "iPhone or iPad: tap Share, then Add to Home Screen.";
-  else if (android) help.textContent = "Android: tap Install below, or use the browser menu → Add to Home screen.";
-  else help.textContent = "On your phone, use the browser menu → Add to Home screen.";
-  button.hidden = !deferredInstallPrompt;
+  button.hidden = false;
+  button.textContent = deferredInstallPrompt ? "Install Worldview" : "Add to Home Screen";
 }
 window.addEventListener("beforeinstallprompt",event => {
   event.preventDefault();
@@ -10890,7 +11007,9 @@ function finishMicPrimer(choice) {
   state.micPrimerChoice = choice;
   save();
   setMicPrimerOpen(false);
-  if (state.introSeenVersion !== INTRO_VERSION) setTimeout(() => setIntroOpen(true),120);
+  const pending = pendingLessonStart;
+  pendingLessonStart = null;
+  if (pending) setTimeout(() => beginLesson(...pending),120);
 }
 async function enableMicrophoneFromPrimer() {
   if (location.protocol === "file:" || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.isSecureContext) return;
@@ -10937,7 +11056,12 @@ function setIntroOpen(open,remember = false) {
   if (open) {
     updateInstallHelp();
     updateCloudAccountUI();
-    requestAnimationFrame(() => (innerWidth > 700 ? $("intro-topic") : $("intro-account")).focus({preventScroll:true}));
+    requestAnimationFrame(() => {
+      /* Do not summon the phone keyboard before the learner chooses a field. */
+      if (innerWidth <= 700) return;
+      const target = accountPending ? $("intro-account-code") : cloudAccount?.email ? $("intro-topic") : $("intro-account-email");
+      if (target) target.focus({preventScroll:true});
+    });
   }
 }
 function finishIntro(openQuestion = false) {
@@ -10967,18 +11091,20 @@ async function startIntroLesson() {
 }
 $("intro-question").addEventListener("submit",event => { event.preventDefault();startIntroLesson(); });
 $("intro-topic").addEventListener("input",event => { $("intro-start").disabled = !event.target.value.trim(); });
-$("intro-example").onclick = () => {
-  $("intro-topic").value = "How does lightning form?";
-  $("intro-start").disabled = false;
-  $("intro-topic").focus();
-};
-$("intro-account").onclick = openAccountSettings;
+$("intro-account-form").addEventListener("submit",event => { event.preventDefault();requestAccountCode("intro"); });
+$("intro-account-verify").onclick = () => verifyAccountCode("intro");
+$("intro-account-code").addEventListener("keydown",event => { if (event.key === "Enter") { event.preventDefault();verifyAccountCode("intro"); } });
 $("intro-install").onclick = async () => {
-  if (!deferredInstallPrompt) { updateInstallHelp();return; }
-  deferredInstallPrompt.prompt();
-  await deferredInstallPrompt.userChoice;
-  deferredInstallPrompt = null;
-  updateInstallHelp();
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    updateInstallHelp();
+    return;
+  }
+  const ua = navigator.userAgent || "";
+  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  toast(ios ? "Tap Share, then Add to Home Screen." : "Open your browser menu, then choose Add to Home screen.",5500);
 };
 $("intro-skip").onclick = () => finishIntro(false);
 $("intro-replay").onclick = () => { closeSettings(true);setIntroOpen(true); };
@@ -11034,7 +11160,7 @@ requestAnimationFrame(homeLandOnExplore); // again after layout settles
 consumeLabLessonHandoff();
 if (backendClient) {
   backendClient.auth.onAuthStateChange((event,session) => {
-    if (["SIGNED_IN","INITIAL_SESSION","USER_UPDATED"].includes(event) && session) {
+    if (!accountTransitionInProgress && ["SIGNED_IN","INITIAL_SESSION","USER_UPDATED"].includes(event) && session) {
       setTimeout(() => initCloudPersistence(),0);
     }
   });
@@ -11042,11 +11168,12 @@ if (backendClient) {
 }
 try { matchMedia("(prefers-color-scheme:dark)").addEventListener("change",() => { if ((state.theme || "system") === "system") applyTheme(); }); } catch (error) {}
 const introNeededAtBoot = state.introSeenVersion !== INTRO_VERSION;
-if (micPrimerNeeded()) setTimeout(() => setMicPrimerOpen(true),80);
-else if (introNeededAtBoot) setTimeout(() => setIntroOpen(true),80);
+if (introNeededAtBoot) setTimeout(() => setIntroOpen(true),80);
 save();
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
+    clearTimeout(cloudSyncTimer);cloudSyncTimer = 0;
+    cloudSyncNow();
     if (voice.active) {
       voice.pausedByVisibility = !!(voice.captureWanted || voice.listening || voice.rec || voice.spaceHeld);
       if (voice.pausedByVisibility) pauseVoiceCapture("");
@@ -11056,6 +11183,7 @@ document.addEventListener("visibilitychange", () => {
     }
     return;
   }
+  if (backendClient && !accountTransitionInProgress) initCloudPersistence();
   if (!voice.active) return;
   if (voice.pausedByVisibility) {
     voice.pausedByVisibility = false;
@@ -11078,6 +11206,8 @@ document.addEventListener("visibilitychange", () => {
   // after a background/foreground cycle — force it back to the live line
   requestAnimationFrame(() => requestAnimationFrame(voiceAutoScroll));
 });
+window.addEventListener("pageshow",() => { if (backendClient && !accountTransitionInProgress) initCloudPersistence(); });
+window.addEventListener("pagehide",() => { clearTimeout(cloudSyncTimer);cloudSyncTimer = 0;cloudSyncNow(); });
 window.addEventListener("blur", () => {
   if (voice.active && voice.spaceHeld) pauseVoiceCapture("The Space-key recording paused when the window lost focus.");
 });

@@ -1545,7 +1545,7 @@ function renderBenchRole(kind) {
   const role = LAB_BENCH_ROLES[kind];
   if (!panel || !role) return;
   panel.replaceChildren();
-  panel.append(element("summary", { text: `What this AI actually does in Worldview — ${role.title}` }));
+  panel.append(element("summary", { text: "About this test" }));
   const body = element("div", { className: "role-body" });
   body.append(element("p", { className: "role-lead", text: role.oneLine }));
   body.append(element("p", { className: "role-model", text: `In production today: ${role.productionModel}` }));

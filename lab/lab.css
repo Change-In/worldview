@@ -25,8 +25,10 @@ body > #lab {
 
 html { background: var(--lab-void); }
 body {
-  min-width: 320px;
+  min-width: 0;
   min-height: 100vh;
+  margin: 0;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at 7% -10%, rgba(116, 97, 235, .36), transparent 28rem),
     radial-gradient(circle at 96% 15%, rgba(30, 194, 163, .14), transparent 25rem),
@@ -47,7 +49,7 @@ body {
   margin: 0 auto;
   padding: max(18px, env(safe-area-inset-top)) 0 16px;
   display: grid;
-  grid-template-columns: 42px 1fr auto;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
 }
