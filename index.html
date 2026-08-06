@@ -1679,11 +1679,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v65 · Aug 6";
+const BUILD = "v66 · Aug 6";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v66", date: "Aug 6", changes: [
+    "The Most recent control now appears as soon as you begin moving across the Explore deck, instead of making you reach a lesson card first.",
+    "Leaving a lesson now shuts down every voice route immediately, including a reply that was about to begin speaking.",
+  ] },
   { tag: "v65", date: "Aug 6", changes: [
     "A folder is no longer a dead end. Opening one keeps the ask-anything card and Notes, adds a clear “← All lessons” way back, and files anything you start there into that folder.",
     "The folder name in the top right now appears as soon as the first lesson card reaches the middle, instead of waiting until you had already scrolled past it.",
@@ -4079,12 +4083,11 @@ function updateDeckLabelVisibility() {
   const button = $("mobile-category-button");
   if (!button) return;
   /* Inside a folder the pill is also the way out, so it is never hidden.
-     Otherwise it appears as soon as the FIRST lesson card comes to centre —
-     it used to wait until you were already past it, which read as arriving
-     one card late (BUG-130). */
+     On the main shelf it appears as soon as the learner starts to move
+     horizontally — the control should be available with the deck, not wait
+     until a particular lesson card reaches the centre. */
   if (wheel.layerCategory) { button.classList.remove("deck-label-hidden"); return; }
-  const firstLesson = wheel.ids.findIndex(id => !!id);
-  const past = firstLesson >= 0 && wheel.pos > firstLesson - 0.5;
+  const past = wheel.pos > 0.08;
   button.classList.toggle("deck-label-hidden", !past);
 }
 let resetCarouselGesture = () => {};
@@ -6385,6 +6388,11 @@ function closeLessonSession(lesson) {
 }
 function exitLessonToHome() {
   const lesson = getLesson(currentLessonId);
+  // A full lesson exit must use the same teardown as the voice-overlay exit.
+  // Without it, a queued or just-about-to-start reply can outlive the lesson
+  // and speak over Home.
+  if (voice.active) exitVoice();
+  else releaseVoiceAudioOutput();
   closeLessonSession(lesson);
   closeLessonPath();
   closeConversationHistory();
