@@ -8759,7 +8759,7 @@ async function chooseLessonEntryVoice() {
   pending.busy = true;
   voiceButton.disabled = true;
   status.className = "";
-  status.textContent = "Waiting for your iPhone or browser to allow the microphoneâ€¦";
+  status.textContent = "Waiting for your iPhone or browser to allow the microphone…";
   try {
     if (voice.mediaStream && !voice.active) releaseOwnedMicStream();
     unlockLessonEntryVoiceAudio();
