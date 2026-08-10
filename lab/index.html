@@ -33,21 +33,64 @@
   <section class="lab-hero" aria-labelledby="lab-title">
     <div>
       <h2 id="lab-title">Model Lab</h2>
+      <p>Run the same scenario, then see exactly where the seconds went.</p>
     </div>
-    <div class="hero-stat"><strong id="lab-provider-count">0</strong><span>configured providers</span></div>
+    <div class="hero-tools">
+      <button id="lab-open-timing" class="hero-timing" type="button"><strong>Timing dashboard</strong><span>queue · model · total</span></button>
+      <div class="hero-stat"><strong id="lab-provider-count">0</strong><span>configured providers</span></div>
+    </div>
   </section>
 
-  <nav class="lab-tabs" role="tablist" aria-label="Lab benches">
-    <button class="lab-tab is-active" id="tab-lesson" type="button" role="tab" aria-selected="true" aria-controls="panel-lesson" data-tab="lesson">Lesson</button>
-    <button class="lab-tab" id="tab-tutor" type="button" role="tab" aria-selected="false" aria-controls="panel-tutor" data-tab="tutor">Tutor</button>
-    <button class="lab-tab" id="tab-brain" type="button" role="tab" aria-selected="false" aria-controls="panel-brain" data-tab="brain">Brain<br><small>shadow</small></button>
-    <button class="lab-tab" id="tab-stt" type="button" role="tab" aria-selected="false" aria-controls="panel-stt" data-tab="stt">Transcription</button>
-    <button class="lab-tab" id="tab-results" type="button" role="tab" aria-selected="false" aria-controls="panel-results" data-tab="results">Results<br>&amp; flow</button>
+  <nav class="lab-tabs" role="tablist" aria-label="Learner workflow and advanced Lab benches">
+    <button class="lab-tab is-active" id="tab-scenario" type="button" role="tab" aria-selected="true" aria-controls="panel-scenario" data-tab="scenario"><span>1</span>Question Map</button>
+    <button class="lab-tab" id="tab-lesson" type="button" role="tab" aria-selected="false" aria-controls="panel-lesson" data-tab="lesson"><span>2</span>Lesson Lab</button>
+    <button class="lab-tab" id="tab-stt" type="button" role="tab" aria-selected="false" aria-controls="panel-stt" data-tab="stt"><span>3</span>Transcription</button>
+    <button class="lab-tab" id="tab-tutor" type="button" role="tab" aria-selected="false" aria-controls="panel-tutor" data-tab="tutor"><span>4</span>Tutor</button>
+    <button class="lab-tab" id="tab-speech" type="button" role="tab" aria-selected="false" aria-controls="panel-speech" data-tab="speech"><span>5</span>Speech</button>
+    <span class="lab-tab-break" aria-hidden="true"></span>
+    <button class="lab-tab lab-tab-secondary" id="tab-results" type="button" role="tab" aria-selected="false" aria-controls="panel-results" data-tab="results">Timing dashboard</button>
+    <button class="lab-tab lab-tab-secondary" id="tab-brain" type="button" role="tab" aria-selected="false" aria-controls="panel-brain" data-tab="brain">Advanced: Brain</button>
   </nav>
 
-  <section id="panel-lesson" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-lesson" data-panel="lesson">
+  <section id="panel-scenario" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-scenario" data-panel="scenario">
     <div class="bench-head">
-      <div><h2>Lesson</h2></div>
+      <div><p class="eyebrow">Step 1 · reusable baseline</p><h2>Question Map</h2></div>
+      <p class="bench-note">Name one controlled scenario, then reuse it across the component benches so timing comparisons mean the same thing.</p>
+    </div>
+    <div class="bench-grid scenario-grid">
+      <section class="lab-card input-card">
+        <label for="scenario-select">Saved benchmark</label>
+        <select id="scenario-select"></select>
+        <label for="scenario-name">Scenario name</label>
+        <input id="scenario-name" type="text" maxlength="80" placeholder="First-principles baseline">
+        <label for="scenario-question">Lesson topic or base question</label>
+        <textarea id="scenario-question" rows="4" maxlength="2000" placeholder="Why does a metal spoon feel colder than a wooden spoon in the same room?"></textarea>
+        <label for="scenario-answer">Fixed learner answer for Tutor</label>
+        <textarea id="scenario-answer" rows="4" maxlength="4000" placeholder="I think metal pulls heat away from my hand faster."></textarea>
+        <label for="scenario-speech">Fixed sentence for Speech</label>
+        <textarea id="scenario-speech" rows="3" maxlength="2000" placeholder="The same temperature can feel different when heat moves at different rates."></textarea>
+        <div class="inline-actions"><button id="scenario-save" class="button button-primary" type="button">Save scenario</button><button id="scenario-delete" class="button button-danger-soft" type="button">Delete saved scenario</button></div>
+        <p id="scenario-message" class="form-message" role="status"></p>
+      </section>
+      <section class="lab-card lane-card scenario-flow-card">
+        <p class="eyebrow">The path being measured</p>
+        <ol class="scenario-flow" aria-label="Learner workflow">
+          <li><b>Question Map</b><span>Keep the test input controlled.</span></li>
+          <li><b>Lesson Lab</b><span>Compare how models prepare the route.</span></li>
+          <li><b>Transcription</b><span>Measure spoken input becoming text.</span></li>
+          <li><b>Tutor</b><span>Compare the response to the same learner turn.</span></li>
+          <li><b>Speech</b><span>Measure the response becoming audible.</span></li>
+        </ol>
+        <p class="privacy-note">The named scenario is saved only in this browser. Durable text jobs retain only the bounded packet you explicitly run; timing history stores fingerprints and numbers, not prompt, reply, transcript, or audio content.</p>
+        <button id="scenario-use" class="button button-primary" type="button">Use this scenario in the Lab</button>
+      </section>
+    </div>
+  </section>
+
+  <section id="panel-lesson" class="tab-panel" role="tabpanel" aria-labelledby="tab-lesson" data-panel="lesson" hidden>
+    <div class="bench-head">
+      <div><p class="eyebrow">Step 2 · durable text job</p><h2>Lesson Lab</h2></div>
+      <p class="bench-note">Runs continue on the protected server if this page closes. Return to the Timing dashboard to inspect partial or finished work.</p>
     </div>
     <details class="role-panel" data-role-panel="lesson"></details>
     <div class="bench-grid">
@@ -70,7 +113,7 @@
         <div class="card-heading"><div><p class="eyebrow">Experiment lanes</p><h3>Choose models to run</h3></div><span class="cost-warning">1 call per sample</span></div>
         <div id="lesson-lanes" class="lanes" aria-live="polite"></div>
         <button class="button button-add" type="button" data-add-lane="lesson">+ Add model run</button>
-        <button class="button button-primary button-run" type="button" data-run="lesson">Run lesson experiment</button>
+        <button class="button button-primary button-run" type="button" data-run="lesson">Start durable lesson job</button>
         <p id="lesson-run-message" class="form-message" role="status"></p>
       </section>
     </div>
@@ -78,7 +121,8 @@
 
   <section id="panel-tutor" class="tab-panel" role="tabpanel" aria-labelledby="tab-tutor" data-panel="tutor" hidden>
     <div class="bench-head">
-      <div><h2>Tutor</h2></div>
+      <div><p class="eyebrow">Step 4 · durable text job</p><h2>Tutor</h2></div>
+      <p class="bench-note">Runs continue on the protected server. The lesson packet is retained only as the bounded private job input you explicitly submit.</p>
     </div>
     <details class="role-panel" data-role-panel="tutor"></details>
     <div class="bench-grid">
@@ -102,7 +146,7 @@
         <div class="card-heading"><div><p class="eyebrow">Same packet</p><h3>Compare tutor replies</h3></div><span class="cost-warning">Sandbox only</span></div>
         <div id="tutor-lanes" class="lanes" aria-live="polite"></div>
         <button class="button button-add" type="button" data-add-lane="tutor">+ Add model run</button>
-        <button class="button button-primary button-run" type="button" data-run="tutor">Run tutor experiment</button>
+        <button class="button button-primary button-run" type="button" data-run="tutor">Start durable tutor job</button>
         <p id="tutor-run-message" class="form-message" role="status"></p>
       </section>
     </div>
@@ -110,7 +154,7 @@
 
   <section id="panel-brain" class="tab-panel" role="tabpanel" aria-labelledby="tab-brain" data-panel="brain" hidden>
     <div class="bench-head">
-      <div><p class="eyebrow">Bench C · proposed only</p><h2>Brain</h2></div>
+      <div><p class="eyebrow">Advanced · proposed only</p><h2>Brain</h2></div>
       <p class="bench-note">Shadow diagnostics only. This is not a production Brain and its result has no authority.</p>
     </div>
     <details class="role-panel" data-role-panel="brain"></details>
@@ -134,7 +178,7 @@
         <div class="card-heading"><div><p class="eyebrow">Shadow outputs</p><h3>Run a diagnostic</h3></div><span class="cost-warning">Read-only experiment</span></div>
         <div id="brain-lanes" class="lanes" aria-live="polite"></div>
         <button class="button button-add" type="button" data-add-lane="brain">+ Add model run</button>
-        <button class="button button-primary button-run" type="button" data-run="brain">Run shadow diagnostic</button>
+        <button class="button button-primary button-run" type="button" data-run="brain">Start durable shadow job</button>
         <p id="brain-run-message" class="form-message" role="status"></p>
       </section>
     </div>
@@ -142,8 +186,8 @@
 
   <section id="panel-stt" class="tab-panel" role="tabpanel" aria-labelledby="tab-stt" data-panel="stt" hidden>
     <div class="bench-head">
-      <div><p class="eyebrow">Bench D · retained recording</p><h2>Transcription</h2></div>
-      <p class="bench-note">Upload one recording and compare the existing server-supported STT routes. No microphone capture occurs in the Lab.</p>
+      <div><p class="eyebrow">Step 3 · foreground check</p><h2>Transcription</h2></div>
+      <p class="bench-note">Upload one recording and compare the existing server-supported STT routes. Keep this page open: audio is never stored, so this first slice cannot resume transcription after a close.</p>
     </div>
     <div class="bench-grid">
       <section class="lab-card input-card">
@@ -163,8 +207,39 @@
     </div>
   </section>
 
+  <section id="panel-speech" class="tab-panel" role="tabpanel" aria-labelledby="tab-speech" data-panel="speech" hidden>
+    <div class="bench-head">
+      <div><p class="eyebrow">Step 5 · foreground check</p><h2>Speech</h2></div>
+      <p class="bench-note">Compare the protected Worldview voice with this device's voice. Keep this page open: audible timing belongs to this device and no generated audio is retained.</p>
+    </div>
+    <div class="bench-grid">
+      <section class="lab-card input-card">
+        <label for="speech-text">Sentence to speak</label>
+        <textarea id="speech-text" rows="5" maxlength="2000" placeholder="The same temperature can feel different when heat moves at different rates."></textarea>
+        <p class="privacy-note">The device route is local and free. The Worldview route sends this sentence to the existing tester-gated voice function and spends one bounded TTS call.</p>
+      </section>
+      <section class="lab-card lane-card">
+        <div class="card-heading"><div><p class="eyebrow">Foreground routes</p><h3>Compare first sound</h3></div><span class="cost-warning">No audio is saved</span></div>
+        <div class="stt-models">
+          <label class="stt-choice"><input id="speech-device" type="checkbox" checked><span><b>This device</b><small>Browser speech synthesis · no provider call</small></span></label>
+          <label class="stt-choice"><input id="speech-worldview" type="checkbox"><span><b>Worldview voice</b><small>Protected Deepgram Aura-2 route · one provider call</small></span></label>
+        </div>
+        <button id="speech-run" class="button button-primary button-run" type="button">Run foreground speech check</button>
+        <button id="speech-stop" class="button button-quiet" type="button">Stop playback</button>
+        <p id="speech-run-message" class="form-message" role="status"></p>
+      </section>
+    </div>
+  </section>
+
   <section id="panel-results" class="tab-panel" role="tabpanel" aria-labelledby="tab-results" data-panel="results" hidden>
-    <div class="results-head"><div><p class="eyebrow">Page-session results</p><h2>Results &amp; flow</h2><p>Unkept results disappear on reload. Exports contain your prompts, typed fixtures, outputs, and evaluation notes, so review the file before sharing it.</p></div><div class="results-actions"><button id="export-results" class="button button-quiet" type="button">Export JSON</button><button id="clear-results" class="button button-danger" type="button">Clear results</button></div></div>
+    <div class="results-head"><div><p class="eyebrow">Durable text jobs · device timing</p><h2>Timing dashboard</h2><p>See queue wait, model time, total wait, failures, and compatible-route medians. Text-job progress and outputs return after reload; foreground transcription/speech outputs remain page-session only.</p></div><div class="results-actions"><button id="jobs-refresh" class="button button-quiet" type="button">Refresh jobs</button><button id="export-results" class="button button-quiet" type="button">Export JSON</button><button id="clear-results" class="button button-danger" type="button">Clear page results</button></div></div>
+    <section class="job-board" aria-labelledby="jobs-title"><div class="card-heading"><div><p class="eyebrow">Private server history</p><h3 id="jobs-title">Durable text jobs</h3></div><span id="jobs-status" class="rate-note">Not loaded</span></div><div id="jobs-list" class="jobs-list" aria-live="polite"></div></section>
+    <section class="latency-card" aria-labelledby="latency-title">
+      <div class="card-heading"><div><p class="eyebrow">Content-free measurements</p><h3 id="latency-title">Time: queue, model, total</h3></div><button id="latency-clear" class="button button-danger-soft" type="button">Clear timing history</button></div>
+      <div id="latency-summary" class="latency-summary"></div>
+      <div id="latency-chart" class="latency-chart" role="img" aria-label="Latency comparison by route"></div>
+      <p class="privacy-note">Compatible samples are grouped only when their scenario, component, route/model, and prompt fingerprints match. p95 waits for at least 10 compatible samples; phone first-sound timing still needs a foreground device run.</p>
+    </section>
     <div class="results-summary"><span id="results-count">0 outputs</span><span id="results-cost">Estimated total $0.00</span><span id="results-rate-note" class="rate-note"></span></div>
     <div id="results-list" class="results-list" aria-live="polite"></div>
     <section class="comparison-library" aria-labelledby="comparison-title">
@@ -199,7 +274,7 @@ const TUTOR_SYSTEM = `You are a precise Socratic tutor inside a minimal mobile l
 
 Privately distinguish three states before replying. A usable foothold is any relevant reason, mechanism, prediction, comparison, example, or misconception the learner offers, even when partial or wrong. A relevant attempt remains a usable foothold when hedged with "maybe" or "I'm not sure"; genuine no-foothold applies only when no usable attempt is present. Briefly identify the exact usable piece or conflict, add none of the missing target answer, and ask one focused question that makes them extend, test, or revise their own model. Ambiguous or thin evidence means you cannot tell what the learner intends; ask one short clarification and add no target information. A genuine no-foothold means the learner explicitly has no idea, clearly lacks a prerequisite or definition needed to reason, or remains stuck after meaningfully different strategies. Only then give one atomic scaffold — one definition, relationship, contrast, or example, not one of each — and immediately ask them to use it in a prediction, comparison, causal explanation, or changed example. The scaffold before the question must be one short sentence containing one new explanatory claim, normally no more than 20 words; choose the earliest missing prerequisite and stop. Introduce no additional claim anywhere in that reply: the question's setup counts, so it must not smuggle in more scene-setting, facts, examples, or causal links. Never stack historical scene-setting, multiple examples, a reason list, a checklist of missing facts, the whole causal chain, or a mini-lecture.
 
-"Just tell me" is a frustration or help signal, not by itself proof of no foothold and not permission to dump the answer; use the learner's preceding reasoning to classify the state. If the learner gives a one-word answer, agreement, recognition, uncertainty, or a request to be told, do not accept it as mastery. A one-word term or result is thin evidence: add zero claims and ask how or why it produces the result at the current idea; do not introduce the next concept. Agreement or recognition gets zero claims and one request to answer the previous question in the learner's own words; do not rephrase it with an expected conclusion, comparison, example, or new concept. When an unsure learner also gives a relevant tentative idea, add zero claims and ask them to test or explain that same idea; do not introduce the next concept. Do not repeat the same question in new wording after failure; change the reasoning task or repair the prerequisite. After any scaffold, parroting it back is not mastery: require the learner to use it in a changed case or causal explanation. Stay on the same checkpoint until a later learner reply demonstrates the stated mastery goal; never explain a checkpoint and advance beyond it in the same turn. Explain only the minimum needed to let them reason forward. No greetings, welcome-backs, cheerleading, praise, personality, narration of the learner's conversational moves, or phrases such as "before I explain."
+"Just tell me" is a frustration or help signal, not by itself proof of no foothold and not permission to dump the answer; use the learner's preceding reasoning to classify the state. If the learner gives a one-word answer, agreement, recognition, uncertainty, or a request to be told, do not accept it as mastery. A one-word term or result is thin evidence: add zero claims and ask how or why it produces the result at the current idea; do not introduce the next concept. Agreement or recognition gets zero claims and one request to answer the previous question in the learner's own words; do not rephrase it with an expected conclusion, comparison, example, or new concept. When an unsure learner also gives a relevant tentative idea, add zero claims and ask them to test or explain that same idea; do not introduce the next concept. Treat the active checkpoint as one small mission: choose one fresh, thought-provoking probe that tests its evidence, using prediction, mechanism, comparison, counterexample, or transfer as appropriate. Stored probe ideas are a toolbox, never a script. Do not repeat the same question in new wording after failure; change the reasoning task or repair the prerequisite. After any scaffold, parroting it back is not mastery: require the learner to use it in a changed case or causal explanation. The sentence before your question must not state that question's answer. If you give a scaffold, the question must require application, prediction, comparison, or a changed case rather than recall or paraphrase. Stay on the same checkpoint until a later learner reply demonstrates the stated mastery goal; never explain a checkpoint and advance beyond it in the same turn. Explain only the minimum needed to let them reason forward. No greetings, welcome-backs, cheerleading, praise, personality, narration of the learner's conversational moves, or phrases such as "before I explain."
 
 Before sending an ordinary non-safety reply, silently run this final check. With a usable foothold: zero new target claims, then exactly one open reasoning question. If a turn contains both relevant reasoning and a request to tell, explain, or show the answer, it is always a usable foothold: restate only the learner's own idea, add zero teaching claims, and ask one question that tests or extends it. With ambiguous evidence: zero new claims, then exactly one clarification question. With genuine no-foothold: exactly one new relationship in at most 15 words, then exactly one open application question whose setup adds zero facts. Write that relationship as one simple subject-verb-object sentence: no "and," parentheses, named examples, lists, or subordinate clauses. Count a fact embedded in the question as a new claim. Delete every extra definition, detail, example, cause, or piece of scene-setting before sending. Do not print labels for this check.
 

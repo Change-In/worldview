@@ -3,8 +3,8 @@
 /*
   Worldview owner lab. This page intentionally has no client-side provider
   credential, no arbitrary endpoint, and no write path to the learner app.
-  Its two network routes are the already tester-gated lab-tutor and transcribe
-  functions. The production cold tutor prompt is declared verbatim above in
+  Its network routes are existing tester-gated functions; durable text work uses
+  lab-jobs while transcription and speech remain foreground-only. The production cold tutor prompt is declared verbatim above in
   index.html so the prompt-integrity test can compare it byte-for-byte.
 */
 
@@ -110,12 +110,26 @@ const LAB_CHARS_PER_TOKEN = 4;
 
 const LAB_PROMPT_LIMITS = { lesson: 12000, tutor: 40000, brain: 12000 };
 const LAB_WORKSPACE_KEY = "worldview-owner-lab-workspace-v1";
-const LAB_WORKSPACE_SCHEMA = 1;
+const LAB_WORKSPACE_SCHEMA = 3;
+const LAB_ACCOUNT_STATE_PREFIX = "worldview-account-state-v1:";
+const LAB_PREVIEW_WORKSPACE_OWNER = "preview";
 const LAB_MAX_CUSTOM_PROMPTS_PER_BENCH = 8;
 const LAB_MAX_COMPARISONS = 60;
 const LAB_MAX_TOPICS_PER_RUN = 4;
 const LAB_MAX_COMPARISON_NOTE = 1200;
+const LAB_MAX_BENCHMARK_SCENARIOS = 8;
+const LAB_MAX_LATENCY_METRICS = 240;
+const LAB_MAX_PENDING_CREATES = 4;
 const LAB_LESSON_HANDOFF_KEY = "worldview-lab-lesson-handoff-v1";
+const LAB_ACTIVE_JOB_STATES = new Set(["queued", "running", "cancelling"]);
+const LAB_DEFAULT_SCENARIO = Object.freeze({
+  id: "builtin:scenario:first-principles",
+  name: "First-principles baseline",
+  question: "Why does a metal spoon feel colder than a wooden spoon in the same room?",
+  learnerAnswer: "I think metal pulls heat away from my hand faster.",
+  speechText: "The same temperature can feel different when heat moves at different rates.",
+  builtIn: true,
+});
 
 const LAB_PRESETS = {
   lesson: [
@@ -279,15 +293,31 @@ const labState = {
   code: localStorage.getItem("wv-lab-code") || "",
   client: null,
   preview: LAB_PREVIEW,
+  verifiedUserId: "",
+  verifiedAccessToken: "",
+  workspaceOwnerId: "",
+  workspaceLoaded: false,
+  accessVerified: false,
   configured: {},
   lessons: [],
   notes: [],
   selectedNoteId: "",
   busy: false,
+  createStarting: false,
   outputs: [],
   flow: [],
   promptVersions: { lesson: [], tutor: [], brain: [] },
   comparisons: [],
+  benchmarkScenarios: [],
+  currentScenarioId: LAB_DEFAULT_SCENARIO.id,
+  latencyMetrics: [],
+  pendingCreates: [],
+  jobs: [],
+  jobDetails: new Map(),
+  jobPollTimer: 0,
+  speechAudio: null,
+  speechCancel: null,
+  speechCancelled: false,
   basePrompt: { lesson: "", tutor: "", brain: "" },
   loadedPromptVersionId: { lesson: "", tutor: "", brain: "" },
   lanes: {
@@ -357,7 +387,7 @@ function sanitizePromptVersion(value, kind) {
 
 function sanitizeComparison(value) {
   if (!value || typeof value !== "object") return null;
-  const kind = ["lesson", "tutor", "brain", "transcription"].includes(value.kind) ? value.kind : "lesson";
+  const kind = ["lesson", "tutor", "brain", "transcription", "speech"].includes(value.kind) ? value.kind : "lesson";
   const text = asText(value.text);
   if (!text || text.length > 50000) return null;
   const promptCore = asText(value.promptCore);
@@ -401,10 +431,131 @@ function sanitizeComparison(value) {
   };
 }
 
-function loadWorkspace() {
+function sanitizeBenchmarkScenario(value) {
+  if (!value || typeof value !== "object") return null;
+  const id = clip(value.id, 120);
+  const name = clip(value.name, 80);
+  const question = clip(value.question, 2000);
+  const learnerAnswer = clip(value.learnerAnswer, 4000);
+  const speechText = clip(value.speechText, 2000);
+  if (!/^scenario:[A-Za-z0-9-]{8,}$/.test(id) || !name || !question) return null;
+  return {
+    id,
+    name,
+    question,
+    learnerAnswer,
+    speechText,
+    createdAt: asText(value.createdAt) || now(),
+    updatedAt: asText(value.updatedAt) || now(),
+  };
+}
+
+function sanitizeNetworkContext(value) {
+  if (!value || typeof value !== "object") return {};
+  return {
+    online: value.online !== false,
+    effectiveType: clip(value.effectiveType, 20),
+    downlink: numeric(value.downlink),
+    rtt: numeric(value.rtt),
+    saveData: Boolean(value.saveData),
+  };
+}
+
+function sanitizeLatencyMetric(value) {
+  if (!value || typeof value !== "object") return null;
+  const id = clip(value.id, 180);
+  const component = ["lesson", "tutor", "brain", "transcription", "speech"].includes(value.component) ? value.component : "";
+  const totalMs = numeric(value.totalMs ?? value.latencyMs);
+  if (!id || !component || totalMs === null || totalMs < 0 || totalMs > 3_600_000) return null;
+  return {
+    id,
+    at: asText(value.at) || now(),
+    component,
+    source: value.source === "durable-job" ? "durable-job" : "foreground",
+    provider: clip(value.provider, 80),
+    model: clip(value.model, 100),
+    route: clip(value.route || `${value.provider || "unknown"}/${value.model || "unknown"}`, 160),
+    scenarioFingerprint: clip(value.scenarioFingerprint, 80),
+    promptFingerprint: clip(value.promptFingerprint, 80),
+    inputFingerprint: clip(value.inputFingerprint, 80),
+    queueMs: numeric(value.queueMs),
+    providerMs: numeric(value.providerMs),
+    firstTextMs: numeric(value.firstTextMs),
+    firstDisplayMs: numeric(value.firstDisplayMs),
+    firstAudioMs: numeric(value.firstAudioMs),
+    totalMs,
+    cost: numeric(value.cost),
+    failed: Boolean(value.failed),
+    network: sanitizeNetworkContext(value.network),
+  };
+}
+
+function labWorkspaceStorageKey(ownerId = labState.workspaceOwnerId) {
+  const id = String(ownerId || "");
+  if (!id || (id !== LAB_PREVIEW_WORKSPACE_OWNER && !/^[A-Za-z0-9-]{8,128}$/.test(id))) return "";
+  return `${LAB_WORKSPACE_KEY}:${id}`;
+}
+
+function labAccountStateStorageKey(userId = labState.verifiedUserId) {
+  const id = String(userId || "");
+  return /^[A-Za-z0-9-]{8,128}$/.test(id) ? `${LAB_ACCOUNT_STATE_PREFIX}${id}` : "";
+}
+
+function sanitizePendingCreate(value) {
+  if (!value || typeof value !== "object") return null;
+  const request = value.request && typeof value.request === "object" ? value.request : null;
+  const component = ["lesson", "tutor", "brain"].includes(value.component) ? value.component : "";
+  const ownerUserId = String(value.ownerUserId || "");
+  const idempotencyKey = clip(request?.idempotencyKey || value.idempotencyKey, 120);
+  if (!request || request.action !== "create" || request.component !== component || !component) return null;
+  if (!/^[A-Za-z0-9-]{8,128}$/.test(ownerUserId)) return null;
+  if (!/^[A-Za-z0-9-]{8,120}$/.test(idempotencyKey) || !Array.isArray(request.samples) || !request.samples.length || request.samples.length > 8) return null;
+  let immutableRequest;
   try {
-    const stored = JSON.parse(localStorage.getItem(LAB_WORKSPACE_KEY) || "{}");
-    if (Number(stored?.schemaVersion || LAB_WORKSPACE_SCHEMA) !== LAB_WORKSPACE_SCHEMA) return;
+    const serialized = JSON.stringify({ ...request, idempotencyKey });
+    if (serialized.length > 650_000) return null;
+    immutableRequest = JSON.parse(serialized);
+  } catch (_) { return null; }
+  const requestFingerprint = fingerprint(JSON.stringify(immutableRequest));
+  if (value.requestFingerprint && value.requestFingerprint !== requestFingerprint) return null;
+  return {
+    id: idempotencyKey,
+    idempotencyKey,
+    ownerUserId,
+    component,
+    createdAt: asText(value.createdAt) || now(),
+    requestFingerprint,
+    request: immutableRequest,
+  };
+}
+
+function resetWorkspaceContents() {
+  labState.promptVersions = { lesson: [], tutor: [], brain: [] };
+  labState.comparisons = [];
+  labState.benchmarkScenarios = [];
+  labState.currentScenarioId = LAB_DEFAULT_SCENARIO.id;
+  labState.latencyMetrics = [];
+  labState.pendingCreates = [];
+  labState.outputs = [];
+  labState.flow = [];
+  labState.jobs = [];
+  labState.jobDetails = new Map();
+  labState.lessons = [];
+  labState.notes = [];
+  labState.selectedNoteId = "";
+  labState.basePrompt = { lesson: "", tutor: "", brain: "" };
+  labState.loadedPromptVersionId = { lesson: "", tutor: "", brain: "" };
+}
+
+function loadWorkspace(ownerId = labState.workspaceOwnerId) {
+  resetWorkspaceContents();
+  const storageKey = labWorkspaceStorageKey(ownerId);
+  if (!storageKey) { labState.workspaceLoaded = false; return; }
+  labState.workspaceLoaded = true;
+  try {
+    const stored = JSON.parse(localStorage.getItem(storageKey) || "{}");
+    const storedSchema = Number(stored?.schemaVersion || 0);
+    if (storedSchema !== LAB_WORKSPACE_SCHEMA || stored?.ownerUserId !== ownerId) return;
     for (const kind of ["lesson", "tutor", "brain"]) {
       labState.promptVersions[kind] = (Array.isArray(stored?.promptVersions?.[kind]) ? stored.promptVersions[kind] : [])
         .map((item) => sanitizePromptVersion(item, kind))
@@ -415,24 +566,44 @@ function loadWorkspace() {
       .map(sanitizeComparison)
       .filter(Boolean)
       .slice(0, LAB_MAX_COMPARISONS);
+    labState.benchmarkScenarios = (Array.isArray(stored?.benchmarkScenarios) ? stored.benchmarkScenarios : [])
+      .map(sanitizeBenchmarkScenario)
+      .filter(Boolean)
+      .slice(0, LAB_MAX_BENCHMARK_SCENARIOS);
+    labState.currentScenarioId = clip(stored?.currentScenarioId || LAB_DEFAULT_SCENARIO.id, 120);
+    labState.latencyMetrics = (Array.isArray(stored?.latencyMetrics) ? stored.latencyMetrics : [])
+      .map(sanitizeLatencyMetric)
+      .filter(Boolean)
+      .slice(0, LAB_MAX_LATENCY_METRICS);
+    labState.pendingCreates = (Array.isArray(stored?.pendingCreates) ? stored.pendingCreates : [])
+      .map(sanitizePendingCreate)
+      .filter((item) => item?.ownerUserId === ownerId)
+      .slice(0, LAB_MAX_PENDING_CREATES);
   } catch (_) {
-    labState.promptVersions = { lesson: [], tutor: [], brain: [] };
-    labState.comparisons = [];
+    resetWorkspaceContents();
+    labState.workspaceLoaded = true;
   }
 }
 
 function workspacePayload() {
   return {
     schemaVersion: LAB_WORKSPACE_SCHEMA,
+    ownerUserId: labState.workspaceOwnerId,
     savedAt: now(),
     promptVersions: labState.promptVersions,
     comparisons: labState.comparisons,
+    benchmarkScenarios: labState.benchmarkScenarios,
+    currentScenarioId: labState.currentScenarioId,
+    latencyMetrics: labState.latencyMetrics,
+    pendingCreates: labState.pendingCreates,
   };
 }
 
 function persistWorkspace(successMessage = "") {
+  const storageKey = labWorkspaceStorageKey();
+  if (!storageKey || !labState.workspaceLoaded) return false;
   try {
-    localStorage.setItem(LAB_WORKSPACE_KEY, JSON.stringify(workspacePayload()));
+    localStorage.setItem(storageKey, JSON.stringify(workspacePayload()));
     if (successMessage) setMessage("workspace-message", successMessage, "ok");
     return true;
   } catch (error) {
@@ -445,6 +616,240 @@ let workspaceSaveTimer = 0;
 function scheduleWorkspaceSave() {
   clearTimeout(workspaceSaveTimer);
   workspaceSaveTimer = setTimeout(() => persistWorkspace("Evaluation note saved on this device."), 280);
+}
+
+function allBenchmarkScenarios() {
+  return [LAB_DEFAULT_SCENARIO, ...labState.benchmarkScenarios];
+}
+
+function selectedBenchmarkScenario() {
+  return allBenchmarkScenarios().find((scenario) => scenario.id === labState.currentScenarioId) || LAB_DEFAULT_SCENARIO;
+}
+
+function scenarioFieldsSnapshot() {
+  return {
+    id: labState.currentScenarioId,
+    name: clip(q("scenario-name")?.value, 80),
+    question: clip(q("scenario-question")?.value, 2000),
+    learnerAnswer: clip(q("scenario-answer")?.value, 4000),
+    speechText: clip(q("scenario-speech")?.value, 2000),
+  };
+}
+
+function scenarioFingerprint(scenario = scenarioFieldsSnapshot()) {
+  return fingerprint(JSON.stringify({
+    question: scenario.question || "",
+    learnerAnswer: scenario.learnerAnswer || "",
+    speechText: scenario.speechText || "",
+  }));
+}
+
+function renderScenarioSelect() {
+  const select = q("scenario-select");
+  if (!select) return;
+  const previous = labState.currentScenarioId;
+  select.replaceChildren(...allBenchmarkScenarios().map((scenario) => element("option", {
+    value: scenario.id,
+    text: `${scenario.builtIn ? "Built in · " : ""}${scenario.name}`,
+  })));
+  if ([...select.options].some((option) => option.value === previous)) select.value = previous;
+  else { labState.currentScenarioId = LAB_DEFAULT_SCENARIO.id; select.value = LAB_DEFAULT_SCENARIO.id; }
+}
+
+function loadScenarioFields(id = labState.currentScenarioId) {
+  const scenario = allBenchmarkScenarios().find((item) => item.id === id) || LAB_DEFAULT_SCENARIO;
+  labState.currentScenarioId = scenario.id;
+  if (q("scenario-select")) q("scenario-select").value = scenario.id;
+  q("scenario-name").value = scenario.name;
+  q("scenario-question").value = scenario.question;
+  q("scenario-answer").value = scenario.learnerAnswer || "";
+  q("scenario-speech").value = scenario.speechText || "";
+  q("scenario-delete").disabled = Boolean(scenario.builtIn);
+  renderLatencyDashboard();
+}
+
+function saveBenchmarkScenario() {
+  const draft = scenarioFieldsSnapshot();
+  if (!draft.name || !draft.question) {
+    setMessage("scenario-message", "Name the scenario and add its base question first.", "error");
+    return;
+  }
+  const selected = selectedBenchmarkScenario();
+  const existing = selected.builtIn ? null : labState.benchmarkScenarios.find((item) => item.id === selected.id);
+  if (!existing && labState.benchmarkScenarios.length >= LAB_MAX_BENCHMARK_SCENARIOS) {
+    setMessage("scenario-message", `Keep at most ${LAB_MAX_BENCHMARK_SCENARIOS} saved scenarios. Delete one before adding another.`, "error");
+    return;
+  }
+  const saved = sanitizeBenchmarkScenario({
+    ...draft,
+    id: existing?.id || `scenario:${makeId().replace(/[^A-Za-z0-9-]/g, "-")}`,
+    createdAt: existing?.createdAt || now(),
+    updatedAt: now(),
+  });
+  if (!saved) {
+    setMessage("scenario-message", "That scenario could not be saved. Shorten its fields and try again.", "error");
+    return;
+  }
+  if (existing) Object.assign(existing, saved);
+  else labState.benchmarkScenarios.unshift(saved);
+  labState.currentScenarioId = saved.id;
+  persistWorkspace();
+  renderScenarioSelect();
+  loadScenarioFields(saved.id);
+  setMessage("scenario-message", `Saved “${saved.name}” on this device.`, "ok");
+}
+
+function deleteBenchmarkScenario() {
+  const selected = selectedBenchmarkScenario();
+  if (selected.builtIn) return;
+  if (!window.confirm(`Delete the saved benchmark “${selected.name}”? Timing numbers remain, but no question or answer is stored with them.`)) return;
+  labState.benchmarkScenarios = labState.benchmarkScenarios.filter((item) => item.id !== selected.id);
+  labState.currentScenarioId = LAB_DEFAULT_SCENARIO.id;
+  persistWorkspace();
+  renderScenarioSelect();
+  loadScenarioFields();
+  setMessage("scenario-message", "Saved scenario deleted. The built-in baseline is active.", "ok");
+}
+
+function applyBenchmarkScenario(openLesson = true) {
+  const scenario = scenarioFieldsSnapshot();
+  if (!scenario.question) {
+    setMessage("scenario-message", "Add a base question first.", "error");
+    return;
+  }
+  q("lesson-topic").value = scenario.question;
+  q("tutor-turn").value = scenario.learnerAnswer || "";
+  q("speech-text").value = scenario.speechText || scenario.question;
+  labState.selectedNoteId = "";
+  q("lesson-note").value = "";
+  renderRunEstimate("lesson");
+  renderRunEstimate("tutor");
+  updateTutorContextPreview();
+  setMessage("scenario-message", "Scenario copied into Lesson Lab, Tutor, and Speech.", "ok");
+  if (openLesson) activateTab("lesson");
+}
+
+function currentNetworkContext() {
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection || {};
+  return sanitizeNetworkContext({
+    online: navigator.onLine !== false,
+    effectiveType: connection.effectiveType || "",
+    downlink: connection.downlink,
+    rtt: connection.rtt,
+    saveData: connection.saveData,
+  });
+}
+
+function metricCompatibilityKey(metric) {
+  return [metric.scenarioFingerprint, metric.component, metric.route, metric.promptFingerprint, metric.inputFingerprint].join("|");
+}
+
+function latencyPercentile(values, percentile) {
+  const sorted = values.map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+  if (!sorted.length) return null;
+  const index = Math.max(0, Math.ceil(percentile * sorted.length) - 1);
+  return sorted[Math.min(index, sorted.length - 1)];
+}
+
+function formatLatency(value) {
+  const ms = numeric(value);
+  if (ms === null) return "—";
+  return ms >= 1000 ? `${(ms / 1000).toFixed(ms >= 10000 ? 1 : 2)}s` : `${Math.round(ms)}ms`;
+}
+
+function recordLatencyMetric(value) {
+  const metric = sanitizeLatencyMetric(value);
+  if (!metric) return;
+  const existing = labState.latencyMetrics.findIndex((item) => item.id === metric.id);
+  if (existing >= 0) labState.latencyMetrics[existing] = metric;
+  else labState.latencyMetrics.unshift(metric);
+  if (labState.latencyMetrics.length > LAB_MAX_LATENCY_METRICS) labState.latencyMetrics.length = LAB_MAX_LATENCY_METRICS;
+  persistWorkspace();
+  renderLatencyDashboard();
+}
+
+function clearLatencyMetrics() {
+  if (labState.latencyMetrics.length && !window.confirm("Clear content-free Lab timing history on this device? Durable job outputs remain on the server.")) return;
+  labState.latencyMetrics = [];
+  persistWorkspace();
+  renderLatencyDashboard();
+}
+
+function renderLatencyDashboard() {
+  const summary = q("latency-summary");
+  const chart = q("latency-chart");
+  if (!summary || !chart) return;
+  const scenario = scenarioFingerprint();
+  const scoped = labState.latencyMetrics.filter((metric) => !scenario || metric.scenarioFingerprint === scenario);
+  const visible = scoped.length ? scoped : labState.latencyMetrics;
+  const groups = new Map();
+  for (const metric of visible) {
+    const key = metricCompatibilityKey(metric);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(metric);
+  }
+  const latest = visible[0] || null;
+  const compatible = latest ? groups.get(metricCompatibilityKey(latest)) || [] : [];
+  const successful = compatible.filter((metric) => !metric.failed).map((metric) => metric.totalMs);
+  const p50 = latencyPercentile(successful, .5);
+  const p95 = successful.length >= 10 ? latencyPercentile(successful, .95) : null;
+  const failures = compatible.filter((metric) => metric.failed).length;
+  const networkLabel = latest?.network?.effectiveType
+    ? `${latest.network.effectiveType}${numeric(latest.network.rtt) !== null ? ` · ${Math.round(latest.network.rtt)}ms RTT` : ""}`
+    : "not reported";
+  summary.replaceChildren();
+  const stats = [
+    ["Compatible samples", compatible.length || visible.length || 0],
+    ["Median", formatLatency(p50)],
+    ["p95", successful.length >= 10 ? formatLatency(p95) : "needs 10"],
+    ["Failure rate", compatible.length ? `${Math.round(failures / compatible.length * 100)}%` : "—"],
+    ["Latest network", networkLabel],
+  ];
+  for (const [label, value] of stats) {
+    const card = element("div", { className: "latency-stat" });
+    card.append(element("small", { text: label }), element("strong", { text: String(value) }));
+    summary.append(card);
+  }
+  chart.replaceChildren();
+  if (!visible.length) {
+    chart.append(element("div", { className: "empty-results", text: "No timing samples yet. Run a durable text job or a foreground transcription/speech check." }));
+    return;
+  }
+  const breakdown = [
+    ["queue", latest.queueMs],
+    ["provider", latest.providerMs],
+    ["first text", latest.firstTextMs],
+    ["first display", latest.firstDisplayMs],
+    ["first sound", latest.firstAudioMs],
+    ["total", latest.totalMs],
+  ].filter(([, value]) => numeric(value) !== null);
+  if (breakdown.length) {
+    chart.append(element("div", { className: "latency-section-label", text: "Latest compatible sample · wait breakdown" }));
+    const breakdownMax = Math.max(1, ...breakdown.map(([, value]) => Number(value)));
+    for (const [labelText, value] of breakdown) {
+      const row = element("div", { className: "latency-route" });
+      const track = element("div", { className: "latency-track" });
+      track.append(element("span", { attrs: { style: `width:${Math.max(1, Number(value) / breakdownMax * 100).toFixed(1)}%` } }));
+      row.append(element("div", { className: "latency-route-label", text: labelText }), track, element("div", { className: "latency-route-value", text: formatLatency(value) }));
+      chart.append(row);
+    }
+    chart.append(element("div", { className: "latency-section-label", text: "Compatible route medians" }));
+  }
+  const routeGroups = [...groups.values()]
+    .map((items) => ({ items, latestAt: Math.max(...items.map((item) => Date.parse(item.at) || 0)), median: latencyPercentile(items.filter((item) => !item.failed).map((item) => item.totalMs), .5) }))
+    .filter((group) => group.median !== null)
+    .sort((a, b) => b.latestAt - a.latestAt)
+    .slice(0, 8);
+  const max = Math.max(1, ...routeGroups.map((group) => group.median));
+  for (const group of routeGroups) {
+    const item = group.items[0];
+    const row = element("div", { className: "latency-route" });
+    const label = element("div", { className: "latency-route-label", text: `${item.component} · ${item.route}` });
+    const track = element("div", { className: "latency-track" });
+    track.append(element("span", { attrs: { style: `width:${Math.max(1, group.median / max * 100).toFixed(1)}%` } }));
+    row.append(label, track, element("div", { className: "latency-route-value", text: `${formatLatency(group.median)} · n=${group.items.length}` }));
+    chart.append(row);
+  }
 }
 
 function element(tag, options = {}) {
@@ -761,16 +1166,74 @@ function renderNoteSelect() {
   if ([...select.options].some((option) => option.value === prior)) select.value = prior;
 }
 
+function rerenderWorkspaceAfterIdentitySwitch() {
+  if (!q("lab-shell") || q("lab-shell").hidden) return;
+  for (const id of ["lesson-topic", "tutor-turn", "brain-focus", "speech-text"]) {
+    if (q(id)) q(id).value = "";
+  }
+  if (q("stt-file")) q("stt-file").value = "";
+  if (q("stt-file-name")) q("stt-file-name").textContent = "No file selected.";
+  for (const kind of ["lesson", "tutor", "brain"]) {
+    fillPresetSelect(kind);
+    resetPreset(kind);
+    renderLanes(kind);
+  }
+  renderScenarioSelect();
+  loadScenarioFields();
+  applyBenchmarkScenario(false);
+  renderResults();
+  renderComparisonLibrary();
+  renderJobHistory();
+  renderLatencyDashboard();
+  renderFlow();
+}
+
+function switchToVerifiedLabUser(userId) {
+  const nextUserId = String(userId || "");
+  if (!/^[A-Za-z0-9-]{8,128}$/.test(nextUserId)) return false;
+  if (labState.workspaceOwnerId === nextUserId && labState.verifiedUserId === nextUserId) return false;
+  stopSpeechComparison();
+  clearTimeout(workspaceSaveTimer);
+  if (labState.workspaceLoaded && labState.workspaceOwnerId) persistWorkspace();
+  labState.verifiedUserId = nextUserId;
+  labState.workspaceOwnerId = nextUserId;
+  loadWorkspace(nextUserId);
+  loadLocalLibrary();
+  rerenderWorkspaceAfterIdentitySwitch();
+  return true;
+}
+
+function clearVerifiedLabUser() {
+  stopSpeechComparison();
+  clearTimeout(workspaceSaveTimer);
+  if (labState.workspaceLoaded && labState.workspaceOwnerId) persistWorkspace();
+  labState.verifiedUserId = "";
+  labState.verifiedAccessToken = "";
+  labState.workspaceOwnerId = "";
+  labState.workspaceLoaded = false;
+  resetWorkspaceContents();
+  loadLocalLibrary();
+  rerenderWorkspaceAfterIdentitySwitch();
+}
+
 function loadLocalLibrary() {
+  const storageKey = labAccountStateStorageKey();
+  if (!storageKey) {
+    labState.lessons = [];
+    labState.notes = [];
+    renderLessonSelects();
+    renderNoteSelect();
+    return;
+  }
   try {
-    const stored = JSON.parse(localStorage.getItem("worldview-v1") || "{}");
+    const stored = JSON.parse(localStorage.getItem(storageKey) || "{}");
     labState.lessons = Array.isArray(stored?.lessons) ? stored.lessons.filter((lesson) => lesson && typeof lesson === "object") : [];
     labState.notes = Array.isArray(stored?.notes) ? stored.notes.filter((note) => note && note.id && typeof note.text === "string" && note.text.trim()) : [];
-    logFlow(`Loaded ${labState.lessons.length} saved lesson${labState.lessons.length === 1 ? "" : "s"} and ${labState.notes.length} Note${labState.notes.length === 1 ? "" : "s"} for read-only selection`, "browser localStorage worldview-v1 (read only)");
+    logFlow(`Loaded ${labState.lessons.length} saved lesson${labState.lessons.length === 1 ? "" : "s"} and ${labState.notes.length} Note${labState.notes.length === 1 ? "" : "s"} for read-only selection`, "verified account-scoped browser library (read only)");
   } catch (_) {
     labState.lessons = [];
     labState.notes = [];
-    logFlow("Could not read the local Worldview library", "browser localStorage worldview-v1 (read only)");
+    logFlow("Could not read the verified account's local Worldview library", "verified account-scoped browser library (read only)");
   }
   renderLessonSelects();
   renderNoteSelect();
@@ -1010,8 +1473,9 @@ function duplicateLane(kind, index) {
 function setBusy(isBusy) {
   labState.busy = isBusy;
   document.querySelectorAll(".button-run").forEach((button) => { button.disabled = isBusy || labState.preview; });
-  document.querySelectorAll("[data-add-lane], [data-load-prompt], [data-save-prompt], [data-delete-prompt], #lab-enter, #export-results, #clear-results, #clear-comparisons").forEach((button) => { button.disabled = isBusy; });
-  document.querySelectorAll(".result-actions button, .comparison-card button, .comparison-card textarea").forEach((control) => { control.disabled = isBusy; });
+  document.querySelectorAll("[data-add-lane], [data-load-prompt], [data-save-prompt], [data-delete-prompt], #lab-enter, #export-results, #clear-results, #clear-comparisons, #scenario-save, #scenario-use, #jobs-refresh, #latency-clear").forEach((button) => { button.disabled = isBusy; });
+  if (q("scenario-delete")) q("scenario-delete").disabled = isBusy || Boolean(selectedBenchmarkScenario().builtIn);
+  document.querySelectorAll(".result-actions button, .comparison-card button, .comparison-card textarea, .job-actions button").forEach((control) => { control.disabled = isBusy; });
   ["lesson", "tutor", "brain"].forEach(syncPromptControls);
 }
 
@@ -1031,6 +1495,17 @@ async function accessToken(forceRefresh = false) {
   }
   const token = data?.session?.access_token;
   if (!token) throw new Error("Could not establish the temporary lab session.");
+  /* A session-shaped object from browser storage is not identity proof. The
+     account id used for Notes, lessons, and Lab workspaces comes only from
+     Supabase getUser(), which validates this token with the Auth server. */
+  if (forceRefresh || token !== labState.verifiedAccessToken || !labState.verifiedUserId) {
+    const verified = await labState.client.auth.getUser(token);
+    if (verified.error) throw verified.error;
+    const verifiedUserId = String(verified.data?.user?.id || "");
+    if (!verifiedUserId) throw new Error("Could not verify the Lab account identity.");
+    switchToVerifiedLabUser(verifiedUserId);
+    labState.verifiedAccessToken = token;
+  }
   return token;
 }
 
@@ -1083,6 +1558,44 @@ async function transcribeFetch(file, model, language, operationId) {
     body: file,
   }));
   return responseJson(response);
+}
+
+async function labJobsFetch(body, expectedUserId = "") {
+  const url = `${SUPABASE_URL}/functions/v1/lab-jobs`;
+  const response = await requestWithToken((token) => {
+    if (expectedUserId && labState.verifiedUserId !== expectedUserId) {
+      const error = new Error("The signed-in account changed before this saved request could be sent.");
+      error.type = "identity_changed";
+      throw error;
+    }
+    return fetch(url, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_PUBLISHABLE_KEY,
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "x-worldview-access": labState.code,
+      },
+      body: JSON.stringify(body),
+    });
+  });
+  return responseJson(response);
+}
+
+async function speechFetch(text) {
+  const url = `${SUPABASE_URL}/functions/v1/voice-stream`;
+  const response = await requestWithToken((token) => fetch(url, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_PUBLISHABLE_KEY,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "x-worldview-access": labState.code,
+    },
+    body: JSON.stringify({ text, model: "aura-2-arcas-en" }),
+  }));
+  if (!response.ok) await responseJson(response);
+  return response;
 }
 
 async function probeProviders() {
@@ -1222,80 +1735,413 @@ function assertRunCap(run, multiTopic = false) {
 }
 
 function pushOutput(output) {
-  labState.outputs.unshift(output);
+  const existing = labState.outputs.findIndex((item) => item.id === output.id);
+  if (existing >= 0) labState.outputs[existing] = output;
+  else labState.outputs.unshift(output);
+  if (numeric(output.latencyMs) !== null) {
+    recordLatencyMetric({
+      id: `output:${output.id}`,
+      at: output.at,
+      component: output.kind,
+      source: output.jobId ? "durable-job" : "foreground",
+      provider: output.provider,
+      model: output.model,
+      route: output.route || `${output.providerLabel || output.provider || "unknown"}/${output.model || "unknown"}`,
+      scenarioFingerprint: output.scenarioFingerprint || scenarioFingerprint(),
+      promptFingerprint: output.promptFingerprint,
+      inputFingerprint: output.inputFingerprint,
+      queueMs: output.queueMs,
+      providerMs: output.providerMs,
+      firstTextMs: output.firstTextMs,
+      firstDisplayMs: output.firstDisplayMs,
+      firstAudioMs: output.firstAudioMs,
+      totalMs: output.latencyMs,
+      cost: output.cost,
+      failed: output.failed,
+      network: output.network || currentNetworkContext(),
+    });
+  }
   renderResults();
+}
+
+function normalizeJob(value) {
+  if (!value || typeof value !== "object" || !value.id) return null;
+  return {
+    ...value,
+    id: String(value.id),
+    status: String(value.status || "queued"),
+    component: String(value.component || value.kind || "lesson"),
+    name: clip(value.name || `${value.component || "Lab"} job`, 120),
+    scenario: value.scenario && typeof value.scenario === "object" ? value.scenario : {},
+    totalSamples: Math.max(0, Number(value.totalSamples ?? value.total_samples) || 0),
+    completedSamples: Math.max(0, Number(value.completedSamples ?? value.completed_samples) || 0),
+    failedSamples: Math.max(0, Number(value.failedSamples ?? value.failed_samples) || 0),
+    uncertainSamples: Math.max(0, Number(value.uncertainSamples ?? value.uncertain_samples) || 0),
+    createdAt: value.createdAt || value.created_at || now(),
+    startedAt: value.startedAt || value.started_at || null,
+    finishedAt: value.finishedAt || value.finished_at || null,
+    cancelRequestedAt: value.cancelRequestedAt || value.cancel_requested_at || null,
+  };
+}
+
+function upsertJob(value) {
+  const job = normalizeJob(value);
+  if (!job) return null;
+  const existing = labState.jobs.findIndex((item) => item.id === job.id);
+  if (existing >= 0) labState.jobs[existing] = job;
+  else labState.jobs.unshift(job);
+  labState.jobs.sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0));
+  return job;
+}
+
+function attemptResultText(attempt, sample) {
+  const result = attempt?.result && typeof attempt.result === "object" ? attempt.result : (sample?.result && typeof sample.result === "object" ? sample.result : {});
+  return asText(result.text ?? attempt?.text ?? sample?.text ?? sample?.resultText);
+}
+
+function syncJobDetail(detail) {
+  const job = upsertJob(detail?.job);
+  if (!job) return;
+  labState.jobDetails.set(job.id, detail);
+  const samples = Array.isArray(detail.samples) ? detail.samples : [];
+  const attempts = Array.isArray(detail.attempts) ? detail.attempts : [];
+  const attemptsBySample = new Map();
+  for (const attempt of attempts) {
+    const sampleId = String(attempt.sampleId || attempt.sample_id || "");
+    if (!attemptsBySample.has(sampleId)) attemptsBySample.set(sampleId, []);
+    attemptsBySample.get(sampleId).push(attempt);
+  }
+  for (const sample of samples) {
+    const sampleId = String(sample.id || sample.clientSampleId || sample.client_sample_id || "");
+    const sampleAttempts = attemptsBySample.get(sampleId) || [];
+    const terminalAttempts = sampleAttempts.filter((attempt) => ["completed", "succeeded", "failed", "interrupted", "uncertain"].includes(String(attempt.status || "")));
+    const records = terminalAttempts.length ? terminalAttempts : (["completed", "succeeded", "failed", "interrupted", "uncertain"].includes(String(sample.status || "")) ? [sample] : []);
+    for (const attempt of records) {
+      const attemptId = String(attempt.id || `${sampleId}:${attempt.attemptNo || attempt.attempt_no || 1}`);
+      const result = attempt.result && typeof attempt.result === "object" ? attempt.result : (sample.result && typeof sample.result === "object" ? sample.result : {});
+      const metadata = sample.metadata && typeof sample.metadata === "object" ? sample.metadata : {};
+      const failed = ["failed", "interrupted", "uncertain"].includes(String(attempt.status || sample.status || ""));
+      const error = attempt.error && typeof attempt.error === "object" ? attempt.error : (sample.error && typeof sample.error === "object" ? sample.error : {});
+      const text = failed
+        ? `Request failed: ${error.message || attempt.errorMessage || sample.errorMessage || "The job did not complete this attempt."}`
+        : attemptResultText(attempt, sample);
+      const providerMs = numeric(attempt.providerMs ?? attempt.provider_ms ?? result.ms ?? sample.latencyMs ?? sample.totalMs);
+      const claimedAt = attempt.claimedAt || attempt.claimed_at || sample.startedAt || sample.started_at;
+      const finishedAt = attempt.finishedAt || attempt.finished_at || sample.finishedAt || sample.finished_at;
+      const queueMs = claimedAt && job.createdAt ? Math.max(0, Date.parse(claimedAt) - Date.parse(job.createdAt)) : null;
+      const endToEndMs = finishedAt && job.createdAt ? Math.max(0, Date.parse(finishedAt) - Date.parse(job.createdAt)) : null;
+      const latencyMs = numeric(endToEndMs) ?? providerMs;
+      pushOutput({
+        id: `job-attempt:${attemptId}`,
+        jobId: job.id,
+        at: finishedAt || now(),
+        kind: job.component,
+        provider: sample.provider || result.provider || "",
+        providerLabel: result.label || providerInfo(sample.provider)?.label || sample.provider || "Provider",
+        model: sample.model || result.model || "",
+        replicate: Number(metadata.replicate) || 1,
+        text,
+        inputTokens: numeric(attempt.inputTokens ?? result.inputTokens ?? sample.inputTokens),
+        outputTokens: numeric(attempt.outputTokens ?? result.outputTokens ?? sample.outputTokens),
+        latencyMs,
+        providerMs,
+        queueMs: numeric(attempt.queueMs ?? attempt.queue_ms) ?? numeric(queueMs),
+        cost: numeric(attempt.costUsd ?? attempt.cost_usd ?? sample.costUsd ?? sample.cost_usd) ?? estimateTextCost(sample.model, result.inputTokens, result.outputTokens),
+        failed,
+        runId: job.id,
+        source: metadata.source || "durable private Lab job",
+        inputLabel: metadata.inputLabel || "Bounded job input",
+        inputFingerprint: metadata.inputFingerprint || "",
+        sourceNoteId: metadata.sourceNoteId || "",
+        promptVersionId: metadata.promptVersionId || "",
+        promptVersionName: metadata.promptVersionName || "Durable job prompt",
+        promptPreset: metadata.promptVersionName || "Durable job prompt",
+        promptEdited: Boolean(metadata.promptEdited),
+        promptCoreFingerprint: metadata.promptCoreFingerprint || "",
+        promptFingerprint: metadata.promptFingerprint || "",
+        checks: failed ? [] : policyFindings(job.component, text),
+        scenarioFingerprint: job.scenario?.fingerprint || "",
+        network: job.scenario?.network || {},
+        researchRequested: Boolean(result.researchRequested ?? sample.researchRequested),
+        researchApplied: Boolean(result.researchApplied ?? sample.researchApplied),
+        searches: numeric(result.searches ?? sample.searches),
+        citations: Array.isArray(result.citations) ? result.citations.slice(0, 20) : [],
+      });
+    }
+  }
+  renderJobHistory();
+}
+
+async function refreshJob(jobId) {
+  const detail = await labJobsFetch({ action: "get", jobId });
+  syncJobDetail(detail);
+  return detail;
+}
+
+async function refreshJobs() {
+  if (labState.preview) {
+    q("jobs-status").textContent = "Preview · server calls disabled";
+    renderJobHistory();
+    return;
+  }
+  q("jobs-status").textContent = "Refreshing…";
+  try {
+    const payload = await labJobsFetch({ action: "list" });
+    labState.jobs = (Array.isArray(payload.jobs) ? payload.jobs : []).map(normalizeJob).filter(Boolean);
+    await Promise.allSettled(labState.jobs.slice(0, 12).map((job) => refreshJob(job.id)));
+    q("jobs-status").textContent = `${labState.jobs.length} recent job${labState.jobs.length === 1 ? "" : "s"}`;
+    renderJobHistory();
+    scheduleJobPoll();
+  } catch (error) {
+    q("jobs-status").textContent = `Could not load jobs: ${clip(error.message, 100)}`;
+  }
+}
+
+function scheduleJobPoll() {
+  clearTimeout(labState.jobPollTimer);
+  if (!labState.jobs.some((job) => LAB_ACTIVE_JOB_STATES.has(job.status))) return;
+  labState.jobPollTimer = setTimeout(async () => {
+    const active = labState.jobs.filter((job) => LAB_ACTIVE_JOB_STATES.has(job.status)).slice(0, 4);
+    await Promise.all(active.map((job) => refreshJob(job.id).catch((error) => logFlow(`Job refresh failed: ${clip(error.message, 100)}`, "lab-jobs"))));
+    scheduleJobPoll();
+  }, 1400);
+}
+
+async function jobAction(action, jobId) {
+  try {
+    const payload = await labJobsFetch({ action, jobId });
+    if (payload.job) upsertJob(payload.job);
+    await refreshJob(jobId);
+    scheduleJobPoll();
+  } catch (error) {
+    q("jobs-status").textContent = `${action === "cancel" ? "Cancel" : "Resume"} failed: ${clip(error.message, 100)}`;
+  }
+}
+
+function renderJobHistory() {
+  const root = q("jobs-list");
+  if (!root) return;
+  root.replaceChildren();
+  for (const pending of labState.pendingCreates) {
+    const card = element("article", { className: "job-card pending-create-card" });
+    const head = element("div", { className: "job-card-head" });
+    const title = element("div");
+    title.append(
+      element("strong", { text: `${pending.component === "lesson" ? "Lesson Lab" : pending.component === "tutor" ? "Tutor" : "Brain shadow"} request` }),
+      element("small", { text: `${prettyDate(pending.createdAt)} · same request key ${pending.idempotencyKey.slice(0, 8)}` }),
+    );
+    head.append(title, element("span", { className: "job-status is-pending", text: "outcome unknown" }));
+    const explanation = element("p", { className: "pending-create-copy", text: "The browser did not receive a definite create result. Checking again reuses the exact saved request and cannot create a second job for this account." });
+    const actions = element("div", { className: "job-actions" });
+    const retry = element("button", { className: "button button-primary", type: "button", text: "Check / retry same request" });
+    retry.addEventListener("click", () => retryPendingCreate(pending.id));
+    actions.append(retry);
+    card.append(head, explanation, actions);
+    root.append(card);
+  }
+  if (!labState.jobs.length && !labState.pendingCreates.length) {
+    root.append(element("div", { className: "empty-results", text: labState.preview ? "Preview mode cannot create or restore server jobs." : "No durable text jobs yet." }));
+    return;
+  }
+  for (const job of labState.jobs.slice(0, 20)) {
+    const total = Math.max(1, job.totalSamples || 1);
+    const finished = Math.min(total, (job.completedSamples || 0) + (job.failedSamples || 0) + (job.uncertainSamples || 0));
+    const card = element("article", { className: "job-card" });
+    const head = element("div", { className: "job-card-head" });
+    const title = element("div");
+    title.append(element("strong", { text: job.name || `${job.component} job` }), element("small", { text: `${job.component} · ${prettyDate(job.createdAt)} · ${finished}/${total} settled` }));
+    const statusClass = job.status === "completed" ? "is-complete" : (["failed", "partial", "needs_attention"].includes(job.status) ? "is-failed" : "");
+    head.append(title, element("span", { className: `job-status ${statusClass}`, text: job.status.replaceAll("_", " ") }));
+    const progress = element("div", { className: "job-progress", attrs: { role: "progressbar", "aria-valuemin": "0", "aria-valuemax": String(total), "aria-valuenow": String(finished) } });
+    progress.append(element("span", { attrs: { style: `width:${Math.max(2, finished / total * 100).toFixed(1)}%` } }));
+    const meta = element("div", { className: "job-meta" });
+    meta.append(element("span", { text: `${job.completedSamples || 0} completed` }), element("span", { text: `${job.failedSamples || 0} failed` }), element("span", { text: `${job.uncertainSamples || 0} needs review` }), element("span", { text: `job ${job.id.slice(0, 8)}` }));
+    const actions = element("div", { className: "job-actions" });
+    const inspect = element("button", { className: "button button-quiet", type: "button", text: "Refresh details" });
+    inspect.addEventListener("click", () => refreshJob(job.id));
+    actions.append(inspect);
+    if (["partial", "failed", "needs_attention"].includes(job.status)) {
+      const resume = element("button", { className: "button button-primary", type: "button", text: "Resume eligible samples" });
+      resume.addEventListener("click", () => jobAction("resume", job.id));
+      actions.append(resume);
+    }
+    if (["queued", "running"].includes(job.status)) {
+      const resumeStalled = element("button", { className: "button button-primary", type: "button", text: "Resume if stalled" });
+      resumeStalled.title = "A live worker lease safely makes this a no-op; an expired lease can continue eligible samples.";
+      resumeStalled.addEventListener("click", () => jobAction("resume", job.id));
+      actions.append(resumeStalled);
+    }
+    if (LAB_ACTIVE_JOB_STATES.has(job.status) && job.status !== "cancelling") {
+      const cancel = element("button", { className: "button button-danger-soft", type: "button", text: "Cancel remaining" });
+      cancel.addEventListener("click", () => jobAction("cancel", job.id));
+      actions.append(cancel);
+    }
+    card.append(head, progress, meta, actions);
+    root.append(card);
+  }
+}
+
+function pendingCreateForComponent(component) {
+  return labState.pendingCreates.find((item) => item.component === component) || null;
+}
+
+function rememberPendingCreate(request) {
+  if (labState.pendingCreates.length >= LAB_MAX_PENDING_CREATES) return null;
+  const pending = sanitizePendingCreate({
+    component: request?.component,
+    ownerUserId: labState.verifiedUserId,
+    idempotencyKey: request?.idempotencyKey,
+    createdAt: now(),
+    request,
+  });
+  if (!pending) return null;
+  labState.pendingCreates = [pending, ...labState.pendingCreates.filter((item) => item.id !== pending.id)].slice(0, LAB_MAX_PENDING_CREATES);
+  if (!persistWorkspace()) {
+    labState.pendingCreates = labState.pendingCreates.filter((item) => item.id !== pending.id);
+    return null;
+  }
+  return pending;
+}
+
+function forgetPendingCreate(id) {
+  const before = labState.pendingCreates.length;
+  labState.pendingCreates = labState.pendingCreates.filter((item) => item.id !== id);
+  if (labState.pendingCreates.length !== before) persistWorkspace();
+}
+
+function definitiveCreateRejection(error) {
+  const status = Number(error?.status);
+  return status >= 400 && status < 500 && ![408, 409, 425, 429].includes(status);
+}
+
+async function submitPendingCreate(pending, messageId) {
+  const immutable = sanitizePendingCreate(pending);
+  if (!immutable) {
+    forgetPendingCreate(pending?.id);
+    const error = new Error("The saved create request failed its local integrity check and was not sent.");
+    setMessage(messageId, error.message, "error");
+    return { error, ambiguous: false };
+  }
+  try {
+    const payload = await labJobsFetch(immutable.request, immutable.ownerUserId);
+    const job = upsertJob(payload.job);
+    if (!job) throw new Error("The server response did not identify the durable job.");
+    forgetPendingCreate(immutable.id);
+    logFlow(`Confirmed durable ${immutable.component} job ${job.id.slice(0, 8)} using create key ${immutable.idempotencyKey.slice(0, 8)}`, "browser → lab-jobs (idempotent create)");
+    setMessage(messageId, `Job ${job.id.slice(0, 8)} accepted. You can close this page and return to Results & timing.`, "ok");
+    renderJobHistory();
+    activateTab("results");
+    try { await refreshJob(job.id); }
+    catch (error) { logFlow(`Job accepted; first detail refresh failed: ${clip(error.message, 100)}`, "lab-jobs"); }
+    scheduleJobPoll();
+    return { job, ambiguous: false };
+  } catch (error) {
+    const definitive = definitiveCreateRejection(error);
+    if (definitive) forgetPendingCreate(immutable.id);
+    setMessage(messageId, definitive
+      ? `Job request was rejected: ${error.message || "Unknown error"}`
+      : `Create outcome is still unknown. The exact request is saved; retry will reuse key ${immutable.idempotencyKey.slice(0, 8)}.`, "error");
+    logFlow(`${definitive ? "Rejected" : "Retained unresolved"} durable ${immutable.component} create ${immutable.idempotencyKey.slice(0, 8)}: ${clip(error.message, 120)}`, "lab-jobs");
+    renderJobHistory();
+    return { error, ambiguous: !definitive };
+  }
+}
+
+async function retryPendingCreate(id) {
+  if (labState.busy) return;
+  const pending = labState.pendingCreates.find((item) => item.id === id);
+  if (!pending) return;
+  setBusy(true);
+  setMessage(`${pending.component}-run-message`, `Checking the saved request with the same key ${pending.idempotencyKey.slice(0, 8)}…`);
+  try { await submitPendingCreate(pending, `${pending.component}-run-message`); }
+  finally {
+    setBusy(false);
+    renderResults();
+    renderComparisonLibrary();
+  }
 }
 
 async function runTextExperiment(kind) {
   if (labState.preview) {
-    setMessage(`${kind}-run-message`, "Preview mode is local only; provider calls are disabled.", "error");
+    setMessage(`${kind}-run-message`, "Preview mode is local only; durable server jobs are disabled.", "error");
     return;
   }
   const messageId = `${kind}-run-message`;
-  if (labState.busy) return;
+  if (labState.busy || labState.createStarting) return;
+  labState.createStarting = true;
+  try { await accessToken(false); }
+  catch (error) {
+    labState.createStarting = false;
+    setMessage(messageId, `Could not verify the Lab account: ${error.message || "reload and try again"}`, "error");
+    return;
+  }
+  const unresolved = pendingCreateForComponent(kind);
+  if (unresolved) {
+    labState.createStarting = false;
+    await retryPendingCreate(unresolved.id);
+    return;
+  }
   let run;
   try { run = buildRun(kind); }
-  catch (error) { setMessage(messageId, error.message, "error"); return; }
+  catch (error) { labState.createStarting = false; setMessage(messageId, error.message, "error"); return; }
   setBusy(true);
-  setMessage(messageId, `Preparing ${run.total} sample${run.total === 1 ? "" : "s"}…`);
+  labState.createStarting = false;
+  setMessage(messageId, `Creating a durable job for ${run.total} sample${run.total === 1 ? "" : "s"}…`);
   const versionNames = [...new Set(run.candidates.map((candidate) => candidate.promptVersionName))];
-  logFlow(`Started ${kind} run ${run.runId.slice(0, 8)} with ${run.total} sample${run.total === 1 ? "" : "s"} across ${versionNames.length} prompt version${versionNames.length === 1 ? "" : "s"}`, run.source);
-  let completed = 0;
   try {
+    const samples = [];
+    let sampleNumber = 0;
     for (const lane of run.candidates) {
       for (const fixture of run.fixtures) {
         for (let replicate = 1; replicate <= lane.quantity; replicate += 1) {
-          completed += 1;
-          const info = providerInfo(lane.provider);
-          const fixtureTag = run.fixtures.length > 1 ? ` · ${clip(fixture.fixture, 40)}` : "";
-          const runLabel = `${info.label} / ${lane.model} · ${lane.promptVersionName}${fixtureTag} · sample ${replicate} of ${lane.quantity}`;
-          setMessage(messageId, `Running ${completed} of ${run.total}: ${runLabel}`);
-          logFlow(`Queued ${kind} ${runLabel}`, "browser → lab-tutor (tester-gated)");
-          const started = performance.now();
-          const shared = {
-            kind, replicate, source: run.source, runId: run.runId,
-            inputLabel: fixture.label, inputFixture: fixture.fixture, inputFingerprint: fixture.fingerprint,
-            sourceNoteId: fixture.sourceNoteId,
-            promptVersionId: lane.promptVersionId, promptVersionName: lane.promptVersionName,
-            promptPresetId: lane.promptVersionId, promptPreset: lane.promptVersionName,
-            promptEdited: lane.promptEdited, promptCore: lane.promptCore,
-            promptCoreFingerprint: lane.promptCoreFingerprint, promptFingerprint: lane.promptFingerprint,
-          };
-          try {
-            logFlow(`Sent ${kind} ${runLabel}`, "lab-tutor → configured provider");
-            const result = await labFetch({
-              provider: lane.provider, model: lane.model, system: lane.system,
-              messages: fixture.messages, max_tokens: maxOutputTokens(kind),
-              ...(lane.research ? { research: true, research_max_uses: 2 } : {}),
-            });
-            const elapsed = Math.round(performance.now() - started);
-            const text = asText(result.text);
-            pushOutput({
-              ...shared,
-              id: makeId(), at: now(), provider: result.provider || lane.provider, providerLabel: result.label || info.label,
-              model: result.model || lane.model, text, inputTokens: numeric(result.inputTokens), outputTokens: numeric(result.outputTokens),
-              latencyMs: numeric(result.ms) ?? elapsed, cost: estimateTextCost(lane.model, result.inputTokens, result.outputTokens),
-              checks: policyFindings(kind, text),
-              researchRequested: !!result.researchRequested,
-              researchApplied: !!result.researchApplied,
-              searches: numeric(result.searches),
-              citations: Array.isArray(result.citations) ? result.citations.slice(0, 20) : [],
-            });
-            logFlow(`Received ${kind} ${runLabel}`, "configured provider → lab-tutor → browser");
-          } catch (error) {
-            const elapsed = Math.round(performance.now() - started);
-            pushOutput({
-              ...shared,
-              id: makeId(), at: now(), provider: lane.provider, providerLabel: info.label, model: lane.model,
-              text: `Request failed: ${error.message || "Unknown error"}`, latencyMs: elapsed, cost: null, failed: true,
-              researchRequested: !!lane.research, researchApplied: false,
-            });
-            logFlow(`Failed ${kind} ${runLabel}: ${clip(error.message, 120)}`, "configured provider / lab-tutor");
-          }
+          sampleNumber += 1;
+          samples.push({
+            clientSampleId: `${run.runId}:${sampleNumber}`,
+            provider: lane.provider,
+            model: lane.model,
+            system: lane.system,
+            messages: fixture.messages,
+            maxTokens: maxOutputTokens(kind),
+            ...(lane.research ? { research: true, researchMaxUses: 2 } : {}),
+            metadata: {
+              promptFingerprint: lane.promptFingerprint,
+              promptCoreFingerprint: lane.promptCoreFingerprint,
+              inputFingerprint: fixture.fingerprint,
+              promptVersionId: lane.promptVersionId,
+              promptVersionName: lane.promptVersionName,
+              replicate,
+              inputLabel: fixture.label,
+              source: run.source,
+              sourceNoteId: fixture.sourceNoteId,
+              promptEdited: lane.promptEdited,
+              checks: [],
+            },
+          });
         }
       }
     }
-    setMessage(messageId, `Finished ${completed} sample${completed === 1 ? "" : "s"}. Results are captured below.`, "ok");
+    const scenario = scenarioFieldsSnapshot();
+    const inputSetFingerprint = fingerprint(run.fixtures.map((fixture) => fixture.fingerprint).join("|"));
+    const request = {
+      action: "create",
+      idempotencyKey: run.runId,
+      component: kind,
+      name: `${kind === "lesson" ? "Lesson Lab" : kind === "tutor" ? "Tutor" : "Brain shadow"} · ${scenario.name || "unnamed scenario"}`,
+      scenario: {
+        id: scenario.id,
+        name: scenario.name,
+        fingerprint: scenarioFingerprint(scenario),
+        inputSetFingerprint,
+        network: currentNetworkContext(),
+      },
+      samples,
+    };
+    const pending = rememberPendingCreate(request);
+    if (!pending) throw new Error("The exact create request could not be saved safely, so it was not sent.");
+    await submitPendingCreate(pending, messageId);
+  } catch (error) {
+    setMessage(messageId, error.message || "The job request could not be prepared.", "error");
+    logFlow(`Did not send durable ${kind} job: ${clip(error.message, 120)}`, "local create safety gate");
   } finally {
     setBusy(false);
     renderResults();
@@ -1345,11 +2191,12 @@ async function runTranscription() {
         const elapsed = Math.round(performance.now() - started);
         pushOutput({
           id: makeId(), at: now(), kind: "transcription", provider: result.provider || model.provider, providerLabel: model.provider,
-          model: result.model || model.id, replicate: 1, text: asText(result.text), latencyMs: elapsed,
+          model: result.model || model.id, replicate: 1, text: asText(result.text), latencyMs: elapsed, providerMs: elapsed,
           duration: numeric(result.duration), language: result.language || q("stt-language").value,
           cost: numeric(result.estimated_cost_usd), source: "selected audio file (not retained by Lab)", runId,
           inputLabel: `Audio file: ${clip(file.name, 180)}`, inputFingerprint, promptPreset: "Existing batch STT contract",
           promptPresetId: "batch-stt-v57", promptEdited: false, promptFingerprint: "batch-stt-v57",
+          scenarioFingerprint: scenarioFingerprint(), network: currentNetworkContext(),
         });
         logFlow(`Received ${model.label} transcript`, "transcribe → browser; audio not retained in Lab result cache");
       } catch (error) {
@@ -1360,12 +2207,171 @@ async function runTranscription() {
           source: "selected audio file (not retained by Lab)", failed: true, runId,
           inputLabel: `Audio file: ${clip(file.name, 180)}`, inputFingerprint, promptPreset: "Existing batch STT contract",
           promptPresetId: "batch-stt-v57", promptEdited: false, promptFingerprint: "batch-stt-v57",
+          scenarioFingerprint: scenarioFingerprint(), network: currentNetworkContext(),
         });
         logFlow(`Failed ${model.label} transcription: ${clip(error.message, 120)}`, "transcribe protected route");
       }
     }
     setMessage(messageId, "Transcription comparison finished. Results are captured below.", "ok");
   } finally {
+    setBusy(false);
+    renderResults();
+    renderComparisonLibrary();
+  }
+}
+
+function stopSpeechComparison() {
+  labState.speechCancelled = true;
+  const cancel = labState.speechCancel;
+  labState.speechCancel = null;
+  if (cancel) cancel();
+  try { window.speechSynthesis?.cancel(); } catch (_) { /* Nothing is playing. */ }
+  const active = labState.speechAudio;
+  if (!active) return;
+  try { active.audio.pause(); } catch (_) { /* Playback already stopped. */ }
+  try { URL.revokeObjectURL(active.url); } catch (_) { /* URL already released. */ }
+  labState.speechAudio = null;
+}
+
+function deviceSpeechSample(text, runId) {
+  return new Promise((resolve, reject) => {
+    if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
+      reject(new Error("This browser does not expose a device speech voice."));
+      return;
+    }
+    const started = performance.now();
+    let firstAudioMs = null;
+    let settled = false;
+    const utterance = new SpeechSynthesisUtterance(text);
+    labState.speechCancel = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("Playback stopped."));
+    };
+    utterance.onstart = () => { firstAudioMs = Math.round(performance.now() - started); };
+    utterance.onend = () => {
+      if (settled) return;
+      settled = true;
+      labState.speechCancel = null;
+      const latencyMs = firstAudioMs ?? Math.round(performance.now() - started);
+      pushOutput({
+        id: makeId(), at: now(), kind: "speech", provider: "browser", providerLabel: "This device",
+        model: "device-speech-synthesis", replicate: 1, text: "Device playback completed; spoken content is not stored in this timing record.",
+        latencyMs, firstAudioMs: latencyMs, cost: 0, source: "foreground device voice; no provider call", runId,
+        inputLabel: "Fixed benchmark sentence", inputFingerprint: fingerprint(text), promptPreset: "Browser speech synthesis",
+        promptPresetId: "browser-speech", promptEdited: false, promptFingerprint: "browser-speech",
+        scenarioFingerprint: scenarioFingerprint(), network: currentNetworkContext(), route: "device speech synthesis",
+      });
+      resolve();
+    };
+    utterance.onerror = (event) => {
+      if (settled) return;
+      settled = true;
+      labState.speechCancel = null;
+      reject(new Error(event.error || "Device speech playback failed."));
+    };
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  });
+}
+
+async function worldviewSpeechSample(text, runId) {
+  const started = performance.now();
+  const response = await speechFetch(text);
+  const responseMs = Math.round(performance.now() - started);
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  labState.speechAudio = { audio, url };
+  await new Promise((resolve, reject) => {
+    let firstAudioMs = null;
+    let settled = false;
+    const cleanup = () => {
+      labState.speechCancel = null;
+      if (labState.speechAudio?.audio === audio) labState.speechAudio = null;
+      URL.revokeObjectURL(url);
+    };
+    labState.speechCancel = () => {
+      if (settled) return;
+      settled = true;
+      try { audio.pause(); } catch (_) { /* Playback already stopped. */ }
+      cleanup();
+      reject(new Error("Playback stopped."));
+    };
+    audio.onplaying = () => { if (firstAudioMs === null) firstAudioMs = Math.round(performance.now() - started); };
+    audio.onended = () => {
+      if (settled) return;
+      settled = true;
+      const latencyMs = firstAudioMs ?? Math.round(performance.now() - started);
+      pushOutput({
+        id: makeId(), at: now(), kind: "speech", provider: "deepgram", providerLabel: "Deepgram",
+        model: "aura-2-arcas-en", replicate: 1, text: "Worldview voice playback completed; generated audio is not retained.",
+        latencyMs, providerMs: responseMs, firstAudioMs: latencyMs, cost: null,
+        source: "foreground tester-gated voice-stream; audio discarded after playback", runId,
+        inputLabel: "Fixed benchmark sentence", inputFingerprint: fingerprint(text), promptPreset: "Existing Worldview voice route",
+        promptPresetId: "voice-stream-aura-2", promptEdited: false, promptFingerprint: "voice-stream-aura-2",
+        scenarioFingerprint: scenarioFingerprint(), network: currentNetworkContext(), route: "voice-stream REST (buffered)",
+      });
+      cleanup();
+      resolve();
+    };
+    audio.onerror = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error("The generated audio could not play on this device."));
+    };
+    Promise.resolve(audio.play()).catch((error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error(error?.message || "Tap playback again so this device can allow sound."));
+    });
+  });
+}
+
+async function runSpeechComparison() {
+  const messageId = "speech-run-message";
+  if (labState.busy) return;
+  const text = clip(q("speech-text").value, 2000);
+  const useDevice = q("speech-device").checked;
+  const useWorldview = q("speech-worldview").checked;
+  if (!text) { setMessage(messageId, "Add one fixed sentence first.", "error"); return; }
+  if (!useDevice && !useWorldview) { setMessage(messageId, "Choose at least one foreground speech route.", "error"); return; }
+  if (labState.preview && useWorldview) { setMessage(messageId, "Preview mode cannot call the protected Worldview voice route.", "error"); return; }
+  const routes = [useDevice ? ["This device", deviceSpeechSample] : null, useWorldview ? ["Worldview voice", worldviewSpeechSample] : null].filter(Boolean);
+  const runId = makeId();
+  setBusy(true);
+  stopSpeechComparison();
+  labState.speechCancelled = false;
+  try {
+    let completed = 0;
+    for (const [label, runner] of routes) {
+      if (labState.speechCancelled) break;
+      setMessage(messageId, `Playing ${label} (${completed + 1} of ${routes.length})…`);
+      try {
+        await runner(text, runId);
+        completed += 1;
+      } catch (error) {
+        if (labState.speechCancelled) break;
+        const latencyMs = 0;
+        pushOutput({
+          id: makeId(), at: now(), kind: "speech", provider: label === "This device" ? "browser" : "deepgram", providerLabel: label,
+          model: label === "This device" ? "device-speech-synthesis" : "aura-2-arcas-en", replicate: 1,
+          text: `Playback failed: ${error.message || "Unknown error"}`, latencyMs, cost: null, failed: true,
+          source: "foreground speech check; no audio retained", runId, inputLabel: "Fixed benchmark sentence",
+          inputFingerprint: fingerprint(text), promptPreset: "Speech startup check", promptPresetId: "speech-startup",
+          promptEdited: false, promptFingerprint: "speech-startup", scenarioFingerprint: scenarioFingerprint(),
+          network: currentNetworkContext(), route: label === "This device" ? "device speech synthesis" : "voice-stream REST (buffered)",
+        });
+      }
+    }
+    setMessage(messageId, labState.speechCancelled
+      ? "Playback stopped. No audio was retained."
+      : `${completed} of ${routes.length} speech route${routes.length === 1 ? "" : "s"} played. First-sound timing is in Results & timing.`,
+    labState.speechCancelled || completed ? "ok" : "error");
+  } finally {
+    labState.speechCancel = null;
     setBusy(false);
     renderResults();
     renderComparisonLibrary();
@@ -1759,6 +2765,9 @@ function downloadJson() {
       createdAt: version.createdAt || null,
     }))])),
     comparisons: labState.comparisons,
+    benchmarkScenarios: labState.benchmarkScenarios,
+    currentScenarioId: labState.currentScenarioId,
+    latencyMetrics: labState.latencyMetrics,
     outputs: labState.outputs.map(exportableOutput),
     flow: labState.flow,
   };
@@ -1791,6 +2800,7 @@ function activateTab(tab) {
     panel.hidden = !active;
     panel.classList.toggle("is-active", active);
   }
+  if (tab === "results") renderLatencyDashboard();
 }
 
 function initializeWorkspace() {
@@ -1801,12 +2811,19 @@ function initializeWorkspace() {
   resetPreset("tutor");
   resetPreset("brain");
   renderSttChoices();
+  renderScenarioSelect();
+  loadScenarioFields();
+  applyBenchmarkScenario(false);
   ["lesson", "tutor", "brain"].forEach(renderLanes);
   renderResults();
   renderComparisonLibrary();
+  renderJobHistory();
+  renderLatencyDashboard();
 }
 
 function openPreview() {
+  labState.workspaceOwnerId = LAB_PREVIEW_WORKSPACE_OWNER;
+  loadWorkspace(LAB_PREVIEW_WORKSPACE_OWNER);
   initializeWorkspace();
   q("lab-provider-count").textContent = "—";
   q("lab-health").textContent = "Preview · calls disabled";
@@ -1826,9 +2843,11 @@ async function openLab() {
   try {
     // The first existing probe claims/validates tester access without paying for a model response.
     await labFetch({ provider: "anthropic", probe: true });
+    labState.accessVerified = true;
     localStorage.setItem("wv-lab-code", labState.code);
     initializeWorkspace();
     await probeProviders();
+    await refreshJobs();
     setMessage("lab-gate-message", "");
   } catch (error) {
     setMessage("lab-gate-message", error.type === "access_denied" ? "That tester code was not accepted." : `Could not open the protected lab: ${error.message || "unknown error"}`, "error");
@@ -1881,11 +2900,28 @@ function bindEvents() {
     const file = q("stt-file").files?.[0];
     q("stt-file-name").textContent = file ? `Selected locally: ${file.name} · ${Math.max(1, Math.round(file.size / 1024))} KB` : "No file selected.";
   });
+  q("scenario-select").addEventListener("change", () => {
+    labState.currentScenarioId = q("scenario-select").value || LAB_DEFAULT_SCENARIO.id;
+    persistWorkspace();
+    loadScenarioFields();
+    renderLatencyDashboard();
+  });
+  q("scenario-save").addEventListener("click", saveBenchmarkScenario);
+  q("scenario-delete").addEventListener("click", deleteBenchmarkScenario);
+  q("scenario-use").addEventListener("click", () => applyBenchmarkScenario(true));
+  q("lab-open-timing").addEventListener("click", () => {
+    activateTab("results");
+    q("latency-title").scrollIntoView({ behavior:"smooth", block:"start" });
+  });
+  q("speech-run").addEventListener("click", runSpeechComparison);
+  q("speech-stop").addEventListener("click", stopSpeechComparison);
+  q("jobs-refresh").addEventListener("click", refreshJobs);
+  q("latency-clear").addEventListener("click", clearLatencyMetrics);
   q("export-results").addEventListener("click", downloadJson);
   q("clear-results").addEventListener("click", clearResults);
   q("clear-comparisons").addEventListener("click", clearComparisons);
   document.querySelectorAll(".lab-tab").forEach((button) => button.addEventListener("click", () => activateTab(button.dataset.tab)));
-  window.addEventListener("pagehide", () => { if (workspaceSaveTimer) persistWorkspace(); });
+  window.addEventListener("pagehide", () => { stopSpeechComparison(); if (workspaceSaveTimer) persistWorkspace(); });
 }
 
 function loadSupabaseSdk() {
@@ -1902,7 +2938,6 @@ function loadSupabaseSdk() {
 }
 
 async function boot() {
-  loadWorkspace();
   fillPresetSelect("lesson");
   fillPresetSelect("tutor");
   fillPresetSelect("brain");
@@ -1911,6 +2946,7 @@ async function boot() {
   renderFlow();
   renderResults();
   renderComparisonLibrary();
+  renderLatencyDashboard();
   if (labState.preview) {
     openPreview();
     return;
@@ -1920,6 +2956,17 @@ async function boot() {
     await loadSupabaseSdk();
     labState.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: "worldview-alpha-auth" },
+    });
+    labState.client.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        clearVerifiedLabUser();
+        return;
+      }
+      if (!labState.accessVerified || !["SIGNED_IN", "TOKEN_REFRESHED", "USER_UPDATED"].includes(event)) return;
+      setTimeout(async () => {
+        try { await accessToken(false); await refreshJobs(); }
+        catch (_) { clearVerifiedLabUser(); }
+      }, 0);
     });
     q("lab-enter").disabled = false;
   } catch (error) {
