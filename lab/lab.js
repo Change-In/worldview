@@ -757,6 +757,55 @@ function formatLatency(value) {
   return ms >= 1000 ? `${(ms / 1000).toFixed(ms >= 10000 ? 1 : 2)}s` : `${Math.round(ms)}ms`;
 }
 
+const LATENCY_COMPONENT_LABELS = {
+  lesson: "Lesson",
+  transcription: "Transcription",
+  tutor: "Tutor",
+  speech: "Speech",
+  brain: "Brain",
+};
+
+function latencyProviderKey(value) {
+  return asText(value).trim().toLowerCase() || "unknown";
+}
+
+function latencyProviderLabel(value) {
+  const key = latencyProviderKey(value);
+  if (LAB_PROVIDER_CATALOG[key]?.label) return LAB_PROVIDER_CATALOG[key].label;
+  return ({
+    browser: "This device",
+    deepgram: "Deepgram",
+    google: "Gemini",
+    openai: "ChatGPT",
+    xai: "xAI",
+  })[key] || asText(value).trim() || "Unknown";
+}
+
+function replaceLatencyFilterOptions(select, options, allLabel) {
+  const current = select.value || "all";
+  select.replaceChildren(element("option", { value: "all", text: allLabel }));
+  for (const option of options) select.append(element("option", option));
+  select.value = options.some((option) => option.value === current) ? current : "all";
+  return select.value;
+}
+
+function renderLatencyFilterOptions(metrics) {
+  const componentSelect = q("latency-component");
+  const providerSelect = q("latency-provider");
+  const modelSelect = q("latency-model");
+  if (!componentSelect || !providerSelect || !modelSelect) return { component: "all", provider: "all", model: "all" };
+  const component = componentSelect.value || "all";
+  const stageMetrics = component === "all" ? metrics : metrics.filter((metric) => metric.component === component);
+  const providerKeys = [...new Set(stageMetrics.map((metric) => latencyProviderKey(metric.provider)))].sort((a, b) => latencyProviderLabel(a).localeCompare(latencyProviderLabel(b)));
+  const provider = replaceLatencyFilterOptions(providerSelect, providerKeys.map((value) => ({ value, text: latencyProviderLabel(value) })), "All providers");
+  const providerMetrics = provider === "all" ? stageMetrics : stageMetrics.filter((metric) => latencyProviderKey(metric.provider) === provider);
+  const modelIds = [...new Set(providerMetrics.map((metric) => asText(metric.model).trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const model = replaceLatencyFilterOptions(modelSelect, modelIds.map((value) => ({ value, text: value })), "All models");
+  providerSelect.disabled = providerKeys.length === 0;
+  modelSelect.disabled = modelIds.length === 0;
+  return { component, provider, model };
+}
+
 function recordLatencyMetric(value) {
   const metric = sanitizeLatencyMetric(value);
   if (!metric) return;
@@ -781,7 +830,12 @@ function renderLatencyDashboard() {
   if (!summary || !chart) return;
   const scenario = scenarioFingerprint();
   const scoped = labState.latencyMetrics.filter((metric) => !scenario || metric.scenarioFingerprint === scenario);
-  const visible = scoped.length ? scoped : labState.latencyMetrics;
+  const available = scoped.length ? scoped : labState.latencyMetrics;
+  const filters = renderLatencyFilterOptions(available);
+  const visible = available.filter((metric) =>
+    (filters.component === "all" || metric.component === filters.component)
+    && (filters.provider === "all" || latencyProviderKey(metric.provider) === filters.provider)
+    && (filters.model === "all" || metric.model === filters.model));
   const groups = new Map();
   for (const metric of visible) {
     const key = metricCompatibilityKey(metric);
@@ -789,21 +843,16 @@ function renderLatencyDashboard() {
     groups.get(key).push(metric);
   }
   const latest = visible[0] || null;
-  const compatible = latest ? groups.get(metricCompatibilityKey(latest)) || [] : [];
-  const successful = compatible.filter((metric) => !metric.failed).map((metric) => metric.totalMs);
+  const successful = visible.filter((metric) => !metric.failed).map((metric) => metric.totalMs);
   const p50 = latencyPercentile(successful, .5);
   const p95 = successful.length >= 10 ? latencyPercentile(successful, .95) : null;
-  const failures = compatible.filter((metric) => metric.failed).length;
-  const networkLabel = latest?.network?.effectiveType
-    ? `${latest.network.effectiveType}${numeric(latest.network.rtt) !== null ? ` · ${Math.round(latest.network.rtt)}ms RTT` : ""}`
-    : "not reported";
+  const failures = visible.filter((metric) => metric.failed).length;
   summary.replaceChildren();
   const stats = [
-    ["Compatible samples", compatible.length || visible.length || 0],
+    ["Runs", visible.length],
     ["Median", formatLatency(p50)],
     ["p95", successful.length >= 10 ? formatLatency(p95) : "needs 10"],
-    ["Failure rate", compatible.length ? `${Math.round(failures / compatible.length * 100)}%` : "—"],
-    ["Latest network", networkLabel],
+    ["Failed", failures],
   ];
   for (const [label, value] of stats) {
     const card = element("div", { className: "latency-stat" });
@@ -812,7 +861,7 @@ function renderLatencyDashboard() {
   }
   chart.replaceChildren();
   if (!visible.length) {
-    chart.append(element("div", { className: "empty-results", text: "No timing samples yet. Run a durable text job or a foreground transcription/speech check." }));
+    chart.append(element("div", { className: "empty-results", text: available.length ? "No runs match this combination." : "Run a stage to see its timing." }));
     return;
   }
   const breakdown = [
@@ -824,7 +873,7 @@ function renderLatencyDashboard() {
     ["total", latest.totalMs],
   ].filter(([, value]) => numeric(value) !== null);
   if (breakdown.length) {
-    chart.append(element("div", { className: "latency-section-label", text: "Latest compatible sample · wait breakdown" }));
+    chart.append(element("div", { className: "latency-section-label", text: "Latest run" }));
     const breakdownMax = Math.max(1, ...breakdown.map(([, value]) => Number(value)));
     for (const [labelText, value] of breakdown) {
       const row = element("div", { className: "latency-route" });
@@ -833,7 +882,7 @@ function renderLatencyDashboard() {
       row.append(element("div", { className: "latency-route-label", text: labelText }), track, element("div", { className: "latency-route-value", text: formatLatency(value) }));
       chart.append(row);
     }
-    chart.append(element("div", { className: "latency-section-label", text: "Compatible route medians" }));
+    chart.append(element("div", { className: "latency-section-label", text: "Matching medians" }));
   }
   const routeGroups = [...groups.values()]
     .map((items) => ({ items, latestAt: Math.max(...items.map((item) => Date.parse(item.at) || 0)), median: latencyPercentile(items.filter((item) => !item.failed).map((item) => item.totalMs), .5) }))
@@ -844,7 +893,9 @@ function renderLatencyDashboard() {
   for (const group of routeGroups) {
     const item = group.items[0];
     const row = element("div", { className: "latency-route" });
-    const label = element("div", { className: "latency-route-label", text: `${item.component} · ${item.route}` });
+    const stageLabel = LATENCY_COMPONENT_LABELS[item.component] || item.component;
+    const routeLabel = `${latencyProviderLabel(item.provider)} / ${item.model || item.route}`;
+    const label = element("div", { className: "latency-route-label", text: `${stageLabel} · ${routeLabel}` });
     const track = element("div", { className: "latency-track" });
     track.append(element("span", { attrs: { style: `width:${Math.max(1, group.median / max * 100).toFixed(1)}%` } }));
     row.append(label, track, element("div", { className: "latency-route-value", text: `${formatLatency(group.median)} · n=${group.items.length}` }));
@@ -2917,6 +2968,7 @@ function bindEvents() {
   q("speech-stop").addEventListener("click", stopSpeechComparison);
   q("jobs-refresh").addEventListener("click", refreshJobs);
   q("latency-clear").addEventListener("click", clearLatencyMetrics);
+  ["latency-component", "latency-provider", "latency-model"].forEach((id) => q(id).addEventListener("change", renderLatencyDashboard));
   q("export-results").addEventListener("click", downloadJson);
   q("clear-results").addEventListener("click", clearResults);
   q("clear-comparisons").addEventListener("click", clearComparisons);

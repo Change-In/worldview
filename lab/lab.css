@@ -483,7 +483,7 @@ button.score-button.is-on { border-color: rgba(255, 211, 111, .45); color: var(-
 .results-actions { flex-wrap: wrap; justify-content: flex-start; }
 .results-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 0 0 12px; }
 .results-summary span:nth-child(2) { color: var(--lab-sun); }
-.results-summary span.rate-note { border: 0; padding: 0; color: var(--lab-muted); background: none; font-size: 10px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.results-summary span.rate-note { max-width:100%;border:0;padding:0;color:var(--lab-muted);background:none;font-size:10px;font-weight:500;letter-spacing:0;line-height:1.4;text-transform:none;white-space:normal;overflow-wrap:anywhere; }
 .results-list { display: grid; gap: 11px; }
 .job-board,
 .latency-card { margin: 0 0 14px; padding: clamp(15px, 3vw, 20px); border: 1px solid var(--lab-line); border-radius: 20px; background: linear-gradient(145deg, rgba(25, 31, 45, .94), rgba(16, 20, 31, .95)); box-shadow: 0 14px 30px rgba(0, 0, 0, .16); }
@@ -506,10 +506,16 @@ button.score-button.is-on { border-color: rgba(255, 211, 111, .45); color: var(-
 .job-actions { display: flex; flex-wrap: wrap; gap: 7px; }
 .job-actions .button { min-height: 34px; padding: 6px 9px; font-size: 11px; }
 .latency-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(115px, 1fr)); gap: 8px; margin-bottom: 13px; }
+.latency-filters { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0; }
+.latency-filters label { margin:0;color:var(--lab-muted);font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase; }
+.latency-filters select { margin-top:5px;min-height:42px;color:var(--lab-ink);font-size:12px;font-weight:650;letter-spacing:0;text-transform:none; }
 .latency-stat { min-width: 0; padding: 10px; border: 1px solid var(--lab-line); border-radius: 13px; background: rgba(6, 8, 16, .34); }
 .latency-stat small { display: block; color: var(--lab-muted); font-size: 9px; letter-spacing: .07em; text-transform: uppercase; }
 .latency-stat strong { display: block; margin-top: 4px; color: var(--lab-mint); font-size: 16px; overflow-wrap: anywhere; }
 .latency-chart { display: grid; gap: 8px; }
+.latency-about { margin-top:12px;color:var(--lab-muted);font-size:10px;line-height:1.45; }
+.latency-about summary { width:max-content;max-width:100%;cursor:pointer;color:var(--lab-ink-soft);font-weight:700; }
+.latency-about p { margin:7px 0 0;max-width:720px; }
 .latency-section-label { margin-top: 4px; color: var(--lab-muted); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .latency-route { display: grid; grid-template-columns: minmax(95px, .32fr) minmax(0, 1fr) auto; gap: 9px; align-items: center; }
 .latency-route-label { min-width: 0; color: var(--lab-muted); font-size: 10px; overflow-wrap: anywhere; }
@@ -590,6 +596,7 @@ button.preferred-button.is-on { border-color: rgba(255, 211, 111, .4); color: va
   .comparison-card-head { align-items: stretch; flex-direction: column; }
   button.preferred-button { width: 100%; }
   .latency-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .latency-filters { grid-template-columns:1fr; }
   .latency-route { grid-template-columns: 82px minmax(0, 1fr); }
   .latency-route-value { grid-column: 2; }
 }

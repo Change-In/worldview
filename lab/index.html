@@ -36,7 +36,7 @@
       <p>Run the same scenario, then see exactly where the seconds went.</p>
     </div>
     <div class="hero-tools">
-      <button id="lab-open-timing" class="hero-timing" type="button"><strong>Timing dashboard</strong><span>queue · model · total</span></button>
+      <button id="lab-open-timing" class="hero-timing" type="button"><strong>Timing</strong><span>compare response times</span></button>
       <div class="hero-stat"><strong id="lab-provider-count">0</strong><span>configured providers</span></div>
     </div>
   </section>
@@ -48,7 +48,7 @@
     <button class="lab-tab" id="tab-tutor" type="button" role="tab" aria-selected="false" aria-controls="panel-tutor" data-tab="tutor"><span>4</span>Tutor</button>
     <button class="lab-tab" id="tab-speech" type="button" role="tab" aria-selected="false" aria-controls="panel-speech" data-tab="speech"><span>5</span>Speech</button>
     <span class="lab-tab-break" aria-hidden="true"></span>
-    <button class="lab-tab lab-tab-secondary" id="tab-results" type="button" role="tab" aria-selected="false" aria-controls="panel-results" data-tab="results">Timing dashboard</button>
+    <button class="lab-tab lab-tab-secondary" id="tab-results" type="button" role="tab" aria-selected="false" aria-controls="panel-results" data-tab="results">Timing</button>
     <button class="lab-tab lab-tab-secondary" id="tab-brain" type="button" role="tab" aria-selected="false" aria-controls="panel-brain" data-tab="brain">Advanced: Brain</button>
   </nav>
 
@@ -232,14 +232,19 @@
   </section>
 
   <section id="panel-results" class="tab-panel" role="tabpanel" aria-labelledby="tab-results" data-panel="results" hidden>
-    <div class="results-head"><div><p class="eyebrow">Durable text jobs · device timing</p><h2>Timing dashboard</h2><p>See queue wait, model time, total wait, failures, and compatible-route medians. Text-job progress and outputs return after reload; foreground transcription/speech outputs remain page-session only.</p></div><div class="results-actions"><button id="jobs-refresh" class="button button-quiet" type="button">Refresh jobs</button><button id="export-results" class="button button-quiet" type="button">Export JSON</button><button id="clear-results" class="button button-danger" type="button">Clear page results</button></div></div>
-    <section class="job-board" aria-labelledby="jobs-title"><div class="card-heading"><div><p class="eyebrow">Private server history</p><h3 id="jobs-title">Durable text jobs</h3></div><span id="jobs-status" class="rate-note">Not loaded</span></div><div id="jobs-list" class="jobs-list" aria-live="polite"></div></section>
+    <div class="results-head"><div><p class="eyebrow">Owner tool</p><h2>Timing</h2><p>Pick a stage, provider, and model.</p></div><div class="results-actions"><button id="jobs-refresh" class="button button-quiet" type="button">Refresh</button><button id="export-results" class="button button-quiet" type="button">Export</button><button id="clear-results" class="button button-danger" type="button">Clear results</button></div></div>
     <section class="latency-card" aria-labelledby="latency-title">
-      <div class="card-heading"><div><p class="eyebrow">Content-free measurements</p><h3 id="latency-title">Time: queue, model, total</h3></div><button id="latency-clear" class="button button-danger-soft" type="button">Clear timing history</button></div>
+      <div class="card-heading"><div><p class="eyebrow">Measured runs</p><h3 id="latency-title">Compare</h3></div><button id="latency-clear" class="button button-danger-soft" type="button">Clear timing</button></div>
+      <div class="latency-filters" aria-label="Timing filters">
+        <label for="latency-component">Stage<select id="latency-component"><option value="all">All stages</option><option value="lesson">Lesson</option><option value="transcription">Transcription</option><option value="tutor">Tutor</option><option value="speech">Speech</option><option value="brain">Brain</option></select></label>
+        <label for="latency-provider">Provider<select id="latency-provider"><option value="all">All providers</option></select></label>
+        <label for="latency-model">Model<select id="latency-model"><option value="all">All models</option></select></label>
+      </div>
       <div id="latency-summary" class="latency-summary"></div>
       <div id="latency-chart" class="latency-chart" role="img" aria-label="Latency comparison by route"></div>
-      <p class="privacy-note">Compatible samples are grouped only when their scenario, component, route/model, and prompt fingerprints match. p95 waits for at least 10 compatible samples; phone first-sound timing still needs a foreground device run.</p>
+      <details class="latency-about"><summary>How this compares runs</summary><p>Runs are compared only when the scenario, stage, route, prompt, and input match. p95 appears after 10 matching runs. Phone audio timing still needs a phone run.</p></details>
     </section>
+    <section class="job-board" aria-labelledby="jobs-title"><div class="card-heading"><div><p class="eyebrow">Server history</p><h3 id="jobs-title">Text jobs</h3></div><span id="jobs-status" class="rate-note">Not loaded</span></div><div id="jobs-list" class="jobs-list" aria-live="polite"></div></section>
     <div class="results-summary"><span id="results-count">0 outputs</span><span id="results-cost">Estimated total $0.00</span><span id="results-rate-note" class="rate-note"></span></div>
     <div id="results-list" class="results-list" aria-live="polite"></div>
     <section class="comparison-library" aria-labelledby="comparison-title">

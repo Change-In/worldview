@@ -711,6 +711,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .rail-item.active::before { background:var(--accent); box-shadow:0 0 0 3px rgba(189,90,48,.16); }
   .rail-settings { position:absolute; left:12px; top:14px; z-index:13; border:1px solid rgba(189,90,48,.55); background:color-mix(in srgb,var(--card) 72%,transparent); color:var(--accent-700); border-radius:999px; padding:7px 11px; cursor:pointer; }
   #developer-lab-launcher { position:fixed; top:14px; right:64px; z-index:35; display:inline-flex; align-items:center; gap:7px; border:1px solid rgba(189,90,48,.65); background:color-mix(in srgb,var(--card) 92%,transparent); color:var(--accent-700); border-radius:999px; padding:7px 12px; box-shadow:var(--shadow-sm); font-size:11px; font-weight:700; letter-spacing:.03em; text-decoration:none; }
+  #developer-lab-launcher[hidden], #models-button[hidden] { display:none; }
   #developer-lab-launcher::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 3px rgba(189,90,48,.14); }
   #developer-lab-launcher:hover { background:var(--card); border-color:var(--accent); }
   #models-button { position:absolute;right:14px;bottom:14px;z-index:14;display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:8px 12px;border:1px solid rgba(189,90,48,.55);border-radius:999px;background:color-mix(in srgb,var(--card) 94%,transparent);box-shadow:var(--shadow-sm);color:var(--accent-700);font-size:10px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;cursor:pointer; }
@@ -1471,8 +1472,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     <button id="rail-sources" class="rail-item" type="button">Upload</button>
   </nav>
   <button id="mobile-category-button" type="button" aria-haspopup="dialog">Most recent</button>
-  <button id="models-button" type="button" aria-haspopup="dialog">Models</button>
-  <a id="developer-lab-launcher" href="lab/">Developer lab</a>
+  <button id="models-button" type="button" aria-haspopup="dialog" hidden>Models</button>
+  <a id="developer-lab-launcher" href="lab/" hidden>Developer lab</a>
   <div id="home-header">
     <button id="home-menu" class="menu-button" type="button" aria-label="Open menu">&#9776;</button>
     <div class="home-brand">
@@ -1856,11 +1857,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v69 · Aug 9";
+const BUILD = "v70 · Aug 10";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v70", date: "Aug 10", changes: [
+    "Models and Developer Lab stay out of the ordinary learning screen; explicit developer mode reveals them when owner tools are needed.",
+    "Timing now starts with compact Stage, Provider, and Model filters and summarizes matching runs, median, p95, failures, and the latest stage breakdown.",
+    "Long timing and cost details wrap cleanly on a phone, while secondary explanation stays collapsed.",
+  ] },
   { tag: "v69", date: "Aug 9", changes: [
     "Every lesson now asks Voice or Text first. Voice requests microphone access immediately; output controls no longer claim a speaker switch the phone did not make.",
     "The tutor works one checkpoint mission at a time, asks fresher questions, and rejects stale replies instead of jumping ahead.",
@@ -4752,7 +4758,19 @@ function syncStartButton() {
   $("start-btn").disabled = !$("topic-input").value.trim();
 }
 
+function syncDeveloperLauncherVisibility() {
+  const launcher = $("developer-lab-launcher");
+  if (launcher) launcher.hidden = !state.developerMode;
+  const modelsButton = $("models-button");
+  if (modelsButton) modelsButton.hidden = !state.developerMode;
+  if (!state.developerMode && $("models-sheet")) {
+    $("models-sheet").classList.remove("open");
+    $("models-sheet").setAttribute("aria-hidden","true");
+  }
+}
+
 function renderHome() {
+  syncDeveloperLauncherVisibility();
   const selectedLayerIndex = categoryLayerEntries().findIndex(entry => entry.key === wheel.layerCategory);
   if (wheel.layerCategory && selectedLayerIndex < 0) { wheel.layerCategory = null; wheel.layerIndex = 0; }
   else if (selectedLayerIndex >= 0) wheel.layerIndex = selectedLayerIndex;
@@ -12371,6 +12389,7 @@ $("set-developer").addEventListener("change",event => {
   if (!state.developerUnlocked) return;
   state.developerMode = !!event.target.checked;
   save();
+  syncDeveloperLauncherVisibility();
   syncDeveloperSettingsVisibility();
   renderConversationModelSwitches();
 });
