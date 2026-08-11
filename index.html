@@ -1116,6 +1116,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .voice-timing-legend { margin:8px 0 0;color:var(--ink-soft);font-size:11px;line-height:1.5; }
   .settings-account-card,.usage-card { padding:14px;border:1px solid rgba(126,160,170,.55);border-radius:12px;background:var(--paper); }
   .settings-account-status { margin:0 0 10px;color:var(--ink-soft);font-size:12px;line-height:1.45; }
+  .settings-access-status { margin:-3px 0 10px;padding:7px 9px;border-radius:9px;background:rgba(126,160,170,.12);color:var(--ink);font-size:11px;line-height:1.4; }
+  .settings-access-status[hidden] { display:none; }
   .settings-account-row { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px; }
   .settings-account-row.link-fallback { grid-template-columns:1fr; }
   .settings-account-row.link-fallback input { display:none; }
@@ -1857,11 +1859,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v70 · Aug 10";
+const BUILD = "v71 · Aug 11";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v71", date: "Aug 11", changes: [
+    "Founding-pilot access now shows its end date in Account settings.",
+    "Expired or revoked access stays closed even if an old tester code remains on the device.",
+    "A server stop can pause every AI request before provider charges; paused messages stay saved and explain that no request was charged.",
+  ] },
   { tag: "v70", date: "Aug 10", changes: [
     "Models and Developer Lab stay out of the ordinary learning screen; explicit developer mode reveals them when owner tools are needed.",
     "Timing now starts with compact Stage, Provider, and Model filters and summarizes matching runs, median, p95, failures, and the latest stage breakdown.",
@@ -2210,6 +2217,7 @@ const ACTIVE_ACCOUNT_STORAGE_KEY = "worldview-active-account-v1";
 const ACCOUNT_STATE_STORAGE_PREFIX = "worldview-account-state-v1:";
 const LEGACY_LIBRARY_QUARANTINE_KEY = "worldview-legacy-library-quarantine-v1";
 let cloudSyncReady = false, cloudHydrating = false, cloudSyncTimer = 0, cloudSyncInFlight = null, cloudAccount = null, backendEntitled = false;
+let backendAccessRowPresent = false, backendEntitlementRecord = null;
 let cloudRetryDelay = 0, accountTransitionInProgress = false;
 let localSaveWarningShown = false;
 let accountCacheReadOnly = false, accountCacheReadOnlyWarningShown = false;
@@ -2482,7 +2490,10 @@ function stableIdentityAllowsMutation() {
   return !backendClient || !!(identityMutationReady && accountOwnershipResolved && !accountCacheReadOnly
     && cloudAccount && stateAccountId && cloudAccount.id === stateAccountId);
 }
-function backendAccessEnabled() { return stableIdentityAllowsMutation() && !!(backendClient && (state.testerInvite || backendEntitled)); }
+function backendAccessEnabled() {
+  return stableIdentityAllowsMutation() && !!(backendClient
+    && (backendEntitled || (!backendAccessRowPresent && state.testerInvite)));
+}
 function aiAvailable() { return stableIdentityAllowsMutation() && (backendAccessEnabled() || !!state.apiKey); }
 async function backendAccessToken(forceRefresh = false) {
   if (!backendClient) throw claudeError("Cloud access is unavailable.", { status:503, type:"not_configured" });
@@ -3012,13 +3023,42 @@ function updateCloudAccountUI(status = "") {
   if ($("drawer-account-status")) $("drawer-account-status").textContent = email
     ? `${email} · ${accountCacheReadOnly ? "read-only, reconnecting" : pendingLegacyRecovery ? "recovery choice needed" : status === "error" ? "save retrying" : "saved"}`
     : held ? heldStatus : "Add recovery email";
+  const accessStatus = $("account-access-status");
+  if (accessStatus) {
+    const access = backendEntitlementRecord;
+    const expiresAt = access?.expires_at ? Date.parse(access.expires_at) : Number.NaN;
+    const expiryLabel = Number.isFinite(expiresAt)
+      ? new Date(expiresAt).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"})
+      : "";
+    accessStatus.hidden = !access;
+    accessStatus.textContent = !access ? ""
+      : access.active === false ? "Access is revoked."
+      : Number.isFinite(expiresAt) && expiresAt <= Date.now() ? `Access ended ${expiryLabel}.`
+      : access.access_tier === "paid" ? `Founding access through ${expiryLabel}.`
+      : access.access_tier === "admin" ? "Owner access is active."
+      : "Tester access is active.";
+  }
   renderAccountSetupUI(status);
   renderAccountGuardUI();
 }
 async function loadBackendEntitlement(userId) {
+  backendEntitled = false;
+  backendAccessRowPresent = false;
+  backendEntitlementRecord = null;
   if (!backendClient || !userId) return false;
-  const result = await backendClient.from("user_access").select("active").eq("user_id",userId).maybeSingle();
-  backendEntitled = !!(!result.error && result.data && result.data.active);
+  const result = await backendClient.from("user_access")
+    .select("active,access_tier,granted_at,revoked_at,expires_at,offer_code,lesson_limit")
+    .eq("user_id",userId).maybeSingle();
+  if (result.error) {
+    console.warn("Access status could not be loaded",result.error.code,result.error.message);
+    return false;
+  }
+  backendAccessRowPresent = !!result.data;
+  backendEntitlementRecord = result.data || null;
+  const expiresAt = result.data?.expires_at ? Date.parse(result.data.expires_at) : Number.NaN;
+  backendEntitled = !!(result.data?.active
+    && !(result.data.access_tier === "paid" && !Number.isFinite(expiresAt))
+    && !(Number.isFinite(expiresAt) && expiresAt <= Date.now()));
   return backendEntitled;
 }
 async function initCloudPersistence() {
@@ -3057,6 +3097,8 @@ async function initCloudPersistence() {
       cloudSyncedFingerprint = "";
       cloudAccount = null;
       backendEntitled = false;
+      backendAccessRowPresent = false;
+      backendEntitlementRecord = null;
       if (stateAccountId || rememberedAccountId()) clearLocalAccountView();
       renderHome();
       renderProfile();
@@ -3115,6 +3157,13 @@ async function initCloudPersistence() {
     accountCacheReadOnly = false;
     accountCacheReadOnlyWarningShown = false;
     cloudSyncReady = accountOwnershipResolved && decision.allowSync;
+    if (backendAccessRowPresent && state.testerInvite) {
+      // Once the server has an access row, that row is the sole authority.
+      // Removing the device copy prevents an old QA code from appearing to be
+      // able to restore a revoked or expired entitlement.
+      state.testerInvite = "";
+      try { writeLocalState(); } catch (error) { console.warn("Stored tester code could not be cleared",error); }
+    }
     applyTheme();
     renderHome();
     renderProfile();
@@ -4196,10 +4245,10 @@ function claudeError(message, details = {}) {
   const error = new Error(message || "Claude could not respond");
   Object.assign(error, details);
   const status = Number(error.status) || 0;
-  error.transient = error.transient === true
+  error.transient = error.type !== "spend_disabled" && (error.transient === true
     || [429, 500, 502, 503, 504, 529].includes(status)
     || ["rate_limit_error", "api_error", "timeout_error", "overloaded_error"].includes(error.type)
-    || (!status && /network|fetch|connection|temporar|overload|timeout/i.test(error.message));
+    || (!status && /network|fetch|connection|temporar|overload|timeout/i.test(error.message)));
   return error;
 }
 async function responseError(response) {
@@ -4241,6 +4290,12 @@ async function withClaudeRetries(operation, onRetry, maxAttempts = 3) {
   throw lastError;
 }
 function friendlyClaudeFailure(error) {
+  if (error?.type === "spend_disabled") {
+    return { title: "Worldview is temporarily paused.", detail: "Your message is saved. No AI request was charged; try again after access resumes." };
+  }
+  if (["access_expired","access_revoked","access_invalid"].includes(error?.type)) {
+    return { title: error.type === "access_expired" ? "Your access period has ended." : "Your access is not active.", detail: "Your message is saved. Ask the pilot owner to renew access.", access:true };
+  }
   if (error && (error.status === 401 || error.status === 403)) {
     if (backendAccessEnabled()) return { title: "Tester access needs attention.", detail: "Your message is saved. Update the access code, then continue.", access:true };
     return { title: "The API key needs attention.", detail: "Your message is saved. Check the key in Settings, then retry." };
@@ -4258,7 +4313,16 @@ function friendlyClaudeFailure(error) {
   return { title: "Worldview couldn't answer yet.", detail: "Your message is saved. Retry the response." };
 }
 function resetInvalidTesterAccess(error) {
-  if (!error || ![401,403].includes(Number(error.status)) || !backendAccessEnabled()) return false;
+  if (!error || ![401,403].includes(Number(error.status))) return false;
+  if (["access_expired","access_revoked","access_invalid"].includes(error.type)) {
+    backendEntitled = false;
+    backendAccessRowPresent = true;
+    if (backendEntitlementRecord) backendEntitlementRecord.active = false;
+    updateCloudAccountUI();
+    syncDeveloperSettingsVisibility();
+    return true;
+  }
+  if (!backendAccessEnabled()) return false;
   // A changed alpha code should never leave the learner in a silent retry
   // loop. Existing account entitlements remain untouched; only a stale code
   // stored on this device is cleared so the focused access field can reappear.
@@ -12028,7 +12092,7 @@ function organizeSettingsPanel() {
   connection.id = "settings-tester-group";
   const accountCard = document.createElement("div");
   accountCard.className = "settings-account-card";
-  accountCard.innerHTML = `<p id="account-status" class="settings-account-status">Connecting…</p><div id="account-email-step" class="settings-account-row"><input id="account-email" type="email" autocomplete="email" inputmode="email" placeholder="Recovery email" aria-label="Recovery email"><button id="account-link" type="button">Add</button></div><div id="account-code-step" class="settings-account-row" hidden><input id="account-code" type="text" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Email code" aria-label="Email verification code"><button id="account-verify" type="button">Confirm</button></div><button id="account-signout" type="button" hidden>Sign out</button>`;
+  accountCard.innerHTML = `<p id="account-status" class="settings-account-status">Connecting…</p><p id="account-access-status" class="settings-access-status" hidden></p><div id="account-email-step" class="settings-account-row"><input id="account-email" type="email" autocomplete="email" inputmode="email" placeholder="Recovery email" aria-label="Recovery email"><button id="account-link" type="button">Add</button></div><div id="account-code-step" class="settings-account-row" hidden><input id="account-code" type="text" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Email code" aria-label="Email verification code"><button id="account-verify" type="button">Confirm</button></div><button id="account-signout" type="button" hidden>Sign out</button>`;
   const account = group("Account",[accountCard],true,true);
   account.id = "settings-account-group";
   const voiceNodes = [];
@@ -12192,7 +12256,7 @@ async function verifyAccountCode(source = "settings") {
     if (accountPending.mode === "email_change" && accountPending.originalUserId && user.id !== accountPending.originalUserId) {
       throw new Error("The account identity changed unexpectedly.");
     }
-    cloudAccount = null;backendEntitled = false;
+    cloudAccount = null;backendEntitled = false;backendAccessRowPresent = false;backendEntitlementRecord = null;
     setAccountPending(null);
     accountTransitionInProgress = false;
     await initCloudPersistence();
@@ -12219,7 +12283,7 @@ async function signOutAccount() {
   accountCacheReadOnly = false;accountCacheReadOnlyWarningShown = false;
   pendingLegacyRecovery = null;identityMutationReady = false;accountOwnershipResolved = false;
   cloudSyncReady = false;cloudRemoteBaseline = "unknown";cloudRemoteRevision = 0;cloudSyncedFingerprint = "";
-  cloudAccount = null;backendEntitled = false;
+  cloudAccount = null;backendEntitled = false;backendAccessRowPresent = false;backendEntitlementRecord = null;
   state.voiceTimingLog = [];
   clearLocalAccountView();
   updateCloudAccountUI();
