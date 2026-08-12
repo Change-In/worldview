@@ -1929,11 +1929,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v76 · Aug 12";
+const BUILD = "v77 · Aug 12";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v77", date: "Aug 12", changes: [
+    "Lesson maps can now actually finish building. The map used to be requested in one oversized piece that ran out of room and time before it could come back, which is why generation kept ending in \"needs your attention\".",
+    "Your lesson path is now built as a short outline first, then one checkpoint at a time in parallel, so a full lesson comes back in about a minute.",
+  ] },
   { tag: "v76", date: "Aug 12", changes: [
     "A rejected optional knowledge-diagnostic response can no longer stop your lesson map: your answer stays saved and the lesson continues.",
     "Voice setup no longer reads prompts with the iPhone system voice, recording feedback stays stable while you talk, and the lesson controls no longer cover the title.",
