@@ -244,7 +244,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #lesson-intake-custom:focus { border-color:var(--accent);box-shadow:0 0 0 3px rgba(23,77,91,.1); }
   .lesson-intake-actions { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px;margin-top:20px; }
   .lesson-intake-actions button[hidden] { display:none; }
-  #lesson-intake-primary { border:0;background:var(--accent);color:#fff; }
+  #lesson-intake-primary,#lesson-intake-voice { border:0;background:var(--accent);color:#fff; }
   #lesson-intake-skip { border:1.5px solid var(--line);background:var(--paper);color:var(--ink); }
   #lesson-intake-cancel { grid-column:1/-1;min-height:40px!important;border:0;background:transparent;color:var(--ink-soft); }
   #lesson-intake-status { min-height:18px;margin-top:10px;color:var(--ink-soft);font-size:11px;line-height:1.4; }
@@ -1457,6 +1457,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     </label>
     <div class="lesson-intake-actions">
       <button id="lesson-intake-primary" type="button" hidden>Continue</button>
+      <button id="lesson-intake-voice" type="button" hidden>Answer aloud</button>
       <button id="lesson-intake-skip" type="button" hidden>Not sure</button>
       <button id="lesson-intake-cancel" type="button">Cancel</button>
     </div>
@@ -1730,7 +1731,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   </div>
   <div id="voice-scroll"></div>
   <div id="voice-control-zone">
-    <button id="voice-build-skip" type="button">I don&rsquo;t know yet &middot; Skip</button>
+    <button id="voice-build-skip" type="button">Start lesson now</button>
     <button id="voice-status" type="button" aria-label="Tap to talk"><span id="voice-dot"></span><span id="voice-status-text">tap to talk</span></button>
   </div>
 </div>
@@ -1872,11 +1873,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v73 · Aug 11";
+const BUILD = "v74 · Aug 11";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v74", date: "Aug 11", changes: [
+    "Voice or Text is now chosen before lesson setup, and that choice stays with you through the opening questions and into the lesson.",
+    "Opening questions can continue while your lesson is being built when another answer would help; there is no early Skip, and Start lesson now appears once the route is ready.",
+    "A valid lesson can no longer fail because an optional planning explanation was blank, and its path panel rejoins the saved build instead of starting a second map.",
+  ] },
   { tag: "v73", date: "Aug 11", changes: [
     "Begin now opens the lesson immediately, with clear setup, retry, and cancel states instead of leaving Home stuck on Starting.",
     "Topic setup asks at most two short clarifying questions, then lesson preparation continues in the lesson while you answer up to three optional knowledge questions.",
@@ -5645,6 +5651,7 @@ function pathControlAtPoint(x, y) {
 
 const LESSON_INTAKE_PROMPT_VERSION = "lesson-intake-clarifier-v3";
 let activeLessonIntake = null;
+let lessonIntakeRecognition = null;
 let lessonIntakeReturnFocus = null;
 let pendingLessonIntakeFlow = null;
 let lessonStartUiToken = "", lessonStartUiPhase = "";
@@ -5764,7 +5771,7 @@ function lessonIntakeElements() {
     overlay:$("lesson-intake"),title:$("lesson-intake-title"),prompt:$("lesson-intake-prompt"),
     options:$("lesson-intake-options"),customWrap:$("lesson-intake-custom-wrap"),custom:$("lesson-intake-custom"),
     customLabel:$("lesson-intake-custom-label"),primary:$("lesson-intake-primary"),
-    skip:$("lesson-intake-skip"),cancel:$("lesson-intake-cancel"),status:$("lesson-intake-status"),
+    voice:$("lesson-intake-voice"),skip:$("lesson-intake-skip"),cancel:$("lesson-intake-cancel"),status:$("lesson-intake-status"),
   };
 }
 function setLessonIntakeOpen(open) {
@@ -5797,8 +5804,65 @@ function resetLessonIntakeUI() {
   ui.options.innerHTML = "";
   ui.customWrap.hidden = true;ui.custom.value = "";
   ui.customLabel.textContent = "What did you mean?";
-  ui.primary.hidden = true;ui.primary.disabled = false;ui.skip.hidden = true;
+  ui.primary.hidden = true;ui.primary.disabled = false;
+  if (ui.voice) { ui.voice.hidden = true;ui.voice.disabled = false; }
+  ui.skip.hidden = true;
   ui.status.className = "";ui.status.textContent = "";
+}
+function stopLessonIntakeSpokenAnswer() {
+  const recognition = lessonIntakeRecognition;
+  lessonIntakeRecognition = null;
+  if (recognition) { try { recognition.abort(); } catch (error) {} }
+}
+function speakLessonIntakePrompt(session, text) {
+  if (!session || session.entryMode !== "voice" || session !== activeLessonIntake || session.settled
+      || !window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") return;
+  try {
+    speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(cleanLessonIntakeText(text,700));
+    utterance.lang = document.documentElement.lang || navigator.language || "en-US";
+    utterance.rate = .96;
+    speechSynthesis.speak(utterance);
+  } catch (error) {}
+}
+function beginLessonIntakeSpokenAnswer() {
+  const session = activeLessonIntake;
+  if (!session || session.settled || session.phase !== "clarify") return;
+  const ui = lessonIntakeElements();
+  if (!SR) {
+    ui.status.className = "is-error";
+    ui.status.textContent = "Spoken setup is not available in this browser. Choose an option; the lesson itself can still use Voice.";
+    return;
+  }
+  stopLessonIntakeSpokenAnswer();
+  try { speechSynthesis.cancel(); } catch (error) {}
+  const recognition = new SR();
+  lessonIntakeRecognition = recognition;
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = document.documentElement.lang || navigator.language || "en-US";
+  recognition.onstart = () => {
+    if (session !== activeLessonIntake || session.settled) return;
+    ui.voice.disabled = true;ui.voice.textContent = "Listening\u2026";
+    ui.status.className = "";ui.status.textContent = "Say the direction you mean.";
+  };
+  recognition.onresult = event => {
+    if (session !== activeLessonIntake || session.settled) return;
+    const answer = cleanLessonIntakeText(Array.from(event.results || []).map(result => result[0] && result[0].transcript || "").join(" "),220);
+    if (answer) chooseLessonClarification(session,answer,"voice");
+  };
+  recognition.onerror = event => {
+    if (session !== activeLessonIntake || session.settled || event && event.error === "aborted") return;
+    ui.status.className = "is-error";
+    ui.status.textContent = "I didn\u2019t catch that. Try again or choose one of the visible options.";
+  };
+  recognition.onend = () => {
+    if (lessonIntakeRecognition === recognition) lessonIntakeRecognition = null;
+    if (session === activeLessonIntake && !session.settled && session.phase === "clarify") {
+      ui.voice.disabled = false;ui.voice.textContent = "Answer aloud";
+    }
+  };
+  recognition.start();
 }
 function lessonIntakeWorkingAssumption(session, preferred = "") {
   const supplied = cleanLessonIntakeText(preferred,500);
@@ -5844,11 +5908,15 @@ function finishLessonIntake(session, preferredAssumption = "") {
   const lastClarifier = Array.isArray(session.clarifiers) && session.clarifiers.length
     ? session.clarifiers[session.clarifiers.length - 1] : session.clarifier;
   session.settled = true;
+  stopLessonIntakeSpokenAnswer();
+  try { speechSynthesis.cancel(); } catch (error) {}
   if (session.requestAbort) session.requestAbort.abort();
   activeLessonIntake = null;
   setLessonIntakeOpen(false);
   session.resolve({
     version:LESSON_INTAKE_PROMPT_VERSION,
+    lessonId:String(session.lessonId || "").slice(0,160),
+    entryMode:session.entryMode === "voice" ? "voice" : "text",
     originalTopic:session.topic,
     clarifiedTopic:assumption,
     clarification:{
@@ -5877,6 +5945,7 @@ function showLessonWorkingAssumption(session, preferred = "", status = "") {
   ui.customWrap.hidden = false;ui.custom.value = session.workingAssumption;
   ui.primary.hidden = false;ui.primary.textContent = "Use this focus";
   ui.status.textContent = status || "This is a starting direction, not a claim about what you know.";
+  speakLessonIntakePrompt(session,`I\u2019ll use this working focus: ${session.workingAssumption}`);
   requestAnimationFrame(() => {
     ui.custom.focus({preventScroll:true});
     if (typeof ui.custom.select === "function") ui.custom.select();
@@ -5906,14 +5975,19 @@ function showLessonClarification(session, result) {
     if (session !== activeLessonIntake || session.settled) return;
     session.phase = "custom";
     ui.options.innerHTML = "";
+    ui.voice.hidden = true;
     ui.customLabel.textContent = "What did you mean?";
     ui.customWrap.hidden = false;ui.primary.hidden = false;ui.primary.textContent = "Continue";
     ui.skip.hidden = true;
     requestAnimationFrame(() => ui.custom.focus({preventScroll:true}));
   };
   ui.options.append(unsure,custom);
-  ui.skip.hidden = false;ui.skip.textContent = "Skip — use an assumption";
+  if (session.entryMode === "voice" && SR) {
+    ui.voice.hidden = false;ui.voice.textContent = "Answer aloud";
+  }
+  ui.skip.hidden = false;ui.skip.textContent = "Use a reasonable focus";
   ui.status.textContent = `Question ${questionNumber} of 2 maximum.`;
+  speakLessonIntakePrompt(session,`${result.focusedQuestion} ${result.options.map((option,index) => `Option ${index + 1}: ${option}.`).join(" ")}`);
   requestAnimationFrame(() => ui.options.querySelector("button")?.focus({preventScroll:true}));
 }
 function acceptLessonClarifierResult(session, raw) {
@@ -5971,6 +6045,8 @@ function chooseLessonClarification(session, answer, mode) {
   if (!session || session !== activeLessonIntake || session.settled) return;
   const clarifier = session.clarifiers[session.clarifiers.length - 1];
   if (!clarifier) return;
+  stopLessonIntakeSpokenAnswer();
+  try { speechSynthesis.cancel(); } catch (error) {}
   const clean = cleanLessonIntakeText(answer,220);
   session.clarificationMode = mode;
   session.clarificationAnswer = clean;
@@ -6027,17 +6103,21 @@ function cancelLessonIntake() {
   const session = activeLessonIntake;
   if (!session || session.settled) return;
   session.settled = true;
+  stopLessonIntakeSpokenAnswer();
+  try { speechSynthesis.cancel(); } catch (error) {}
   if (session.requestAbort) session.requestAbort.abort();
   activeLessonIntake = null;
   setLessonIntakeOpen(false);
+  if (session.entryMode === "voice") cleanupLessonEntryVoiceResources();
   session.resolve(null);
 }
-async function openLessonIntake(topic) {
+async function openLessonIntake(topic, options = {}) {
   if (activeLessonIntake) return activeLessonIntake.promise;
   let resolve;
   const promise = new Promise(done => { resolve = done; });
   const session = {
     id:uid(),topic:cleanLessonIntakeText(topic,500),phase:"opening",settled:false,resolve,promise,
+    lessonId:String(options.lessonId || "").slice(0,160),entryMode:options.entryMode === "voice" ? "voice" : "text",
     clarificationMode:"clear",clarificationAnswer:"",clarifier:null,clarifiers:[],answers:[],requestCount:0,
     requestAbort:new AbortController(),clarifierTask:null,allowanceTask:null,allowanceConfirmed:false,
   };
@@ -6077,6 +6157,7 @@ function handleLessonIntakeSkip() {
   if (session.phase === "clarify") chooseLessonClarification(session,"","skip");
 }
 $("lesson-intake-primary").addEventListener("click",handleLessonIntakePrimary);
+$("lesson-intake-voice").addEventListener("click",beginLessonIntakeSpokenAnswer);
 $("lesson-intake-skip").addEventListener("click",handleLessonIntakeSkip);
 $("lesson-intake-cancel").addEventListener("click",cancelLessonIntake);
 $("lesson-intake").addEventListener("keydown",event => {
@@ -6164,11 +6245,15 @@ async function beginLesson(topic, methodKey, starterText, parentId, sourceUrl, s
       try {
         const topicInput = $("topic-input");
         if (topicInput && document.activeElement === topicInput) topicInput.blur();
+        const draftLessonId = uid();
+        setLessonStartUiPhase(token,"mode");
+        const entryMode = await openLessonEntryMode(draftLessonId);
+        if (!entryMode) return null;
         setLessonStartUiPhase(token,"intake");
         /* openLessonIntake paints its full-screen shell before it performs the
            paid capacity check. Clarifier/provider work remains gated inside
            that shell until capacity succeeds. */
-        const collected = await openLessonIntake(topic);
+        const collected = await openLessonIntake(topic,{entryMode,lessonId:draftLessonId});
         if (!collected) return null;
         const clarifiedTopic = cleanLessonIntakeText(collected.clarifiedTopic,500) || cleanLessonIntakeText(topic,500);
         const clarifiedStarter = clarifiedTopic === cleanLessonIntakeText(topic,500)
@@ -6184,7 +6269,7 @@ async function beginLesson(topic, methodKey, starterText, parentId, sourceUrl, s
     return flow;
   }
   const creationToken = startToken || uid();
-  const lessonId = uid();
+  const lessonId = cleanLessonIntakeText(intakeContext.lessonId,160) || uid();
   const lesson = {
     id: lessonId,
     creationRequestKey:(crypto.randomUUID ? crypto.randomUUID() : `${uid()}-${uid()}`).slice(0,200),
@@ -6210,9 +6295,12 @@ async function beginLesson(topic, methodKey, starterText, parentId, sourceUrl, s
   /* Every lesson entry makes the mode explicit. Choosing Voice performs the
      real browser permission request before planning begins and retains that
      same stream for the first recording; Text makes no microphone call. */
-  setLessonStartUiPhase(creationToken,"mode");
-  const entryMode = await openLessonEntryMode(lesson.id);
-  if (!entryMode) return null;
+  let entryMode = intakeContext.entryMode === "voice" ? "voice" : intakeContext.entryMode === "text" ? "text" : "";
+  if (!entryMode) {
+    setLessonStartUiPhase(creationToken,"mode");
+    entryMode = await openLessonEntryMode(lesson.id);
+    if (!entryMode) return null;
+  }
   /* Source and upload lessons retain their proven legacy planner. Only an
      ordinary typed topic joins the durable server-owned build pipeline. */
   if (!sourceUrl && !sourceMedia) lesson.lessonBuild = newTypedLessonBuildState(lesson,entryMode);
@@ -6220,6 +6308,7 @@ async function beginLesson(topic, methodKey, starterText, parentId, sourceUrl, s
   state.lessons.push(lesson);
   if (!(paidPilotLessonLimitApplies() ? saveLocalOnly() : save())) {
     state.lessons = state.lessons.filter(item => item !== lesson);
+    if (entryMode === "voice") cleanupLessonEntryVoiceResources();
     toast("The lesson could not be saved, so no AI request was started.",6500);
     return null;
   }
@@ -6903,6 +6992,7 @@ const LESSON_BUILD_REQUEST_TIMEOUT_MS = 25000;
 const LESSON_BUILD_FOREGROUND_MS = 150000;
 const LESSON_BUILD_TARGET_MS = 120000;
 const LESSON_BUILD_POLL_MS = 1400;
+const LESSON_BUILD_MAX_EXTRACTOR_QUESTIONS = 8;
 const LESSON_BUILD_STAGES = new Set(["classify","research","plan","extract","map"]);
 const LESSON_BUILD_STATUSES = new Set(["queued","running","waiting_for_answer","converging","ready","needs_attention","cancelling","cancelled","failed"]);
 const lessonBuildTasks = new Map();
@@ -6922,6 +7012,7 @@ function newTypedLessonBuildState(lesson, preferredMode = "text") {
     draft:"", draftQuestionNumber:1, answerKeys:{}, startedQuestions:[],
     pendingSubmission:null, preferredMode:preferredMode === "voice" ? "voice" : "text",
     canRetry:false, hasUncertain:false, progressStage:"classify",
+    plannerStatus:"pending", extractorStatus:"waiting_for_answer", mappingStatus:"waiting",
     startedAt:Date.now(), updatedAt:Date.now(), tutorStarted:false,
   };
 }
@@ -6937,7 +7028,7 @@ function typedLessonBuildQuestion(lesson) {
   const build = typedLessonBuildState(lesson);
   const question = build && build.currentQuestion;
   const number = Number(question && question.number);
-  return number >= 1 && number <= 3 && String(question.text || "").trim()
+  return number >= 1 && number <= LESSON_BUILD_MAX_EXTRACTOR_QUESTIONS && String(question.text || "").trim()
     ? {number,text:String(question.text).trim().slice(0,700)} : null;
 }
 function typedLessonBuildAnswerKey(build, questionNumber) {
@@ -6988,7 +7079,7 @@ function normalizeTypedLessonBuildEnvelope(raw, lesson, expectedBuildId = "") {
   if (envelope.currentQuestion != null) {
     const number = Number(envelope.currentQuestion.number);
     const text = String(envelope.currentQuestion.text || "").trim();
-    if (!Number.isInteger(number) || number < 1 || number > 3 || !text || text.length > 700) throw new Error("Lesson build returned an invalid question");
+    if (!Number.isInteger(number) || number < 1 || number > LESSON_BUILD_MAX_EXTRACTOR_QUESTIONS || !text || text.length > 700) throw new Error("Lesson build returned an invalid question");
     currentQuestion = {number,text};
   }
   const steps = Array.isArray(envelope.steps) ? envelope.steps.map(step => {
@@ -6999,10 +7090,10 @@ function normalizeTypedLessonBuildEnvelope(raw, lesson, expectedBuildId = "") {
   }) : [];
   const turns = Array.isArray(envelope.turns) ? envelope.turns.map(turn => {
     const number = Number(turn && turn.questionNumber);
-    if (!Number.isInteger(number) || number < 1 || number > 3) throw new Error("Lesson build returned an invalid extractor turn");
+    if (!Number.isInteger(number) || number < 1 || number > LESSON_BUILD_MAX_EXTRACTOR_QUESTIONS) throw new Error("Lesson build returned an invalid extractor turn");
     return {id:String(turn.id||""),questionNumber:number,question:String(turn.question||"").slice(0,700),answer:String(turn.answer||"").slice(0,2000),skipped:!!turn.skipped,status:String(turn.status||""),answeredAt:turn.answeredAt||null};
   }) : [];
-  if (turns.length > 3 || new Set(turns.map(turn => turn.questionNumber)).size !== turns.length) throw new Error("Lesson build exceeded the three-question cap");
+  if (turns.length > LESSON_BUILD_MAX_EXTRACTOR_QUESTIONS || new Set(turns.map(turn => turn.questionNumber)).size !== turns.length) throw new Error("Lesson build exceeded the knowledge-conversation safety cap");
   const work = envelope.work && typeof envelope.work === "object" ? {
     queued:!!envelope.work.queued, canRetry:!!envelope.work.canRetry, hasUncertain:!!envelope.work.hasUncertain,
     providerConfigured:envelope.work.providerConfigured !== false,
@@ -7155,8 +7246,18 @@ async function validateTypedLessonReadyArtifact(lesson, snapshot) {
 function typedLessonBuildProgress(snapshot, build) {
   if (build.hasUncertain) return {stage:"uncertain",text:"A provider result is uncertain, so Worldview will not repeat it automatically."};
   if (build.status === "committed") return {stage:"ready",text:"Your lesson path is ready."};
-  if (build.status === "needs_attention" || build.status === "failed") return {stage:"attention",text:"Lesson generation needs your attention."};
   const steps = snapshot && snapshot.steps || [];
+  if (build.status === "needs_attention" || build.status === "failed") {
+    const failed = steps.find(step => step.status === "failed");
+    const failedLabels = {
+      classify:"The topic check paused before lesson mapping",
+      research:"The bounded research check paused",
+      plan:"The lesson map did not pass its checks",
+      extract:"That knowledge answer still needs to be processed",
+      map:"The prior-knowledge hints could not be connected",
+    };
+    return {stage:"attention",text:(failedLabels[failed && failed.stage] || "Lesson generation paused") + ". Your lesson and answers are saved."};
+  }
   const active = steps.find(step => ["running","pending"].includes(step.status))
     || [...steps].reverse().find(step => step.status === "completed");
   const stage = active ? active.stage : build.progressStage || "classify";
@@ -7187,12 +7288,13 @@ function renderTypedLessonBuild(lesson) {
       ? `<span>This is taking longer than the two-minute target. It is saved and safe to leave.</span>`
       : `<span>This work is saved. You can leave and return while it finishes.</span>`;
     const errorCopy = build.lastError ? `<span>${esc(build.lastError)}</span>` : "";
-    const priorTurns = (snapshot && snapshot.turns || []).filter(turn => turn.questionNumber < Number(question && question.number || 4));
-    const turnCopy = priorTurns.length ? `<div class="lesson-build-turns">${priorTurns.map(turn =>
-      `<div class="lesson-build-turn"><b>Question ${turn.questionNumber}</b><span>${esc(turn.question)}</span><span>${turn.skipped ? "I don\u2019t know yet \u00b7 skipped" : esc(turn.answer)}</span></div>`
-    ).join("")}</div>` : "";
+    const priorTurns = (snapshot && snapshot.turns || []).filter(turn => turn.questionNumber < Number(question && question.number || LESSON_BUILD_MAX_EXTRACTOR_QUESTIONS + 1));
+    const recentTurns = priorTurns.slice(-2);
+    const turnCopy = recentTurns.length ? `<details class="lesson-build-turns"><summary>${priorTurns.length} answer${priorTurns.length === 1 ? "" : "s"} saved as unverified context</summary>${recentTurns.map(turn =>
+      `<div class="lesson-build-turn"><b>Question ${turn.questionNumber}</b><span>${esc(turn.question)}</span><span>${turn.skipped ? "Knowledge conversation ended when the lesson was ready" : esc(turn.answer)}</span></div>`
+    ).join("")}</details>` : "";
     bubble.innerHTML = `<div class="lesson-build-panel">`
-      + `<div class="lesson-build-kicker">${question ? `Question ${question.number} of at most 3` : "Building your lesson"}</div>`
+      + `<div class="lesson-build-kicker">${question ? `Understanding your starting point \u00b7 question ${question.number}` : "Building your lesson"}</div>`
       + turnCopy
       + (question ? `<div class="lesson-build-question">${esc(question.text)}</div>` : "")
       + `<div class="lesson-build-progress"><strong>${esc(progress.text)}</strong>${targetCopy}${errorCopy}</div>`
@@ -7204,9 +7306,9 @@ function renderTypedLessonBuild(lesson) {
       retryOpening.onclick = () => beginTypedLessonTutor(lesson);
       actions.appendChild(retryOpening);
     }
-    if (question) {
+    if (question && build.plannerStatus === "ready") {
       const skip = document.createElement("button");
-      skip.type = "button"; skip.textContent = "I don\u2019t know yet \u00b7 Skip";
+      skip.type = "button"; skip.textContent = "Start lesson now";
       skip.disabled = !!build.submitting;
       skip.onclick = () => skipTypedLessonBuildQuestion(lesson);
       actions.appendChild(skip);
@@ -7239,7 +7341,10 @@ function renderTypedLessonBuildVoice(lesson, forceSpeak = false) {
   if (!voice.active || currentLessonId !== lesson.id) return;
   const build = typedLessonBuildState(lesson), question = typedLessonBuildQuestion(lesson);
   const skip = $("voice-build-skip");
-  if (skip) skip.classList.toggle("show",!!question && build.status !== "committed");
+  if (skip) {
+    skip.textContent = "Start lesson now";
+    skip.classList.toggle("show",!!question && build.status !== "committed" && build.plannerStatus === "ready");
+  }
   if (!question) {
     if (build.status !== "committed") {
       setVoiceStatus("planning");
@@ -7301,6 +7406,9 @@ async function applyTypedLessonBuildEnvelope(lesson, snapshot) {
   build.intentVersion = snapshot.build.intentVersion;
   build.intentFingerprint = snapshot.build.intentFingerprint;
   build.status = snapshot.build.status;
+  build.plannerStatus = snapshot.build.plannerStatus;
+  build.extractorStatus = snapshot.build.extractorStatus;
+  build.mappingStatus = snapshot.build.mappingStatus;
   build.canRetry = !!snapshot.work.canRetry;
   build.hasUncertain = !!snapshot.work.hasUncertain;
   build.providerConfigured = snapshot.work.providerConfigured !== false;
@@ -7448,7 +7556,7 @@ function flushQueuedTypedLessonBuildSubmission(lesson) {
   const build = typedLessonBuildState(lesson), pending = build && build.pendingSubmission;
   if (!build || !pending || !build.buildId || build.submitting) return null;
   const number = Number(pending.questionNumber);
-  if (number < 1 || number > 3) return null;
+  if (number < 1 || number > LESSON_BUILD_MAX_EXTRACTOR_QUESTIONS) return null;
   const key = `${lesson.id}:${pending.kind}:${number}`;
   if (lessonBuildActionTasks.has(key)) return lessonBuildActionTasks.get(key);
   build.submitting = true; delete build.lastError;
@@ -7478,7 +7586,11 @@ function flushQueuedTypedLessonBuildSubmission(lesson) {
   return task;
 }
 function submitTypedLessonBuildAnswer(lesson, answer) { return queueTypedLessonBuildSubmission(lesson,"answer",answer); }
-function skipTypedLessonBuildQuestion(lesson) { return queueTypedLessonBuildSubmission(lesson,"skip",""); }
+function skipTypedLessonBuildQuestion(lesson) {
+  const build = typedLessonBuildState(lesson);
+  if (!build || build.plannerStatus !== "ready") return null;
+  return queueTypedLessonBuildSubmission(lesson,"skip","");
+}
 async function retryTypedLessonBuild(lesson) {
   const build = typedLessonBuildState(lesson);
   if (!build || !build.buildId || !build.canRetry || build.hasUncertain) return;
@@ -7981,6 +8093,20 @@ function renderLessonPath(lesson) {
     : `${percent}% complete`;
   $("lesson-path-progress").innerHTML = `<span>${progressCopy}</span><span class="lesson-path-progress-track"><span class="lesson-path-progress-fill" style="--path-progress:${percent}%"></span></span><span>${progress.completedCount}/${progress.totalCount}</span>`;
   if (!nodes.length) {
+    const durableBuild = typedLessonBuildState(lesson);
+    if (durableBuild && durableBuild.status !== "committed") {
+      const durableProgress = typedLessonBuildProgress(lessonBuildSnapshots.get(lesson.id),durableBuild);
+      const paused = ["needs_attention","failed"].includes(durableBuild.status);
+      $("lesson-path-overview").textContent = paused
+        ? "The saved generation job paused before a trustworthy route was available. Your knowledge answers were not discarded."
+        : "The route is being built in the same saved generation job as your knowledge conversation.";
+      $("lesson-path-nodes").innerHTML = `<div class="lesson-path-empty"><strong>${paused ? "Lesson map paused" : "Building the map\u2026"}</strong><span>${esc(durableProgress.text)}</span>${durableBuild.canRetry && !durableBuild.hasUncertain ? `<button id="lesson-path-retry" type="button">Retry safely</button>` : `<button id="lesson-path-check" type="button">Check saved build</button>`}</div>`;
+      const retry = $("lesson-path-retry");
+      if (retry) retry.onclick = () => { retryTypedLessonBuild(lesson);renderLessonPath(lesson); };
+      const check = $("lesson-path-check");
+      if (check) check.onclick = () => { startTypedLessonBuild(lesson,{reopen:true});renderLessonPath(lesson); };
+      return;
+    }
     /* Two different waits used to look like one failure. `lessonPathMigrations`
        only tracks a RETRY of an existing lesson — a lesson being planned for
        the very first time is tracked by `lessonPlanning`, so opening the map on
@@ -8030,7 +8156,9 @@ function openLessonPath(id = currentLessonId) {
   $("lesson-path-backdrop").setAttribute("aria-hidden","false");
   $("lesson-path-panel").classList.add("open");
   $("lesson-path-panel").setAttribute("aria-hidden","false");
-  ensureUniqueLessonPath(lesson);
+  // Durable typed-topic lessons have one server-owned planner. Opening their
+  // path is a read/rejoin action and must never launch the legacy Opus planner.
+  if (!typedLessonUsesDurableBuild(lesson)) ensureUniqueLessonPath(lesson);
   requestAnimationFrame(() => {
     const current = $("lesson-path-nodes").querySelector(".lesson-path-node.current");
     if (current) current.scrollIntoView({block:"center",behavior:"smooth"});
