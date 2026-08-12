@@ -1305,7 +1305,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   body.voice-mode #view-chat #chat-input,
   body.voice-mode #view-chat #chat-send,
   body.voice-mode #view-chat #chat-mic { pointer-events:none; }
-  #voice-topbar { position:relative;flex:0 0 58px;height:58px;display:grid;grid-template-columns:96px minmax(0,1fr) 96px;align-items:center;padding:0 10px;z-index:4;pointer-events:none;background:color-mix(in srgb,var(--paper) 96%,transparent);border-bottom:1px solid rgba(44,36,28,.42); }
+  #voice-topbar { position:relative;flex:0 0 58px;height:58px;display:grid;grid-template-columns:48px minmax(0,1fr) auto;align-items:center;padding:0 10px;z-index:4;pointer-events:none;background:color-mix(in srgb,var(--paper) 96%,transparent);border-bottom:1px solid rgba(44,36,28,.42); }
   #voice-topbar > * { pointer-events:auto; }
   #voice-close {
     position: static; justify-self:start;
@@ -1314,7 +1314,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   }
   #voice-heading { min-width:0;text-align:center; }
   #voice-title { min-width:0;font:600 14px/1.2 system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
-  #voice-top-actions { justify-self:end;display:flex;gap:4px; }
+  #voice-top-actions { justify-self:end;display:flex;gap:3px; }
   #voice-history-button, #voice-path-button { width:42px;height:42px;background:color-mix(in srgb,var(--card) 72%,transparent); }
   #voice-scroll {
     flex: 1; min-height:0; overflow-y: auto; padding: 18px max(28px, calc((100% - 720px) / 2)) 24px;
@@ -1529,6 +1529,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       <button id="lesson-entry-voice" type="button">Use voice</button>
       <button id="lesson-entry-text" type="button">Use text</button>
     </div>
+    <button id="lesson-entry-cancel" type="button">Cancel</button>
     <div id="lesson-entry-mode-status" role="status" aria-live="polite"></div>
   </section>
 </div>
@@ -1928,11 +1929,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v75 · Aug 12";
+const BUILD = "v76 · Aug 12";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v76", date: "Aug 12", changes: [
+    "A rejected optional knowledge-diagnostic response can no longer stop your lesson map: your answer stays saved and the lesson continues.",
+    "Voice setup no longer reads prompts with the iPhone system voice, recording feedback stays stable while you talk, and the lesson controls no longer cover the title.",
+    "You can cancel the Voice or Text choice if you opened a lesson by accident.",
+  ] },
   { tag: "v75", date: "Aug 12", changes: [
     "Clarification now follows how you chose to learn: type your own direction alongside suggestions, or answer naturally by voice and ask for ideas only when you want them.",
     "Choosing the big picture keeps your original topic broad instead of quietly narrowing it to one suggested angle.",
@@ -5892,6 +5898,10 @@ function stopLessonIntakeSpokenAnswer() {
   if (recognition) { try { recognition.abort(); } catch (error) {} }
 }
 function speakLessonIntakePrompt(session, text, onend = null) {
+  /* Setup has no owned high-quality speech route yet. Keep the prompt visible
+     and let the learner speak, rather than forcing iPhone's system voice. */
+  return false;
+  /* istanbul ignore next -- retained provider-free fallback */
   if (!session || session.entryMode !== "voice" || session !== activeLessonIntake || session.settled
       || !window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") return false;
   try {
@@ -5954,7 +5964,7 @@ function beginLessonIntakeSpokenAnswer() {
     ui.voice.disabled = true;ui.voice.textContent = "Listening\u2026";
     ui.status.className = "";ui.status.textContent = session.voiceOptionsRevealed
       ? "Say an option number or explain your direction."
-      : "Answer in your own words, or say \u201cgive me options.\u201d";
+      : "Tell me what to focus on, or say \u201cgive me options.\u201d";
   };
   recognition.onresult = event => {
     if (session !== activeLessonIntake || session.settled) return;
@@ -6107,12 +6117,12 @@ function showLessonClarification(session, result) {
   ui.skip.hidden = false;ui.skip.textContent = "Start with the big picture";
   ui.status.textContent = session.entryMode === "voice"
     ? SR
-      ? (showOptions ? "Say an option number, answer in your own words, or use Text below." : "Answer in your own words. Say “give me options” if useful.")
+      ? (showOptions ? "Say an option number, or tell me what to focus on." : "Tell me what to focus on. Say “give me options” if useful.")
       : "Spoken setup is not available in this browser. Continue in Text, or start with the big picture."
     : "Choose one or write your own direction.";
   if (session.entryMode === "voice" && SR && session.voicePromptPresented !== questionNumber) {
     session.voicePromptPresented = questionNumber;
-    speakLessonIntakePrompt(session,`${result.focusedQuestion} Answer in your own words. Say give me options if you’d like suggestions.`);
+    speakLessonIntakePrompt(session,`${result.focusedQuestion} Say give me options if you’d like suggestions.`);
   }
 }
 function acceptLessonClarifierResult(session, raw) {
@@ -7534,6 +7544,7 @@ function renderTypedLessonBuildVoice(lesson, forceSpeak = false) {
     }
     return;
   }
+  if (voice.captureWanted || voice.captureEngine === "owned" || voice.mediaRecorder) return;
   setVoiceStatus(build.submitting ? "thinking" : "ready");
   const prior = lessonBuildVoicePresented.get(lesson.id);
   if (forceSpeak || prior !== question.number) {
@@ -10387,6 +10398,11 @@ function finishLessonEntryMode(choice) {
   setLessonEntryModeOpen(false);
   pending.resolve(choice);
 }
+function cancelLessonEntryMode() {
+  if (!lessonEntryModePending) return;
+  cleanupLessonEntryVoiceResources();
+  finishLessonEntryMode("");
+}
 function openLessonEntryMode(lessonId) {
   if (lessonEntryModePending) return lessonEntryModePending.promise;
   const supported = lessonEntryMicrophoneSupported() && voiceSupported();
@@ -10479,8 +10495,9 @@ function chooseLessonEntryText() {
 }
 $("lesson-entry-voice").addEventListener("click",chooseLessonEntryVoice);
 $("lesson-entry-text").addEventListener("click",chooseLessonEntryText);
+$("lesson-entry-cancel").addEventListener("click",cancelLessonEntryMode);
 $("lesson-entry-mode").addEventListener("keydown",event => {
-  if (event.key === "Escape") { event.preventDefault();chooseLessonEntryText(); }
+  if (event.key === "Escape") { event.preventDefault();cancelLessonEntryMode(); }
 });
 
 function ownedVoiceCaptureSupported() {
