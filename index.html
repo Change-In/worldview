@@ -306,6 +306,9 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     padding:max(10px,env(safe-area-inset-top)) 0 max(10px,env(safe-area-inset-bottom));
   }
   #direction.open { display:grid;grid-template-rows:auto minmax(0,1fr) auto; }
+  /* Focus is parked here in Voice mode so Space and Escape reach the dialog;
+     it is not a visible control, so it shows no focus ring. */
+  #direction:focus { outline:none; }
   #direction-bar {
     display:flex;align-items:center;justify-content:space-between;gap:10px;
     padding:2px 14px 8px;position:relative;z-index:2;
@@ -1601,7 +1604,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <!-- Direction conversation. Opens after Begin with a typed topic. Only the
      latest message is shown on purpose: there is no history to scroll back
      through. In Voice mode #direction-stage is the push-to-talk target. -->
-<div id="direction" role="dialog" aria-modal="true" aria-labelledby="direction-say" aria-hidden="true" inert>
+<div id="direction" role="dialog" aria-modal="true" aria-labelledby="direction-say" aria-hidden="true" tabindex="-1" inert>
   <div id="direction-bar">
     <button id="direction-cancel" type="button">Cancel</button>
     <span id="direction-topic"></span>
@@ -7063,7 +7066,16 @@ function directionSetMode(mode) {
   session.mode = mode === "voice" ? "voice" : "text";
   session.micHint = "Hold anywhere on the screen to talk.";
   directionRender();
-  if (session.mode === "text" && !session.settled) directionEls().input.focus();
+  directionFocus();
+}
+/* Voice mode focuses nothing on its own, so Space and Escape would never reach
+   the dialog's key handlers. Park focus on the root instead. */
+function directionFocus() {
+  const session = directionSession;
+  if (!session) return;
+  const els = directionEls();
+  if (session.mode === "text" && !session.settled) els.input.focus();
+  else els.root.focus({ preventScroll:true });
 }
 function closeDirection() {
   directionStopMic();
@@ -7089,7 +7101,7 @@ function openDirection(topic, mode = "voice") {
   els.send.disabled = false;
   directionSetOpen(true);
   directionRender();
-  if (directionSession.mode === "text") els.input.focus();
+  directionFocus();
 }
 (function wireDirection() {
   const stage = $("direction-stage");
