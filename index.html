@@ -331,7 +331,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #direction[data-mode="voice"][data-mic="on"] #direction-stage { cursor:grabbing; }
   #direction-say {
     margin:0;width:min(660px,100%);margin-inline:auto;color:var(--ink);
-    font:500 clamp(21px,5vw,32px)/1.4 Georgia,serif;
+    font:500 clamp(21px,5vw,32px)/1.4 Georgia,serif;white-space:pre-line;
   }
   #direction-angles { list-style:none;margin:0;padding:0;width:min(660px,100%);margin-inline:auto;display:grid;gap:9px; }
   #direction-angles:empty { display:none; }
@@ -6930,7 +6930,7 @@ function directionRender() {
     button.addEventListener("click",() => directionSubmit(angle.label));
     els.chips.appendChild(button);
   });
-  if (session.mode === "text" && set.angles.length > session.shown) {
+  if (session.mode === "text" && !session.settled && set.angles.length > session.shown) {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = "Show me other angles";
