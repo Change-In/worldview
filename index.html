@@ -295,6 +295,84 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   }
   #lesson-intake[data-entry-mode="voice"] #lesson-intake-skip { border-radius:999px; }
 
+  /* ---- Direction conversation (rebuild stage 1) ------------------------
+     The surface that opens after Begin with a typed topic. It is a short
+     spoken/typed conversation about what is worth learning, not a form.
+     Voice mode makes the WHOLE stage the push-to-talk target: only the thin
+     top bar is excluded, so there is no small button to aim at. Only the
+     latest message is shown — there is deliberately no scrollback. */
+  #direction {
+    position:fixed;inset:0;z-index:214;display:none;background:var(--paper);
+    padding:max(10px,env(safe-area-inset-top)) 0 max(10px,env(safe-area-inset-bottom));
+  }
+  #direction.open { display:grid;grid-template-rows:auto minmax(0,1fr) auto; }
+  #direction-bar {
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:2px 14px 8px;position:relative;z-index:2;
+  }
+  #direction-bar button {
+    min-height:38px;padding:7px 13px;border:0;border-radius:999px;background:transparent;
+    color:var(--ink-soft);font:650 12px/1.2 -apple-system,"Segoe UI",system-ui,sans-serif;cursor:pointer;
+  }
+  #direction-bar button:hover,#direction-bar button:focus-visible { background:var(--card);color:var(--ink); }
+  #direction-topic {
+    flex:1;min-width:0;text-align:center;color:var(--ink-soft);font-size:11px;font-weight:650;
+    letter-spacing:.09em;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  /* The hold target. touch-action/user-select keep a long press from turning
+     into a scroll, text selection, or the iOS callout menu. */
+  #direction-stage {
+    display:flex;flex-direction:column;justify-content:center;gap:18px;
+    padding:12px clamp(18px,5vw,34px);overflow-y:auto;
+  }
+  #direction[data-mode="voice"] #direction-stage {
+    touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;cursor:grab;
+  }
+  #direction[data-mode="voice"][data-mic="on"] #direction-stage { cursor:grabbing; }
+  #direction-say {
+    margin:0;width:min(660px,100%);margin-inline:auto;color:var(--ink);
+    font:500 clamp(21px,5vw,32px)/1.4 Georgia,serif;
+  }
+  #direction-angles { list-style:none;margin:0;padding:0;width:min(660px,100%);margin-inline:auto;display:grid;gap:9px; }
+  #direction-angles:empty { display:none; }
+  #direction-angles li { display:flex;gap:11px;align-items:baseline;color:var(--ink);font-size:clamp(15px,3.6vw,17px);line-height:1.45; }
+  #direction-angles li::before {
+    content:"";flex:0 0 auto;width:6px;height:6px;border-radius:50%;background:var(--accent);transform:translateY(-3px);
+  }
+  #direction[data-mode="text"] #direction-angles { display:none; }
+  #direction-chips { display:none;width:min(660px,100%);margin-inline:auto;gap:9px;grid-auto-rows:min-content; }
+  #direction[data-mode="text"] #direction-chips { display:grid; }
+  #direction-chips button {
+    min-height:47px;padding:11px 14px;border:1.5px solid var(--line);border-radius:13px;background:var(--card);
+    color:var(--ink);text-align:left;font:500 15px/1.4 -apple-system,"Segoe UI",system-ui,sans-serif;cursor:pointer;
+  }
+  #direction-chips button:hover,#direction-chips button:focus-visible { border-color:var(--accent); }
+  #direction-note {
+    width:min(660px,100%);margin-inline:auto;color:var(--ink-soft);font-size:13px;line-height:1.5;
+  }
+  #direction-note:empty { display:none; }
+  #direction-foot { padding:8px clamp(18px,5vw,34px) 4px;position:relative;z-index:2; }
+  #direction-compose { display:none;width:min(660px,100%);margin-inline:auto;gap:9px;grid-template-columns:minmax(0,1fr) auto; }
+  #direction[data-mode="text"] #direction-compose { display:grid; }
+  #direction-input {
+    width:100%;min-height:50px;border:1.5px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);
+    padding:13px 15px;font:400 16px/1.4 -apple-system,"Segoe UI",system-ui,sans-serif;outline:none;
+  }
+  #direction-input:focus { border-color:var(--accent);box-shadow:0 0 0 3px rgba(23,77,91,.1); }
+  #direction-send { min-height:50px;padding:0 20px;border:0;border-radius:14px;background:var(--accent);color:#fff;font:650 14px/1 -apple-system,system-ui,sans-serif;cursor:pointer; }
+  #direction-send:disabled { opacity:.45;cursor:default; }
+  /* Voice footer is a status readout, not a control: the screen is the control. */
+  #direction-mic { display:none;width:min(660px,100%);margin-inline:auto;align-items:center;gap:12px;min-height:50px; }
+  #direction[data-mode="voice"] #direction-mic { display:flex; }
+  #direction-dot {
+    flex:0 0 auto;width:11px;height:11px;border-radius:50%;background:var(--line);transition:background .18s,transform .18s;
+  }
+  #direction[data-mode="voice"][data-mic="on"] #direction-dot { background:var(--accent-700,#b3402a);transform:scale(1.5);animation:directionPulse 1.15s ease-in-out infinite; }
+  @keyframes directionPulse { 50% { opacity:.42; } }
+  #direction-mic-text { color:var(--ink-soft);font-size:13px;line-height:1.35; }
+  #direction[data-mode="voice"][data-mic="on"] #direction-mic-text { color:var(--ink);font-weight:650; }
+  @media (prefers-reduced-motion:reduce) { #direction-dot { animation:none!important;transition:none; } }
+
   /* Every lesson entry makes one explicit Voice/Text choice. The Voice button
      itself owns the browser permission gesture so the first recording can
      reuse the stream instead of asking again. */
@@ -1518,6 +1596,33 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     </div>
     <div id="lesson-intake-status" role="status" aria-live="polite"></div>
   </section>
+</div>
+
+<!-- Direction conversation. Opens after Begin with a typed topic. Only the
+     latest message is shown on purpose: there is no history to scroll back
+     through. In Voice mode #direction-stage is the push-to-talk target. -->
+<div id="direction" role="dialog" aria-modal="true" aria-labelledby="direction-say" aria-hidden="true" inert>
+  <div id="direction-bar">
+    <button id="direction-cancel" type="button">Cancel</button>
+    <span id="direction-topic"></span>
+    <button id="direction-swap" type="button">Type instead</button>
+  </div>
+  <div id="direction-stage">
+    <p id="direction-say"></p>
+    <ul id="direction-angles"></ul>
+    <div id="direction-chips"></div>
+    <p id="direction-note"></p>
+  </div>
+  <div id="direction-foot">
+    <div id="direction-compose">
+      <input id="direction-input" type="text" autocomplete="off" enterkeyhint="send" placeholder="Say what you're curious about…">
+      <button id="direction-send" type="button">Send</button>
+    </div>
+    <div id="direction-mic">
+      <span id="direction-dot" aria-hidden="true"></span>
+      <span id="direction-mic-text" role="status" aria-live="polite"></span>
+    </div>
+  </div>
 </div>
 
 <div id="lesson-entry-mode" role="dialog" aria-modal="true" aria-labelledby="lesson-entry-mode-title" aria-hidden="true">
@@ -6574,6 +6679,452 @@ async function beginLesson(topic, methodKey, starterText, parentId, sourceUrl, s
   return lesson;
 }
 
+/* DIRECTION_PURE_START
+   Rebuild stage 1: the conversation that runs after Begin with a typed topic.
+   Its job is to make the learner curious and find out which way they want to
+   go — not to interrogate them. These functions are dependency-free so
+   tools/direction-conversation.test.mjs can execute this exact block; there
+   must never be a second copy of this logic.
+
+   The advancement rule is the important part. The model (stage 2) will only
+   ever CLASSIFY a turn and propose a direction. Fixed code below decides
+   whether the conversation ends, so a learner asking a follow-up question or
+   asking for more ideas can never be shoved into a lesson they did not pick. */
+const DIRECTION_TURN_CAP = 8;
+const DIRECTION_FIRST_BATCH = 4;
+
+/* Stage 1 uses written angle sets so the interaction can be judged with zero
+   provider spend. Stage 2 replaces `angles` with one model call per topic and
+   keeps every function below unchanged. */
+const DIRECTION_SCRIPTS = {
+  terrafab:{
+    match:/\bterra\s?fab\b/i,
+    angles:[
+      { id:"scale", label:"what it takes to put up one of the biggest buildings on Earth",
+        more:"Foundations, steel, cooling, and the logistics of a site that size — the building is arguably the harder engineering problem than the chips." },
+      { id:"competition", label:"how it expects to compete with Taiwan's fabs",
+        more:"Taiwan's lead is decades of tooling, staff, and supplier density. Matching that is a very different problem from building a big factory." },
+      { id:"market", label:"what happens to chip supply and prices if it works",
+        more:"One enormous new supplier changes who depends on whom — that's a supply-and-demand story as much as an engineering one." },
+      { id:"space", label:"why space is supposedly the better place to make chips",
+        more:"Vacuum, temperature, and zero gravity each do something specific to chip fabrication. Whether that beats the cost of getting there is the real question." },
+      { id:"launch", label:"the launch system the whole plan leans on",
+        more:"None of it matters if you can't get mass up and product down cheaply and often. The launch cadence is the hidden constraint." },
+      { id:"power", label:"where the power and water for a fab that size come from" },
+      { id:"people", label:"who actually staffs something like this, and where they come from" },
+    ],
+  },
+  ramen:{
+    match:/\bramen\b/i,
+    angles:[
+      { id:"origins", label:"where it actually came from, and why that's still argued about",
+        more:"The Chinese-to-Japanese path is well documented; what people disagree on is when it stopped being a borrowed dish and became its own." },
+      { id:"broth", label:"what's going on in a broth that cooks for twelve hours",
+        more:"Collagen, emulsified fat, and slow protein breakdown — the texture is chemistry, not just time." },
+      { id:"instant", label:"how instant ramen took over supermarket shelves worldwide",
+        more:"Flash-frying, shelf life, and price per calorie turned it into one of the most successful food products ever made." },
+      { id:"regional", label:"why the regional styles split the way they did",
+        more:"Local ingredients and post-war supply shaped Sapporo, Hakata, and the rest into genuinely different dishes." },
+      { id:"shop", label:"what a ramen shop has to get right to survive",
+        more:"Thin margins, seat turnover, and a broth you can't rush make it a brutal small business." },
+      { id:"noodles", label:"what makes the noodle itself work — and why alkaline water matters" },
+      { id:"culture", label:"how it went from cheap fuel to something people queue an hour for" },
+    ],
+  },
+};
+/* Generic lenses for any other topic. Deliberately phrased as things a curious
+   person might wonder rather than as a syllabus, and they must read naturally
+   when the topic is dropped in. Stage 2 replaces these with real model output;
+   they exist so an unscripted topic still behaves correctly today. */
+function directionGenericAngles(topic) {
+  const t = String(topic || "").trim();
+  return [
+    { id:"origin", label:`where ${t} came from, and what problem it was solving` },
+    { id:"mechanism", label:`how ${t} actually works once you look underneath` },
+    { id:"wrong", label:`what most people get wrong about ${t}` },
+    { id:"matters", label:`why ${t} matters more than it first looks` },
+    { id:"future", label:`where ${t} seems to be heading next` },
+    { id:"compare", label:`how ${t} stacks up against the alternatives` },
+  ];
+}
+function directionAngleSet(topic) {
+  const clean = String(topic || "").replace(/\s+/g," ").trim();
+  for (const key of Object.keys(DIRECTION_SCRIPTS)) {
+    const script = DIRECTION_SCRIPTS[key];
+    if (script.match.test(clean)) return { topic:clean, angles:script.angles.slice(), scripted:true };
+  }
+  return { topic:clean, angles:directionGenericAngles(clean), scripted:false };
+}
+function directionNormalize(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9\s']+/g," ").replace(/\s+/g," ").trim();
+}
+const DIRECTION_BROAD = /^(no|nope|nah|not really|not sure|unsure|dunno|i dunno|i don't know|i dont know|no idea|no preference|anything|any|whatever|everything|all of it|all|general|generally|broad|overview|the basics|basics|surprise me|you pick|you choose)$/;
+const DIRECTION_START = /\b(let'?s (start|go|begin|do it)|start (it|now|the lesson)?|begin|go ahead|i'?m ready|ready|that'?s enough|good to go)\b/;
+const DIRECTION_MORE = /\b(more|other|others|another|else|different|alternatives?|options?|ideas?|suggestions?|like what|such as)\b/;
+const DIRECTION_AFFIRM = /^(yes|yeah|yep|yup|sure|ok|okay|that one|this one|that|sounds good|do that|go with that|let'?s do that|please|definitely)$/;
+const DIRECTION_QUESTION_OPENER = /^(what|why|how|when|where|who|which|is|are|does|do|can|could|would|should|will|tell me|explain)\b/;
+/* Scores how strongly a learner utterance points at one offered angle. Content
+   words only, so "the space one" still reaches the space angle. */
+function directionAngleScore(text, angle) {
+  const said = directionNormalize(text);
+  if (!said) return 0;
+  const saidWords = new Set(said.split(" "));
+  if (saidWords.has(directionNormalize(angle.id))) return 1;
+  const stop = new Set(["the","a","an","and","or","of","to","in","on","for","it","its","that","this","what","how","why","with","from","up","one","out","about","into","at","is","are","was","be","been","if","as","by","you","your","they","their","them","people","most","more","still","actually","really","just","like","does","do","did","can","could","would","should","when","where","who","which","than","then","there","here","have","has","had","get","gets","got","make","makes","made","take","takes","look","looks","first","next","own","other","some","any","all","not","no","yes","i","me","my","we","us","our"]);
+  const angleWords = directionNormalize(angle.label).split(" ").filter(word => word.length > 2 && !stop.has(word));
+  if (!angleWords.length) return 0;
+  const hits = angleWords.filter(word => saidWords.has(word)).length;
+  if (!hits) return 0;
+  /* Score both directions and keep the stronger one. "why space?" covers little
+     of the angle's wording but everything the learner actually said, and that
+     is plainly a choice — measuring only the angle side would miss it. */
+  const saidContent = said.split(" ").filter(word => word.length > 2 && !stop.has(word));
+  const saidCoverage = saidContent.length ? saidContent.filter(word => angleWords.includes(word)).length / saidContent.length : 0;
+  return Math.max(hits / angleWords.length,saidCoverage);
+}
+function directionBestAngle(text, angles) {
+  let best = null, bestScore = 0;
+  (angles || []).forEach(angle => {
+    const score = directionAngleScore(text,angle);
+    if (score > bestScore) { bestScore = score;best = angle; }
+  });
+  return bestScore >= 0.34 ? { angle:best, score:bestScore } : null;
+}
+/* One learner turn in, one classification out. This is exactly the shape the
+   stage-2 model call must return, so the surrounding code never changes. */
+function classifyDirectionTurn(text, angles, state = {}) {
+  const raw = String(text || "").trim();
+  const said = directionNormalize(raw);
+  if (!said) return { kind:"unclear" };
+  if (DIRECTION_AFFIRM.test(said)) {
+    return state.pendingAngleId ? { kind:"choose", angleId:state.pendingAngleId } : { kind:"unclear" };
+  }
+  if (DIRECTION_BROAD.test(said)) return { kind:"broad" };
+  const match = directionBestAngle(raw,angles);
+  const wantsMore = DIRECTION_MORE.test(said);
+  const marked = /\?\s*$/.test(raw);
+  /* "tell me more about the space one" names an angle but is a request to hear
+     about it, not a decision. Treat it as a question and stay in the
+     conversation — this is the exact premature-advance failure to avoid. */
+  if (match && wantsMore) return { kind:"question", angleId:match.angle.id };
+  if (match) {
+    /* The angles are themselves phrased as "how…" and "why…", so an
+       interrogative opening word cannot mean the learner is asking rather than
+       picking. Only an explicit question mark can, and even then a close
+       restatement ("why space?") is still a choice. */
+    return marked && match.score < 0.6
+      ? { kind:"question", angleId:match.angle.id }
+      : { kind:"choose", angleId:match.angle.id };
+  }
+  if (wantsMore) return { kind:"more" };
+  if (DIRECTION_START.test(said)) return { kind:"start" };
+  if (marked || DIRECTION_QUESTION_OPENER.test(said)) return { kind:"question" };
+  return said.split(" ").length >= 2 ? { kind:"choose", direction:raw } : { kind:"unclear" };
+}
+/* Fixed code owns advancement. A model classification is a proposal; only the
+   cases below may end the conversation. */
+function directionAdvance(state, turn) {
+  const turns = Number(state && state.turns || 0) + 1;
+  const kind = turn && turn.kind;
+  if (kind === "choose") return { settle:true, reason:"chosen", angleId:turn.angleId || "", direction:turn.direction || "", turns };
+  if (kind === "broad") return { settle:true, reason:"broad", angleId:"", direction:"", turns };
+  if (kind === "start") {
+    return state && state.pendingAngleId
+      ? { settle:true, reason:"chosen", angleId:state.pendingAngleId, direction:"", turns }
+      : { settle:true, reason:"broad", angleId:"", direction:"", turns };
+  }
+  /* Cost guard only, never shown as a quota. On reaching it the conversation
+     stops asking and offers the broad lesson rather than looping forever. */
+  if (turns >= DIRECTION_TURN_CAP) return { settle:true, reason:"cap", angleId:"", direction:"", turns };
+  return { settle:false, reason:kind || "unclear", angleId:turn && turn.angleId || "", direction:"", turns };
+}
+function directionAngleById(angles, id) {
+  return (angles || []).find(angle => angle.id === id) || null;
+}
+function directionOpeningLine(topic) {
+  return `Welcome to ${topic}. Anything in particular pulling at you, or want a few directions to react to?`;
+}
+function directionMultiLessonNote(shown) {
+  return shown >= 3
+    ? "Any one of these is big enough to be its own lesson — take whichever pulls hardest and the rest will still be here afterwards."
+    : "";
+}
+/* Builds the next thing shown on screen. Returns the message, which angles are
+   visible, and any angle now awaiting a yes/no. */
+function directionReply(state, turn, set) {
+  const angles = set.angles, topic = set.topic;
+  const shown = Number(state.shown || 0);
+  const kind = turn && turn.kind;
+  if (kind === "more") {
+    const next = Math.min(angles.length,shown + 3);
+    if (next <= shown) {
+      return { say:`That's everything worth pulling on for ${topic} — which one sounds most like your kind of question?`, shown, pendingAngleId:"" };
+    }
+    return { say:"A few more angles:", shown:next, pendingAngleId:"", note:directionMultiLessonNote(next) };
+  }
+  if (kind === "question") {
+    const angle = directionAngleById(angles,turn.angleId);
+    if (angle) {
+      const detail = angle.more || `That one looks at ${angle.label}.`;
+      return { say:`${detail} Want to take that direction?`, shown, pendingAngleId:angle.id };
+    }
+    return { say:`Good question — that's the sort of thing the lesson itself should answer. Which direction do you want it to start from?`, shown, pendingAngleId:"" };
+  }
+  return { say:`Say a bit more — what pulled you toward ${topic}?`, shown, pendingAngleId:"" };
+}
+/* The frozen result of the conversation. Stage 1 stops here: nothing after this
+   creates a lesson, a plan, or a provider call. */
+function directionOutcome(set, advance) {
+  const angle = directionAngleById(set.angles,advance.angleId);
+  return {
+    topic:set.topic,
+    mode:advance.reason === "chosen" ? "focused" : "broad",
+    angleId:angle ? angle.id : "",
+    direction:angle ? angle.label : String(advance.direction || ""),
+    turns:advance.turns,
+  };
+}
+/* DIRECTION_PURE_END */
+
+/* ---- Direction conversation UI ---------------------------------------
+   Whole-screen push-to-talk: the stage element is the control, so there is
+   nothing small to aim at. Only the latest message is rendered — there is no
+   scrollback by design. */
+let directionSession = null;
+function directionEls() {
+  return {
+    root:$("direction"), say:$("direction-say"), angles:$("direction-angles"), chips:$("direction-chips"),
+    note:$("direction-note"), topic:$("direction-topic"), input:$("direction-input"), send:$("direction-send"),
+    stage:$("direction-stage"), micText:$("direction-mic-text"), swap:$("direction-swap"),
+  };
+}
+function directionSetOpen(open) {
+  const root = $("direction");
+  root.classList.toggle("open",open);
+  root.setAttribute("aria-hidden",open ? "false" : "true");
+  if (open) root.removeAttribute("inert"); else root.setAttribute("inert","");
+}
+function directionMicLabel(text) {
+  const els = directionEls();
+  if (els.micText) els.micText.textContent = text;
+}
+function directionRender() {
+  const session = directionSession;
+  if (!session) return;
+  const els = directionEls(), set = session.set;
+  els.topic.textContent = set.topic;
+  els.say.textContent = session.say;
+  els.note.textContent = session.note || "";
+  const visible = set.angles.slice(0,session.shown);
+  els.angles.innerHTML = "";
+  visible.forEach(angle => {
+    const li = document.createElement("li");
+    li.textContent = angle.label;
+    els.angles.appendChild(li);
+  });
+  els.chips.innerHTML = "";
+  visible.forEach(angle => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = angle.label;
+    button.addEventListener("click",() => directionSubmit(angle.label));
+    els.chips.appendChild(button);
+  });
+  if (session.mode === "text" && set.angles.length > session.shown) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "Show me other angles";
+    button.addEventListener("click",() => directionSubmit("show me other angles"));
+    els.chips.appendChild(button);
+  }
+  els.root.dataset.mode = session.mode;
+  els.swap.textContent = session.mode === "voice" ? "Type instead" : "Talk instead";
+  if (session.mode === "voice") directionMicLabel(session.micHint || "Hold anywhere on the screen to talk.");
+}
+function directionSay(say, options = {}) {
+  if (!directionSession) return;
+  directionSession.say = say;
+  if ("shown" in options) directionSession.shown = options.shown;
+  if ("note" in options) directionSession.note = options.note;
+  directionSession.pendingAngleId = options.pendingAngleId || "";
+  directionRender();
+}
+/* One learner turn. Classification proposes; directionAdvance decides. */
+function directionSubmit(text) {
+  const session = directionSession;
+  if (!session || session.settled) return;
+  const value = String(text || "").trim();
+  if (!value) return;
+  const els = directionEls();
+  els.input.value = "";
+  const turn = classifyDirectionTurn(value,session.set.angles,session);
+  const advance = directionAdvance(session,turn);
+  session.turns = advance.turns;
+  if (advance.settle) { directionSettle(advance); return; }
+  const reply = directionReply(session,turn,session.set);
+  directionSay(reply.say,{
+    shown:"shown" in reply ? reply.shown : session.shown,
+    note:"note" in reply ? reply.note : session.note,
+    pendingAngleId:reply.pendingAngleId,
+  });
+}
+/* Stage 1 deliberately stops here. No lesson is created, nothing is planned,
+   and no provider call is made — this is the seam the next stage builds on. */
+function directionSettle(advance) {
+  const session = directionSession;
+  if (!session) return;
+  session.settled = true;
+  const outcome = directionOutcome(session.set,advance);
+  session.outcome = outcome;
+  directionStopMic();
+  const els = directionEls();
+  els.chips.innerHTML = "";
+  els.angles.innerHTML = "";
+  session.shown = 0;
+  const headline = outcome.mode === "focused"
+    ? `Good — we'll build ${session.set.topic} around ${outcome.direction}.`
+    : `Good — we'll take ${session.set.topic} broadly: what it is, why it matters, and how it works.`;
+  directionSay(`${headline}\n\nThat's as far as this build goes: the lesson itself isn't built yet.`,{ shown:0, note:"" });
+  els.root.dataset.mode = session.mode;
+  directionMicLabel("Direction locked.");
+  els.input.disabled = true;
+  els.send.disabled = true;
+  try { console.info("[direction] settled",JSON.stringify(outcome)); } catch (error) { /* preview aid only */ }
+}
+function directionStopMic() {
+  const session = directionSession;
+  $("direction").dataset.mic = "off";
+  if (!session) return;
+  session.holding = false;
+  const recognition = session.recognition;
+  session.recognition = null;
+  if (recognition) { try { recognition.onend = null;recognition.onresult = null;recognition.stop(); } catch (error) { /* already stopped */ } }
+}
+function directionSpeechSupport() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+function directionStartMic() {
+  const session = directionSession;
+  if (!session || session.settled || session.mode !== "voice" || session.holding) return;
+  const Recognition = directionSpeechSupport();
+  session.holding = true;
+  session.heard = "";
+  $("direction").dataset.mic = "on";
+  if (!Recognition) {
+    /* No recognition backend (every headless browser, some desktops). Say so
+       plainly instead of pretending to listen. */
+    directionMicLabel("Listening isn't available in this browser — use Type instead.");
+    return;
+  }
+  directionMicLabel("Listening… release to send.");
+  let recognition;
+  try { recognition = new Recognition(); } catch (error) { directionMicLabel("Listening isn't available here — use Type instead.");return; }
+  recognition.lang = "en-US";
+  recognition.interimResults = true;
+  recognition.continuous = true;
+  recognition.onresult = event => {
+    let text = "";
+    for (let index = 0; index < event.results.length; index++) text += `${event.results[index][0].transcript} `;
+    session.heard = text.trim();
+    if (session.holding && session.heard) directionMicLabel(session.heard);
+  };
+  recognition.onerror = () => { if (session.holding) directionMicLabel("Didn't catch that — hold and try again."); };
+  session.recognition = recognition;
+  try { recognition.start(); } catch (error) { /* a rapid re-hold can throw; the next hold recovers */ }
+}
+function directionReleaseMic() {
+  const session = directionSession;
+  if (!session || !session.holding) return;
+  session.holding = false;
+  $("direction").dataset.mic = "off";
+  const recognition = session.recognition;
+  session.recognition = null;
+  if (recognition) { try { recognition.onend = null;recognition.stop(); } catch (error) { /* already stopped */ } }
+  const heard = String(session.heard || "").trim();
+  session.heard = "";
+  if (!heard) {
+    directionMicLabel(directionSpeechSupport() ? "Nothing heard — hold anywhere and speak." : "Listening isn't available in this browser — use Type instead.");
+    return;
+  }
+  directionMicLabel("Hold anywhere on the screen to talk.");
+  directionSubmit(heard);
+}
+function directionSetMode(mode) {
+  const session = directionSession;
+  if (!session) return;
+  directionStopMic();
+  session.mode = mode === "voice" ? "voice" : "text";
+  session.micHint = "Hold anywhere on the screen to talk.";
+  directionRender();
+  if (session.mode === "text" && !session.settled) directionEls().input.focus();
+}
+function closeDirection() {
+  directionStopMic();
+  directionSession = null;
+  directionSetOpen(false);
+  const els = directionEls();
+  els.input.disabled = false;
+  els.send.disabled = false;
+  els.input.value = "";
+  if (typeof syncStartButton === "function") syncStartButton();
+}
+function openDirection(topic, mode = "voice") {
+  const set = directionAngleSet(topic);
+  if (!set.topic) return;
+  directionSession = {
+    set, mode:mode === "text" ? "text" : "voice", turns:0, shown:DIRECTION_FIRST_BATCH,
+    say:directionOpeningLine(set.topic), note:directionMultiLessonNote(DIRECTION_FIRST_BATCH),
+    pendingAngleId:"", settled:false, holding:false, heard:"", recognition:null,
+    micHint:"Hold anywhere on the screen to talk.",
+  };
+  const els = directionEls();
+  els.input.disabled = false;
+  els.send.disabled = false;
+  directionSetOpen(true);
+  directionRender();
+  if (directionSession.mode === "text") els.input.focus();
+}
+(function wireDirection() {
+  const stage = $("direction-stage");
+  /* Pointer events cover mouse, pen, and touch with one path. Pointer capture
+     means a finger sliding off the original element still releases correctly. */
+  stage.addEventListener("pointerdown",event => {
+    const session = directionSession;
+    if (!session || session.mode !== "voice" || session.settled) return;
+    if (event.button && event.button !== 0) return;
+    event.preventDefault();
+    try { stage.setPointerCapture(event.pointerId); } catch (error) { /* not fatal */ }
+    directionStartMic();
+  });
+  const release = event => {
+    const session = directionSession;
+    if (!session || session.mode !== "voice") return;
+    try { if (event.pointerId != null && stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId); } catch (error) { /* not fatal */ }
+    directionReleaseMic();
+  };
+  stage.addEventListener("pointerup",release);
+  stage.addEventListener("pointercancel",release);
+  stage.addEventListener("contextmenu",event => {
+    if (directionSession && directionSession.mode === "voice") event.preventDefault();
+  });
+  $("direction-send").addEventListener("click",() => directionSubmit($("direction-input").value));
+  $("direction-input").addEventListener("keydown",event => {
+    if (event.key === "Enter" && !event.shiftKey) { event.preventDefault();directionSubmit($("direction-input").value); }
+  });
+  $("direction-swap").addEventListener("click",() => directionSetMode(directionSession && directionSession.mode === "voice" ? "text" : "voice"));
+  $("direction-cancel").addEventListener("click",closeDirection);
+  $("direction").addEventListener("keydown",event => {
+    if (event.key === "Escape") { event.preventDefault();closeDirection(); }
+    /* Space is the desktop equivalent of holding the screen. */
+    if (event.code === "Space" && directionSession && directionSession.mode === "voice" && !event.repeat
+      && document.activeElement !== $("direction-input")) { event.preventDefault();directionStartMic(); }
+  });
+  $("direction").addEventListener("keyup",event => {
+    if (event.code === "Space" && directionSession && directionSession.mode === "voice"
+      && document.activeElement !== $("direction-input")) { event.preventDefault();directionReleaseMic(); }
+  });
+})();
+
 async function startLesson() {
   // guards against a double-call: the native button "onclick" and the
   // coordinate-based tap resolution in wheelGestures can both fire for the
@@ -6582,10 +7133,13 @@ async function startLesson() {
   if (!topic) return;
   if (Date.now() - (startLesson._t || 0) < 500) return;
   startLesson._t = Date.now();
-  const method = METHODS[methodIdx];
-  const started = await beginLesson(topic, method.key, method.starter(topic));
+  /* Rebuild stage 1: a typed topic now opens the direction conversation
+     instead of going straight into lesson creation. Everything before this
+     point — Home, the carousel, the topic field — is unchanged, and every
+     other caller of beginLesson (Explore cards, sources, uploads) still
+     takes the original path. */
+  openDirection(topic,"voice");
   $("topic-input").value = "";
-  if (started === null) $("topic-input").value = topic;
   syncStartButton();
 }
 
