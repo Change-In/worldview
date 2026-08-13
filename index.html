@@ -2034,11 +2034,18 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v77 · Aug 12";
+const BUILD = "v78 · Aug 13";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v78", date: "Aug 13", changes: [
+    "Review build — the lesson opening is being rebuilt from scratch, one stage at a time. This stage is the conversation only.",
+    "Typing a topic now opens with a welcome and a few things about it genuinely worth being curious about, instead of asking you what you want. Where the angles are big, it says any one of them could be its own lesson.",
+    "Ask for more ideas, ask a follow-up, or say something vague and it keeps talking. It only moves on when you actually pick a direction, say you have no preference, or say let's start.",
+    "In voice, hold anywhere on the screen to talk and let go to send — no small button, no toggle. Only the latest message is shown.",
+    "Known and deliberate: typing a topic stops at the chosen direction. No lesson is built yet, and nothing is charged. Your saved lessons still open normally.",
+  ] },
   { tag: "v77", date: "Aug 12", changes: [
     "Lesson maps can now actually finish building. The map used to be requested in one oversized piece that ran out of room and time before it could come back, which is why generation kept ending in \"needs your attention\".",
     "Your lesson path is now built as a short outline first, then one checkpoint at a time in parallel, so a full lesson comes back in about a minute.",
