@@ -68,20 +68,36 @@
       <li><span>6</span><b>Final explanation</b><small>Feynman measure</small></li>
     </ol>
 
-    <div class="pipeline-stage-grid">
-      <section class="lab-card pipeline-experience" aria-labelledby="clarification-experience-title">
+    <div class="clarification-workspace-bar">
+      <div class="clarification-view-switch" role="tablist" aria-label="Clarification Lab view">
+        <button id="clarification-view-learner" class="clarification-view-option is-active" type="button" role="tab" aria-selected="true" aria-controls="clarification-learner-panel">Learner view</button>
+        <button id="clarification-view-backend" class="clarification-view-option" type="button" role="tab" aria-selected="false" aria-controls="clarification-backend-panel">Backend view</button>
+      </div>
+      <button id="clarification-new" class="button button-quiet" type="button">New run</button>
+    </div>
+
+    <div class="pipeline-stage-grid clarification-workspace">
+      <section id="clarification-learner-panel" class="lab-card pipeline-experience" role="tabpanel" aria-labelledby="clarification-view-learner">
         <div class="pipeline-card-head">
-          <div><p class="eyebrow">Learner experience</p><h3 id="clarification-experience-title">Clarification</h3></div>
-          <button id="clarification-new" class="button button-quiet" type="button">New run</button>
+          <div><p class="eyebrow">Learner rehearsal</p><h3 id="clarification-experience-title">Worldview</h3></div>
+          <span class="clarification-rehearsal-badge">real model run</span>
         </div>
 
         <div id="clarification-setup" class="clarification-setup">
+          <div class="clarification-home-copy"><p class="eyebrow">Start a lesson</p><h3>What do you want to understand?</h3><p>Enter a topic, then follow the same clarification path a learner will see.</p></div>
           <label for="clarification-topic">What do you want to learn?</label>
           <textarea id="clarification-topic" rows="3" maxlength="500" placeholder="Ramen&#10;How vaccines train the immune system&#10;Why cities develop where they do"></textarea>
+          <button id="clarification-start" class="clarification-start" type="button">Start lesson</button>
           <p class="privacy-note">Use a synthetic topic while testing. The model conversation and its exact packet are retained in the owner-only Lab job history.</p>
+          <div id="clarification-mode-step" class="clarification-mode-step" hidden>
+            <button id="clarification-mode-back" class="clarification-cancel" type="button">Back</button>
+            <p class="eyebrow">How would you like to talk?</p>
+            <h3>Voice or text?</h3>
+            <p>Voice asks for microphone access now, before the conversation begins.</p>
           <div class="clarification-mode-grid">
             <button id="clarification-voice" class="clarification-mode" type="button"><strong>Voice</strong><span>Allow the mic now, then hold anywhere to talk.</span></button>
             <button id="clarification-text" class="clarification-mode" type="button"><strong>Text</strong><span>Have the same conversation by typing.</span></button>
+          </div>
           </div>
           <p id="clarification-setup-message" class="form-message" role="status"></p>
         </div>
@@ -114,10 +130,20 @@
         </div>
       </section>
 
-      <section class="lab-card pipeline-inspector" aria-labelledby="clarification-inspector-title">
+      <section id="clarification-backend-panel" class="lab-card pipeline-inspector" role="tabpanel" aria-labelledby="clarification-view-backend" hidden>
         <div class="pipeline-card-head">
-          <div><p class="eyebrow">Backend inspector</p><h3 id="clarification-inspector-title">Prompt + output</h3></div>
+          <div><p class="eyebrow">Backend inspector</p><h3 id="clarification-inspector-title">Run + inspect the same conversation</h3></div>
           <span id="clarification-job-status" class="job-status">not run</span>
+        </div>
+        <div class="clarification-backend-runner">
+          <label for="clarification-backend-topic">Test topic</label>
+          <div class="clarification-backend-launch">
+            <input id="clarification-backend-topic" type="text" maxlength="500" placeholder="What do you want to learn?">
+            <button id="clarification-backend-text" class="button button-primary" type="button">Run as text</button>
+            <button id="clarification-backend-voice" class="button button-quiet" type="button">Run as voice</button>
+          </div>
+          <p class="privacy-note">These controls start the same learner conversation. Switching views never resets or repeats the run.</p>
+          <p id="clarification-backend-message" class="form-message" role="status"></p>
         </div>
         <label for="clarification-provider">Model route</label>
         <div class="clarification-model-row">

@@ -319,6 +319,7 @@ const labState = {
   speechCancel: null,
   speechCancelled: false,
   clarification: {
+    view: "learner",
     runId: "",
     topic: "",
     mode: "",
@@ -328,6 +329,7 @@ const labState = {
     latestRaw: "",
     latestPacket: null,
     latestJobId: "",
+    runError: "",
     finalized: null,
     finalizedStorage: "",
     busy: false,
@@ -2929,11 +2931,58 @@ function setClarificationBusy(busy, label = "") {
   q("clarification-waiting").hidden = !busy;
   q("clarification-latest").hidden = busy;
   q("clarification-directions").hidden = busy;
-  for (const id of ["clarification-send", "clarification-done", "clarification-new", "clarification-fork"]) {
+  for (const id of ["clarification-send", "clarification-done", "clarification-new", "clarification-fork", "clarification-backend-text", "clarification-backend-voice"]) {
     if (q(id)) q(id).disabled = busy || (id === "clarification-done" && (!state.latest?.ready_to_finish || state.learnerReplyCount < 1));
   }
-  q("clarification-job-status").textContent = busy ? (label || "running") : (state.latestJobId ? "saved" : "not run");
-  q("clarification-job-status").className = `job-status ${busy ? "is-pending" : (state.latestJobId ? "is-complete" : "")}`;
+  q("clarification-job-status").textContent = busy ? (label || "running") : (state.runError ? "failed" : (state.latestJobId ? "saved" : "not run"));
+  q("clarification-job-status").className = `job-status ${busy ? "is-pending" : (state.runError ? "is-failed" : (state.latestJobId ? "is-complete" : ""))}`;
+}
+
+function setClarificationView(view) {
+  const next = view === "backend" ? "backend" : "learner";
+  labState.clarification.view = next;
+  document.body.classList.toggle("clarification-learner-active", next === "learner" && !q("panel-pipeline").hidden);
+  const learner = q("clarification-learner-panel");
+  const backend = q("clarification-backend-panel");
+  learner.hidden = next !== "learner";
+  backend.hidden = next !== "backend";
+  for (const name of ["learner", "backend"]) {
+    const button = q(`clarification-view-${name}`);
+    const active = name === next;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", String(active));
+  }
+}
+
+function syncClarificationTopic(sourceId) {
+  const source = q(sourceId);
+  const target = q(sourceId === "clarification-topic" ? "clarification-backend-topic" : "clarification-topic");
+  if (source && target && target.value !== source.value) target.value = source.value;
+}
+
+function showClarificationModeStep() {
+  const topic = clip(q("clarification-topic").value, 500);
+  if (!topic) {
+    setMessage("clarification-setup-message", "Add the thing you want to learn first.", "error");
+    q("clarification-topic").focus();
+    return;
+  }
+  syncClarificationTopic("clarification-topic");
+  setMessage("clarification-setup-message", "");
+  q("clarification-setup").classList.add("is-mode-choice");
+  q("clarification-mode-step").hidden = false;
+  q("clarification-voice").focus();
+}
+
+function hideClarificationModeStep() {
+  q("clarification-setup").classList.remove("is-mode-choice");
+  q("clarification-mode-step").hidden = true;
+  q("clarification-start").focus();
+}
+
+function setClarificationLaunchError(message) {
+  setMessage("clarification-setup-message", message, "error");
+  setMessage("clarification-backend-message", message, "error");
 }
 
 function resetClarificationRun(seed = "") {
@@ -2944,12 +2993,15 @@ function resetClarificationRun(seed = "") {
   if (state.micStream) for (const track of state.micStream.getTracks()) track.stop();
   Object.assign(state, {
     runId: "", topic: seed || "", mode: "", turns: [], learnerReplyCount: 0,
-    latest: null, latestRaw: "", latestPacket: null, latestJobId: "", finalized: null, finalizedStorage: "",
+    latest: null, latestRaw: "", latestPacket: null, latestJobId: "", runError: "", finalized: null, finalizedStorage: "",
     busy: false, micStream: null, recorder: null, recorderChunks: [], recordingStartedAt: 0,
     recordingPromise: null, audioPrimed: false, voiceAudio: null, voiceSpeechCancel: null,
   });
   q("clarification-topic").value = seed || "";
+  q("clarification-backend-topic").value = seed || "";
   q("clarification-setup").hidden = false;
+  q("clarification-setup").classList.remove("is-mode-choice");
+  q("clarification-mode-step").hidden = true;
   q("clarification-conversation").hidden = true;
   q("clarification-complete").hidden = true;
   q("clarification-latest").replaceChildren();
@@ -2962,6 +3014,8 @@ function resetClarificationRun(seed = "") {
   q("clarification-job-status").className = "job-status";
   setMessage("clarification-message", "");
   setMessage("clarification-setup-message", "");
+  setMessage("clarification-backend-message", "");
+  setClarificationView("learner");
 }
 
 function restoreClarificationArtifact(artifact, storage = "device") {
@@ -2969,6 +3023,8 @@ function restoreClarificationArtifact(artifact, storage = "device") {
   labState.clarification.finalized = artifact;
   labState.clarification.finalizedStorage = storage;
   labState.clarification.topic = artifact.topic || "";
+  q("clarification-topic").value = artifact.topic || "";
+  q("clarification-backend-topic").value = artifact.topic || "";
   q("clarification-setup").hidden = true;
   q("clarification-conversation").hidden = true;
   q("clarification-complete").hidden = false;
@@ -2988,7 +3044,7 @@ async function refreshClarificationArtifacts() {
     restoreClarificationArtifact(latest.artifact, "server");
     persistClarificationSettings();
   } catch (error) {
-    setMessage("clarification-setup-message", `Saved pipeline outputs could not be restored: ${error.message}`, "error");
+    logFlow("Optional clarification artifact sync is unavailable", clip(error.message || "device fallback remains available", 160));
   }
 }
 
@@ -2999,6 +3055,7 @@ function initializeClarification() {
   renderClarificationModels();
   if (saved.model && [...q("clarification-model").options].some((option) => option.value === saved.model)) q("clarification-model").value = saved.model;
   if (saved.finalized) restoreClarificationArtifact(saved.finalized, saved.finalizedStorage || "device");
+  setClarificationView("learner");
 }
 
 async function primeClarificationAudio() {
@@ -3115,7 +3172,12 @@ async function runClarificationModel() {
   if (state.busy) return;
   let packet;
   try { packet = clarificationRequestPacket(); }
-  catch (error) { setMessage("clarification-message", error.message, "error"); return; }
+  catch (error) {
+    const message = error.message || "The clarification request could not be prepared.";
+    setMessage("clarification-message", message, "error");
+    setMessage("clarification-backend-message", message, "error");
+    return;
+  }
   const firstTurn = state.turns.filter((turn) => turn.role === "assistant").length === 0;
   const idempotencyKey = makeId();
   const request = {
@@ -3144,6 +3206,8 @@ async function runClarificationModel() {
   q("clarification-packet").textContent = JSON.stringify(packet, null, 2);
   const started = performance.now();
   try {
+    state.runError = "";
+    setMessage("clarification-backend-message", "The real model turn is running. You can switch views without interrupting it.");
     const created = await labJobsFetch(request);
     if (!created?.job?.id) throw new Error("The server did not return a saved job id.");
     state.latestJobId = created.job.id;
@@ -3156,13 +3220,18 @@ async function runClarificationModel() {
     const output = parseClarificationOutput(raw, firstTurn);
     state.turns.push({ role: "assistant", content: JSON.stringify(output) });
     renderClarificationOutput(output, raw, detail, packet, Math.round(performance.now() - started));
+    state.runError = "";
     setMessage("clarification-message", output.ready_to_finish ? "You can keep talking or choose Done when the scope feels right." : "Keep talking to shape the lesson direction.", "ok");
+    setMessage("clarification-backend-message", "Run completed. The prompt, exact request, raw reply, and validated output below all belong to this learner turn.", "ok");
     if (state.mode === "voice") {
       try { await playClarificationSpeech(clarificationSpeechText(output)); }
       catch (error) { setMessage("clarification-message", `The reply is visible, but speech did not play: ${error.message}`, "error"); }
     }
   } catch (error) {
-    setMessage("clarification-message", error.message || "This clarification turn failed.", "error");
+    const message = error.message || "This clarification turn failed.";
+    state.runError = message;
+    setMessage("clarification-message", `The clarification model could not answer: ${message}`, "error");
+    setMessage("clarification-backend-message", message, "error");
     q("clarification-job-status").textContent = state.latestJobId ? "needs review" : "failed";
     q("clarification-job-status").className = "job-status is-failed";
   } finally {
@@ -3172,9 +3241,9 @@ async function runClarificationModel() {
 }
 
 async function startClarification(mode) {
-  if (labState.preview) { setMessage("clarification-setup-message", "Preview mode shows the interface only. Open the protected Lab for real model, voice, and saved-job testing.", "error"); return; }
+  if (labState.preview) { setClarificationLaunchError("Preview mode shows the interface only. Open the protected Lab for real model, voice, and saved-job testing."); return; }
   const topic = clip(q("clarification-topic").value, 500);
-  if (!topic) { setMessage("clarification-setup-message", "Add the thing you want to learn first.", "error"); return; }
+  if (!topic) { setClarificationLaunchError("Add the thing you want to learn first."); return; }
   const state = labState.clarification;
   state.runId = makeId();
   state.topic = topic;
@@ -3182,21 +3251,25 @@ async function startClarification(mode) {
   state.turns = [{ role: "user", content: `The learner entered this topic: ${topic}\nThis is the first clarification turn.` }];
   state.learnerReplyCount = 0;
   state.latest = null;
+  state.runError = "";
   state.finalized = null;
   if (mode === "voice") {
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
-      setMessage("clarification-setup-message", "This browser does not expose microphone recording. Use Text on this device.", "error");
+      setClarificationLaunchError("This browser does not expose microphone recording. Use Text on this device.");
       return;
     }
     try {
       await primeClarificationAudio();
       state.micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
     } catch (error) {
-      setMessage("clarification-setup-message", `Microphone access was not granted: ${error.message || "use Text instead"}`, "error");
+      setClarificationLaunchError(`Microphone access was not granted: ${error.message || "use Text instead"}`);
       return;
     }
   }
+  setMessage("clarification-backend-message", "");
+  q("clarification-backend-topic").value = topic;
   q("clarification-setup").hidden = true;
+  q("clarification-mode-step").hidden = true;
   q("clarification-complete").hidden = true;
   q("clarification-conversation").hidden = false;
   q("clarification-mode-label").textContent = mode === "voice" ? "Voice conversation" : "Text conversation";
@@ -3317,6 +3390,22 @@ async function finishClarification() {
 }
 
 function bindClarificationEvents() {
+  q("clarification-view-learner").addEventListener("click", () => setClarificationView("learner"));
+  q("clarification-view-backend").addEventListener("click", () => setClarificationView("backend"));
+  q("clarification-topic").addEventListener("input", () => syncClarificationTopic("clarification-topic"));
+  q("clarification-backend-topic").addEventListener("input", () => syncClarificationTopic("clarification-backend-topic"));
+  q("clarification-start").addEventListener("click", showClarificationModeStep);
+  q("clarification-mode-back").addEventListener("click", hideClarificationModeStep);
+  q("clarification-backend-text").addEventListener("click", async () => {
+    syncClarificationTopic("clarification-backend-topic");
+    setClarificationView("learner");
+    await startClarification("text");
+  });
+  q("clarification-backend-voice").addEventListener("click", async () => {
+    syncClarificationTopic("clarification-backend-topic");
+    setClarificationView("learner");
+    await startClarification("voice");
+  });
   q("clarification-provider").addEventListener("change", renderClarificationModels);
   q("clarification-prompt-reset").addEventListener("click", () => { q("clarification-prompt").value = CLARIFICATION_PROMPT; setMessage("clarification-prompt-message", "Restored the built-in prompt. Save it if you want this draft to persist.", "ok"); });
   q("clarification-prompt-save").addEventListener("click", () => {
@@ -3352,6 +3441,7 @@ function activateTab(tab) {
     panel.hidden = !active;
     panel.classList.toggle("is-active", active);
   }
+  document.body.classList.toggle("clarification-learner-active", tab === "pipeline" && labState.clarification.view === "learner");
   if (tab === "results") renderLatencyDashboard();
 }
 

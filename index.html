@@ -2037,11 +2037,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v80 · Aug 14";
+const BUILD = "v81 · Aug 14";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v81", date: "Aug 14", changes: [
+    "Clarification in the Developer Lab is now a real learner rehearsal: enter a topic, tap Start lesson, choose Voice or Text, and run the live model conversation.",
+    "Learner view and Backend view are two views of the same run, so you can switch between the exact user screen and its editable prompt, request packet, raw reply, validated output, timing, tokens, and cost.",
+    "The backend view can start the same Text or Voice rehearsal directly, and an unavailable optional saved-output sync no longer looks like a failed clarification run.",
+  ] },
   { tag: "v80", date: "Aug 14", changes: [
     "The Developer lab button is visible on Home again, so the protected component workshop can be opened directly on phone or laptop.",
     "The Lab still requires its owner access code; making the launcher visible does not reveal prompts, jobs, or provider controls.",
