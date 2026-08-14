@@ -2037,11 +2037,17 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v78 · Aug 13";
+const BUILD = "v79 · Aug 13";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v79", date: "Aug 13", changes: [
+    "Owner Lab release — the learner-facing lesson opening remains unchanged while its parts are rebuilt and tested separately.",
+    "The Lab now shows the full connected lesson pipeline, with a working Clarification stage and intentionally inactive later stages.",
+    "Clarification is a real Voice or Text model conversation: it offers three topic-specific directions, accepts combined or new directions, speaks replies, and freezes the exact scope only when Done is chosen.",
+    "Every model turn is retained in the private Lab job history; the approved scope is saved on the test device until the server artifact upgrade is deployed.",
+  ] },
   { tag: "v78", date: "Aug 13", changes: [
     "Review build — the lesson opening is being rebuilt from scratch, one stage at a time. This stage is the conversation only.",
     "Typing a topic now opens with a welcome and a few things about it genuinely worth being curious about, instead of asking you what you want. Where the angles are big, it says any one of them could be its own lesson.",

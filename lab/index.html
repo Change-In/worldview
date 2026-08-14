@@ -42,7 +42,8 @@
   </section>
 
   <nav class="lab-tabs" role="tablist" aria-label="Learner workflow and advanced Lab benches">
-    <button class="lab-tab is-active" id="tab-scenario" type="button" role="tab" aria-selected="true" aria-controls="panel-scenario" data-tab="scenario"><span>1</span>Question Map</button>
+    <button class="lab-tab is-active" id="tab-pipeline" type="button" role="tab" aria-selected="true" aria-controls="panel-pipeline" data-tab="pipeline"><span>1</span>Lesson Pipeline</button>
+    <button class="lab-tab" id="tab-scenario" type="button" role="tab" aria-selected="false" aria-controls="panel-scenario" data-tab="scenario"><span>2</span>Question Map</button>
     <button class="lab-tab" id="tab-lesson" type="button" role="tab" aria-selected="false" aria-controls="panel-lesson" data-tab="lesson"><span>2</span>Lesson Lab</button>
     <button class="lab-tab" id="tab-stt" type="button" role="tab" aria-selected="false" aria-controls="panel-stt" data-tab="stt"><span>3</span>Transcription</button>
     <button class="lab-tab" id="tab-tutor" type="button" role="tab" aria-selected="false" aria-controls="panel-tutor" data-tab="tutor"><span>4</span>Tutor</button>
@@ -52,7 +53,103 @@
     <button class="lab-tab lab-tab-secondary" id="tab-brain" type="button" role="tab" aria-selected="false" aria-controls="panel-brain" data-tab="brain">Advanced: Brain</button>
   </nav>
 
-  <section id="panel-scenario" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-scenario" data-panel="scenario">
+  <section id="panel-pipeline" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-pipeline" data-panel="pipeline">
+    <div class="bench-head pipeline-head">
+      <div><p class="eyebrow">Component workshop</p><h2>Lesson Pipeline</h2></div>
+      <p class="bench-note">Test one phase as the learner experiences it, then inspect the exact packet behind it. Only Clarification is active in this build.</p>
+    </div>
+
+    <ol class="pipeline-rail" aria-label="Lesson pipeline stages">
+      <li class="is-active"><span>1</span><b>Clarification</b><small>working</small></li>
+      <li><span>2</span><b>Knowledge extraction</b><small>Feynman diagnostic</small></li>
+      <li><span>3</span><b>Map + checkpoints</b><small>graph beneath one mission</small></li>
+      <li><span>4</span><b>Lesson opening</b><small>converge both inputs</small></li>
+      <li><span>5</span><b>Lesson conversation</b><small>Socratic repair</small></li>
+      <li><span>6</span><b>Final explanation</b><small>Feynman measure</small></li>
+    </ol>
+
+    <div class="pipeline-stage-grid">
+      <section class="lab-card pipeline-experience" aria-labelledby="clarification-experience-title">
+        <div class="pipeline-card-head">
+          <div><p class="eyebrow">Learner experience</p><h3 id="clarification-experience-title">Clarification</h3></div>
+          <button id="clarification-new" class="button button-quiet" type="button">New run</button>
+        </div>
+
+        <div id="clarification-setup" class="clarification-setup">
+          <label for="clarification-topic">What do you want to learn?</label>
+          <textarea id="clarification-topic" rows="3" maxlength="500" placeholder="Ramen&#10;How vaccines train the immune system&#10;Why cities develop where they do"></textarea>
+          <p class="privacy-note">Use a synthetic topic while testing. The model conversation and its exact packet are retained in the owner-only Lab job history.</p>
+          <div class="clarification-mode-grid">
+            <button id="clarification-voice" class="clarification-mode" type="button"><strong>Voice</strong><span>Allow the mic now, then hold anywhere to talk.</span></button>
+            <button id="clarification-text" class="clarification-mode" type="button"><strong>Text</strong><span>Have the same conversation by typing.</span></button>
+          </div>
+          <p id="clarification-setup-message" class="form-message" role="status"></p>
+        </div>
+
+        <div id="clarification-conversation" class="clarification-conversation" hidden>
+          <div class="clarification-status-row"><span id="clarification-mode-label">Voice</span><span id="clarification-run-label"></span></div>
+          <div id="clarification-surface" class="clarification-surface" tabindex="0" aria-label="Hold anywhere in this area to talk">
+            <div id="clarification-waiting" class="clarification-waiting" hidden><span></span><p>Finding useful directions…</p></div>
+            <div id="clarification-latest" class="clarification-latest" aria-live="polite"></div>
+            <ul id="clarification-directions" class="clarification-directions"></ul>
+            <p id="clarification-ptt-hint" class="clarification-ptt-hint">Hold anywhere on this screen to talk.</p>
+          </div>
+          <div id="clarification-text-controls" class="clarification-text-controls" hidden>
+            <label class="sr-only" for="clarification-reply">Your reply</label>
+            <textarea id="clarification-reply" rows="2" maxlength="1200" placeholder="Tell it what interests you, combine directions, or ask for different ideas."></textarea>
+            <button id="clarification-send" class="button button-primary" type="button">Send</button>
+          </div>
+          <button id="clarification-done" class="clarification-done" type="button" disabled>Done</button>
+          <p id="clarification-message" class="form-message" role="status"></p>
+        </div>
+
+        <div id="clarification-complete" class="clarification-complete" hidden>
+          <p class="eyebrow">Saved clarification output</p>
+          <h4>Exact lesson scope</h4>
+          <p id="clarification-scope"></p>
+          <div id="clarification-scope-items" class="scope-items"></div>
+          <p id="clarification-storage-note" class="form-message" role="status"></p>
+          <p class="privacy-note">This frozen output is the input future extraction and lesson-map stages will consume. Start a new run to create an editable fork; this result stays unchanged.</p>
+          <button id="clarification-fork" class="button button-primary" type="button">Fork into a new run</button>
+        </div>
+      </section>
+
+      <section class="lab-card pipeline-inspector" aria-labelledby="clarification-inspector-title">
+        <div class="pipeline-card-head">
+          <div><p class="eyebrow">Backend inspector</p><h3 id="clarification-inspector-title">Prompt + output</h3></div>
+          <span id="clarification-job-status" class="job-status">not run</span>
+        </div>
+        <label for="clarification-provider">Model route</label>
+        <div class="clarification-model-row">
+          <select id="clarification-provider">
+            <option value="anthropic">Claude</option><option value="google">Gemini</option><option value="openai">ChatGPT</option><option value="xai">Grok</option>
+          </select>
+          <select id="clarification-model"></select>
+        </div>
+        <label for="clarification-prompt">Editable system prompt</label>
+        <textarea id="clarification-prompt" class="packet-editor" rows="18" maxlength="18000" spellcheck="false"></textarea>
+        <div class="inline-actions"><button id="clarification-prompt-reset" class="button button-quiet" type="button">Reset prompt</button><button id="clarification-prompt-save" class="button button-quiet" type="button">Save draft on this device</button></div>
+        <p id="clarification-prompt-message" class="form-message"></p>
+        <details open><summary>Validated output</summary><pre id="clarification-validated">No output yet.</pre></details>
+        <details><summary>Raw model response</summary><pre id="clarification-raw">No output yet.</pre></details>
+        <details><summary>Exact request packet</summary><pre id="clarification-packet">No request yet.</pre></details>
+        <div id="clarification-metrics" class="clarification-metrics"><span>Latency —</span><span>Tokens —</span><span>Cost —</span></div>
+      </section>
+    </div>
+
+    <section class="pipeline-placeholders" aria-labelledby="pipeline-next-title">
+      <div class="card-heading"><div><p class="eyebrow">Connected stages</p><h3 id="pipeline-next-title">What follows this output</h3></div><span class="cost-warning">Visible, intentionally inactive</span></div>
+      <div class="placeholder-grid">
+        <article><span>2</span><h4>Knowledge extraction</h4><p>Feynman-style diagnostic from general understanding to specifics. It does not teach. Demonstrated knowledge can satisfy lesson checkpoints, but must be explained again in the final assessment.</p></article>
+        <article><span>3</span><h4>Map + checkpoints</h4><p>Build a branching graph of fundamentals and dependencies while presenting one active mission at a time. Starts in parallel with extraction after Clarification is frozen.</p></article>
+        <article><span>4</span><h4>Lesson opening</h4><p>Merge the frozen scope, generated graph, and diagnostic evidence. Begin as soon as enough of both parallel paths is available.</p></article>
+        <article><span>5</span><h4>Lesson conversation</h4><p>Socratic questions surface and repair gaps. The exact behavior is a testable starting point, not a settled framework.</p></article>
+        <article><span>6</span><h4>Final explanation</h4><p>The learner explains the whole idea unaided. Targeted follow-ups expose gaps; gaps loop to Socratic repair, then a fresh explanation measures learning.</p></article>
+      </div>
+    </section>
+  </section>
+
+  <section id="panel-scenario" class="tab-panel" role="tabpanel" aria-labelledby="tab-scenario" data-panel="scenario" hidden>
     <div class="bench-head">
       <div><p class="eyebrow">Step 1 · reusable baseline</p><h2>Question Map</h2></div>
       <p class="bench-note">Name one controlled scenario, then reuse it across the component benches so timing comparisons mean the same thing.</p>
