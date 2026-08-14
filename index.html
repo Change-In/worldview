@@ -1652,7 +1652,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   </nav>
   <button id="mobile-category-button" type="button" aria-haspopup="dialog">Most recent</button>
   <button id="models-button" type="button" aria-haspopup="dialog" hidden>Models</button>
-  <a id="developer-lab-launcher" href="lab/" hidden>Developer lab</a>
+  <a id="developer-lab-launcher" href="lab/" aria-label="Open the protected developer Lab">Developer lab</a>
   <div id="home-header">
     <button id="home-menu" class="menu-button" type="button" aria-label="Open menu">&#9776;</button>
     <div class="home-brand">
@@ -2037,11 +2037,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v79 · Aug 13";
+const BUILD = "v80 · Aug 14";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v80", date: "Aug 14", changes: [
+    "The Developer lab button is visible on Home again, so the protected component workshop can be opened directly on phone or laptop.",
+    "The Lab still requires its owner access code; making the launcher visible does not reveal prompts, jobs, or provider controls.",
+  ] },
   { tag: "v79", date: "Aug 13", changes: [
     "Owner Lab release — the learner-facing lesson opening remains unchanged while its parts are rebuilt and tested separately.",
     "The Lab now shows the full connected lesson pipeline, with a working Clarification stage and intentionally inactive later stages.",
@@ -5338,7 +5342,9 @@ function syncStartButton() {
 
 function syncDeveloperLauncherVisibility() {
   const launcher = $("developer-lab-launcher");
-  if (launcher) launcher.hidden = !state.developerMode;
+  /* The Lab itself retains its owner-code gate. Keep the Home route visible so
+     the owner cannot be locked out merely because device developer mode reset. */
+  if (launcher) launcher.hidden = false;
   const modelsButton = $("models-button");
   if (modelsButton) modelsButton.hidden = !state.developerMode;
   if (!state.developerMode && $("models-sheet")) {
