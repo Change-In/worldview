@@ -798,24 +798,26 @@ const LATENCY_COMPONENT_LABELS = {
   brain: "Brain",
 };
 
-const CLARIFICATION_PROMPT_VERSION = "clarification-conversation-v2";
+const CLARIFICATION_PROMPT_VERSION = "clarification-conversation-v3";
 const CLARIFICATION_PROMPT = `You run only the clarification phase before a lesson. Your job is to help a learner discover and express a useful lesson direction. Do not teach the topic, explain answers, quiz knowledge, praise, apologize, mention pedagogy, or advance to another phase.
 
-This is a real conversation, not an option picker or a taxonomy. On the first turn, offer exactly three genuinely interesting, specific directions that arise from the learner's actual topic. Each direction must contain one concise, concrete real-world breadcrumb: a surprising fact, comparison, tension, consequence, scene, or question that could make a curious person want to follow it. Use accurate hooks, not vague category labels or reusable frames. Give only enough of the breadcrumb to open curiosity; do not resolve it, explain the mechanism, or give the lesson itself. Never default to origin, how it works, misconceptions, or why it matters unless that angle is unusually alive for this topic. Do not put the topic in quotation marks. Do not say we, our, let's, welcome, or anything in particular.
+This is a real conversation, not an option picker or a taxonomy. On the first turn, invent exactly three genuinely interesting, specific hooks that arise from the learner's actual topic. Think like short headlines that could catch the attention of someone new to the subject. Each hook is a two-to-eight-word phrase built around one accurate real-world breadcrumb: a surprising fact, comparison, tension, consequence, scene, or question. A hook is not a complete sentence, category label, reusable frame, or miniature explanation. Never default to origin, how it works, misconceptions, or why it matters unless that angle is unusually alive for this topic.
 
-After the learner replies, follow what they mean. They may combine several directions, reject all of them, propose their own, ask what a direction means, or ask for different ideas. If they ask for more or different ideas, offer exactly three fresh topic-specific directions. Otherwise respond naturally in one or two short sentences and ask at most one useful clarifying question. Keep every accumulated interest in scope_summary and scope_items; never silently discard an earlier choice. The learner, not you, ends this phase with a Done control, so never announce that the phase is complete or move into teaching.
+The learner sees assistant_message, not a list. Write one natural paragraph of at most 65 words that weaves all three hook phrases in verbatim, with no bullets, numbering, headings, or line breaks. Give only enough of each breadcrumb to open curiosity; do not resolve it, explain the mechanism, or teach the lesson. End with one brief invitation to react. The directions array contains the same three hook phrases for saved structure and must not add wording the learner did not see. Do not put the topic in quotation marks. Do not say we, our, let's, welcome, or anything in particular.
+
+After the learner replies, follow what they mean. They may combine several directions, reject all of them, propose their own, ask what a hook means, or ask for different ideas. If they ask for more or different ideas, use the same three-hook paragraph format with three fresh topic-specific hooks. Otherwise respond as one natural paragraph of at most 55 words and ask at most one useful clarifying question. Keep every accumulated interest in scope_summary and scope_items; never silently discard an earlier choice. The learner, not you, ends this phase with a Done control, so never announce that the phase is complete or move into teaching.
 
 Return only valid JSON with exactly this shape:
 {
-  "assistant_message": "short conversational response, without the direction bullets",
-  "directions": ["direction one", "direction two", "direction three"],
+  "assistant_message": "one short natural paragraph containing the three hooks",
+  "directions": ["two-to-eight-word hook", "two-to-eight-word hook", "two-to-eight-word hook"],
   "scope_summary": "one precise sentence describing the lesson scope accumulated so far",
   "scope_items": ["short interest or boundary"],
   "ready_to_finish": false
 }
 
-On the first turn directions must contain exactly three strings. On later turns directions is empty unless the learner asked for ideas, in which case it contains exactly three new strings. ready_to_finish becomes true only after the learner has stated a usable scope or explicitly requested a broad overview. JSON only; no markdown fences or commentary.`;
-const CLARIFICATION_PREVIOUS_BUILTIN_FINGERPRINT = "fnv1a-ba1fadac";
+On the first turn directions must contain exactly three strings. On later turns directions is empty unless the learner asked for ideas, in which case it contains exactly three new strings in the same paragraph format. ready_to_finish becomes true only after the learner has stated a usable scope or explicitly requested a broad overview. JSON only; no markdown fences or commentary.`;
+const CLARIFICATION_PREVIOUS_BUILTIN_FINGERPRINT = "fnv1a-19120e07";
 const CLARIFICATION_LOCAL_KEY = "worldview-lab-clarification-v1";
 
 function latencyProviderKey(value) {
@@ -2944,7 +2946,8 @@ function setClarificationBusy(busy, label = "") {
   setClarificationActivity(busy, label);
   q("clarification-waiting").hidden = !busy;
   q("clarification-latest").hidden = busy;
-  q("clarification-directions").hidden = busy;
+  q("clarification-directions").hidden = true;
+  q("clarification-surface").classList.toggle("has-reply", !busy && !!state.latest);
   for (const id of ["clarification-send", "clarification-done", "clarification-new", "clarification-fork", "clarification-backend-text", "clarification-backend-voice"]) {
     if (q(id)) q(id).disabled = busy || (id === "clarification-done" && (!state.latest?.ready_to_finish || state.learnerReplyCount < 1));
   }
@@ -2956,11 +2959,10 @@ function clarificationActivityLabel(label, elapsedSeconds = 0) {
   const labels = {
     starting: "Starting the model conversation…",
     running: "Saving this turn before the model runs…",
-    directions: "Finding three concrete directions worth exploring…",
+    directions: "Finding three intriguing hooks…",
     following: "Following what you said and shaping the scope…",
     transcribing: "Turning your recording into text…",
     "transcribing again": "Deepgram is trying the saved recording again…",
-    speaking: "Playing the spoken reply…",
     "saving output": "Saving the clarified scope…",
   };
   if (elapsedSeconds >= 8 && ["starting", "running", "directions", "following"].includes(label)) {
@@ -3003,6 +3005,23 @@ function setClarificationFocus(enabled) {
   button.setAttribute("aria-pressed", String(state.focusMode));
   button.textContent = state.focusMode ? "Exit full screen" : "Full screen";
   if (state.focusMode) q("clarification-learner-panel").scrollTop = 0;
+}
+
+function setClarificationAudioSession(type) {
+  try {
+    if (navigator.audioSession && "type" in navigator.audioSession) navigator.audioSession.type = type;
+  } catch (_) { /* The browser owns the physical route when this API is unavailable. */ }
+}
+
+function setClarificationMicTracksEnabled(enabled) {
+  for (const track of labState.clarification.micStream?.getAudioTracks?.() || []) track.enabled = enabled;
+}
+
+function scrollClarificationReplyToTop() {
+  for (const id of ["clarification-conversation", "clarification-learner-panel", "clarification-surface"]) {
+    const node = q(id);
+    if (node) node.scrollTop = 0;
+  }
 }
 
 function setClarificationMicStatus(status = "", message = "") {
@@ -3085,6 +3104,7 @@ function resetClarificationRun(seed = "") {
   q("clarification-complete").hidden = true;
   q("clarification-latest").replaceChildren();
   q("clarification-directions").replaceChildren();
+  q("clarification-surface").classList.remove("has-reply", "is-listening");
   q("clarification-raw").textContent = "No output yet.";
   q("clarification-validated").textContent = "No output yet.";
   q("clarification-packet").textContent = "No request yet.";
@@ -3134,7 +3154,7 @@ async function refreshClarificationArtifacts() {
 function initializeClarification() {
   const saved = savedClarificationSettings();
   const savedPrompt = clip(saved.prompt, 18000);
-  const previousBuiltIn = savedPrompt && !saved.promptVersion && fingerprint(savedPrompt) === CLARIFICATION_PREVIOUS_BUILTIN_FINGERPRINT;
+  const previousBuiltIn = savedPrompt && fingerprint(savedPrompt) === CLARIFICATION_PREVIOUS_BUILTIN_FINGERPRINT;
   q("clarification-prompt").value = savedPrompt && !previousBuiltIn ? savedPrompt : CLARIFICATION_PROMPT;
   q("clarification-provider").value = LAB_PROVIDER_CATALOG[saved.provider] ? saved.provider : "anthropic";
   renderClarificationModels();
@@ -3146,7 +3166,9 @@ function initializeClarification() {
 async function primeClarificationAudio() {
   try {
     const audio = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=");
-    audio.muted = true;
+    audio.playsInline = true;
+    audio.muted = false;
+    audio.volume = 1;
     let timeoutId = 0;
     await Promise.race([
       Promise.resolve(audio.play()),
@@ -3154,7 +3176,6 @@ async function primeClarificationAudio() {
     ]).finally(() => clearTimeout(timeoutId));
     audio.pause();
     audio.currentTime = 0;
-    audio.muted = false;
     labState.clarification.voiceAudio = audio;
     labState.clarification.audioPrimed = true;
   } catch (_) { /* TTS will report a useful playback error later. */ }
@@ -3166,6 +3187,8 @@ async function playClarificationSpeech(text) {
   if (!spoken) return;
   state.lastSpeechText = spoken;
   q("clarification-replay").hidden = false;
+  setClarificationMicTracksEnabled(false);
+  setClarificationAudioSession("playback");
   let cloudError = null;
   try {
     const response = await speechFetch(spoken);
@@ -3174,6 +3197,9 @@ async function playClarificationSpeech(text) {
     const audio = state.voiceAudio || new Audio();
     state.voiceAudio = audio;
     try {
+      audio.playsInline = true;
+      audio.muted = false;
+      audio.volume = 1;
       audio.src = url;
       await new Promise(async (resolve, reject) => {
         state.voiceSpeechCancel = resolve;
@@ -3210,16 +3236,13 @@ async function replayClarificationSpeech() {
   const state = labState.clarification;
   if (!state.lastSpeechText || state.speaking) return;
   state.speaking = true;
-  setClarificationActivity(true, "speaking");
-  setMessage("clarification-message", "Playing the reply again…");
+  setMessage("clarification-message", "");
   try {
     await playClarificationSpeech(state.lastSpeechText);
-    setMessage("clarification-message", "Voice reply played.", "ok");
   } catch (error) {
     setMessage("clarification-message", `The reply is visible, but speech still could not play: ${error.message}`, "error");
   } finally {
     state.speaking = false;
-    setClarificationActivity(false);
   }
 }
 
@@ -3234,7 +3257,7 @@ function stopClarificationSpeech() {
 }
 
 function clarificationSpeechText(output) {
-  return [output.assistant_message, ...(output.directions || [])].filter(Boolean).join(" ");
+  return output.assistant_message;
 }
 
 function parseClarificationOutput(raw, firstTurn) {
@@ -3244,12 +3267,17 @@ function parseClarificationOutput(raw, firstTurn) {
   catch (_) { throw new Error("The model did not return valid JSON. The raw reply is preserved in the inspector."); }
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("The model returned the wrong output shape.");
   const assistantMessage = clip(value.assistant_message, 700);
-  const directions = Array.isArray(value.directions) ? value.directions.map((item) => clip(item, 220)).filter(Boolean).slice(0, 5) : [];
+  const directions = Array.isArray(value.directions) ? value.directions.map((item) => clip(item, 90)).filter(Boolean).slice(0, 5) : [];
   const scopeSummary = clip(value.scope_summary, 700);
   const scopeItems = Array.isArray(value.scope_items) ? value.scope_items.map((item) => clip(item, 180)).filter(Boolean).slice(0, 12) : [];
   if (!assistantMessage || !scopeSummary) throw new Error("The model omitted the conversational reply or scope summary.");
   if (firstTurn && directions.length !== 3) throw new Error("The first reply did not contain exactly three directions.");
+  if (!firstTurn && directions.length !== 0 && directions.length !== 3) throw new Error("A follow-up must return either no hooks or exactly three hooks.");
+  if (/[\r\n]/.test(assistantMessage) || /^\s*(?:[-*•]|\d+[.)])\s/m.test(assistantMessage)) throw new Error("The learner reply must be one natural paragraph, not a list.");
+  if (assistantMessage.split(/\s+/).length > (directions.length ? 65 : 55)) throw new Error("The conversational reply was too long.");
   if (directions.some((item) => /[“”\"]/.test(item))) throw new Error("A direction used quotation marks, so it was rejected.");
+  if (directions.some((item) => item.split(/\s+/).length < 2 || item.split(/\s+/).length > 8 || /[.!?;:]$/.test(item))) throw new Error("Every hook must be a short headline phrase.");
+  if (directions.some((item) => !assistantMessage.toLocaleLowerCase().includes(item.toLocaleLowerCase()))) throw new Error("Every structured hook must also appear in the learner paragraph.");
   return {
     assistant_message: assistantMessage,
     directions,
@@ -3265,7 +3293,10 @@ function renderClarificationOutput(output, raw, detail, packet, elapsed) {
   state.latestRaw = raw;
   state.latestPacket = packet;
   q("clarification-latest").textContent = output.assistant_message;
-  q("clarification-directions").replaceChildren(...output.directions.map((direction) => element("li", { text: direction })));
+  q("clarification-directions").replaceChildren();
+  q("clarification-directions").hidden = true;
+  q("clarification-surface").classList.add("has-reply");
+  scrollClarificationReplyToTop();
   q("clarification-validated").textContent = JSON.stringify(output, null, 2);
   q("clarification-raw").textContent = raw;
   q("clarification-packet").textContent = JSON.stringify(packet, null, 2);
@@ -3297,7 +3328,7 @@ function clarificationRequestPacket() {
   const model = q("clarification-model").value;
   const system = q("clarification-prompt").value.trim();
   if (!system) throw new Error("The clarification prompt is empty.");
-  return { provider, model, system, messages: state.turns.map(({ role, content }) => ({ role, content })), maxTokens: 700 };
+  return { provider, model, system, messages: state.turns.map(({ role, content }) => ({ role, content })), maxTokens: 450 };
 }
 
 async function runClarificationModel() {
@@ -3329,7 +3360,7 @@ async function runClarificationModel() {
       metadata: {
         promptFingerprint: fingerprint(packet.system), promptCoreFingerprint: fingerprint(CLARIFICATION_PROMPT),
         inputFingerprint: fingerprint(JSON.stringify(packet.messages)), promptVersionId: CLARIFICATION_PROMPT_VERSION,
-        promptVersionName: "Clarification conversation v2", replicate: 1, inputLabel: `Clarification turn ${state.learnerReplyCount + 1}`,
+        promptVersionName: "Clarification conversation v3", replicate: 1, inputLabel: `Clarification turn ${state.learnerReplyCount + 1}`,
         source: `lesson pipeline ${state.runId}`, promptEdited: packet.system !== CLARIFICATION_PROMPT, checks: [],
       },
     }],
@@ -3360,12 +3391,10 @@ async function runClarificationModel() {
     if (state.mode === "voice") {
       setClarificationBusy(false);
       state.speaking = true;
-      setClarificationActivity(true, "speaking");
       try { await playClarificationSpeech(clarificationSpeechText(output)); }
       catch (error) { setMessage("clarification-message", `The reply is visible, but speech did not play: ${error.message}`, "error"); }
       finally {
         state.speaking = false;
-        setClarificationActivity(false);
       }
     }
   } catch (error) {
@@ -3419,6 +3448,7 @@ async function startClarification(mode) {
   const activeRunId = state.runId;
   let microphonePromise = Promise.resolve();
   if (mode === "voice") {
+    setClarificationAudioSession("play-and-record");
     setClarificationMicStatus("requesting", "Waiting for microphone permissionâ€¦");
     microphonePromise = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
       .then((stream) => {
@@ -3427,7 +3457,9 @@ async function startClarification(mode) {
           return;
         }
         state.micStream = stream;
-        setClarificationMicStatus("ready", "Microphone ready â€” hold anywhere after the reply.");
+        setClarificationMicTracksEnabled(false);
+        setClarificationAudioSession("playback");
+        setClarificationMicStatus();
       })
       .catch((error) => {
         if (state.runId !== activeRunId) return;
@@ -3436,6 +3468,7 @@ async function startClarification(mode) {
         q("clarification-text-controls").hidden = false;
         setMessage("clarification-message", "The response will still appear here. You can continue by typing.", "error");
       });
+    setClarificationAudioSession("playback");
     void primeClarificationAudio();
   } else {
     setClarificationMicStatus();
@@ -3518,6 +3551,8 @@ function startClarificationRecording(event) {
   stopSpeechComparison();
   stopClarificationSpeech();
   try {
+    setClarificationAudioSession("play-and-record");
+    setClarificationMicTracksEnabled(true);
     const type = recorderMimeType();
     state.recorderChunks = [];
     state.recorder = type ? new MediaRecorder(state.micStream, { mimeType: type }) : new MediaRecorder(state.micStream);
@@ -3526,6 +3561,8 @@ function startClarificationRecording(event) {
     const recorder = state.recorder;
     state.recorder.onstop = async () => {
       q("clarification-surface").classList.remove("is-listening");
+      setClarificationMicTracksEnabled(false);
+      setClarificationAudioSession("playback");
       if (performance.now() - state.recordingStartedAt < 220 || !state.recorderChunks.length) {
         setMessage("clarification-message", "Hold a little longer, then release to send.", "error");
         return;
@@ -3547,7 +3584,11 @@ function startClarificationRecording(event) {
     q("clarification-surface").classList.add("is-listening");
     setMessage("clarification-message", "Listening… release to send.");
     event?.preventDefault?.();
-  } catch (error) { setMessage("clarification-message", `Recording could not start: ${error.message}`, "error"); }
+  } catch (error) {
+    setClarificationMicTracksEnabled(false);
+    setClarificationAudioSession("playback");
+    setMessage("clarification-message", `Recording could not start: ${error.message}`, "error");
+  }
 }
 
 function stopClarificationRecording(event) {
