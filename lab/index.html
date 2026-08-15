@@ -80,7 +80,10 @@
       <section id="clarification-learner-panel" class="lab-card pipeline-experience" role="tabpanel" aria-labelledby="clarification-view-learner">
         <div class="pipeline-card-head">
           <div><p class="eyebrow">Learner rehearsal</p><h3 id="clarification-experience-title">Worldview</h3></div>
-          <span class="clarification-rehearsal-badge">real model run</span>
+          <div class="clarification-card-actions">
+            <span class="clarification-rehearsal-badge">real model run</span>
+            <button id="clarification-focus-toggle" class="clarification-focus-toggle" type="button" aria-pressed="false">Full screen</button>
+          </div>
         </div>
 
         <div id="clarification-setup" class="clarification-setup">
@@ -103,9 +106,17 @@
         </div>
 
         <div id="clarification-conversation" class="clarification-conversation" hidden>
-          <div class="clarification-status-row"><span id="clarification-mode-label">Voice</span><span id="clarification-run-label"></span></div>
+          <div class="clarification-status-row">
+            <span id="clarification-mode-label">Voice</span>
+            <span id="clarification-run-label"></span>
+          </div>
+          <div id="clarification-activity" class="clarification-activity" role="status" aria-live="polite" hidden>
+            <span class="clarification-activity-dot" aria-hidden="true"></span>
+            <strong id="clarification-activity-text">Starting…</strong>
+            <small id="clarification-activity-time">0s</small>
+          </div>
           <div id="clarification-surface" class="clarification-surface" tabindex="0" aria-label="Hold anywhere in this area to talk">
-            <div id="clarification-waiting" class="clarification-waiting" hidden><span></span><p>Finding useful directions…</p></div>
+            <div id="clarification-waiting" class="clarification-waiting" hidden><span></span><p id="clarification-waiting-text">Finding interesting directions…</p></div>
             <div id="clarification-latest" class="clarification-latest" aria-live="polite"></div>
             <ul id="clarification-directions" class="clarification-directions"></ul>
             <p id="clarification-ptt-hint" class="clarification-ptt-hint">Hold anywhere on this screen to talk.</p>
@@ -114,6 +125,10 @@
             <label class="sr-only" for="clarification-reply">Your reply</label>
             <textarea id="clarification-reply" rows="2" maxlength="1200" placeholder="Tell it what interests you, combine directions, or ask for different ideas."></textarea>
             <button id="clarification-send" class="button button-primary" type="button">Send</button>
+          </div>
+          <div class="clarification-voice-actions">
+            <button id="clarification-replay" class="button button-quiet" type="button" hidden>Replay voice</button>
+            <button id="clarification-retry-transcription" class="button button-quiet" type="button" hidden>Retry transcription</button>
           </div>
           <button id="clarification-done" class="clarification-done" type="button" disabled>Done</button>
           <p id="clarification-message" class="form-message" role="status"></p>

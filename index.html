@@ -2037,11 +2037,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v81 · Aug 14";
+const BUILD = "v82 · Aug 14";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v82", date: "Aug 14", changes: [
+    "Clarification now shows a clear live working state with elapsed time, uses a phone-sized learner frame on laptops, and has a focused full-screen mode for testing the real conversation.",
+    "Voice recording now sends one complete phone audio file to Deepgram instead of fragmented pieces, keeps a failed recording available for Retry, and offers Replay voice plus an audible fallback if cloud playback fails.",
+    "Clarification directions now use concrete real-world breadcrumbs—surprising facts, comparisons, tensions, or consequences that invite exploration—without teaching the lesson or locking you into one path.",
+  ] },
   { tag: "v81", date: "Aug 14", changes: [
     "Clarification in the Developer Lab is now a real learner rehearsal: enter a topic, tap Start lesson, choose Voice or Text, and run the live model conversation.",
     "Learner view and Backend view are two views of the same run, so you can switch between the exact user screen and its editable prompt, request packet, raw reply, validated output, timing, tokens, and cost.",
