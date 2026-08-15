@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css">
+<link rel="stylesheet" href="./lab.css?v=86">
 </head>
 <body>
 
@@ -79,9 +79,8 @@
     <div class="pipeline-stage-grid clarification-workspace">
       <section id="clarification-learner-panel" class="lab-card pipeline-experience" role="tabpanel" aria-labelledby="clarification-view-learner">
         <div class="pipeline-card-head">
-          <div><p class="eyebrow">Learner rehearsal</p><h3 id="clarification-experience-title">Worldview</h3></div>
+          <div class="clarification-screen-title"><p class="eyebrow">Clarification phase</p><h3 id="clarification-experience-title">Worldview</h3></div>
           <div class="clarification-card-actions">
-            <span class="clarification-rehearsal-badge">real model run</span>
             <button id="clarification-focus-toggle" class="clarification-focus-toggle" type="button" aria-pressed="false">Full screen</button>
           </div>
         </div>
@@ -106,10 +105,6 @@
         </div>
 
         <div id="clarification-conversation" class="clarification-conversation" hidden>
-          <div class="clarification-status-row">
-            <span id="clarification-mode-label">Voice</span>
-            <span id="clarification-run-label"></span>
-          </div>
           <p id="clarification-mic-status" class="clarification-mic-status" role="status" aria-live="polite" hidden>
             <span class="clarification-mic-dot" aria-hidden="true"></span>
             <strong id="clarification-mic-text"></strong>
@@ -131,7 +126,6 @@
             <button id="clarification-send" class="button button-primary" type="button">Send</button>
           </div>
           <div class="clarification-voice-actions">
-            <button id="clarification-replay" class="button button-quiet" type="button" hidden>Replay voice</button>
             <button id="clarification-retry-transcription" class="button button-quiet" type="button" hidden>Retry transcription</button>
           </div>
           <button id="clarification-done" class="clarification-done" type="button" disabled>Done</button>
@@ -437,6 +431,6 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js" defer></script>
+<script src="./lab.js?v=86" defer></script>
 </body>
 </html>

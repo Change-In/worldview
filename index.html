@@ -2037,11 +2037,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v85 · Aug 15";
+const BUILD = "v86 · Aug 15";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v86", date: "Aug 15", changes: [
+    "Clarification now addresses the learner as an intelligent adult, using calm language without greetings, emojis, performative enthusiasm, or childlike encouragement.",
+    "The focused learner view is now a true conversation screen: Worldview is centered, a back arrow exits, the reply begins at the top left, and Lab run labels are gone.",
+    "Reply text is smaller and fully scrollable when needed; Replay is removed and Done stays out of the way until the learner has expressed a usable direction.",
+  ] },
   { tag: "v85", date: "Aug 15", changes: [
     "Clarification now uses the new Phase One discovery prompt and explicitly runs without web research.",
     "Useful model text is no longer discarded just because secondary JSON or hook formatting is imperfect; the Lab normalizes it into the conversation while preserving the raw response for inspection.",
