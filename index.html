@@ -2037,11 +2037,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v86 · Aug 15";
+const BUILD = "v87 · Aug 15";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v87", date: "Aug 15", changes: [
+    "Long Clarification replies now have a wide right-edge scroll lane, so the full response remains reachable without moving the page or accidentally recording.",
+    "Learner-visible Clarification text now removes emojis even when a model ignores the prompt, while Backend inspection still preserves the exact raw reply.",
+    "Holding the lesson now interrupts stuck or silent speech and starts recording; a small Hear reply control provides a fresh iPhone playback gesture.",
+  ] },
   { tag: "v86", date: "Aug 15", changes: [
     "Clarification now addresses the learner as an intelligent adult, using calm language without greetings, emojis, performative enthusiasm, or childlike encouragement.",
     "The focused learner view is now a true conversation screen: Worldview is centered, a back arrow exits, the reply begins at the top left, and Lab run labels are gone.",

@@ -3022,10 +3022,43 @@ function setClarificationMicTracksEnabled(enabled) {
 }
 
 function scrollClarificationReplyToTop() {
-  for (const id of ["clarification-conversation", "clarification-learner-panel", "clarification-surface"]) {
+  for (const id of ["clarification-conversation", "clarification-learner-panel", "clarification-scroll"]) {
     const node = q(id);
     if (node) node.scrollTop = 0;
   }
+  updateClarificationScrollbar();
+}
+
+function updateClarificationScrollbar() {
+  const viewport = q("clarification-scroll");
+  const track = q("clarification-scrollbar");
+  const thumb = q("clarification-scroll-thumb");
+  if (!viewport || !track || !thumb) return;
+  const maxScroll = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+  track.hidden = maxScroll <= 2;
+  if (track.hidden) {
+    track.setAttribute("aria-valuenow", "0");
+    return;
+  }
+  const trackHeight = Math.max(1, track.clientHeight);
+  const thumbHeight = Math.max(56, Math.round(trackHeight * viewport.clientHeight / viewport.scrollHeight));
+  const travel = Math.max(0, trackHeight - thumbHeight);
+  const progress = maxScroll ? viewport.scrollTop / maxScroll : 0;
+  thumb.style.height = `${Math.min(trackHeight, thumbHeight)}px`;
+  thumb.style.transform = `translate(-50%, ${Math.round(travel * progress)}px)`;
+  track.setAttribute("aria-valuenow", String(Math.round(progress * 100)));
+}
+
+function scrollClarificationFromPointer(event) {
+  const viewport = q("clarification-scroll");
+  const track = q("clarification-scrollbar");
+  const thumb = q("clarification-scroll-thumb");
+  const rect = track.getBoundingClientRect();
+  const thumbHeight = thumb.getBoundingClientRect().height;
+  const travel = Math.max(1, rect.height - thumbHeight);
+  const progress = Math.max(0, Math.min(1, (event.clientY - rect.top - thumbHeight / 2) / travel));
+  viewport.scrollTop = progress * Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+  updateClarificationScrollbar();
 }
 
 function setClarificationMicStatus(status = "", message = "") {
@@ -3115,7 +3148,9 @@ function resetClarificationRun(seed = "") {
   q("clarification-metrics").replaceChildren(element("span", { text: "Latency —" }), element("span", { text: "Tokens —" }), element("span", { text: "Cost —" }));
   q("clarification-job-status").textContent = "not run";
   q("clarification-job-status").className = "job-status";
+  q("clarification-hear").hidden = true;
   q("clarification-retry-transcription").hidden = true;
+  updateClarificationScrollbar();
   setClarificationMicStatus();
   setClarificationActivity(false);
   setMessage("clarification-message", "");
@@ -3203,12 +3238,16 @@ async function playClarificationSpeech(text) {
       audio.muted = false;
       audio.volume = 1;
       audio.src = url;
+      let watchdog = 0;
       await new Promise(async (resolve, reject) => {
-        state.voiceSpeechCancel = resolve;
-        audio.onended = resolve;
-        audio.onerror = () => reject(new Error("The generated clarification voice could not play on this device."));
-        try { await audio.play(); } catch (error) { reject(error); }
-      });
+        const finish = () => { clearTimeout(watchdog); resolve(); };
+        const fail = (error) => { clearTimeout(watchdog); reject(error); };
+        watchdog = setTimeout(() => fail(new Error("Speech playback stalled on this device.")), Math.max(12000, Math.min(60000, spoken.length * 90)));
+        state.voiceSpeechCancel = finish;
+        audio.onended = finish;
+        audio.onerror = () => fail(new Error("The generated clarification voice could not play on this device."));
+        try { await audio.play(); } catch (error) { fail(error); }
+      }).finally(() => clearTimeout(watchdog));
       return;
     } finally {
       state.voiceSpeechCancel = null;
@@ -3248,6 +3287,12 @@ function clarificationSpeechText(output) {
   return output.assistant_message;
 }
 
+function stripClarificationEmoji(text) {
+  return String(text || "")
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}](?:\uFE0E|\uFE0F)?(?:\u200D[\p{Extended_Pictographic}\p{Emoji_Presentation}](?:\uFE0E|\uFE0F)?)*/gu, "")
+    .replace(/[\uFE0E\uFE0F]/g, "");
+}
+
 function parseClarificationOutput(raw, firstTurn, topic = "") {
   const clean = String(raw || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   if (!clean) throw new Error("The model returned an empty reply.");
@@ -3263,7 +3308,7 @@ function parseClarificationOutput(raw, firstTurn, topic = "") {
 
   const fallbackMessage = "What first made this topic feel worth exploring: something you heard, a problem you noticed, or a question that keeps returning?";
   const sourceMessage = clip(value.assistant_message || (objectStart < 0 ? clean : "") || fallbackMessage, 700);
-  const assistantMessage = sourceMessage
+  const assistantMessage = stripClarificationEmoji(sourceMessage)
     .replace(/(?:^|\s)#{1,6}\s+/g, " ")
     .replace(/(?:^|\r?\n)\s*(?:[-*•]|\d+[.)])\s*/g, " ")
     .replace(/[*_~`]+/g, "")
@@ -3298,6 +3343,7 @@ function renderClarificationOutput(output, raw, detail, packet, elapsed) {
   q("clarification-directions").hidden = true;
   q("clarification-surface").classList.add("has-reply");
   scrollClarificationReplyToTop();
+  requestAnimationFrame(updateClarificationScrollbar);
   q("clarification-validated").textContent = JSON.stringify(output, null, 2);
   q("clarification-raw").textContent = raw;
   q("clarification-packet").textContent = JSON.stringify(packet, null, 2);
@@ -3406,6 +3452,7 @@ async function runClarificationModel() {
       catch (error) { setMessage("clarification-message", `The reply is visible, but speech did not play: ${error.message}`, "error"); }
       finally {
         state.speaking = false;
+        q("clarification-hear").hidden = false;
       }
     }
   } catch (error) {
@@ -3448,6 +3495,7 @@ async function startClarification(mode) {
   q("clarification-text-controls").hidden = mode !== "text";
   q("clarification-ptt-hint").hidden = mode !== "voice";
   q("clarification-retry-transcription").hidden = true;
+  q("clarification-hear").hidden = true;
   q("clarification-done").disabled = true;
   setClarificationActivity(true, "starting");
   setClarificationFocus(true);
@@ -3568,7 +3616,7 @@ async function retryClarificationTranscription() {
 
 function startClarificationRecording(event) {
   const state = labState.clarification;
-  if (state.mode !== "voice" || state.busy || state.speaking || !state.micStream || state.recorder?.state === "recording") return;
+  if (state.mode !== "voice" || state.busy || !state.micStream || state.recorder?.state === "recording") return;
   if (event?.pointerType === "mouse" && event.button !== 0) return;
   stopSpeechComparison();
   stopClarificationSpeech();
@@ -3695,12 +3743,55 @@ function bindClarificationEvents() {
   q("clarification-voice").addEventListener("click", () => startClarification("voice"));
   q("clarification-text").addEventListener("click", () => startClarification("text"));
   q("clarification-send").addEventListener("click", () => submitClarificationReply(q("clarification-reply").value));
+  q("clarification-hear").addEventListener("click", async () => {
+    const state = labState.clarification;
+    if (state.busy || !state.latest?.assistant_message) return;
+    stopClarificationSpeech();
+    state.speaking = true;
+    try { await playClarificationSpeech(clarificationSpeechText(state.latest)); }
+    catch (error) { setMessage("clarification-message", `The reply is visible, but speech did not play: ${error.message}`, "error"); }
+    finally { state.speaking = false; }
+  });
   q("clarification-retry-transcription").addEventListener("click", retryClarificationTranscription);
   q("clarification-reply").addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submitClarificationReply(event.currentTarget.value); } });
   q("clarification-done").addEventListener("click", finishClarification);
   q("clarification-new").addEventListener("click", () => resetClarificationRun());
   q("clarification-fork").addEventListener("click", () => resetClarificationRun(labState.clarification.finalized?.topic || ""));
   q("clarification-surface").addEventListener("pointerdown", startClarificationRecording);
+  q("clarification-scroll").addEventListener("scroll", updateClarificationScrollbar, { passive: true });
+  q("clarification-scrollbar").addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    event.currentTarget.dataset.pointerId = String(event.pointerId);
+    scrollClarificationFromPointer(event);
+  });
+  q("clarification-scrollbar").addEventListener("pointermove", (event) => {
+    if (event.currentTarget.dataset.pointerId !== String(event.pointerId)) return;
+    event.preventDefault();
+    scrollClarificationFromPointer(event);
+  });
+  q("clarification-scrollbar").addEventListener("pointerup", (event) => {
+    event.stopPropagation();
+    delete event.currentTarget.dataset.pointerId;
+  });
+  q("clarification-scrollbar").addEventListener("pointercancel", (event) => { delete event.currentTarget.dataset.pointerId; });
+  q("clarification-scrollbar").addEventListener("wheel", (event) => {
+    event.preventDefault();
+    q("clarification-scroll").scrollBy({ top: event.deltaY, behavior: "auto" });
+  }, { passive: false });
+  q("clarification-scrollbar").addEventListener("keydown", (event) => {
+    const viewport = q("clarification-scroll");
+    const step = Math.max(48, viewport.clientHeight * .8);
+    if (event.key === "ArrowUp") viewport.scrollBy({ top: -48 });
+    else if (event.key === "ArrowDown") viewport.scrollBy({ top: 48 });
+    else if (event.key === "PageUp") viewport.scrollBy({ top: -step });
+    else if (event.key === "PageDown") viewport.scrollBy({ top: step });
+    else if (event.key === "Home") viewport.scrollTop = 0;
+    else if (event.key === "End") viewport.scrollTop = viewport.scrollHeight;
+    else return;
+    event.preventDefault();
+  });
   window.addEventListener("pointerup", stopClarificationRecording);
   window.addEventListener("pointercancel", stopClarificationRecording);
   window.addEventListener("keydown", (event) => {
@@ -3710,6 +3801,7 @@ function bindClarificationEvents() {
     startClarificationRecording(event);
   });
   window.addEventListener("keyup", (event) => { if (event.code === "Space") stopClarificationRecording(event); });
+  window.addEventListener("resize", updateClarificationScrollbar);
 }
 
 function activateTab(tab) {

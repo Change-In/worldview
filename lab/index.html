@@ -114,11 +114,16 @@
             <strong id="clarification-activity-text">Starting…</strong>
             <small id="clarification-activity-time">0s</small>
           </div>
-          <div id="clarification-surface" class="clarification-surface" tabindex="0" aria-label="Hold anywhere in this area to talk">
-            <div id="clarification-waiting" class="clarification-waiting" hidden><span></span><p id="clarification-waiting-text">Finding three intriguing hooks…</p></div>
-            <div id="clarification-latest" class="clarification-latest" aria-live="polite"></div>
+          <div id="clarification-surface" class="clarification-surface" tabindex="0" aria-label="Hold the lesson area to talk. Use the right edge to scroll.">
+            <div id="clarification-scroll" class="clarification-scroll">
+              <div id="clarification-waiting" class="clarification-waiting" hidden><span></span><p id="clarification-waiting-text">Finding three intriguing hooks…</p></div>
+              <div id="clarification-latest" class="clarification-latest" aria-live="polite"></div>
+            </div>
+            <div id="clarification-scrollbar" class="clarification-scrollbar" role="scrollbar" tabindex="0" aria-label="Scroll the lesson" aria-controls="clarification-scroll" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+              <span id="clarification-scroll-thumb" class="clarification-scroll-thumb"></span>
+            </div>
             <div id="clarification-directions" hidden aria-hidden="true"></div>
-            <p id="clarification-ptt-hint" class="clarification-ptt-hint">Hold anywhere on this screen to talk.</p>
+            <p id="clarification-ptt-hint" class="clarification-ptt-hint">Hold the lesson area to talk. Use the right edge to scroll.</p>
           </div>
           <div id="clarification-text-controls" class="clarification-text-controls" hidden>
             <label class="sr-only" for="clarification-reply">Your reply</label>
@@ -126,6 +131,7 @@
             <button id="clarification-send" class="button button-primary" type="button">Send</button>
           </div>
           <div class="clarification-voice-actions">
+            <button id="clarification-hear" class="button button-quiet" type="button" hidden>Hear reply</button>
             <button id="clarification-retry-transcription" class="button button-quiet" type="button" hidden>Retry transcription</button>
           </div>
           <button id="clarification-done" class="clarification-done" type="button" disabled>Done</button>
