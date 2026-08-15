@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=86">
+<link rel="stylesheet" href="./lab.css?v=87">
 </head>
 <body>
 
@@ -249,36 +249,7 @@
         <textarea id="lesson-prompt" class="packet-editor" rows="15" maxlength="12000" spellcheck="false"></textarea>
         <p id="lesson-prompt-count" class="field-count"></p>
         <div class="version-save"><input id="lesson-version-name" type="text" maxlength="80" placeholder="Name this version"><button class="button button-save-version" type="button" data-save-prompt="lesson">Save as new version</button></div>
-        <div class="inline-actions"><button class="button button-danger-soft" type="button" data-delete-prompt="lesson">Delete saved version</button><button class="button button-workshop" type="button" data-workshop="lesson">Copy workshop briefing</button></div>
-        <p id="lesson-prompt-state" class="form-message"></p>
-      </section>
-      <section class="lab-card lane-card">
-        <div class="card-heading"><div><p class="eyebrow">Experiment lanes</p><h3>Choose models to run</h3></div><span class="cost-warning">1 call per sample</span></div>
-        <div id="lesson-lanes" class="lanes" aria-live="polite"></div>
-        <button class="button button-add" type="button" data-add-lane="lesson">+ Add model run</button>
-        <button class="button button-primary button-run" type="button" data-run="lesson">Start durable lesson job</button>
-        <p id="lesson-run-message" class="form-message" role="status"></p>
-      </section>
-    </div>
-  </section>
-
-  <section id="panel-tutor" class="tab-panel" role="tabpanel" aria-labelledby="tab-tutor" data-panel="tutor" hidden>
-    <div class="bench-head">
-      <div><p class="eyebrow">Step 4 · durable text job</p><h2>Tutor</h2></div>
-      <p class="bench-note">Runs continue on the protected server. The lesson packet is retained only as the bounded private job input you explicitly submit.</p>
-    </div>
-    <details class="role-panel" data-role-panel="tutor"></details>
-    <div class="bench-grid">
-      <section class="lab-card input-card">
-        <div class="field-row"><label for="tutor-lesson">Saved lesson on this device</label><button id="tutor-refresh" class="text-button" type="button">Refresh</button></div>
-        <select id="tutor-lesson"></select>
-        <label for="tutor-turn">New learner turn</label>
-        <textarea id="tutor-turn" rows="3" maxlength="4000" placeholder="What would you like the learner to say next?"></textarea>
-        <p class="privacy-note">Sends the last 10 turns to each chosen model.</p>
-        <label for="tutor-preset">Prompt version</label>
-        <div class="version-picker"><select id="tutor-preset"></select><button class="button button-quiet" type="button" data-load-prompt="tutor">Load</button></div>
-        <div class="packet-title"><span>Editable tutor instruction core</span><span id="tutor-edited" class="edited-badge" hidden>Edited</span></div>
-        <textarea id="tutor-prompt" class="packet-editor" rows="15" maxlength="40000" spellcheck="false"></textarea>
+        <div c…605 tokens truncated…ows="15" maxlength="40000" spellcheck="false"></textarea>
         <p id="tutor-prompt-count" class="field-count"></p>
         <div class="version-save"><input id="tutor-version-name" type="text" maxlength="80" placeholder="Name this version"><button class="button button-save-version" type="button" data-save-prompt="tutor">Save as new version</button></div>
         <div class="inline-actions"><button class="button button-danger-soft" type="button" data-delete-prompt="tutor">Delete saved version</button><button class="button button-workshop" type="button" data-workshop="tutor">Copy workshop briefing</button></div>
@@ -437,6 +408,6 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=86" defer></script>
+<script src="./lab.js?v=87" defer></script>
 </body>
 </html>
