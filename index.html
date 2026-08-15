@@ -2037,11 +2037,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v84 · Aug 14";
+const BUILD = "v85 · Aug 15";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v85", date: "Aug 15", changes: [
+    "Clarification now uses the new Phase One discovery prompt and explicitly runs without web research.",
+    "Useful model text is no longer discarded just because secondary JSON or hook formatting is imperfect; the Lab normalizes it into the conversation while preserving the raw response for inspection.",
+    "Clarification requests use a smaller response budget and tolerate brief status-check interruptions, reducing delay without hiding real backend failures.",
+  ] },
   { tag: "v84", date: "Aug 14", changes: [
     "Clarification now opens with one short, natural paragraph containing three headline-like hooks instead of a separate bullet list.",
     "Each new reply starts at the top of the conversation, and microphone-ready or spoken-playback announcements no longer crowd the learner screen.",
