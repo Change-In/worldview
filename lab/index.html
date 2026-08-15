@@ -96,9 +96,9 @@
             <button id="clarification-mode-back" class="clarification-cancel" type="button">Back</button>
             <p class="eyebrow">How would you like to talk?</p>
             <h3>Voice or text?</h3>
-            <p>Voice asks for microphone access now, before the conversation begins.</p>
+            <p>Voice opens the conversation and asks for microphone access immediately.</p>
           <div class="clarification-mode-grid">
-            <button id="clarification-voice" class="clarification-mode" type="button"><strong>Voice</strong><span>Allow the mic now, then hold anywhere to talk.</span></button>
+            <button id="clarification-voice" class="clarification-mode" type="button"><strong>Voice</strong><span>Open the chat, allow the mic, then hold anywhere to talk.</span></button>
             <button id="clarification-text" class="clarification-mode" type="button"><strong>Text</strong><span>Have the same conversation by typing.</span></button>
           </div>
           </div>
@@ -110,6 +110,10 @@
             <span id="clarification-mode-label">Voice</span>
             <span id="clarification-run-label"></span>
           </div>
+          <p id="clarification-mic-status" class="clarification-mic-status" role="status" aria-live="polite" hidden>
+            <span class="clarification-mic-dot" aria-hidden="true"></span>
+            <strong id="clarification-mic-text"></strong>
+          </p>
           <div id="clarification-activity" class="clarification-activity" role="status" aria-live="polite" hidden>
             <span class="clarification-activity-dot" aria-hidden="true"></span>
             <strong id="clarification-activity-text">Starting…</strong>

@@ -3005,6 +3005,14 @@ function setClarificationFocus(enabled) {
   if (state.focusMode) q("clarification-learner-panel").scrollTop = 0;
 }
 
+function setClarificationMicStatus(status = "", message = "") {
+  const root = q("clarification-mic-status");
+  if (!root) return;
+  root.hidden = !message;
+  root.dataset.state = status;
+  q("clarification-mic-text").textContent = message;
+}
+
 function setClarificationView(view) {
   const next = view === "backend" ? "backend" : "learner";
   if (next === "backend" && labState.clarification.focusMode) setClarificationFocus(false);
@@ -3085,6 +3093,7 @@ function resetClarificationRun(seed = "") {
   q("clarification-job-status").className = "job-status";
   q("clarification-replay").hidden = true;
   q("clarification-retry-transcription").hidden = true;
+  setClarificationMicStatus();
   setClarificationActivity(false);
   setMessage("clarification-message", "");
   setMessage("clarification-setup-message", "");
@@ -3138,7 +3147,11 @@ async function primeClarificationAudio() {
   try {
     const audio = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=");
     audio.muted = true;
-    await audio.play();
+    let timeoutId = 0;
+    await Promise.race([
+      Promise.resolve(audio.play()),
+      new Promise((_, reject) => { timeoutId = setTimeout(() => reject(new Error("Audio priming timed out.")), 900); }),
+    ]).finally(() => clearTimeout(timeoutId));
     audio.pause();
     audio.currentTime = 0;
     audio.muted = false;
@@ -3386,13 +3399,6 @@ async function startClarification(mode) {
       setClarificationLaunchError("This browser does not expose microphone recording. Use Text on this device.");
       return;
     }
-    try {
-      await primeClarificationAudio();
-      state.micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-    } catch (error) {
-      setClarificationLaunchError(`Microphone access was not granted: ${error.message || "use Text instead"}`);
-      return;
-    }
   }
   setMessage("clarification-backend-message", "");
   q("clarification-backend-topic").value = topic;
@@ -3408,7 +3414,35 @@ async function startClarification(mode) {
   q("clarification-retry-transcription").hidden = true;
   q("clarification-done").disabled = true;
   setClarificationActivity(true, "starting");
-  await runClarificationModel();
+  setClarificationFocus(true);
+
+  const activeRunId = state.runId;
+  let microphonePromise = Promise.resolve();
+  if (mode === "voice") {
+    setClarificationMicStatus("requesting", "Waiting for microphone permissionâ€¦");
+    microphonePromise = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+      .then((stream) => {
+        if (state.runId !== activeRunId) {
+          for (const track of stream.getTracks()) track.stop();
+          return;
+        }
+        state.micStream = stream;
+        setClarificationMicStatus("ready", "Microphone ready â€” hold anywhere after the reply.");
+      })
+      .catch((error) => {
+        if (state.runId !== activeRunId) return;
+        setClarificationMicStatus("error", `Microphone unavailable: ${error.message || "permission was not granted"}`);
+        q("clarification-ptt-hint").hidden = true;
+        q("clarification-text-controls").hidden = false;
+        setMessage("clarification-message", "The response will still appear here. You can continue by typing.", "error");
+      });
+    void primeClarificationAudio();
+  } else {
+    setClarificationMicStatus();
+  }
+
+  const modelPromise = runClarificationModel();
+  await Promise.allSettled([modelPromise, microphonePromise]);
 }
 
 async function submitClarificationReply(text) {

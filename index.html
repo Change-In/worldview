@@ -2037,11 +2037,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v82 · Aug 14";
+const BUILD = "v83 · Aug 14";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v83", date: "Aug 14", changes: [
+    "Choosing Voice now opens the clarification conversation immediately, requests microphone permission from that same tap, and starts the model response at the same time.",
+    "The chat shows microphone permission separately from model progress, so a slow reply no longer looks like a dead Voice button; if mic access fails, the response still appears and Text remains available.",
+  ] },
   { tag: "v82", date: "Aug 14", changes: [
     "Clarification now shows a clear live working state with elapsed time, uses a phone-sized learner frame on laptops, and has a focused full-screen mode for testing the real conversation.",
     "Voice recording now sends one complete phone audio file to Deepgram instead of fragmented pieces, keeps a failed recording available for Retry, and offers Replay voice plus an audible fallback if cloud playback fails.",

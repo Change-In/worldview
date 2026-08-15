@@ -676,6 +676,12 @@ button.preferred-button.is-on { border-color: rgba(255, 211, 111, .4); color: va
 .clarification-activity-dot { width:9px; height:9px; border-radius:50%; background:#ed985f; box-shadow:0 0 0 0 rgba(237,152,95,.45); animation:clarificationAlive 1.35s ease-out infinite; }
 .clarification-activity strong { overflow:hidden; font-size:11px; font-weight:800; text-overflow:ellipsis; white-space:nowrap; }
 .clarification-activity small { color:#bdac8e; font-size:10px; font-variant-numeric:tabular-nums; }
+.clarification-mic-status { display:flex; align-items:center; gap:8px; min-height:34px; margin:0 0 10px; padding:7px 10px; border:1px solid rgba(120,229,192,.22); border-radius:11px; color:#c9f4e5; background:rgba(120,229,192,.065); font-size:10px; line-height:1.35; }
+.clarification-mic-status[hidden] { display:none; }
+.clarification-mic-dot { width:8px; height:8px; border-radius:50%; flex:0 0 auto; background:#78e5c0; }
+.clarification-mic-status[data-state="requesting"] .clarification-mic-dot { background:#ed985f; box-shadow:0 0 0 0 rgba(237,152,95,.45); animation:clarificationAlive 1.35s ease-out infinite; }
+.clarification-mic-status[data-state="error"] { border-color:rgba(255,133,133,.25); color:#ffd0c8; background:rgba(255,99,99,.07); }
+.clarification-mic-status[data-state="error"] .clarification-mic-dot { background:#ff8585; }
 @keyframes clarificationAlive { 65% { box-shadow:0 0 0 8px rgba(237,152,95,0); } 100% { box-shadow:0 0 0 0 rgba(237,152,95,0); } }
 .clarification-surface { position:relative; display:flex; min-height:390px; padding:clamp(24px,5vw,46px); overflow:hidden; flex-direction:column; justify-content:center; border:1px solid rgba(255,255,255,.08); border-radius:23px; background:radial-gradient(circle at 50% 38%,rgba(126,98,211,.14),transparent 45%),linear-gradient(155deg,#211d19,#171715); touch-action:none; user-select:none; -webkit-user-select:none; }
 .clarification-surface.is-listening { border-color:rgba(242,151,95,.65); box-shadow:inset 0 0 0 1px rgba(242,151,95,.2),0 0 34px rgba(242,151,95,.08); }
