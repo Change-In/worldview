@@ -2037,11 +2037,17 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v90 · Aug 16";
+const BUILD = "v91 · Aug 16";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v91", date: "Aug 16", changes: [
+    "Model Lab restores the three intended tools: Lesson Pipeline, Question Map, and Lesson Lab; timing remains available only from the small top-right clock.",
+    "The connected pipeline now uses five clear stages: Clarification, Lesson Map, Extraction, Lesson, and Quiz, with no disabled placeholder stages.",
+    "Left and right run controls browse saved Clarification runs, and the selected run remains the input shown across every pipeline stage.",
+    "Lesson Map jobs are now tagged to their source lesson run so a completed map can be restored beside that same run instead of appearing only in Timing.",
+  ] },
   { tag: "v90", date: "Aug 16", changes: [
     "The Model Lab now opens directly into one connected Lesson Pipeline instead of competing phase and benchmark tabs.",
     "Map + checkpoints is the next tappable stage and can load any saved Clarification run, including its frozen scope and complete conversation.",

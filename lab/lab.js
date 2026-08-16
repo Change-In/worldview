@@ -318,6 +318,7 @@ const labState = {
   clarificationArtifacts: [],
   pipelineStage: "clarification",
   pipelineSelectedRunId: "",
+  lastPrimaryTab: "pipeline",
   speechAudio: null,
   speechCancel: null,
   speechCancelled: false,
@@ -1997,6 +1998,7 @@ function syncJobDetail(detail) {
     }
   }
   renderJobHistory();
+  renderPipelineMapOutput();
 }
 
 async function refreshJob(jobId) {
@@ -2263,6 +2265,10 @@ async function runTextExperiment(kind) {
         fingerprint: scenarioFingerprint(scenario),
         inputSetFingerprint,
         network: currentNetworkContext(),
+        ...(kind === "lesson" && q("lesson-topic")?.dataset.pipelineRunId ? {
+          pipelineRunId: q("lesson-topic").dataset.pipelineRunId,
+          pipelineStage: "map",
+        } : {}),
       },
       samples,
     };
@@ -2958,7 +2964,7 @@ function rememberClarificationArtifact(value, storage = "device") {
 }
 
 function selectedPipelineArtifact() {
-  return labState.clarificationArtifacts.find((item) => item.runId === labState.pipelineSelectedRunId) || labState.clarificationArtifacts[0] || null;
+  return labState.clarificationArtifacts.find((item) => item.runId === labState.pipelineSelectedRunId) || null;
 }
 
 function pipelineArtifactLabel(artifact) {
@@ -2969,17 +2975,33 @@ function pipelineArtifactLabel(artifact) {
 }
 
 function renderPipelineArtifactSelect() {
-  const select = q("pipeline-source-select");
-  if (!select) return;
   const artifacts = labState.clarificationArtifacts;
-  select.replaceChildren(...(artifacts.length ? artifacts.map((artifact) => element("option", {
-    value: artifact.runId,
-    text: pipelineArtifactLabel(artifact),
-  })) : [element("option", { value:"", text:"No saved Clarification runs yet" })]));
-  if (!artifacts.some((item) => item.runId === labState.pipelineSelectedRunId)) labState.pipelineSelectedRunId = artifacts[0]?.runId || "";
-  select.value = labState.pipelineSelectedRunId;
-  select.disabled = !artifacts.length;
+  const selectedIndex = artifacts.findIndex((item) => item.runId === labState.pipelineSelectedRunId);
+  const selected = selectedIndex >= 0 ? artifacts[selectedIndex] : null;
+  q("pipeline-run-position").textContent = selected ? `Run ${selectedIndex + 1} of ${artifacts.length}` : (artifacts.length ? "New run" : "No saved runs");
+  q("pipeline-run-label").textContent = selected ? pipelineArtifactLabel(selected) : (artifacts.length ? `${artifacts.length} saved run${artifacts.length === 1 ? "" : "s"} available` : "Start a new Clarification run.");
+  q("pipeline-run-prev").disabled = !artifacts.length || (selected && selectedIndex >= artifacts.length - 1) || labState.clarification.busy;
+  q("pipeline-run-next").disabled = !selected || selectedIndex <= 0 || labState.clarification.busy;
   renderPipelineSourcePreview();
+  renderPipelineMapOutput();
+}
+
+function browsePipelineRun(direction) {
+  const state = labState.clarification;
+  if (state.busy) return;
+  if (state.runId && !state.finalized) {
+    setMessage("clarification-message", "Finish this active Clarification run before opening a saved run.", "error");
+    return;
+  }
+  const artifacts = labState.clarificationArtifacts;
+  if (!artifacts.length) return;
+  let index = artifacts.findIndex((item) => item.runId === labState.pipelineSelectedRunId);
+  const next = index < 0 ? 0 : Math.max(0, Math.min(artifacts.length - 1, index + direction));
+  const artifact = artifacts[next];
+  labState.pipelineSelectedRunId = artifact.runId;
+  restoreClarificationArtifact(artifact, artifact.storage || "device");
+  persistClarificationSettings();
+  renderPipelineArtifactSelect();
 }
 
 function renderPipelineSourcePreview() {
@@ -3001,6 +3023,37 @@ function renderPipelineSourcePreview() {
     item.append(element("strong", { text:`${turn.role === "assistant" ? "Clarification" : "Learner"}: ` }), document.createTextNode(turn.content));
     return item;
   }));
+}
+
+function pipelineMapJob(artifact = selectedPipelineArtifact()) {
+  if (!artifact) return null;
+  return labState.jobs.find((job) => job.component === "lesson" && job.scenario?.pipelineRunId === artifact.runId && job.scenario?.pipelineStage === "map") || null;
+}
+
+function renderPipelineMapOutput() {
+  const root = q("pipeline-map-output");
+  const status = q("pipeline-map-output-status");
+  if (!root || !status) return;
+  root.replaceChildren();
+  const artifact = selectedPipelineArtifact();
+  const job = pipelineMapJob(artifact);
+  if (!artifact) { status.textContent = "Choose or create a Clarification run first."; return; }
+  if (!job) { status.textContent = "No saved Lesson Map output exists for this run yet."; return; }
+  const detail = labState.jobDetails.get(job.id);
+  status.textContent = `${job.status} \u00B7 ${job.completedSamples || 0} of ${job.totalSamples || 0} samples complete`;
+  status.className = `form-message ${["completed", "partial"].includes(job.status) ? "is-ok" : ""}`;
+  const samples = Array.isArray(detail?.samples) ? detail.samples : [];
+  const texts = samples.map((sample) => attemptResultText(null, sample)).filter(Boolean);
+  if (!texts.length) {
+    root.append(element("p", { text: LAB_ACTIVE_JOB_STATES.has(job.status) ? "This saved map job is still running." : "The saved job has no readable map output." }));
+    return;
+  }
+  for (const [index, output] of texts.entries()) {
+    const card = element("details", { className:"pipeline-output-result" });
+    if (index === 0) card.open = true;
+    card.append(element("summary", { text:`Map result ${index + 1}` }), element("pre", { text:output }));
+    root.append(card);
+  }
 }
 
 function pipelineMapInput(artifact = selectedPipelineArtifact()) {
@@ -3033,24 +3086,27 @@ function loadPipelineMapInput() {
   q("lesson-topic").scrollIntoView({ behavior:"smooth", block:"center" });
 }
 
-function mountPipelineMapWorkspace() {
-  const source = q("panel-lesson");
-  const host = q("pipeline-map-workspace");
-  if (!source || !host || host.childNodes.length) return;
-  while (source.firstChild) host.append(source.firstChild);
-  source.remove();
+function mountLessonWorkspace(target = "pipeline") {
+  const workspace = q("lesson-bench-workspace");
+  const host = target === "lesson" ? q("panel-lesson") : q("pipeline-map-workspace");
+  if (!workspace || !host || workspace.parentElement === host) return;
+  host.append(workspace);
 }
 
 function setPipelineStage(stage = "clarification") {
-  const next = ["map", "extraction"].includes(stage) ? stage : "clarification";
+  const stages = ["clarification", "map", "extraction", "lesson", "quiz"];
+  const next = stages.includes(stage) ? stage : "clarification";
   if (next !== "clarification" && labState.clarification.focusMode) setClarificationFocus(false);
   labState.pipelineStage = next;
   for (const panel of document.querySelectorAll('[data-pipeline-stage-panel="clarification"]')) panel.hidden = next !== "clarification";
   q("pipeline-connected-stage").hidden = next === "clarification";
   q("pipeline-map-stage").hidden = next !== "map";
   q("pipeline-extraction-stage").hidden = next !== "extraction";
-  q("pipeline-stage-eyebrow").textContent = next === "map" ? "Stage 2" : "Stage 3";
-  q("pipeline-stage-title").textContent = next === "map" ? "Map + checkpoints" : "Knowledge extraction";
+  q("pipeline-lesson-stage").hidden = next !== "lesson";
+  q("pipeline-quiz-stage").hidden = next !== "quiz";
+  const stageCopy = { map:["Stage 2", "Lesson Map"], extraction:["Stage 3", "Extraction"], lesson:["Stage 4", "Lesson"], quiz:["Stage 5", "Quiz"] };
+  if (stageCopy[next]) [q("pipeline-stage-eyebrow").textContent, q("pipeline-stage-title").textContent] = stageCopy[next];
+  if (next === "map") mountLessonWorkspace("pipeline");
   for (const button of document.querySelectorAll("[data-pipeline-stage]")) {
     const active = button.dataset.pipelineStage === next;
     button.closest("li")?.classList.toggle("is-active", active);
@@ -3294,6 +3350,14 @@ function resetClarificationRun(seed = "") {
   setMessage("clarification-setup-message", "");
   setMessage("clarification-backend-message", "");
   setClarificationView("learner");
+}
+
+function startNewPipelineRun(seed = "") {
+  labState.pipelineSelectedRunId = "";
+  resetClarificationRun(seed);
+  setPipelineStage("clarification");
+  persistClarificationSettings();
+  renderPipelineArtifactSelect();
 }
 
 function restoreClarificationArtifact(artifact, storage = "device") {
@@ -3945,8 +4009,8 @@ function bindClarificationEvents() {
   q("clarification-retry-transcription").addEventListener("click", retryClarificationTranscription);
   q("clarification-reply").addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submitClarificationReply(event.currentTarget.value); } });
   q("clarification-done").addEventListener("click", () => finishClarification());
-  q("clarification-new").addEventListener("click", () => resetClarificationRun());
-  q("clarification-fork").addEventListener("click", () => resetClarificationRun(labState.clarification.finalized?.topic || ""));
+  q("clarification-new").addEventListener("click", () => startNewPipelineRun());
+  q("clarification-fork").addEventListener("click", () => startNewPipelineRun(labState.clarification.finalized?.topic || ""));
   q("clarification-surface").addEventListener("pointerdown", startClarificationRecording);
   window.addEventListener("pointerup", stopClarificationRecording);
   window.addEventListener("pointercancel", stopClarificationRecording);
@@ -3960,6 +4024,9 @@ function bindClarificationEvents() {
 }
 
 function activateTab(tab) {
+  if (["pipeline", "scenario", "lesson"].includes(tab)) labState.lastPrimaryTab = tab;
+  if (tab === "lesson") mountLessonWorkspace("lesson");
+  if (tab === "pipeline" && labState.pipelineStage === "map") mountLessonWorkspace("pipeline");
   for (const button of document.querySelectorAll(".lab-tab")) {
     const active = button.dataset.tab === tab;
     button.classList.toggle("is-active", active);
@@ -3978,7 +4045,6 @@ function initializeWorkspace() {
   q("lab-gate").hidden = true;
   q("lab-shell").hidden = false;
   q("lab-open-timing").disabled = false;
-  mountPipelineMapWorkspace();
   loadLocalLibrary();
   resetPreset("lesson");
   resetPreset("tutor");
@@ -4089,11 +4155,9 @@ function bindEvents() {
   q("scenario-delete").addEventListener("click", deleteBenchmarkScenario);
   q("scenario-use").addEventListener("click", () => applyBenchmarkScenario(true));
   document.querySelectorAll("[data-pipeline-stage]").forEach((button) => button.addEventListener("click", () => setPipelineStage(button.dataset.pipelineStage)));
-  q("pipeline-source-select").addEventListener("change", () => {
-    labState.pipelineSelectedRunId = q("pipeline-source-select").value;
-    persistClarificationSettings();
-    renderPipelineSourcePreview();
-  });
+  q("pipeline-run-prev").addEventListener("click", () => browsePipelineRun(1));
+  q("pipeline-run-next").addEventListener("click", () => browsePipelineRun(-1));
+  document.querySelectorAll("[data-pipeline-previous-stage]").forEach((button) => button.addEventListener("click", () => setPipelineStage(button.dataset.pipelinePreviousStage)));
   q("pipeline-refresh-runs").addEventListener("click", refreshClarificationArtifacts);
   q("pipeline-load-map").addEventListener("click", loadPipelineMapInput);
   q("clarification-open-map").addEventListener("click", () => {
@@ -4101,12 +4165,11 @@ function bindEvents() {
     if (runId) labState.pipelineSelectedRunId = runId;
     setPipelineStage("map");
   });
-  q("pipeline-extraction-open-map").addEventListener("click", () => setPipelineStage("map"));
   q("lab-open-timing").addEventListener("click", () => {
     activateTab("results");
     q("latency-title").scrollIntoView({ behavior:"smooth", block:"start" });
   });
-  q("timing-back").addEventListener("click", () => activateTab("pipeline"));
+  q("timing-back").addEventListener("click", () => activateTab(labState.lastPrimaryTab || "pipeline"));
   q("speech-run").addEventListener("click", runSpeechComparison);
   q("speech-stop").addEventListener("click", stopSpeechComparison);
   q("jobs-refresh").addEventListener("click", refreshJobs);
