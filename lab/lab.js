@@ -340,6 +340,8 @@ const labState = {
   clarificationArtifacts: [],
   pipelineStage: "clarification",
   pipelineSelectedRunId: "",
+  pipelineSelectedMapJobId: "",
+  mapDeletingJobs: new Set(),
   mapView: "learner",
   lastPrimaryTab: "pipeline",
   speechAudio: null,
@@ -605,6 +607,8 @@ function resetWorkspaceContents() {
   labState.clarificationArtifacts = [];
   labState.pipelineStage = "clarification";
   labState.pipelineSelectedRunId = "";
+  labState.pipelineSelectedMapJobId = "";
+  labState.mapDeletingJobs = new Set();
   labState.mapView = "learner";
   labState.lessons = [];
   labState.notes = [];
@@ -1828,8 +1832,7 @@ function buildRun(kind) {
   if (unavailable.length) throw new Error(`${[...new Set(unavailable)].join(", ")} is not configured on the protected server.`);
 
   if (kind === "lesson") {
-    const pipelineRunId = q("lesson-topic")?.dataset?.pipelineRunId || "";
-    const pipelineArtifact = (labState.clarificationArtifacts || []).find((artifact) => artifact.runId === pipelineRunId);
+    const pipelineArtifact = pipelineMapGenerationArtifact();
     if (pipelineArtifact) {
       const fixtures = [{
         label: `Clarification run: ${pipelineArtifact.topic}`,
@@ -2183,9 +2186,14 @@ async function submitPendingCreate(pending, messageId) {
     if (!job) throw new Error("The server response did not identify the durable job.");
     forgetPendingCreate(immutable.id);
     logFlow(`Confirmed durable ${immutable.component} job ${job.id.slice(0, 8)} using create key ${immutable.idempotencyKey.slice(0, 8)}`, "browser → lab-jobs (idempotent create)");
-    const pipelineMapJob = immutable.component === "lesson" && Boolean(q("lesson-topic")?.dataset.pipelineRunId);
+    const pipelineMapJob = immutable.component === "lesson" && Boolean(immutable.request?.scenario?.pipelineRunId);
+    if (pipelineMapJob) {
+      labState.pipelineSelectedMapJobId = job.id;
+      persistClarificationSettings();
+      setMapView("learner");
+    }
     setMessage(messageId, pipelineMapJob
-      ? `Map job ${job.id.slice(0, 8)} accepted. It continues safely; open the clock to inspect progress and output.`
+      ? `Roadmap run ${job.id.slice(0, 8)} accepted. It now appears in Ready roadmaps and will update there as models finish.`
       : `Job ${job.id.slice(0, 8)} accepted. You can close this page and return to Timing.`, "ok");
     renderJobHistory();
     if (!pipelineMapJob) activateTab("results");
@@ -2279,20 +2287,21 @@ async function runTextExperiment(kind) {
       }
     }
     const scenario = scenarioFieldsSnapshot();
+    const pipelineArtifact = kind === "lesson" ? pipelineMapGenerationArtifact() : null;
     const inputSetFingerprint = fingerprint(run.fixtures.map((fixture) => fixture.fingerprint).join("|"));
     const request = {
       action: "create",
       idempotencyKey: run.runId,
       component: kind,
-      name: `${kind === "lesson" ? "Map + checkpoints" : kind === "tutor" ? "Tutor" : "Brain shadow"} · ${scenario.name || "unnamed scenario"}`,
+      name: pipelineArtifact ? `Lesson Map · ${pipelineArtifact.topic}` : `${kind === "lesson" ? "Map + checkpoints" : kind === "tutor" ? "Tutor" : "Brain shadow"} · ${scenario.name || "unnamed scenario"}`,
       scenario: {
         id: scenario.id,
         name: scenario.name,
         fingerprint: scenarioFingerprint(scenario),
         inputSetFingerprint,
         network: currentNetworkContext(),
-        ...(kind === "lesson" && q("lesson-topic")?.dataset.pipelineRunId ? {
-          pipelineRunId: q("lesson-topic").dataset.pipelineRunId,
+        ...(pipelineArtifact ? {
+          pipelineRunId: pipelineArtifact.runId,
           pipelineStage: "map",
         } : {}),
       },
@@ -3027,6 +3036,7 @@ function selectPipelineRun(runId) {
   const artifact = labState.clarificationArtifacts.find((item) => item.runId === selectedId);
   if (!artifact) { renderPipelineArtifactSelect(); return; }
   labState.pipelineSelectedRunId = artifact.runId;
+  if (!pipelineMapJobs(artifact).some((job) => job.id === labState.pipelineSelectedMapJobId)) labState.pipelineSelectedMapJobId = "";
   restoreClarificationArtifact(artifact, artifact.storage || "device");
   persistClarificationSettings();
   renderPipelineArtifactSelect();
@@ -3037,25 +3047,37 @@ function renderPipelineSourcePreview() {
   const preview = q("pipeline-source-preview");
   if (!preview) return;
   preview.hidden = !artifact;
-  q("pipeline-load-map").disabled = !artifact;
   if (!artifact) {
     setMessage("pipeline-source-message", "Finish a Clarification run, or choose a saved run above.");
+    syncPipelineMapInput(null);
     return;
   }
   setMessage("pipeline-source-message", "");
   q("pipeline-source-topic").textContent = artifact.topic;
   q("pipeline-source-scope").textContent = artifact.scopeSummary;
-  q("pipeline-source-items").replaceChildren(...artifact.scopeItems.map((item) => element("span", { text:item })));
+  const interests = artifact.scopeItems || [];
+  q("pipeline-source-interests").hidden = !interests.length;
+  q("pipeline-source-interests-summary").textContent = `Areas of interest (${interests.length})`;
+  q("pipeline-source-items").replaceChildren(...interests.map((item) => element("span", { text:item })));
   q("pipeline-source-transcript").replaceChildren(...artifact.transcript.map((turn) => {
     const item = element("li");
     item.append(element("strong", { text:`${turn.role === "assistant" ? "Clarification" : "Learner"}: ` }), document.createTextNode(turn.content));
     return item;
   }));
+  syncPipelineMapInput(artifact);
+}
+
+function pipelineMapJobs(artifact = selectedPipelineArtifact()) {
+  if (!artifact) return [];
+  return labState.jobs
+    .filter((job) => job.component === "lesson" && job.scenario?.pipelineRunId === artifact.runId && job.scenario?.pipelineStage === "map")
+    .sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0));
 }
 
 function pipelineMapJob(artifact = selectedPipelineArtifact()) {
   if (!artifact) return null;
-  return labState.jobs.find((job) => job.component === "lesson" && job.scenario?.pipelineRunId === artifact.runId && job.scenario?.pipelineStage === "map") || null;
+  const jobs = pipelineMapJobs(artifact);
+  return jobs.find((job) => job.id === labState.pipelineSelectedMapJobId) || jobs[0] || null;
 }
 
 function cleanMapText(value, length = 1200) {
@@ -3290,6 +3312,107 @@ function renderPipelineRoadmap(record, artifact) {
   return { card, map, meta };
 }
 
+function pipelineMapRunState(job) {
+  const records = pipelineMapOutputRecords(labState.jobDetails.get(job.id), job);
+  const incomplete = records.some((record) => {
+    const map = parsePipelineMapOutput(record.text, selectedPipelineArtifact());
+    return pipelineMapRecordMeta(record, map).likelyCutOff;
+  });
+  if (LAB_ACTIVE_JOB_STATES.has(job.status)) return { label:"Generating", className:"" };
+  if (records.length && incomplete) return { label:"Incomplete", className:"is-incomplete" };
+  if (records.length) return { label:"Ready", className:"is-ready" };
+  if (["failed", "partial", "needs_attention", "cancelled"].includes(job.status)) return { label:job.status === "cancelled" ? "Cancelled" : "Failed", className:"is-failed" };
+  return { label:job.status.replaceAll("_", " "), className:"" };
+}
+
+function selectPipelineMapJob(jobId, options = {}) {
+  const artifact = selectedPipelineArtifact();
+  const job = pipelineMapJobs(artifact).find((item) => item.id === jobId);
+  if (!job) return;
+  labState.pipelineSelectedMapJobId = job.id;
+  persistClarificationSettings();
+  setPipelineStage("map");
+  setMapView("learner");
+  ensurePipelineMapDetail(job);
+  renderPipelineMapOutput();
+  if (options.scroll !== false) q("pipeline-map-output")?.scrollIntoView({ behavior:"smooth", block:"start" });
+}
+
+function removePipelineMapJobLocally(jobId) {
+  labState.jobs = labState.jobs.filter((job) => job.id !== jobId);
+  labState.jobDetails.delete(jobId);
+  labState.mapDetailRequests.delete(jobId);
+  labState.mapDetailRefreshed.delete(jobId);
+  labState.outputs = labState.outputs.filter((output) => output.jobId !== jobId);
+  if (labState.pipelineSelectedMapJobId === jobId) labState.pipelineSelectedMapJobId = "";
+  persistWorkspace();
+  persistClarificationSettings();
+  renderJobHistory();
+  renderResults();
+  renderPipelineMapOutput();
+}
+
+async function deletePipelineMapJob(jobId) {
+  const job = pipelineMapJobs().find((item) => item.id === jobId);
+  if (!job || LAB_ACTIVE_JOB_STATES.has(job.status) || labState.mapDeletingJobs.has(jobId)) return;
+  const state = pipelineMapRunState(job);
+  const warning = state.label === "Ready"
+    ? "Delete this saved roadmap run and all of its model outputs? This cannot be undone."
+    : "Delete this failed or incomplete roadmap run? This cannot be undone.";
+  if (!window.confirm(warning)) return;
+  if (labState.preview) { removePipelineMapJobLocally(jobId); return; }
+  labState.mapDeletingJobs.add(jobId);
+  renderPipelineMapOutput();
+  try {
+    await labJobsFetch({ action:"delete", jobId });
+    removePipelineMapJobLocally(jobId);
+    setMessage("pipeline-map-output-status", "Roadmap run deleted.", "ok");
+  } catch (error) {
+    setMessage("pipeline-map-output-status", `Delete failed: ${clip(error.message, 120)}`, "error");
+  } finally {
+    labState.mapDeletingJobs.delete(jobId);
+    renderPipelineMapOutput();
+  }
+}
+
+function renderPipelineMapRuns(artifact = selectedPipelineArtifact()) {
+  const root = q("pipeline-map-runs");
+  const count = q("pipeline-map-runs-count");
+  if (!root || !count) return;
+  root.replaceChildren();
+  const jobs = pipelineMapJobs(artifact);
+  const readyCount = jobs.filter((job) => pipelineMapOutputRecords(labState.jobDetails.get(job.id), job).length).length;
+  count.textContent = jobs.length ? `${readyCount} ready · ${jobs.length} total` : "0 runs";
+  if (!jobs.length) {
+    root.append(element("p", { className:"map-run-empty", text:"No roadmap runs yet. Generate one from the clarification shown above." }));
+    return;
+  }
+  for (const job of jobs) {
+    const selected = pipelineMapJob(artifact)?.id === job.id;
+    const state = pipelineMapRunState(job);
+    const total = Math.max(1, job.totalSamples || 1);
+    const settled = Math.min(total, (job.completedSamples || 0) + (job.failedSamples || 0) + (job.uncertainSamples || 0));
+    const row = element("article", { className:`map-run-row${selected ? " is-selected" : ""}` });
+    const open = element("button", { className:"map-run-open", type:"button", attrs:{ "aria-pressed":String(selected) } });
+    const copy = element("span", { className:"map-run-copy" });
+    copy.append(
+      element("strong", { text:`${clip(artifact?.topic || "Lesson", 80)} roadmap` }),
+      element("small", { text:`${prettyDate(job.createdAt)} · ${settled}/${total} model result${total === 1 ? "" : "s"} · ${String(job.id || "run").slice(-8)}` }),
+    );
+    open.append(copy, element("span", { className:`map-run-status ${state.className}`.trim(), text:state.label }));
+    open.addEventListener("click", () => selectPipelineMapJob(job.id));
+    row.append(open);
+    if (!LAB_ACTIVE_JOB_STATES.has(job.status)) {
+      const deleting = labState.mapDeletingJobs.has(job.id);
+      const remove = element("button", { className:"map-run-delete", type:"button", text:deleting ? "…" : "×", attrs:{ "aria-label":`Delete roadmap from ${prettyDate(job.createdAt)}`, title:"Delete roadmap run" } });
+      remove.disabled = deleting;
+      remove.addEventListener("click", () => deletePipelineMapJob(job.id));
+      row.append(remove);
+    }
+    root.append(row);
+  }
+}
+
 function renderPipelineMapOutput() {
   const root = q("pipeline-map-output");
   const status = q("pipeline-map-output-status");
@@ -3300,6 +3423,7 @@ function renderPipelineMapOutput() {
   q("pipeline-map-packet").textContent = "No request yet.";
   q("pipeline-map-metrics").replaceChildren(element("article", { className:"map-result-summary", text:"No model results yet." }));
   const artifact = selectedPipelineArtifact();
+  renderPipelineMapRuns(artifact);
   const job = pipelineMapJob(artifact);
   const backendStatus = q("pipeline-map-backend-status");
   const setStatus = (text, ok = false) => {
@@ -3393,16 +3517,32 @@ function pipelineMapPacket(artifact) {
   });
 }
 
-function loadPipelineMapInput() {
-  const artifact = selectedPipelineArtifact();
-  if (!artifact) return;
-  q("lesson-topic").value = pipelineMapInput(artifact);
-  q("lesson-topic").dataset.pipelineRunId = artifact.runId;
+function pipelineMapGenerationArtifact() {
+  const workspace = q("lesson-bench-workspace");
+  const insidePipeline = workspace?.parentElement === q("pipeline-map-workspace") || labState.pipelineStage === "map";
+  return insidePipeline ? selectedPipelineArtifact() : null;
+}
+
+function syncPipelineMapInput(artifact = selectedPipelineArtifact()) {
+  const topic = q("lesson-topic");
+  if (!topic) return;
+  if (!artifact) {
+    delete topic.dataset.pipelineRunId;
+    topic.readOnly = false;
+    q("lesson-bound-source").hidden = true;
+    q("pipeline-map-bound-source").textContent = "Choose or finish a Clarification run before generating a roadmap.";
+    return;
+  }
+  topic.value = pipelineMapInput(artifact);
+  topic.dataset.pipelineRunId = artifact.runId;
+  topic.readOnly = true;
   labState.selectedNoteId = "";
   q("lesson-note").value = "";
+  const message = `Locked to “${artifact.topic}” — the clarification shown above is the exact source for every model in the next roadmap run.`;
+  q("lesson-bound-source").hidden = false;
+  q("lesson-bound-source").textContent = message;
+  q("pipeline-map-bound-source").textContent = message;
   renderRunEstimate("lesson");
-  setMessage("lesson-run-message", "Loaded the frozen Clarification scope and conversation into this map job.", "ok");
-  q("lesson-topic").scrollIntoView({ behavior:"smooth", block:"center" });
 }
 
 function mountLessonWorkspace(target = "pipeline") {
@@ -3410,6 +3550,7 @@ function mountLessonWorkspace(target = "pipeline") {
   const host = target === "lesson" ? q("panel-lesson") : q("pipeline-map-workspace");
   if (!workspace || !host || workspace.parentElement === host) return;
   host.append(workspace);
+  if (target === "pipeline") syncPipelineMapInput();
 }
 
 function setPipelineStage(stage = "clarification") {
@@ -3471,6 +3612,7 @@ function persistClarificationSettings() {
     finalizedStorage: state.finalizedStorage,
     artifacts: labState.clarificationArtifacts.slice(0, 12),
     pipelineSelectedRunId: labState.pipelineSelectedRunId,
+    pipelineSelectedMapJobId: labState.pipelineSelectedMapJobId,
   };
   try { localStorage.setItem(clarificationStorageKey(), JSON.stringify(payload)); return true; }
   catch (_) { return false; }
@@ -3671,6 +3813,7 @@ function resetClarificationRun(seed = "") {
 
 function startNewPipelineRun(seed = "") {
   labState.pipelineSelectedRunId = "";
+  labState.pipelineSelectedMapJobId = "";
   resetClarificationRun(seed);
   setPipelineStage("clarification");
   persistClarificationSettings();
@@ -3720,6 +3863,7 @@ function initializeClarification() {
   const inheritedPreviousDefault = previousBuiltIn && q("clarification-provider").value === "anthropic" && saved.model === "claude-haiku-4-5";
   if (!inheritedPreviousDefault && saved.model && [...q("clarification-model").options].some((option) => option.value === saved.model)) q("clarification-model").value = saved.model;
   labState.pipelineSelectedRunId = clip(saved.pipelineSelectedRunId, 120);
+  labState.pipelineSelectedMapJobId = clip(saved.pipelineSelectedMapJobId, 120);
   for (const artifact of Array.isArray(saved.artifacts) ? saved.artifacts : []) rememberClarificationArtifact(artifact, artifact?.storage || "device");
   if (saved.finalized) rememberClarificationArtifact(saved.finalized, saved.finalizedStorage || "device");
   if (saved.finalized) restoreClarificationArtifact(saved.finalized, saved.finalizedStorage || "device");
@@ -4382,32 +4526,37 @@ function initializeWorkspace() {
 function openMapPreviewFixture() {
   if (!labState.preview || new URLSearchParams(window.location.search).get("fixture") !== "map") return;
   const artifact = {
-    runId:"preview-map-v93", topic:"How chameleons change color",
-    scopeSummary:"Understand the physical mechanism, the signals that control it, and what color change does for a chameleon.",
-    scopeItems:["cell structure", "nervous signals", "communication"],
+    runId:"preview-map-v94", topic:"Trains",
+    scopeSummary:"Understand how trains stay on the rails, how signaling keeps traffic safe, and how rail networks move people efficiently.",
+    scopeItems:["wheel and rail mechanics", "railway signals", "network planning"],
     transcript:[
-      { role:"assistant", content:"Which part of chameleon color change do you most want to understand?" },
-      { role:"user", content:"The mechanism, and why they actually do it." },
+      { role:"assistant", content:"Which part of trains do you most want to understand?" },
+      { role:"user", content:"How they stay on track, and how a whole rail network is coordinated." },
     ],
     completionMethod:"preview fixture", storage:"device",
   };
   rememberClarificationArtifact(artifact, "device");
   labState.pipelineSelectedRunId = artifact.runId;
   const job = {
-    id:"preview-map-job-v93", component:"lesson", status:"completed", createdAt:now(),
+    id:"preview-map-job-v94", component:"lesson", status:"completed", createdAt:now(), totalSamples:2, completedSamples:2, failedSamples:0, uncertainSamples:0,
     scenario:{ pipelineRunId:artifact.runId, pipelineStage:"map" },
   };
-  labState.jobs.unshift(job);
+  const failedJob = {
+    id:"preview-map-failed-v94", component:"lesson", status:"failed", createdAt:new Date(Date.now() - 3600000).toISOString(), totalSamples:1, completedSamples:0, failedSamples:1, uncertainSamples:0,
+    scenario:{ pipelineRunId:artifact.runId, pipelineStage:"map" },
+  };
+  labState.jobs.unshift(job, failedJob);
+  labState.pipelineSelectedMapJobId = job.id;
   const makeMap = (variant) => JSON.stringify({
-    goal:variant === "research" ? "Explain how current evidence connects chameleon skin structure to signaling and social context." : "Explain how skin structure and signals let a chameleon change its visible color.",
-    route:["light_structure","signal_control","purpose_integration"],
+    goal:variant === "research" ? "Explain how train mechanics, modern signaling evidence, and network planning work together." : "Explain how train mechanics, signaling, and scheduling form one rail system.",
+    route:["wheel_rail","signal_control","network_integration"],
     nodes:[
-      { id:"light_structure", kind:"foundation", title:"How skin structures change reflected light", whyNeeded:"Color change begins with a physical change in reflective cells, not colored liquid moving through the skin.", prerequisites:[], masteryGoal:"Predict how changing the spacing of reflective structures changes the wavelengths that leave the skin.", diagnosticQuestion:"If the reflective spacing grows, what should happen to the reflected color, and why?" },
-      { id:"signal_control", kind:"integration", title:"How the body controls those structures", whyNeeded:"The optical mechanism needs a control signal that connects the animal's state to its skin.", prerequisites:["light_structure"], masteryGoal:"Trace a plausible chain from a sensory or social cue to a visible skin change.", diagnosticQuestion:"What links seeing a rival to a change in the reflective cells?" },
-      { id:"purpose_integration", kind:"goal", title:"When and why chameleons change color", whyNeeded:"Mechanism alone does not explain the behavior's role in temperature, camouflage, and communication.", prerequisites:["signal_control"], masteryGoal:"Compare two contexts and explain why the same color-change system produces different visible outcomes.", diagnosticQuestion:"How would the expected change differ between warming in sunlight and signaling to a rival?" },
+      { id:"wheel_rail", kind:"foundation", title:"How wheel shape keeps a train centered", whyNeeded:"The wheel and rail geometry explains ordinary guidance before switches or signaling enter the picture.", prerequisites:[], masteryGoal:"Predict how a conical wheelset responds when it shifts sideways on straight track.", diagnosticQuestion:"Why does one wheel effectively travel farther after the axle shifts sideways?" },
+      { id:"signal_control", kind:"integration", title:"How signals separate trains safely", whyNeeded:"Mechanical guidance does not prevent two trains from occupying the same section of track.", prerequisites:["wheel_rail"], masteryGoal:"Trace how track occupancy changes the permission shown to the next train.", diagnosticQuestion:"What information must a signal system know before it clears a train into a block?" },
+      { id:"network_integration", kind:"goal", title:"How a rail network balances safety and throughput", whyNeeded:"The whole system must combine vehicles, track, signals, stations, and schedules.", prerequisites:["signal_control"], masteryGoal:"Explain one scheduling tradeoff that increases capacity without weakening safe separation.", diagnosticQuestion:"Why can adding one delayed train disrupt several otherwise independent services?" },
     ],
-    startingQuestion:"What would have to change inside the skin for the reflected color to change?",
-    assumptions:[], researchNeeds:variant === "research" ? [] : ["How strongly each function varies by species"],
+    startingQuestion:"What physical feature lets a rigid axle steer without a steering wheel?",
+    assumptions:[], researchNeeds:variant === "research" ? [] : ["How signaling rules differ between rail systems"],
   });
   const samples = [
     { id:"preview-no-research", provider:"anthropic", providerLabel:"Claude", model:"claude-sonnet-5", status:"completed", request:{ maxTokens:2000, research:false }, result:{ text:makeMap("plain"), inputTokens:1310, outputTokens:1044, ms:18420, researchRequested:false, researchApplied:false, searches:0, citations:[] } },
@@ -4482,7 +4631,8 @@ function bindEvents() {
     labState.selectedNoteId = String(note.id);
     setMessage("lesson-run-message", "Copied this saved Note into the Lab topic. The original Note remains unchanged.", "ok");
   });
-  q("lesson-topic").addEventListener("input", () => {
+  q("lesson-topic").addEventListener("input", (event) => {
+    if (event.currentTarget.readOnly) { syncPipelineMapInput(); return; }
     delete q("lesson-topic").dataset.pipelineRunId;
     const note = labState.notes.find((item) => String(item.id) === q("lesson-note").value);
     if (note && note.text.trim() !== q("lesson-topic").value.trim()) {
@@ -4516,7 +4666,6 @@ function bindEvents() {
   document.querySelectorAll("[data-pipeline-previous-stage]").forEach((button) => button.addEventListener("click", () => setPipelineStage(button.dataset.pipelinePreviousStage)));
   q("map-view-learner").addEventListener("click", () => setMapView("learner"));
   q("map-view-backend").addEventListener("click", () => setMapView("backend"));
-  q("pipeline-load-map").addEventListener("click", loadPipelineMapInput);
   q("clarification-open-map").addEventListener("click", () => {
     const runId = labState.clarification.finalized?.runId;
     if (runId) labState.pipelineSelectedRunId = runId;

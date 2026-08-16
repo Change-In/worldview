@@ -2037,11 +2037,17 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v93 · Aug 16";
+const BUILD = "v94 · Aug 16";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v94", date: "Aug 16", changes: [
+    "Lesson Map now has one clickable Ready roadmaps history for the clarification shown above; every completed, failed, or incomplete run remains visible until you delete it.",
+    "Selecting any roadmap run opens that exact run in Learner view, and finished map runs have a confirmed Delete action that removes their saved model outputs.",
+    "New generations are hard-bound to the selected Clarification artifact, named for its topic, selected immediately when accepted, and refreshed in the roadmap list as models finish.",
+    "Areas of interest now open from a dropdown beside the clarification title, and the redundant Lesson Pipeline, Question Map, and Lesson Lab toggles are removed so the five learning stages are the only primary navigation.",
+  ] },
   { tag: "v93", date: "Aug 16", changes: [
     "Lesson Map now shows each model as a clear comparison card with its research state, generation time, and incomplete-output warning.",
     "Roadmaps show every checkpoint title at a glance; selecting a checkpoint reveals what counts as passing, how to test it, why it belongs, and what it builds on.",
