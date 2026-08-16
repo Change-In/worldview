@@ -693,8 +693,10 @@ button.preferred-button.is-on { border-color: rgba(255, 211, 111, .4); color: va
 .clarification-waiting span { width:34px; height:34px; border:2px solid rgba(255,255,255,.15); border-top-color:#ed985f; border-radius:50%; animation:clarificationSpin .8s linear infinite; }
 @keyframes clarificationSpin { to { transform:rotate(360deg); } }
 .clarification-waiting p { margin:0; }
-.clarification-text-controls { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:9px; margin-top:10px; }
-.clarification-text-controls textarea { min-height:62px; resize:vertical; }
+.clarification-text-controls { position:relative; display:block; margin-top:10px; }
+.clarification-text-controls textarea { width:100%; min-height:62px; padding-right:74px; resize:vertical; }
+.clarification-send { position:absolute; right:8px; bottom:8px; min-height:38px; padding:7px 12px; border-radius:999px; }
+.clarification-send[hidden] { display:none; }
 .clarification-voice-actions { display:flex; gap:8px; margin-top:10px; }
 .clarification-voice-actions:not(:has(button:not([hidden]))) { display:none; }
 .clarification-voice-actions .button { flex:1; }

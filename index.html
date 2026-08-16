@@ -2037,11 +2037,17 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v88 · Aug 16";
+const BUILD = "v89 · Aug 16";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v89", date: "Aug 16", changes: [
+    "Clarification now uses Claude Sonnet 4.6 by default and a more formal, discovery-only Phase One prompt while preserving owner-edited prompt drafts.",
+    "Saying or typing an explicit readiness phrase can advance after the scope is usable; Done remains available as a deliberate fallback.",
+    "Text mode hides Send until there is a reply and places it inside the right edge of the composer to save space.",
+    "The next lesson-map design now completes one prerequisite family and its integrating checkpoint before moving across to the next branch.",
+  ] },
   { tag: "v88", date: "Aug 16", changes: [
     "Clarification now keeps every reply digestible on one phone screen instead of asking you to scroll through a long response.",
     "The model no longer forces or announces three directions; it follows however many possibilities the topic and your interest actually need.",

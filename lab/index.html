@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=88">
+<link rel="stylesheet" href="./lab.css?v=89">
 </head>
 <body>
 
@@ -122,7 +122,7 @@
           <div id="clarification-text-controls" class="clarification-text-controls" hidden>
             <label class="sr-only" for="clarification-reply">Your reply</label>
             <textarea id="clarification-reply" rows="2" maxlength="1200" placeholder="Tell it what interests you or ask for different ideas."></textarea>
-            <button id="clarification-send" class="button button-primary" type="button">Send</button>
+            <button id="clarification-send" class="clarification-send button button-primary" type="button" hidden>Send</button>
           </div>
           <div class="clarification-voice-actions">
             <button id="clarification-hear" class="button button-quiet" type="button" hidden>Hear reply</button>
@@ -180,8 +180,8 @@
     <section class="pipeline-placeholders" aria-labelledby="pipeline-next-title">
       <div class="card-heading"><div><p class="eyebrow">Connected stages</p><h3 id="pipeline-next-title">What follows this output</h3></div><span class="cost-warning">Visible, intentionally inactive</span></div>
       <div class="placeholder-grid">
-        <article><span>2</span><h4>Knowledge extraction</h4><p>Feynman-style diagnostic from general understanding to specifics. It does not teach. Demonstrated knowledge can satisfy lesson checkpoints, but must be explained again in the final assessment.</p></article>
-        <article><span>3</span><h4>Map + checkpoints</h4><p>Build a branching graph of fundamentals and dependencies while presenting one active mission at a time. Starts in parallel with extraction after Clarification is frozen.</p></article>
+        <article><span>2</span><h4>Knowledge extraction</h4><p>Begins with map generation after scope freezes. Opens with the learner's broad current understanding, then narrows from their own words without teaching or awarding progress.</p></article>
+        <article><span>3</span><h4>Map + checkpoints</h4><p>Retains a branching dependency graph, but the learner route completes one prerequisite family and its integrating checkpoint before moving to the next branch.</p></article>
         <article><span>4</span><h4>Lesson opening</h4><p>Merge the frozen scope, generated graph, and diagnostic evidence. Begin as soon as enough of both parallel paths is available.</p></article>
         <article><span>5</span><h4>Lesson conversation</h4><p>Socratic questions surface and repair gaps. The exact behavior is a testable starting point, not a settled framework.</p></article>
         <article><span>6</span><h4>Final explanation</h4><p>The learner explains the whole idea unaided. Targeted follow-ups expose gaps; gaps loop to Socratic repair, then a fresh explanation measures learning.</p></article>
@@ -431,6 +431,6 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=88" defer></script>
+<script src="./lab.js?v=89" defer></script>
 </body>
 </html>
