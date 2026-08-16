@@ -2037,15 +2037,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v87 · Aug 15";
+const BUILD = "v88 · Aug 16";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
-  { tag: "v87", date: "Aug 15", changes: [
-    "Long Clarification replies now have a wide right-edge scroll lane, so the full response remains reachable without moving the page or accidentally recording.",
-    "Learner-visible Clarification text now removes emojis even when a model ignores the prompt, while Backend inspection still preserves the exact raw reply.",
-    "Holding the lesson now interrupts stuck or silent speech and starts recording; a small Hear reply control provides a fresh iPhone playback gesture.",
+  { tag: "v88", date: "Aug 16", changes: [
+    "Clarification now keeps every reply digestible on one phone screen instead of asking you to scroll through a long response.",
+    "The model no longer forces or announces three directions; it follows however many possibilities the topic and your interest actually need.",
+    "Voice now retains and unlocks the same audio player before protected Supabase speech arrives; holding interrupts stuck speech, and Hear reply supplies a fresh playback tap.",
+    "Clarification removes model-supplied emojis from learner copy while keeping the exact raw response in Backend.",
   ] },
   { tag: "v86", date: "Aug 15", changes: [
     "Clarification now addresses the learner as an intelligent adult, using calm language without greetings, emojis, performative enthusiasm, or childlike encouragement.",
