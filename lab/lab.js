@@ -122,6 +122,26 @@ const LAB_MAX_LATENCY_METRICS = 240;
 const LAB_MAX_PENDING_CREATES = 4;
 const LAB_LESSON_HANDOFF_KEY = "worldview-lab-lesson-handoff-v1";
 const LAB_ACTIVE_JOB_STATES = new Set(["queued", "running", "cancelling"]);
+const LESSON_MAP_OUTPUT_CONTRACT = `Return only valid JSON with this shape:
+{
+  "goal": "the clarified lesson goal",
+  "route": ["node_id_in_learner_order"],
+  "nodes": [
+    {
+      "id": "stable_short_id",
+      "kind": "foundation | integration | goal",
+      "title": "short learner-facing checkpoint title",
+      "whyNeeded": "why this supports the learner's goal",
+      "prerequisites": ["earlier_node_id"],
+      "masteryGoal": "what the learner must explain, predict, compare, or apply",
+      "diagnosticQuestion": "one question that can reveal that understanding"
+    }
+  ],
+  "startingQuestion": "the first broad diagnostic question",
+  "assumptions": ["important map assumption not established by the learner"],
+  "researchNeeds": ["fresh or contested claim that should be checked before teaching"]
+}
+The route must contain every node exactly once in branch-completion order. Use empty arrays when no assumptions or research needs exist. Do not wrap the JSON in markdown.`;
 const LAB_DEFAULT_SCENARIO = Object.freeze({
   id: "builtin:scenario:first-principles",
   name: "First-principles baseline",
@@ -134,9 +154,9 @@ const LAB_DEFAULT_SCENARIO = Object.freeze({
 const LAB_PRESETS = {
   lesson: [
     {
-      id: "branch-completion-map",
+      id: "branch-completion-map-v2",
       label: "Branch-completion knowledge map",
-      text: "Build the smallest sufficient dependency graph for the learner's clarified goal. Identify the first-principle nodes, the integrating nodes they unlock, and the final target. Do not force a checkpoint count. Return a linear learner route that completes one prerequisite family and its integrating node before crossing to the next family, then converges on the shared goal. For every node, name its prerequisites, the understanding the learner must demonstrate, and one diagnostic question. Preserve all interests and constraints in the frozen Clarification artifact. This map plans the route; it does not teach or award mastery.",
+      text: `Build the smallest sufficient dependency graph for the learner's clarified goal. Identify the first-principle nodes, the integrating nodes they unlock, and the final target. Do not force a checkpoint count. Return a linear learner route that completes one prerequisite family and its integrating node before crossing to the next family, then converges on the shared goal. For every node, name its prerequisites, the understanding the learner must demonstrate, and one diagnostic question. Preserve all interests and constraints in the frozen Clarification artifact. This map plans the route; it does not teach or award mastery.\n\n${LESSON_MAP_OUTPUT_CONTRACT}`,
     },
     {
       id: "first-principles",
@@ -314,10 +334,13 @@ const labState = {
   pendingCreates: [],
   jobs: [],
   jobDetails: new Map(),
+  mapDetailRequests: new Set(),
+  mapDetailRefreshed: new Set(),
   jobPollTimer: 0,
   clarificationArtifacts: [],
   pipelineStage: "clarification",
   pipelineSelectedRunId: "",
+  mapView: "learner",
   lastPrimaryTab: "pipeline",
   speechAudio: null,
   speechCancel: null,
@@ -577,9 +600,12 @@ function resetWorkspaceContents() {
   labState.flow = [];
   labState.jobs = [];
   labState.jobDetails = new Map();
+  labState.mapDetailRequests = new Set();
+  labState.mapDetailRefreshed = new Set();
   labState.clarificationArtifacts = [];
   labState.pipelineStage = "clarification";
   labState.pipelineSelectedRunId = "";
+  labState.mapView = "learner";
   labState.lessons = [];
   labState.notes = [];
   labState.selectedNoteId = "";
@@ -1051,10 +1077,10 @@ function policyFindings(kind, text) {
     }
   }
   if (kind === "lesson") {
-    const checkpoints = (body.match(/^\s*(?:\d+[.)]|[-*])\s+/gm) || []).length;
+    const checkpoints = parsePipelineMapOutput(body).nodes.length;
     findings.push(checkpoints
-      ? { level: "pass", label: `${checkpoints} listed steps` }
-      : { level: "warn", label: "No enumerated checkpoints found" });
+      ? { level: "pass", label: `${checkpoints} readable checkpoints` }
+      : { level: "warn", label: "No readable checkpoints found" });
   }
   if (/\[\[checkpoint:/i.test(body)) findings.push({ level: "warn", label: "Emitted a checkpoint marker — the Lab does not ask for one" });
   return findings;
@@ -2976,28 +3002,30 @@ function pipelineArtifactLabel(artifact) {
 
 function renderPipelineArtifactSelect() {
   const artifacts = labState.clarificationArtifacts;
-  const selectedIndex = artifacts.findIndex((item) => item.runId === labState.pipelineSelectedRunId);
-  const selected = selectedIndex >= 0 ? artifacts[selectedIndex] : null;
-  q("pipeline-run-position").textContent = selected ? `Run ${selectedIndex + 1} of ${artifacts.length}` : (artifacts.length ? "New run" : "No saved runs");
-  q("pipeline-run-label").textContent = selected ? pipelineArtifactLabel(selected) : (artifacts.length ? `${artifacts.length} saved run${artifacts.length === 1 ? "" : "s"} available` : "Start a new Clarification run.");
-  q("pipeline-run-prev").disabled = !artifacts.length || (selected && selectedIndex >= artifacts.length - 1) || labState.clarification.busy;
-  q("pipeline-run-next").disabled = !selected || selectedIndex <= 0 || labState.clarification.busy;
+  const selected = selectedPipelineArtifact();
+  const select = q("pipeline-run-select");
+  if (select) {
+    select.replaceChildren(element("option", { value:"", text: artifacts.length ? "New lesson run" : "No saved lesson runs" }));
+    for (const artifact of artifacts) select.append(element("option", { value:artifact.runId, text:pipelineArtifactLabel(artifact) }));
+    select.value = selected?.runId || "";
+    select.disabled = labState.clarification.busy;
+  }
   renderPipelineSourcePreview();
   renderPipelineMapOutput();
 }
 
-function browsePipelineRun(direction) {
+function selectPipelineRun(runId) {
   const state = labState.clarification;
-  if (state.busy) return;
+  if (state.busy) { renderPipelineArtifactSelect(); return; }
   if (state.runId && !state.finalized) {
     setMessage("clarification-message", "Finish this active Clarification run before opening a saved run.", "error");
+    renderPipelineArtifactSelect();
     return;
   }
-  const artifacts = labState.clarificationArtifacts;
-  if (!artifacts.length) return;
-  let index = artifacts.findIndex((item) => item.runId === labState.pipelineSelectedRunId);
-  const next = index < 0 ? 0 : Math.max(0, Math.min(artifacts.length - 1, index + direction));
-  const artifact = artifacts[next];
+  const selectedId = clip(runId, 120);
+  if (!selectedId) { startNewPipelineRun(); return; }
+  const artifact = labState.clarificationArtifacts.find((item) => item.runId === selectedId);
+  if (!artifact) { renderPipelineArtifactSelect(); return; }
   labState.pipelineSelectedRunId = artifact.runId;
   restoreClarificationArtifact(artifact, artifact.storage || "device");
   persistClarificationSettings();
@@ -3011,10 +3039,10 @@ function renderPipelineSourcePreview() {
   preview.hidden = !artifact;
   q("pipeline-load-map").disabled = !artifact;
   if (!artifact) {
-    setMessage("pipeline-source-message", "Finish a Clarification run, or refresh after opening a previously saved run.");
+    setMessage("pipeline-source-message", "Finish a Clarification run, or choose a saved run above.");
     return;
   }
-  setMessage("pipeline-source-message", `${artifact.storage === "server" ? "Server-saved" : "Device-saved"} immutable run · ${artifact.transcript.length} conversation turns`, "ok");
+  setMessage("pipeline-source-message", "");
   q("pipeline-source-topic").textContent = artifact.topic;
   q("pipeline-source-scope").textContent = artifact.scopeSummary;
   q("pipeline-source-items").replaceChildren(...artifact.scopeItems.map((item) => element("span", { text:item })));
@@ -3030,30 +3058,229 @@ function pipelineMapJob(artifact = selectedPipelineArtifact()) {
   return labState.jobs.find((job) => job.component === "lesson" && job.scenario?.pipelineRunId === artifact.runId && job.scenario?.pipelineStage === "map") || null;
 }
 
+function cleanMapText(value, length = 1200) {
+  return clip(asText(value).replace(/\*\*|__|`/g, "").replace(/^#+\s*/g, "").trim(), length);
+}
+
+function normalizePipelineMap(value, raw = "", artifact = selectedPipelineArtifact()) {
+  const source = value && typeof value === "object" ? value : {};
+  const routeSource = Array.isArray(source.route) ? source.route : [];
+  const nodeSource = [source.nodes, source.checkpoints, source.knowledgeTree, source.linear, routeSource]
+    .find((items) => Array.isArray(items) && items.some((item) => item && typeof item === "object")) || [];
+  const nodes = nodeSource.map((node, index) => {
+    const id = cleanMapText(node?.id || node?.nodeId || node?.checkpointId || `step_${index + 1}`, 80).replace(/\s+/g, "_").toLowerCase();
+    const prerequisites = (Array.isArray(node?.prerequisites) ? node.prerequisites : Array.isArray(node?.prerequisiteIds) ? node.prerequisiteIds : Array.isArray(node?.prerequisite_ids) ? node.prerequisite_ids : [])
+      .map((item) => cleanMapText(typeof item === "object" ? item.id || item.title : item, 80)).filter(Boolean).slice(0, 12);
+    return {
+      id: id || `step_${index + 1}`,
+      kind: cleanMapText(node?.kind || node?.type || node?.scale || (index === nodeSource.length - 1 ? "goal" : "checkpoint"), 40).toLowerCase(),
+      title: cleanMapText(node?.title || node?.label || node?.name || `Checkpoint ${index + 1}`, 180),
+      whyNeeded: cleanMapText(node?.whyNeeded || node?.why_needed || node?.purpose || node?.reason || node?.description, 900),
+      prerequisites,
+      masteryGoal: cleanMapText(node?.masteryGoal || node?.mastery_goal || node?.mastery || node?.successCriteria || node?.success_criteria, 900),
+      diagnosticQuestion: cleanMapText(node?.diagnosticQuestion || node?.diagnostic_question || node?.question || node?.probe, 700),
+    };
+  }).filter((node) => node.title);
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const routeIds = routeSource.filter((item) => typeof item === "string").map((item) => cleanMapText(item, 80).replace(/\s+/g, "_").toLowerCase());
+  const ordered = routeIds.length
+    ? [...routeIds.map((id) => byId.get(id)).filter(Boolean), ...nodes.filter((node) => !routeIds.includes(node.id))]
+    : nodes;
+  return {
+    goal: cleanMapText(source.goal || source.mission || source.target || artifact?.scopeSummary || artifact?.topic, 900),
+    route: ordered.map((node) => node.id),
+    nodes: ordered,
+    startingQuestion: cleanMapText(source.startingQuestion || source.starting_question || source.firstQuestion || source.first_question, 700),
+    assumptions: (Array.isArray(source.assumptions) ? source.assumptions : []).map((item) => cleanMapText(item, 500)).filter(Boolean).slice(0, 12),
+    researchNeeds: (Array.isArray(source.researchNeeds) ? source.researchNeeds : Array.isArray(source.research_needs) ? source.research_needs : []).map((item) => cleanMapText(item, 500)).filter(Boolean).slice(0, 12),
+    sourceFormat: ordered.length ? "structured" : "",
+    raw: asText(raw),
+  };
+}
+
+function prosePipelineMap(raw, artifact = selectedPipelineArtifact()) {
+  const text = asText(raw).trim();
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const nodes = [];
+  let current = null;
+  const commit = () => {
+    if (!current?.title) return;
+    current.whyNeeded = cleanMapText(current.details.join(" "), 900);
+    delete current.details;
+    nodes.push(current);
+  };
+  for (const line of lines) {
+    const start = line.match(/^(?:#{1,4}\s*)?(?:(\d+)[.)]\s+|(?:node|checkpoint)\s+([A-Za-z0-9_-]+)\s*[:.)-]\s*)(.+)$/i);
+    const heading = line.match(/^#{2,4}\s+(.+)$/);
+    const headingTitle = heading && !/^(goal|route|lesson map|assumptions?|research|starting question|output)$/i.test(cleanMapText(heading[1], 120)) ? heading[1] : "";
+    if (start || headingTitle) {
+      commit();
+      const title = cleanMapText(start?.[3] || headingTitle, 180).replace(/^\d+[.)]\s*/, "");
+      current = { id:`step_${nodes.length + 1}`, kind:"checkpoint", title, prerequisites:[], masteryGoal:"", diagnosticQuestion:"", details:[] };
+      continue;
+    }
+    if (!current) continue;
+    const property = line.replace(/^[-*]\s*/, "").match(/^(prerequisites?|why(?: needed)?|purpose|mastery(?: goal)?|diagnostic(?: question)?|question)\s*:\s*(.+)$/i);
+    if (property) {
+      const key = property[1].toLowerCase();
+      const content = cleanMapText(property[2], 900);
+      if (key.startsWith("prerequisite")) current.prerequisites = content.split(/[,;|]/).map((item) => cleanMapText(item, 80)).filter(Boolean);
+      else if (key.startsWith("mastery")) current.masteryGoal = content;
+      else if (key.startsWith("diagnostic") || key === "question") current.diagnosticQuestion = content;
+      else current.details.push(content);
+    } else current.details.push(line.replace(/^[-*]\s*/, ""));
+  }
+  commit();
+  if (!nodes.length) {
+    const steps = lines.map((line) => line.match(/^\s*(?:\d+[.)]|[-*])\s+(.+)$/)?.[1]).filter(Boolean)
+      .filter((line) => !/^(prerequisites?|mastery|diagnostic|question|assumptions?|research)\s*:/i.test(line)).slice(0, 12);
+    for (const [index, step] of steps.entries()) nodes.push({ id:`step_${index + 1}`, kind:"checkpoint", title:cleanMapText(step, 180), whyNeeded:"", prerequisites:[], masteryGoal:"", diagnosticQuestion:"" });
+  }
+  if (!nodes.length) {
+    const paragraphs = text.split(/\n\s*\n|(?<=[.!?])\s+(?=[A-Z])/).map((item) => cleanMapText(item, 500)).filter((item) => item.length >= 18).slice(0, 8);
+    for (const [index, paragraph] of paragraphs.entries()) nodes.push({ id:`step_${index + 1}`, kind:"checkpoint", title:clip(paragraph.split(/[:—-]/)[0], 180), whyNeeded:paragraph, prerequisites:[], masteryGoal:"", diagnosticQuestion:"" });
+  }
+  if (nodes.length) nodes[nodes.length - 1].kind = "goal";
+  return {
+    goal: cleanMapText(artifact?.scopeSummary || artifact?.topic, 900),
+    route: nodes.map((node) => node.id), nodes, startingQuestion:"", assumptions:[], researchNeeds:[], sourceFormat:"prose", raw:text,
+  };
+}
+
+function parsePipelineMapOutput(raw, artifact = selectedPipelineArtifact()) {
+  const text = asText(raw).trim();
+  if (!text) return normalizePipelineMap({}, "", artifact);
+  const unfenced = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  const candidates = [unfenced];
+  const first = unfenced.indexOf("{");
+  const last = unfenced.lastIndexOf("}");
+  if (first >= 0 && last > first) candidates.push(unfenced.slice(first, last + 1));
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      const normalized = normalizePipelineMap(parsed, text, artifact);
+      if (normalized.nodes.length) return normalized;
+    } catch (_) { /* Older saved map prose is handled below. */ }
+  }
+  return prosePipelineMap(text, artifact);
+}
+
+function pipelineMapOutputRecords(detail, job = pipelineMapJob()) {
+  const records = [];
+  for (const sample of Array.isArray(detail?.samples) ? detail.samples : []) {
+    const text = attemptResultText(null, sample);
+    if (!text) continue;
+    records.push({
+      id:String(sample.id || sample.clientSampleId || records.length), text, sample,
+      provider:sample.providerLabel || sample.provider || sample.result?.label || "Model",
+      model:sample.model || sample.result?.model || "",
+    });
+  }
+  if (!records.length && job) {
+    for (const output of labState.outputs.filter((item) => item.jobId === job.id && !item.failed && item.text)) {
+      records.push({ id:String(output.id), text:output.text, sample:output, provider:output.providerLabel || output.provider || "Model", model:output.model || "" });
+    }
+  }
+  return records;
+}
+
+function ensurePipelineMapDetail(job) {
+  if (!job || labState.preview || labState.mapDetailRequests.has(job.id)) return;
+  const detail = labState.jobDetails.get(job.id);
+  const hasOutput = pipelineMapOutputRecords(detail, job).length > 0;
+  const completedWithoutOutput = ["completed", "partial"].includes(job.status) && !hasOutput;
+  if (detail && (!completedWithoutOutput || labState.mapDetailRefreshed.has(job.id))) return;
+  labState.mapDetailRequests.add(job.id);
+  if (completedWithoutOutput) labState.mapDetailRefreshed.add(job.id);
+  refreshJob(job.id).catch((error) => logFlow(`Saved map detail refresh failed: ${clip(error.message, 120)}`, "lab-jobs"))
+    .finally(() => { labState.mapDetailRequests.delete(job.id); renderPipelineMapOutput(); });
+}
+
+function renderPipelineRoadmap(record, artifact) {
+  const map = parsePipelineMapOutput(record.text, artifact);
+  const card = element("article", { className:"map-roadmap" });
+  if (record.provider || record.model) card.append(element("p", { className:"map-route-label", text:[record.provider, record.model].filter(Boolean).join(" · ") }));
+  if (map.goal) card.append(element("h4", { text:map.goal }));
+  const nodes = element("div", { className:"map-roadmap-nodes" });
+  for (const [index, node] of map.nodes.entries()) {
+    const item = element("article", { className:`map-roadmap-node is-${node.kind || "checkpoint"}` });
+    item.append(element("span", { className:"map-roadmap-marker", text:String(index + 1) }));
+    const body = element("div", { className:"map-roadmap-copy" });
+    body.append(element("small", { text:node.kind === "goal" ? "Goal" : node.kind === "integration" ? "Integration" : index === 0 ? "Starting point" : "Checkpoint" }), element("strong", { text:node.title }));
+    const detail = node.masteryGoal || node.whyNeeded;
+    if (detail) body.append(element("p", { text:`You’ll be able to explain: ${detail}` }));
+    if (node.prerequisites.length) body.append(element("p", { className:"map-prerequisites", text:`Builds on ${node.prerequisites.join(", ")}` }));
+    item.append(body);
+    nodes.append(item);
+  }
+  card.append(nodes);
+  if (map.startingQuestion) card.append(element("p", { className:"map-starting-question", text:map.startingQuestion }));
+  return { card, map };
+}
+
 function renderPipelineMapOutput() {
   const root = q("pipeline-map-output");
   const status = q("pipeline-map-output-status");
   if (!root || !status) return;
   root.replaceChildren();
+  q("pipeline-map-validated").textContent = "No output yet.";
+  q("pipeline-map-raw").textContent = "No output yet.";
+  q("pipeline-map-packet").textContent = "No request yet.";
+  q("pipeline-map-metrics").replaceChildren(element("span", { text:"Latency —" }), element("span", { text:"Tokens —" }), element("span", { text:"Cost —" }));
   const artifact = selectedPipelineArtifact();
   const job = pipelineMapJob(artifact);
-  if (!artifact) { status.textContent = "Choose or create a Clarification run first."; return; }
-  if (!job) { status.textContent = "No saved Lesson Map output exists for this run yet."; return; }
+  const backendStatus = q("pipeline-map-backend-status");
+  const setStatus = (text, ok = false) => {
+    status.textContent = text;
+    status.className = `form-message ${ok ? "is-ok" : ""}`;
+    backendStatus.textContent = text;
+    backendStatus.className = status.className;
+  };
+  if (!artifact) { setStatus("Choose or create a Clarification run first."); return; }
+  if (!job) { setStatus("No Lesson Map has been generated for this run."); return; }
   const detail = labState.jobDetails.get(job.id);
-  status.textContent = `${job.status} \u00B7 ${job.completedSamples || 0} of ${job.totalSamples || 0} samples complete`;
-  status.className = `form-message ${["completed", "partial"].includes(job.status) ? "is-ok" : ""}`;
-  const samples = Array.isArray(detail?.samples) ? detail.samples : [];
-  const texts = samples.map((sample) => attemptResultText(null, sample)).filter(Boolean);
-  if (!texts.length) {
-    root.append(element("p", { text: LAB_ACTIVE_JOB_STATES.has(job.status) ? "This saved map job is still running." : "The saved job has no readable map output." }));
+  const records = pipelineMapOutputRecords(detail, job);
+  if (!records.length) {
+    ensurePipelineMapDetail(job);
+    setStatus(LAB_ACTIVE_JOB_STATES.has(job.status) ? "Generating the roadmap…" : labState.mapDetailRequests.has(job.id) ? "Loading the completed roadmap…" : "The completed model call returned no text to display.");
     return;
   }
-  for (const [index, output] of texts.entries()) {
-    const card = element("details", { className:"pipeline-output-result" });
-    if (index === 0) card.open = true;
-    card.append(element("summary", { text:`Map result ${index + 1}` }), element("pre", { text:output }));
-    root.append(card);
+  setStatus(`${records.length} roadmap${records.length === 1 ? "" : "s"} ready`, true);
+  const parsed = [];
+  for (const record of records) {
+    const rendered = renderPipelineRoadmap(record, artifact);
+    root.append(rendered.card);
+    parsed.push(rendered.map);
   }
+  const firstRecord = records[0];
+  const firstSample = firstRecord.sample || {};
+  q("pipeline-map-validated").textContent = JSON.stringify(parsed.length === 1 ? parsed[0] : parsed, null, 2);
+  q("pipeline-map-raw").textContent = records.map((record, index) => `${records.length > 1 ? `RESULT ${index + 1} · ${record.provider} ${record.model}` : ""}${records.length > 1 ? "\n" : ""}${record.text}`).join("\n\n---\n\n");
+  q("pipeline-map-packet").textContent = JSON.stringify(firstSample.request || detail?.samples?.[0]?.request || {}, null, 2);
+  const inputTokens = numeric(firstSample.inputTokens ?? firstSample.result?.inputTokens);
+  const outputTokens = numeric(firstSample.outputTokens ?? firstSample.result?.outputTokens);
+  const latency = numeric(firstSample.latencyMs ?? firstSample.result?.ms);
+  const cost = estimateTextCost(firstSample.model || firstSample.result?.model, inputTokens, outputTokens);
+  q("pipeline-map-metrics").replaceChildren(
+    element("span", { text:latency === null ? "Latency —" : `Latency ${Math.round(latency).toLocaleString()} ms` }),
+    element("span", { text:inputTokens === null && outputTokens === null ? "Tokens —" : `Tokens ${(inputTokens || 0).toLocaleString()} in · ${(outputTokens || 0).toLocaleString()} out` }),
+    element("span", { text:cost === null ? "Cost —" : formatCost(cost) }),
+  );
+}
+
+function setMapView(view = "learner") {
+  const next = view === "backend" ? "backend" : "learner";
+  labState.mapView = next;
+  q("map-learner-panel").hidden = next !== "learner";
+  q("map-backend-panel").hidden = next !== "backend";
+  for (const name of ["learner", "backend"]) {
+    const button = q(`map-view-${name}`);
+    const active = name === next;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", String(active));
+  }
+  if (next === "backend") mountLessonWorkspace("pipeline");
+  renderPipelineMapOutput();
 }
 
 function pipelineMapInput(artifact = selectedPipelineArtifact()) {
@@ -3104,9 +3331,7 @@ function setPipelineStage(stage = "clarification") {
   q("pipeline-extraction-stage").hidden = next !== "extraction";
   q("pipeline-lesson-stage").hidden = next !== "lesson";
   q("pipeline-quiz-stage").hidden = next !== "quiz";
-  const stageCopy = { map:["Stage 2", "Lesson Map"], extraction:["Stage 3", "Extraction"], lesson:["Stage 4", "Lesson"], quiz:["Stage 5", "Quiz"] };
-  if (stageCopy[next]) [q("pipeline-stage-eyebrow").textContent, q("pipeline-stage-title").textContent] = stageCopy[next];
-  if (next === "map") mountLessonWorkspace("pipeline");
+  if (next === "map") setMapView(labState.mapView);
   for (const button of document.querySelectorAll("[data-pipeline-stage]")) {
     const active = button.dataset.pipelineStage === next;
     button.closest("li")?.classList.toggle("is-active", active);
@@ -4155,10 +4380,10 @@ function bindEvents() {
   q("scenario-delete").addEventListener("click", deleteBenchmarkScenario);
   q("scenario-use").addEventListener("click", () => applyBenchmarkScenario(true));
   document.querySelectorAll("[data-pipeline-stage]").forEach((button) => button.addEventListener("click", () => setPipelineStage(button.dataset.pipelineStage)));
-  q("pipeline-run-prev").addEventListener("click", () => browsePipelineRun(1));
-  q("pipeline-run-next").addEventListener("click", () => browsePipelineRun(-1));
+  q("pipeline-run-select").addEventListener("change", (event) => selectPipelineRun(event.currentTarget.value));
   document.querySelectorAll("[data-pipeline-previous-stage]").forEach((button) => button.addEventListener("click", () => setPipelineStage(button.dataset.pipelinePreviousStage)));
-  q("pipeline-refresh-runs").addEventListener("click", refreshClarificationArtifacts);
+  q("map-view-learner").addEventListener("click", () => setMapView("learner"));
+  q("map-view-backend").addEventListener("click", () => setMapView("backend"));
   q("pipeline-load-map").addEventListener("click", loadPipelineMapInput);
   q("clarification-open-map").addEventListener("click", () => {
     const runId = labState.clarification.finalized?.runId;

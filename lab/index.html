@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=91">
+<link rel="stylesheet" href="./lab.css?v=92">
 </head>
 <body>
 
@@ -40,15 +40,9 @@
   </nav>
 
   <section id="panel-pipeline" class="tab-panel is-active" role="region" aria-label="Lesson Pipeline" data-panel="pipeline">
-    <div class="bench-head pipeline-head">
-      <div><p class="eyebrow">One connected run</p><h2>Lesson Pipeline</h2></div>
-      <p class="bench-note">Choose one saved lesson run, inspect each stage, then pass that exact run forward.</p>
-    </div>
-
     <div class="pipeline-run-browser" aria-label="Saved lesson runs">
-      <button id="pipeline-run-prev" class="pipeline-run-arrow" type="button" aria-label="Show older run">&larr;</button>
-      <div class="pipeline-run-identity"><strong id="pipeline-run-position">No saved runs</strong><small id="pipeline-run-label">Start a Clarification run.</small></div>
-      <button id="pipeline-run-next" class="pipeline-run-arrow" type="button" aria-label="Show newer run">&rarr;</button>
+      <label class="sr-only" for="pipeline-run-select">Selected lesson run</label>
+      <select id="pipeline-run-select" aria-label="Selected lesson run"><option value="">New lesson run</option></select>
       <button id="clarification-new" class="pipeline-run-new" type="button" aria-label="Start a new lesson run" title="New run">+</button>
     </div>
 
@@ -169,15 +163,9 @@
     </div>
 
     <section id="pipeline-connected-stage" class="pipeline-connected-stage" data-pipeline-stage-panel="connected" hidden>
-      <div class="pipeline-source-head">
-        <div><p id="pipeline-stage-eyebrow" class="eyebrow">Stage 2</p><h3 id="pipeline-stage-title">Lesson Map</h3></div>
-        <button id="pipeline-refresh-runs" class="button button-quiet" type="button">Refresh saved runs</button>
-      </div>
-      <section class="lab-card pipeline-source-card" aria-labelledby="pipeline-source-label">
-        <p id="pipeline-source-label" class="eyebrow">Selected lesson run</p>
+      <section class="lab-card pipeline-source-card" aria-label="Selected lesson run">
         <p id="pipeline-source-message" class="form-message" role="status"></p>
         <div id="pipeline-source-preview" class="pipeline-source-preview" hidden>
-          <p class="eyebrow">Frozen input</p>
           <h4 id="pipeline-source-topic"></h4>
           <p id="pipeline-source-scope"></p>
           <div id="pipeline-source-items" class="scope-items"></div>
@@ -185,13 +173,29 @@
         </div>
       </section>
       <div id="pipeline-map-stage">
-        <button id="pipeline-load-map" class="button button-primary pipeline-stage-action" type="button">Load this conversation into the map</button>
-        <div id="pipeline-map-workspace"></div>
-        <section class="lab-card pipeline-saved-output" aria-labelledby="pipeline-map-output-title">
-          <p class="eyebrow">Saved output for this run</p><h3 id="pipeline-map-output-title">Lesson Map result</h3>
-          <p id="pipeline-map-output-status" class="form-message"></p>
-          <div id="pipeline-map-output"></div>
-        </section>
+        <div class="map-workspace-bar">
+          <div class="clarification-view-switch map-view-switch" role="tablist" aria-label="Lesson Map view">
+            <button id="map-view-learner" class="clarification-view-option is-active" type="button" role="tab" aria-selected="true" aria-controls="map-learner-panel">Learner view</button>
+            <button id="map-view-backend" class="clarification-view-option" type="button" role="tab" aria-selected="false" aria-controls="map-backend-panel">Backend view</button>
+          </div>
+        </div>
+        <div class="map-workspace">
+          <section id="map-learner-panel" class="lab-card map-learner-panel" role="tabpanel" aria-labelledby="map-view-learner">
+            <p id="pipeline-map-output-status" class="form-message" role="status"></p>
+            <div id="pipeline-map-output" class="map-roadmaps"></div>
+          </section>
+          <section id="map-backend-panel" class="map-backend-panel" role="tabpanel" aria-labelledby="map-view-backend" hidden>
+            <button id="pipeline-load-map" class="button button-primary pipeline-stage-action" type="button">Use this run</button>
+            <div id="pipeline-map-workspace"></div>
+            <section class="lab-card pipeline-inspector map-inspector" aria-label="Lesson Map backend output">
+              <p id="pipeline-map-backend-status" class="form-message" role="status"></p>
+              <details open><summary>Validated roadmap</summary><pre id="pipeline-map-validated">No output yet.</pre></details>
+              <details><summary>Raw model response</summary><pre id="pipeline-map-raw">No output yet.</pre></details>
+              <details><summary>Exact request packet</summary><pre id="pipeline-map-packet">No request yet.</pre></details>
+              <div id="pipeline-map-metrics" class="clarification-metrics"><span>Latency —</span><span>Tokens —</span><span>Cost —</span></div>
+            </section>
+          </section>
+        </div>
       </div>
       <section id="pipeline-extraction-stage" class="lab-card pipeline-extraction-stage" hidden>
         <p class="eyebrow">Saved output for this run</p><h3>Extraction</h3>
@@ -455,6 +459,6 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=91" defer></script>
+<script src="./lab.js?v=92" defer></script>
 </body>
 </html>

@@ -2037,11 +2037,17 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v91 · Aug 16";
+const BUILD = "v92 · Aug 16";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v92", date: "Aug 16", changes: [
+    "Saved lesson runs now use one compact dropdown instead of previous/next arrows, and the manual refresh control and repeated stage headings are gone.",
+    "Completed Lesson Map jobs automatically reload their saved detail, including the map you already generated, instead of stopping at a no-readable-output message.",
+    "Lesson Map now has Learner and Backend views: Learner shows a phone-readable roadmap, while Backend retains the prompt, exact request, normalized map, raw response, timing, tokens, and cost.",
+    "New branch-completion map runs return a structured dependency graph with ordered nodes, prerequisites, mastery goals, diagnostic questions, assumptions, and research needs; older prose maps remain readable.",
+  ] },
   { tag: "v91", date: "Aug 16", changes: [
     "Model Lab restores the three intended tools: Lesson Pipeline, Question Map, and Lesson Lab; timing remains available only from the small top-right clock.",
     "The connected pipeline now uses five clear stages: Clarification, Lesson Map, Extraction, Lesson, and Quiz, with no disabled placeholder stages.",
