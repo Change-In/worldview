@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=89">
+<link rel="stylesheet" href="./lab.css?v=90">
 </head>
 <body>
 
@@ -15,7 +15,10 @@
     <p class="eyebrow">Worldview</p>
     <h1>Model Lab</h1>
   </div>
-  <div id="lab-health" class="lab-health" aria-live="polite">Locked</div>
+  <div class="lab-topbar-actions">
+    <button id="lab-open-timing" class="lab-clock" type="button" aria-label="Open timing" title="Timing" disabled>◷</button>
+    <div id="lab-health" class="lab-health" aria-live="polite">Locked</div>
+  </div>
 </header>
 
 <section id="lab-gate" class="lab-gate" aria-labelledby="lab-gate-title">
@@ -30,45 +33,22 @@
 </section>
 
 <main id="lab-shell" class="lab-shell" hidden>
-  <section class="lab-hero" aria-labelledby="lab-title">
-    <div>
-      <h2 id="lab-title">Model Lab</h2>
-      <p>Run the same scenario, then see exactly where the seconds went.</p>
-    </div>
-    <div class="hero-tools">
-      <button id="lab-open-timing" class="hero-timing" type="button"><strong>Timing</strong><span>compare response times</span></button>
-      <div class="hero-stat"><strong id="lab-provider-count">0</strong><span>configured providers</span></div>
-    </div>
-  </section>
-
-  <nav class="lab-tabs" role="tablist" aria-label="Learner workflow and advanced Lab benches">
-    <button class="lab-tab is-active" id="tab-pipeline" type="button" role="tab" aria-selected="true" aria-controls="panel-pipeline" data-tab="pipeline"><span>1</span>Lesson Pipeline</button>
-    <button class="lab-tab" id="tab-scenario" type="button" role="tab" aria-selected="false" aria-controls="panel-scenario" data-tab="scenario"><span>2</span>Question Map</button>
-    <button class="lab-tab" id="tab-lesson" type="button" role="tab" aria-selected="false" aria-controls="panel-lesson" data-tab="lesson"><span>2</span>Lesson Lab</button>
-    <button class="lab-tab" id="tab-stt" type="button" role="tab" aria-selected="false" aria-controls="panel-stt" data-tab="stt"><span>3</span>Transcription</button>
-    <button class="lab-tab" id="tab-tutor" type="button" role="tab" aria-selected="false" aria-controls="panel-tutor" data-tab="tutor"><span>4</span>Tutor</button>
-    <button class="lab-tab" id="tab-speech" type="button" role="tab" aria-selected="false" aria-controls="panel-speech" data-tab="speech"><span>5</span>Speech</button>
-    <span class="lab-tab-break" aria-hidden="true"></span>
-    <button class="lab-tab lab-tab-secondary" id="tab-results" type="button" role="tab" aria-selected="false" aria-controls="panel-results" data-tab="results">Timing</button>
-    <button class="lab-tab lab-tab-secondary" id="tab-brain" type="button" role="tab" aria-selected="false" aria-controls="panel-brain" data-tab="brain">Advanced: Brain</button>
-  </nav>
-
-  <section id="panel-pipeline" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-pipeline" data-panel="pipeline">
+  <section id="panel-pipeline" class="tab-panel is-active" role="region" aria-label="Lesson Pipeline" data-panel="pipeline">
     <div class="bench-head pipeline-head">
-      <div><p class="eyebrow">Component workshop</p><h2>Lesson Pipeline</h2></div>
-      <p class="bench-note">Test one phase as the learner experiences it, then inspect the exact packet behind it. Only Clarification is active in this build.</p>
+      <div><p class="eyebrow">One connected run</p><h2>Lesson Pipeline</h2></div>
+      <p class="bench-note">Choose a stage. Saved Clarification conversations remain available to every later stage.</p>
     </div>
 
     <ol class="pipeline-rail" aria-label="Lesson pipeline stages">
-      <li class="is-active"><span>1</span><b>Clarification</b><small>working</small></li>
-      <li><span>2</span><b>Knowledge extraction</b><small>Feynman diagnostic</small></li>
-      <li><span>3</span><b>Map + checkpoints</b><small>graph beneath one mission</small></li>
-      <li><span>4</span><b>Lesson opening</b><small>converge both inputs</small></li>
-      <li><span>5</span><b>Lesson conversation</b><small>Socratic repair</small></li>
-      <li><span>6</span><b>Final explanation</b><small>Feynman measure</small></li>
+      <li class="is-active"><button type="button" data-pipeline-stage="clarification" aria-pressed="true"><span>1</span><b>Clarification</b><small>conversation + frozen scope</small></button></li>
+      <li><button type="button" data-pipeline-stage="map" aria-pressed="false"><span>2</span><b>Map + checkpoints</b><small>starts before extraction</small></button></li>
+      <li><button type="button" data-pipeline-stage="extraction" aria-pressed="false"><span>3</span><b>Knowledge extraction</b><small>uses the same run</small></button></li>
+      <li><button type="button" disabled><span>4</span><b>Lesson opening</b><small>converge both inputs</small></button></li>
+      <li><button type="button" disabled><span>5</span><b>Lesson conversation</b><small>Socratic repair</small></button></li>
+      <li><button type="button" disabled><span>6</span><b>Final explanation</b><small>Feynman measure</small></button></li>
     </ol>
 
-    <div class="clarification-workspace-bar">
+    <div class="clarification-workspace-bar" data-pipeline-stage-panel="clarification">
       <div class="clarification-view-switch" role="tablist" aria-label="Clarification Lab view">
         <button id="clarification-view-learner" class="clarification-view-option is-active" type="button" role="tab" aria-selected="true" aria-controls="clarification-learner-panel">Learner view</button>
         <button id="clarification-view-backend" class="clarification-view-option" type="button" role="tab" aria-selected="false" aria-controls="clarification-backend-panel">Backend view</button>
@@ -76,7 +56,7 @@
       <button id="clarification-new" class="button button-quiet" type="button">New run</button>
     </div>
 
-    <div class="pipeline-stage-grid clarification-workspace">
+    <div class="pipeline-stage-grid clarification-workspace" data-pipeline-stage-panel="clarification">
       <section id="clarification-learner-panel" class="lab-card pipeline-experience" role="tabpanel" aria-labelledby="clarification-view-learner">
         <div class="pipeline-card-head">
           <div class="clarification-screen-title"><p class="eyebrow">Clarification phase</p><h3 id="clarification-experience-title">Worldview</h3></div>
@@ -139,7 +119,7 @@
           <div id="clarification-scope-items" class="scope-items"></div>
           <p id="clarification-storage-note" class="form-message" role="status"></p>
           <p class="privacy-note">This frozen output is the input future extraction and lesson-map stages will consume. Start a new run to create an editable fork; this result stays unchanged.</p>
-          <button id="clarification-fork" class="button button-primary" type="button">Fork into a new run</button>
+          <div class="inline-actions"><button id="clarification-open-map" class="button button-primary" type="button">Continue to map</button><button id="clarification-fork" class="button button-quiet" type="button">Fork into a new run</button></div>
         </div>
       </section>
 
@@ -177,15 +157,33 @@
       </section>
     </div>
 
-    <section class="pipeline-placeholders" aria-labelledby="pipeline-next-title">
-      <div class="card-heading"><div><p class="eyebrow">Connected stages</p><h3 id="pipeline-next-title">What follows this output</h3></div><span class="cost-warning">Visible, intentionally inactive</span></div>
-      <div class="placeholder-grid">
-        <article><span>2</span><h4>Knowledge extraction</h4><p>Begins with map generation after scope freezes. Opens with the learner's broad current understanding, then narrows from their own words without teaching or awarding progress.</p></article>
-        <article><span>3</span><h4>Map + checkpoints</h4><p>Retains a branching dependency graph, but the learner route completes one prerequisite family and its integrating checkpoint before moving to the next branch.</p></article>
-        <article><span>4</span><h4>Lesson opening</h4><p>Merge the frozen scope, generated graph, and diagnostic evidence. Begin as soon as enough of both parallel paths is available.</p></article>
-        <article><span>5</span><h4>Lesson conversation</h4><p>Socratic questions surface and repair gaps. The exact behavior is a testable starting point, not a settled framework.</p></article>
-        <article><span>6</span><h4>Final explanation</h4><p>The learner explains the whole idea unaided. Targeted follow-ups expose gaps; gaps loop to Socratic repair, then a fresh explanation measures learning.</p></article>
+    <section id="pipeline-connected-stage" class="pipeline-connected-stage" data-pipeline-stage-panel="connected" hidden>
+      <div class="pipeline-source-head">
+        <div><p id="pipeline-stage-eyebrow" class="eyebrow">Stage 2</p><h3 id="pipeline-stage-title">Map + checkpoints</h3></div>
+        <button id="pipeline-refresh-runs" class="button button-quiet" type="button">Refresh saved runs</button>
       </div>
+      <section class="lab-card pipeline-source-card" aria-labelledby="pipeline-source-label">
+        <label id="pipeline-source-label" for="pipeline-source-select">Clarification run</label>
+        <select id="pipeline-source-select"></select>
+        <p id="pipeline-source-message" class="form-message" role="status"></p>
+        <div id="pipeline-source-preview" class="pipeline-source-preview" hidden>
+          <p class="eyebrow">Frozen input</p>
+          <h4 id="pipeline-source-topic"></h4>
+          <p id="pipeline-source-scope"></p>
+          <div id="pipeline-source-items" class="scope-items"></div>
+          <details><summary>Clarification conversation</summary><ol id="pipeline-source-transcript" class="pipeline-transcript"></ol></details>
+        </div>
+      </section>
+      <div id="pipeline-map-stage">
+        <button id="pipeline-load-map" class="button button-primary pipeline-stage-action" type="button">Load this conversation into the map</button>
+        <div id="pipeline-map-workspace"></div>
+      </div>
+      <section id="pipeline-extraction-stage" class="lab-card pipeline-extraction-stage" hidden>
+        <p class="eyebrow">Same saved run</p>
+        <h3>Knowledge extraction</h3>
+        <p>The selected Clarification conversation is ready. Map generation starts first; extraction will use this same frozen input while the map runs behind the scenes.</p>
+        <button id="pipeline-extraction-open-map" class="button button-primary" type="button">Open map stage</button>
+      </section>
     </section>
   </section>
 
@@ -226,8 +224,8 @@
 
   <section id="panel-lesson" class="tab-panel" role="tabpanel" aria-labelledby="tab-lesson" data-panel="lesson" hidden>
     <div class="bench-head">
-      <div><p class="eyebrow">Step 2 · durable text job</p><h2>Lesson Lab</h2></div>
-      <p class="bench-note">Runs continue on the protected server if this page closes. Return to the Timing dashboard to inspect partial or finished work.</p>
+      <div><p class="eyebrow">Durable map job</p><h2>Generate map + checkpoints</h2></div>
+      <p class="bench-note">The selected frozen scope and conversation become one bounded map input. Runs continue on the protected server if this page closes.</p>
     </div>
     <details class="role-panel" data-role-panel="lesson"></details>
     <div class="bench-grid">
@@ -369,7 +367,7 @@
   </section>
 
   <section id="panel-results" class="tab-panel" role="tabpanel" aria-labelledby="tab-results" data-panel="results" hidden>
-    <div class="results-head"><div><p class="eyebrow">Owner tool</p><h2>Timing</h2><p>Pick a stage, provider, and model.</p></div><div class="results-actions"><button id="jobs-refresh" class="button button-quiet" type="button">Refresh</button><button id="export-results" class="button button-quiet" type="button">Export</button><button id="clear-results" class="button button-danger" type="button">Clear results</button></div></div>
+    <div class="results-head"><div><p class="eyebrow">Owner tool</p><h2>Timing</h2><p>Pick a stage, provider, and model.</p></div><div class="results-actions"><button id="timing-back" class="button button-quiet" type="button">Back to pipeline</button><button id="jobs-refresh" class="button button-quiet" type="button">Refresh</button><button id="export-results" class="button button-quiet" type="button">Export</button><button id="clear-results" class="button button-danger" type="button">Clear results</button></div></div>
     <section class="latency-card" aria-labelledby="latency-title">
       <div class="card-heading"><div><p class="eyebrow">Measured runs</p><h3 id="latency-title">Compare</h3></div><button id="latency-clear" class="button button-danger-soft" type="button">Clear timing</button></div>
       <div class="latency-filters" aria-label="Timing filters">
@@ -431,6 +429,6 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=89" defer></script>
+<script src="./lab.js?v=90" defer></script>
 </body>
 </html>

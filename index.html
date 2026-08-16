@@ -2037,11 +2037,17 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v89 · Aug 16";
+const BUILD = "v90 · Aug 16";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v90", date: "Aug 16", changes: [
+    "The Model Lab now opens directly into one connected Lesson Pipeline instead of competing phase and benchmark tabs.",
+    "Map + checkpoints is the next tappable stage and can load any saved Clarification run, including its frozen scope and complete conversation.",
+    "Map generation now starts before Knowledge Extraction and uses a branch-completion knowledge-map prompt without a fixed checkpoint count.",
+    "Timing moved to a small clock in the top-right corner, and the large introductory timing panel and bottom stage explanations were removed.",
+  ] },
   { tag: "v89", date: "Aug 16", changes: [
     "Clarification now uses Claude Sonnet 4.6 by default and a more formal, discovery-only Phase One prompt while preserving owner-edited prompt drafts.",
     "Saying or typing an explicit readiness phrase can advance after the scope is usable; Done remains available as a deliberate fallback.",
