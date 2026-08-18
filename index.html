@@ -1048,6 +1048,10 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     display: flex; align-items: center; gap: 12px;
     border-bottom: 1.5px solid var(--line); background: var(--card);
   }
+  .conversation-mode-toggle { display:grid; width:42px; height:42px; flex:0 0 auto; place-items:center; padding:0; border:1px solid var(--line); border-radius:12px; color:var(--ink); background:var(--card); cursor:pointer; }
+  .conversation-mode-toggle:hover,.conversation-mode-toggle:focus-visible { border-color:var(--accent); outline:none; }
+  .conversation-mode-toggle svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .conversation-mode-toggle span { font:800 14px/1 system-ui,sans-serif; letter-spacing:-.08em; }
   #chat-back { background: none; border: none; font-size: 22px; color: var(--ink); cursor: pointer; padding: 2px 8px; }
   #chat-menu { display:none; }
   #chat-title { font-size: 16px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1362,7 +1366,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   }
   .dictation-mic.is-listening .dictation-icon { animation: vpulse 1.15s ease-in-out infinite; }
   .dictation-mic:disabled { opacity: 0.5; cursor: default; }
-  #chat-mic { align-self: flex-end; padding: 12px 14px; font-size: 17px; flex: 0 0 auto; }
+  #chat-mic { display:none; align-self: flex-end; padding: 12px 14px; font-size: 17px; flex: 0 0 auto; }
   .dictation-status {
     color: var(--ink-soft); font-size: 12.5px; line-height: 1.35; text-align: center;
   }
@@ -1396,7 +1400,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #voice-heading { min-width:0;text-align:center; }
   #voice-title { min-width:0;font:600 14px/1.2 system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
   #voice-top-actions { justify-self:end;display:flex;gap:3px; }
-  #voice-history-button, #voice-path-button { width:42px;height:42px;background:color-mix(in srgb,var(--card) 72%,transparent); }
+  #voice-history-button, #voice-path-button, #voice-mode-toggle { width:42px;height:42px;background:color-mix(in srgb,var(--card) 72%,transparent); }
   #voice-scroll {
     flex: 1; min-height:0; overflow-y: auto; padding: 18px max(28px, calc((100% - 720px) / 2)) 24px;
     -webkit-overflow-scrolling: touch; touch-action:pan-y; overscroll-behavior:contain;
@@ -1432,6 +1436,9 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #voice-dot.held { transform: scale(1.6); animation: none; background: var(--ink); }
   @keyframes vpulse { 0%,100% { opacity: 0.35; } 50% { opacity: 1; } }
   @media(max-width:700px){
+    #chat-header{gap:4px}
+    #chat-cost{display:none}
+    #chat-header .conversation-history-button,#chat-header .lesson-path-button,#chat-header .conversation-mode-toggle{width:40px;height:40px}
     #voice-control-zone{width:min(calc(100% - 24px),440px);padding-top:14px}
     #voice-status{min-height:72px;padding:15px 18px;font-size:14px}
   }
@@ -1807,6 +1814,9 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     <button id="chat-path-button" class="lesson-path-button" type="button" aria-label="Open lesson path" title="Lesson path">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6v4m10-4v4M7 10h10M12 10v5"/><circle cx="7" cy="4" r="2"/><circle cx="17" cy="4" r="2"/><circle cx="12" cy="18" r="2"/></svg>
     </button>
+    <button id="chat-mode-toggle" class="conversation-mode-toggle" type="button" aria-label="Switch to Voice" title="Switch to Voice">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3.5 19c.9-3.3 3-5 5.5-5s4.6 1.7 5.5 5M16 8.5c1.8.5 3 2.1 3 4s-1.2 3.5-3 4"/><path d="M18.5 6c2.4 1.4 3.8 3.8 3.8 6.5S20.9 17.6 18.5 19"/></svg>
+    </button>
     <button id="chat-menu" class="menu-button" type="button" aria-label="Open menu">&#9776;</button>
   </div>
   <div id="chat-scroll"></div>
@@ -1891,6 +1901,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       <button id="voice-path-button" class="lesson-path-button" type="button" aria-label="Open lesson path" title="Lesson path">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6v4m10-4v4M7 10h10M12 10v5"/><circle cx="7" cy="4" r="2"/><circle cx="17" cy="4" r="2"/><circle cx="12" cy="18" r="2"/></svg>
       </button>
+      <button id="voice-mode-toggle" class="conversation-mode-toggle" type="button" aria-label="Switch to Text" title="Switch to Text"><span aria-hidden="true">Aa</span></button>
     </div>
   </div>
   <div id="voice-scroll"></div>
@@ -2037,11 +2048,24 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v94 · Aug 16";
+const BUILD = "v98 · Aug 17";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v98", date: "Aug 17", changes: [
+    "Lesson Map now separates chapters from their learning outcomes. Open a chapter, then open any checkpoint to see its outcome, evidence of success, optional cross-examination, and research support needs.",
+    "New roadmap prompts stay compact and name what later research must verify instead of inventing facts or stuffing a full research dossier into one response.",
+    "Roadmap readiness now uses the provider's actual stop reason, so a complete result is no longer called cut off merely for using its response allowance.",
+  ] },
+  { tag: "v96", date: "Aug 17", changes: [
+    "Lesson Map now shows one simple vertical chapter path. Tap any chapter to read its learning outcome, what success looks like, why it belongs, and what it builds on.",
+    "Roadmap status now uses the provider's actual stopping reason: a normal completed response is not falsely called incomplete just because it used the available output room.",
+  ] },
+  { tag: "v95", date: "Aug 17", changes: [
+    "You can now switch between Text and Voice from the top-right corner during a lesson or a Clarification Lab run, without losing the conversation.",
+    "Switching to Voice asks for microphone access from that tap; if it is unavailable, the same conversation remains ready in Text.",
+  ] },
   { tag: "v94", date: "Aug 16", changes: [
     "Lesson Map now has one clickable Ready roadmaps history for the clarification shown above; every completed, failed, or incomplete run remains visible until you delete it.",
     "Selecting any roadmap run opens that exact run in Learner view, and finished map runs have a confirmed Delete action that removes their saved model outputs.",
@@ -3601,7 +3625,7 @@ document.getElementById("account-guard-import").onclick = () => completeLegacyRe
 document.getElementById("account-guard-fresh").onclick = () => completeLegacyRecovery("fresh");
 const ACCOUNT_MUTATING_CONTROL_SELECTOR = [
   "#start-btn","#intro-topic","#intro-start","#note-input","#note-add",".note-x",".note-start",
-  "#chat-input","#chat-send","#chat-mic","#voice-status","#lesson-entry-voice","#category-name-input","#category-create",
+  "#chat-input","#chat-send","#chat-mic","#chat-mode-toggle","#voice-mode-toggle","#voice-status","#lesson-entry-voice","#category-name-input","#category-create",
   ".organizer-category-main",".organizer-category-delete","#import-btn","#import-file","#settings-save","#theme-toggle",
   "#set-theme","#set-model","#set-thinking","#set-ttsprovider","#set-speechlanguage","#set-voicedefault","#voice-timing-clear"
 ].join(",");
@@ -11355,6 +11379,12 @@ function exitVoice() {
   unlockVoiceKeyboard();
 }
 
+function returnToTextConversation() {
+  const lessonId = currentLessonId;
+  exitVoice();
+  if (lessonId) openChat(lessonId, true, true);
+}
+
 document.addEventListener("focusin", event => {
   if (!voice.active) return;
   const target = event.target;
@@ -14253,10 +14283,9 @@ $("voice-status").addEventListener("click",handleVoiceControl);
   overlay.addEventListener("pointercancel", () => { tracking=false; });
 })();
 $("voice-close").onclick = () => { exitVoice(); exitLessonToHome(); };
+$("voice-mode-toggle").onclick = returnToTextConversation;
 if (FULL_VOICE_MODE_ENABLED) {
-  $("chat-mic").setAttribute("aria-label", "Open spoken conversation");
-  $("chat-mic").title = "Spoken conversation";
-  $("chat-mic").onclick = () => {
+  const openSpokenConversation = () => {
     const lesson = getLesson(currentLessonId);
     if (typedLessonBuildBlocksTutorInput(lesson)) { renderTypedLessonBuild(lesson);return; }
     const last = lesson && lesson.messages[lesson.messages.length - 1];
@@ -14264,6 +14293,10 @@ if (FULL_VOICE_MODE_ENABLED) {
     enterVoice(false, !!pending);
     if (pending && voice.active) voiceRepeatPending(lesson, last);
   };
+  $("chat-mic").setAttribute("aria-label", "Open spoken conversation");
+  $("chat-mic").title = "Spoken conversation";
+  $("chat-mic").onclick = openSpokenConversation;
+  $("chat-mode-toggle").onclick = openSpokenConversation;
 }
 
 /* ================= Backup / cross-browser sync ================= */

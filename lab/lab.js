@@ -124,24 +124,31 @@ const LAB_LESSON_HANDOFF_KEY = "worldview-lab-lesson-handoff-v1";
 const LAB_ACTIVE_JOB_STATES = new Set(["queued", "running", "cancelling"]);
 const LESSON_MAP_OUTPUT_CONTRACT = `Return only valid JSON with this shape:
 {
+  "lessonTitle": "short learner-facing lesson title",
   "goal": "the clarified lesson goal",
-  "route": ["node_id_in_learner_order"],
-  "nodes": [
+  "chapters": [
     {
-      "id": "stable_short_id",
-      "kind": "foundation | integration | goal",
-      "title": "short learner-facing checkpoint title",
-      "whyNeeded": "why this supports the learner's goal",
-      "prerequisites": ["earlier_node_id"],
-      "masteryGoal": "what the learner must explain, predict, compare, or apply",
-      "diagnosticQuestion": "one question that can reveal that understanding"
+      "id": "stable_short_chapter_id",
+      "title": "short chapter title",
+      "purpose": "why this chapter supports the learner's goal",
+      "prerequisites": ["earlier_chapter_id"],
+      "outcomes": [
+        {
+          "id": "stable_short_outcome_id",
+          "title": "short checkpoint name",
+          "learningOutcome": "what the learner must explain, predict, compare, or apply",
+          "successEvidence": "observable evidence that would demonstrate the outcome",
+          "diagnosticQuestion": "one optional cross-examination question",
+          "supportNeeds": ["claim, mechanism, example type, or boundary to verify before teaching"]
+        }
+      ]
     }
   ],
   "startingQuestion": "the first broad diagnostic question",
   "assumptions": ["important map assumption not established by the learner"],
-  "researchNeeds": ["fresh or contested claim that should be checked before teaching"]
+  "sharedResearchNeeds": ["fresh or contested claim shared by several outcomes"]
 }
-The route must contain every node exactly once in branch-completion order. Every masteryGoal must be an observable passing standard, not a topic label. Keep each node field to one concise sentence so the complete JSON fits within the output budget. Use empty arrays when no assumptions or research needs exist. Do not wrap the JSON in markdown.`;
+Chapters and their outcomes are already in learner order: prerequisites first, then integration, then the clarified goal. Use the smallest sufficient route; do not force a chapter or outcome count. Every learningOutcome and successEvidence must be observable, not a topic label. supportNeeds are research questions or evidence requirements, never invented facts or case-study details. Keep every string concise and use empty arrays when nothing is needed so the complete JSON fits within the output budget. Do not wrap the JSON in markdown.`;
 const LAB_DEFAULT_SCENARIO = Object.freeze({
   id: "builtin:scenario:first-principles",
   name: "First-principles baseline",
@@ -154,9 +161,9 @@ const LAB_DEFAULT_SCENARIO = Object.freeze({
 const LAB_PRESETS = {
   lesson: [
     {
-      id: "branch-completion-map-v3",
+      id: "branch-completion-map-v4",
       label: "Branch-completion knowledge map",
-      text: `Build the smallest sufficient dependency graph for the learner's clarified goal. Identify the first-principle nodes, the integrating nodes they unlock, and the final target. Do not force a checkpoint count. Return a linear learner route that completes one prerequisite family and its integrating node before crossing to the next family, then converges on the shared goal. For every node, name its prerequisites, the understanding the learner must demonstrate, and one diagnostic question. Preserve all interests and constraints in the frozen Clarification artifact. This map plans the route; it does not teach or award mastery.\n\n${LESSON_MAP_OUTPUT_CONTRACT}`,
+      text: `Build the smallest sufficient dependency graph for the learner's clarified goal, then group that route into learner-readable chapters. Each chapter contains one or more ordered learning outcomes; those outcomes are the checkpoints. Complete one prerequisite family and its integrating outcome before crossing to the next family, then converge on the shared goal. Preserve all interests and constraints in the frozen Clarification artifact. Give the future tutor observable success evidence and optional diagnostic questions, not a script. Identify what must later be verified as supportNeeds, but do not invent facts, quotations, statistics, sources, or case-study details. This map plans the route; it does not teach, research the full support pack, decide that a learner has passed, or award mastery.\n\n${LESSON_MAP_OUTPUT_CONTRACT}`,
     },
     {
       id: "first-principles",
@@ -341,6 +348,7 @@ const labState = {
   pipelineStage: "clarification",
   pipelineSelectedRunId: "",
   pipelineSelectedMapJobId: "",
+  pipelineSelectedMapRecordId: "",
   mapDeletingJobs: new Set(),
   mapView: "learner",
   lastPrimaryTab: "pipeline",
@@ -608,6 +616,7 @@ function resetWorkspaceContents() {
   labState.pipelineStage = "clarification";
   labState.pipelineSelectedRunId = "";
   labState.pipelineSelectedMapJobId = "";
+  labState.pipelineSelectedMapRecordId = "";
   labState.mapDeletingJobs = new Set();
   labState.mapView = "learner";
   labState.lessons = [];
@@ -2193,7 +2202,7 @@ async function submitPendingCreate(pending, messageId) {
       setMapView("learner");
     }
     setMessage(messageId, pipelineMapJob
-      ? `Roadmap run ${job.id.slice(0, 8)} accepted. It now appears in Ready roadmaps and will update there as models finish.`
+      ? `Roadmap run ${job.id.slice(0, 8)} accepted. It now appears in Saved roadmaps and will update there as models finish.`
       : `Job ${job.id.slice(0, 8)} accepted. You can close this page and return to Timing.`, "ok");
     renderJobHistory();
     if (!pipelineMapJob) activateTab("results");
@@ -3037,6 +3046,7 @@ function selectPipelineRun(runId) {
   if (!artifact) { renderPipelineArtifactSelect(); return; }
   labState.pipelineSelectedRunId = artifact.runId;
   if (!pipelineMapJobs(artifact).some((job) => job.id === labState.pipelineSelectedMapJobId)) labState.pipelineSelectedMapJobId = "";
+  labState.pipelineSelectedMapRecordId = "";
   restoreClarificationArtifact(artifact, artifact.storage || "device");
   persistClarificationSettings();
   renderPipelineArtifactSelect();
@@ -3086,10 +3096,40 @@ function cleanMapText(value, length = 1200) {
 
 function normalizePipelineMap(value, raw = "", artifact = selectedPipelineArtifact()) {
   const source = value && typeof value === "object" ? value : {};
+  const normalizeSupportNeeds = (outcome) => {
+    const items = Array.isArray(outcome?.supportNeeds) ? outcome.supportNeeds
+      : Array.isArray(outcome?.support_needs) ? outcome.support_needs
+        : Array.isArray(outcome?.researchNeeds) ? outcome.researchNeeds
+          : Array.isArray(outcome?.research_needs) ? outcome.research_needs : [];
+    return items.map((item) => cleanMapText(item, 280)).filter(Boolean).slice(0, 4);
+  };
+  const normalizeOutcome = (outcome, index, chapterId, fallback = {}) => ({
+    id: cleanMapText(outcome?.id || outcome?.outcomeId || outcome?.checkpointId || `${chapterId}_outcome_${index + 1}`, 80).replace(/\s+/g, "_").toLowerCase(),
+    title: cleanMapText(outcome?.title || outcome?.label || outcome?.name || fallback.title || `Learning outcome ${index + 1}`, 150),
+    learningOutcome: cleanMapText(outcome?.learningOutcome || outcome?.learning_outcome || outcome?.masteryGoal || outcome?.mastery_goal || outcome?.mastery || fallback.learningOutcome, 700),
+    successEvidence: cleanMapText(outcome?.successEvidence || outcome?.success_evidence || outcome?.successCriteria || outcome?.success_criteria || fallback.successEvidence, 600),
+    diagnosticQuestion: cleanMapText(outcome?.diagnosticQuestion || outcome?.diagnostic_question || outcome?.question || outcome?.probe || fallback.diagnosticQuestion, 500),
+    supportNeeds: normalizeSupportNeeds(outcome),
+  });
+  const chapterSource = Array.isArray(source.chapters) ? source.chapters.filter((item) => item && typeof item === "object") : [];
+  let chapters = chapterSource.map((chapter, index) => {
+    const id = cleanMapText(chapter?.id || chapter?.chapterId || `chapter_${index + 1}`, 80).replace(/\s+/g, "_").toLowerCase() || `chapter_${index + 1}`;
+    const outcomeSource = [chapter?.outcomes, chapter?.learningOutcomes, chapter?.learning_outcomes, chapter?.checkpoints]
+      .find((items) => Array.isArray(items)) || [];
+    return {
+      id,
+      kind: cleanMapText(chapter?.kind || chapter?.type || (index === chapterSource.length - 1 ? "goal" : "chapter"), 40).toLowerCase(),
+      title: cleanMapText(chapter?.title || chapter?.label || chapter?.name || `Chapter ${index + 1}`, 180),
+      purpose: cleanMapText(chapter?.purpose || chapter?.whyNeeded || chapter?.why_needed || chapter?.description, 700),
+      prerequisites: (Array.isArray(chapter?.prerequisites) ? chapter.prerequisites : Array.isArray(chapter?.prerequisiteIds) ? chapter.prerequisiteIds : [])
+        .map((item) => cleanMapText(typeof item === "object" ? item.id || item.title : item, 80)).filter(Boolean).slice(0, 8),
+      outcomes: outcomeSource.map((outcome, outcomeIndex) => normalizeOutcome(outcome, outcomeIndex, id)).filter((outcome) => outcome.title),
+    };
+  }).filter((chapter) => chapter.title && chapter.outcomes.length);
   const routeSource = Array.isArray(source.route) ? source.route : [];
   const nodeSource = [source.nodes, source.checkpoints, source.knowledgeTree, source.linear, routeSource]
     .find((items) => Array.isArray(items) && items.some((item) => item && typeof item === "object")) || [];
-  const nodes = nodeSource.map((node, index) => {
+  const legacyNodes = nodeSource.map((node, index) => {
     const id = cleanMapText(node?.id || node?.nodeId || node?.checkpointId || `step_${index + 1}`, 80).replace(/\s+/g, "_").toLowerCase();
     const prerequisites = (Array.isArray(node?.prerequisites) ? node.prerequisites : Array.isArray(node?.prerequisiteIds) ? node.prerequisiteIds : Array.isArray(node?.prerequisite_ids) ? node.prerequisite_ids : [])
       .map((item) => cleanMapText(typeof item === "object" ? item.id || item.title : item, 80)).filter(Boolean).slice(0, 12);
@@ -3103,19 +3143,31 @@ function normalizePipelineMap(value, raw = "", artifact = selectedPipelineArtifa
       diagnosticQuestion: cleanMapText(node?.diagnosticQuestion || node?.diagnostic_question || node?.question || node?.probe, 700),
     };
   }).filter((node) => node.title);
-  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const byId = new Map(legacyNodes.map((node) => [node.id, node]));
   const routeIds = routeSource.filter((item) => typeof item === "string").map((item) => cleanMapText(item, 80).replace(/\s+/g, "_").toLowerCase());
-  const ordered = routeIds.length
-    ? [...routeIds.map((id) => byId.get(id)).filter(Boolean), ...nodes.filter((node) => !routeIds.includes(node.id))]
-    : nodes;
+  const orderedLegacy = routeIds.length
+    ? [...routeIds.map((id) => byId.get(id)).filter(Boolean), ...legacyNodes.filter((node) => !routeIds.includes(node.id))]
+    : legacyNodes;
+  if (!chapters.length) {
+    chapters = orderedLegacy.map((node) => ({
+      id: node.id, kind: node.kind, title: node.title, purpose: node.whyNeeded, prerequisites: node.prerequisites,
+      outcomes: [normalizeOutcome({}, 0, node.id, { title:"Chapter outcome", learningOutcome:node.masteryGoal, successEvidence:node.diagnosticQuestion, diagnosticQuestion:node.diagnosticQuestion })],
+    }));
+  }
+  const nodes = chapters.flatMap((chapter) => chapter.outcomes.map((outcome) => ({
+    id:outcome.id, kind:chapter.kind, title:outcome.title, whyNeeded:chapter.purpose, prerequisites:chapter.prerequisites,
+    masteryGoal:outcome.learningOutcome, diagnosticQuestion:outcome.diagnosticQuestion || outcome.successEvidence,
+  })));
   return {
+    lessonTitle: cleanMapText(source.lessonTitle || source.lesson_title || source.title || artifact?.topic, 220),
     goal: cleanMapText(source.goal || source.mission || source.target || artifact?.scopeSummary || artifact?.topic, 900),
-    route: ordered.map((node) => node.id),
-    nodes: ordered,
+    chapters,
+    route: chapters.map((chapter) => chapter.id),
+    nodes,
     startingQuestion: cleanMapText(source.startingQuestion || source.starting_question || source.firstQuestion || source.first_question, 700),
     assumptions: (Array.isArray(source.assumptions) ? source.assumptions : []).map((item) => cleanMapText(item, 500)).filter(Boolean).slice(0, 12),
-    researchNeeds: (Array.isArray(source.researchNeeds) ? source.researchNeeds : Array.isArray(source.research_needs) ? source.research_needs : []).map((item) => cleanMapText(item, 500)).filter(Boolean).slice(0, 12),
-    sourceFormat: ordered.length ? "structured" : "",
+    researchNeeds: (Array.isArray(source.sharedResearchNeeds) ? source.sharedResearchNeeds : Array.isArray(source.shared_research_needs) ? source.shared_research_needs : Array.isArray(source.researchNeeds) ? source.researchNeeds : Array.isArray(source.research_needs) ? source.research_needs : []).map((item) => cleanMapText(item, 500)).filter(Boolean).slice(0, 12),
+    sourceFormat: chapters.length ? "structured" : "",
     raw: asText(raw),
   };
 }
@@ -3164,7 +3216,10 @@ function prosePipelineMap(raw, artifact = selectedPipelineArtifact()) {
   }
   if (nodes.length) nodes[nodes.length - 1].kind = "goal";
   return {
+    lessonTitle: cleanMapText(artifact?.topic, 220),
     goal: cleanMapText(artifact?.scopeSummary || artifact?.topic, 900),
+    chapters: nodes.map((node) => ({ id:node.id, kind:node.kind, title:node.title, purpose:node.whyNeeded, prerequisites:node.prerequisites,
+      outcomes:[{ id:`${node.id}_outcome_1`, title:"Chapter outcome", learningOutcome:node.masteryGoal, successEvidence:node.diagnosticQuestion, diagnosticQuestion:node.diagnosticQuestion, supportNeeds:[] }] })),
     route: nodes.map((node) => node.id), nodes, startingQuestion:"", assumptions:[], researchNeeds:[], sourceFormat:"prose", raw:text,
   };
 }
@@ -3219,14 +3274,21 @@ function pipelineMapRecordMeta(record, map = null) {
   const searches = numeric(result.searches ?? sample.searches);
   const citations = Array.isArray(result.citations) ? result.citations : Array.isArray(sample.citations) ? sample.citations : [];
   const raw = asText(record?.text).trim();
+  const finishReason = cleanMapText(sample.finishReason ?? result.finishReason, 80);
+  const normalizedFinishReason = finishReason.toLowerCase();
   const unclosedJson = raw.startsWith("{") && !raw.endsWith("}");
   const atOutputLimit = maxTokens !== null && outputTokens !== null && outputTokens >= maxTokens - Math.max(8, Math.round(maxTokens * .01));
-  const legacyAtLimit = maxTokens === null && outputTokens !== null && outputTokens >= 995 && map?.sourceFormat !== "structured";
-  const likelyCutOff = unclosedJson || atOutputLimit || legacyAtLimit;
+  const providerCutOff = ["max_tokens", "length", "max_tokens_reached", "max_tokens_stop", "max_output_tokens", "max_output_tokens_reached"]
+    .includes(normalizedFinishReason);
+  const invalidStructuredJson = raw.startsWith("{") && map?.sourceFormat !== "structured";
+  const incomplete = unclosedJson || invalidStructuredJson || providerCutOff;
+  // Older samples did not store the provider's terminal reason. Reaching the
+  // token allowance is worth inspection, but it does not prove a failure.
+  const needsReview = !incomplete && !finishReason && atOutputLimit;
   return {
     request, inputTokens, outputTokens, maxTokens, latency,
     researchRequested, researchApplied, searches, citations,
-    likelyCutOff,
+    finishReason, incomplete, needsReview,
     structured: map?.sourceFormat === "structured",
     cost: estimateTextCost(record?.model || sample.model || result.model, inputTokens, outputTokens),
   };
@@ -3259,49 +3321,72 @@ function ensurePipelineMapDetail(job) {
 function renderPipelineRoadmap(record, artifact) {
   const map = parsePipelineMapOutput(record.text, artifact);
   const meta = pipelineMapRecordMeta(record, map);
-  const card = element("article", { className:"map-roadmap" });
+  const card = element("article", { className:"map-roadmap map-lesson-path" });
   const head = element("header", { className:"map-roadmap-head" });
-  head.append(element("strong", { text:[record.provider, record.model].filter(Boolean).join(" · ") || "Model result" }));
-  const badges = element("div", { className:"map-result-badges" });
-  const research = pipelineMapResearchLabel(meta);
-  badges.append(
-    element("span", { className:`map-result-badge ${research.className}`, text:research.text }),
-    element("span", { className:"map-result-badge is-time", text:pipelineMapDuration(meta.latency) }),
-  );
-  if (meta.likelyCutOff) badges.append(element("span", { className:"map-result-badge is-cutoff", text:"Output appears cut off" }));
-  else if (!meta.structured) badges.append(element("span", { className:"map-result-badge is-legacy", text:"Prose result" }));
-  head.append(badges);
+  head.append(element("small", { text:"Lesson path" }));
   card.append(head);
-  if (meta.likelyCutOff) card.append(element("p", { className:"map-cutoff-warning", text:"This model reached its response limit or returned unfinished JSON. Treat this roadmap as incomplete and rerun it with the new 2,000-token budget." }));
-  if (map.goal) {
+  if (meta.incomplete) card.append(element("p", { className:"map-cutoff-warning", text:"This model reported a response-limit stop or returned unfinished JSON. Treat this roadmap as incomplete and rerun it." }));
+  else if (meta.needsReview) card.append(element("p", { className:"map-review-warning", text:"This older run used nearly all of its output allowance, but it did not save the provider’s stop reason. Review the chapters below; it is not automatically a failed roadmap." }));
+  if (map.lessonTitle || map.goal) {
     const goal = element("section", { className:"map-goal" });
-    goal.append(element("small", { text:"Learning goal" }), element("h4", { text:map.goal }));
+    goal.append(element("small", { text:"Lesson" }), element("h4", { text:map.lessonTitle || artifact?.topic || "Lesson path" }));
+    if (map.goal) goal.append(element("p", { className:"map-goal-copy", text:map.goal }));
     card.append(goal);
   }
-  if (map.nodes.length) card.append(element("p", { className:"map-checkpoint-instruction", text:`${map.nodes.length} checkpoints · Select one to see what the learner must understand and how to test it.` }));
+  const outcomeCount = map.chapters.reduce((sum, chapter) => sum + chapter.outcomes.length, 0);
+  if (map.chapters.length) card.append(element("p", { className:"map-checkpoint-instruction", text:`${map.chapters.length} chapter${map.chapters.length === 1 ? "" : "s"} · ${outcomeCount} learning outcome${outcomeCount === 1 ? "" : "s"} · Tap a chapter to open it.` }));
   const nodes = element("div", { className:"map-roadmap-nodes" });
-  for (const [index, node] of map.nodes.entries()) {
-    const item = element("article", { className:`map-roadmap-node is-${node.kind || "checkpoint"}` });
-    item.append(element("span", { className:"map-roadmap-marker", text:String(index + 1) }));
+  for (const [index, chapter] of map.chapters.entries()) {
+    const item = element("article", { className:`map-roadmap-node is-${chapter.kind || "chapter"}` });
+    item.append(element("span", { className:"map-roadmap-marker", attrs:{ "aria-hidden":"true" } }));
     const disclosure = element("details", { className:"map-roadmap-copy" });
     const summary = element("summary");
     const summaryCopy = element("span");
-    summaryCopy.append(element("small", { text:node.kind === "goal" ? "Goal checkpoint" : node.kind === "integration" ? "Integration" : index === 0 ? "Starting point" : `Checkpoint ${index + 1}` }), element("strong", { text:node.title }));
+    summaryCopy.append(element("small", { text:chapter.kind === "goal" ? "Final chapter" : chapter.kind === "integration" ? "Integration chapter" : index === 0 ? "Starting chapter" : `Chapter ${index + 1}` }), element("strong", { text:chapter.title }));
     const openLabel = element("span", { className:"map-node-open-label", text:"View" });
     summary.append(summaryCopy, openLabel);
     disclosure.append(summary);
     disclosure.addEventListener("toggle", () => { openLabel.textContent = disclosure.open ? "Close" : "View"; });
     const detail = element("div", { className:"map-node-details" });
-    const addField = (label, text, className = "") => {
+    const addChapterField = (label, text, className = "") => {
       if (!text) return;
       const field = element("p", { className:`map-node-field ${className}`.trim() });
       field.append(element("strong", { text:label }), element("span", { text }));
       detail.append(field);
     };
-    addField("What counts as passing", node.masteryGoal);
-    addField("How to test it", node.diagnosticQuestion);
-    addField("Why it belongs", node.whyNeeded);
-    addField("Builds on", node.prerequisites.join(", "), "map-prerequisites");
+    addChapterField("Why this chapter belongs", chapter.purpose);
+    addChapterField("Builds on", chapter.prerequisites.join(", "), "map-prerequisites");
+    const outcomes = element("section", { className:"map-chapter-outcomes" });
+    outcomes.append(element("h5", { text:"Learning outcomes" }));
+    for (const [outcomeIndex, outcome] of chapter.outcomes.entries()) {
+      const outcomeDisclosure = element("details", { className:"map-outcome" });
+      const outcomeSummary = element("summary");
+      outcomeSummary.append(element("span", { className:"map-outcome-number", text:`${index + 1}.${outcomeIndex + 1}` }), element("strong", { text:outcome.title }), element("span", { className:"map-outcome-open-label", text:"View" }));
+      outcomeDisclosure.append(outcomeSummary);
+      const outcomeDetail = element("div", { className:"map-outcome-details" });
+      const addOutcomeField = (label, text) => {
+        if (!text) return;
+        const field = element("p", { className:"map-node-field" });
+        field.append(element("strong", { text:label }), element("span", { text }));
+        outcomeDetail.append(field);
+      };
+      addOutcomeField("Learning outcome", outcome.learningOutcome);
+      addOutcomeField("Evidence of success", outcome.successEvidence);
+      addOutcomeField("Example cross-examination", outcome.diagnosticQuestion);
+      if (outcome.supportNeeds.length) {
+        const support = element("div", { className:"map-support-needs" });
+        support.append(element("strong", { text:"Research support needed" }));
+        const list = element("ul");
+        for (const need of outcome.supportNeeds) list.append(element("li", { text:need }));
+        support.append(list);
+        outcomeDetail.append(support);
+      }
+      if (!outcomeDetail.childElementCount) outcomeDetail.append(element("p", { className:"map-node-empty", text:"This result did not provide outcome details." }));
+      outcomeDisclosure.append(outcomeDetail);
+      outcomeDisclosure.addEventListener("toggle", () => { outcomeDisclosure.querySelector(".map-outcome-open-label").textContent = outcomeDisclosure.open ? "Close" : "View"; });
+      outcomes.append(outcomeDisclosure);
+    }
+    detail.append(outcomes);
     if (!detail.childElementCount) detail.append(element("p", { className:"map-node-empty", text:"This result did not provide checkpoint details." }));
     disclosure.append(detail);
     item.append(disclosure);
@@ -3316,10 +3401,15 @@ function pipelineMapRunState(job) {
   const records = pipelineMapOutputRecords(labState.jobDetails.get(job.id), job);
   const incomplete = records.some((record) => {
     const map = parsePipelineMapOutput(record.text, selectedPipelineArtifact());
-    return pipelineMapRecordMeta(record, map).likelyCutOff;
+    return pipelineMapRecordMeta(record, map).incomplete;
+  });
+  const needsReview = records.some((record) => {
+    const map = parsePipelineMapOutput(record.text, selectedPipelineArtifact());
+    return pipelineMapRecordMeta(record, map).needsReview;
   });
   if (LAB_ACTIVE_JOB_STATES.has(job.status)) return { label:"Generating", className:"" };
   if (records.length && incomplete) return { label:"Incomplete", className:"is-incomplete" };
+  if (records.length && needsReview) return { label:"Review", className:"is-review" };
   if (records.length) return { label:"Ready", className:"is-ready" };
   if (["failed", "partial", "needs_attention", "cancelled"].includes(job.status)) return { label:job.status === "cancelled" ? "Cancelled" : "Failed", className:"is-failed" };
   return { label:job.status.replaceAll("_", " "), className:"" };
@@ -3330,6 +3420,7 @@ function selectPipelineMapJob(jobId, options = {}) {
   const job = pipelineMapJobs(artifact).find((item) => item.id === jobId);
   if (!job) return;
   labState.pipelineSelectedMapJobId = job.id;
+  labState.pipelineSelectedMapRecordId = "";
   persistClarificationSettings();
   setPipelineStage("map");
   setMapView("learner");
@@ -3344,7 +3435,10 @@ function removePipelineMapJobLocally(jobId) {
   labState.mapDetailRequests.delete(jobId);
   labState.mapDetailRefreshed.delete(jobId);
   labState.outputs = labState.outputs.filter((output) => output.jobId !== jobId);
-  if (labState.pipelineSelectedMapJobId === jobId) labState.pipelineSelectedMapJobId = "";
+  if (labState.pipelineSelectedMapJobId === jobId) {
+    labState.pipelineSelectedMapJobId = "";
+    labState.pipelineSelectedMapRecordId = "";
+  }
   persistWorkspace();
   persistClarificationSettings();
   renderJobHistory();
@@ -3441,17 +3535,34 @@ function renderPipelineMapOutput() {
     setStatus(LAB_ACTIVE_JOB_STATES.has(job.status) ? "Generating the roadmap…" : labState.mapDetailRequests.has(job.id) ? "Loading the completed roadmap…" : "The completed model call returned no text to display.");
     return;
   }
-  const renderedRecords = records.map((record) => ({ record, ...renderPipelineRoadmap(record, artifact) }));
-  const cutOffCount = renderedRecords.filter((item) => item.meta.likelyCutOff).length;
-  setStatus(`${records.length} roadmap${records.length === 1 ? "" : "s"} ready${cutOffCount ? ` · ${cutOffCount} appears incomplete` : ""}`, !cutOffCount);
+  const renderedRecords = records.map((record, index) => ({ record, recordKey:cleanMapText(record.id, 120) || `result-${index}`, ...renderPipelineRoadmap(record, artifact) }));
+  const incompleteCount = renderedRecords.filter((item) => item.meta.incomplete).length;
+  const reviewCount = renderedRecords.filter((item) => item.meta.needsReview).length;
+  setStatus(`${records.length} roadmap${records.length === 1 ? "" : "s"} returned${incompleteCount ? ` · ${incompleteCount} incomplete` : ""}${reviewCount ? ` · ${reviewCount} older run${reviewCount === 1 ? "" : "s"} needs review` : ""}`, !incompleteCount && !reviewCount);
+  const selectedRecord = renderedRecords.find((item) => item.recordKey === labState.pipelineSelectedMapRecordId) || renderedRecords[0];
+  labState.pipelineSelectedMapRecordId = selectedRecord.recordKey;
+  if (renderedRecords.length > 1) {
+    const picker = element("label", { className:"map-route-picker" });
+    picker.append(element("span", { text:"Route proposal" }));
+    const select = element("select", { attrs:{ "aria-label":"Choose a route proposal" } });
+    for (const item of renderedRecords) select.append(element("option", { value:item.recordKey, text:[item.record.provider, item.record.model].filter(Boolean).join(" · ") || "Model result" }));
+    select.value = selectedRecord.recordKey;
+    select.addEventListener("change", () => {
+      labState.pipelineSelectedMapRecordId = select.value;
+      persistClarificationSettings();
+      renderPipelineMapOutput();
+    });
+    picker.append(select);
+    root.append(picker);
+  }
+  root.append(selectedRecord.card);
   const parsed = [];
   for (const rendered of renderedRecords) {
-    root.append(rendered.card);
     parsed.push({
       model:[rendered.record.provider, rendered.record.model].filter(Boolean).join(" · "),
       research:pipelineMapResearchLabel(rendered.meta).text,
       elapsed:pipelineMapDuration(rendered.meta.latency),
-      completion:rendered.meta.likelyCutOff ? "appears cut off" : rendered.meta.structured ? "complete structured map" : "prose compatibility result",
+      completion:rendered.meta.incomplete ? "incomplete output" : rendered.meta.needsReview ? "older run needs review" : rendered.meta.structured ? "complete structured map" : "prose compatibility result",
       roadmap:rendered.map,
     });
   }
@@ -3461,7 +3572,7 @@ function renderPipelineMapOutput() {
       `RESULT ${index + 1} · ${item.record.provider} ${item.record.model}`,
       `Research: ${pipelineMapResearchLabel(item.meta).text}`,
       `Time: ${pipelineMapDuration(item.meta.latency)}`,
-      `Output: ${item.meta.outputTokens ?? "?"}${item.meta.maxTokens === null ? "" : ` / ${item.meta.maxTokens}`} tokens · ${item.meta.likelyCutOff ? "APPEARS CUT OFF" : item.meta.structured ? "complete structured map" : "prose compatibility result"}`,
+      `Output: ${item.meta.outputTokens ?? "?"}${item.meta.maxTokens === null ? "" : ` / ${item.meta.maxTokens}`} tokens${item.meta.finishReason ? ` · provider stop: ${item.meta.finishReason}` : ""} · ${item.meta.incomplete ? "INCOMPLETE OUTPUT" : item.meta.needsReview ? "OLDER RUN NEEDS REVIEW" : item.meta.structured ? "complete structured map" : "prose compatibility result"}`,
     ].join("\n");
     return `${header}\n\n${item.record.text}`;
   }).join("\n\n----------------------------------------\n\n");
@@ -3478,7 +3589,7 @@ function renderPipelineMapOutput() {
       element("span", { text:`Time ${pipelineMapDuration(item.meta.latency)}` }),
       element("span", { text:item.meta.inputTokens === null && item.meta.outputTokens === null ? "Tokens unavailable" : `Tokens ${(item.meta.inputTokens || 0).toLocaleString()} in · ${(item.meta.outputTokens || 0).toLocaleString()} out${item.meta.maxTokens === null ? "" : ` / ${item.meta.maxTokens.toLocaleString()} max`}` }),
       element("span", { text:item.meta.cost === null ? "Cost unavailable" : formatCost(item.meta.cost) }),
-      element("span", { className:item.meta.likelyCutOff ? "is-cutoff" : "", text:item.meta.likelyCutOff ? "Output appears cut off" : item.meta.structured ? "Complete structured map" : "Prose compatibility result" }),
+      element("span", { className:item.meta.incomplete ? "is-cutoff" : item.meta.needsReview ? "is-review" : "", text:item.meta.incomplete ? "Incomplete output" : item.meta.needsReview ? "Older run needs review" : item.meta.structured ? "Complete structured map" : "Prose compatibility result" }),
     );
     return summary;
   }));
@@ -3613,6 +3724,7 @@ function persistClarificationSettings() {
     artifacts: labState.clarificationArtifacts.slice(0, 12),
     pipelineSelectedRunId: labState.pipelineSelectedRunId,
     pipelineSelectedMapJobId: labState.pipelineSelectedMapJobId,
+    pipelineSelectedMapRecordId: labState.pipelineSelectedMapRecordId,
   };
   try { localStorage.setItem(clarificationStorageKey(), JSON.stringify(payload)); return true; }
   catch (_) { return false; }
@@ -3634,12 +3746,97 @@ function setClarificationBusy(busy, label = "") {
   q("clarification-waiting").hidden = !busy;
   q("clarification-latest").hidden = busy;
   q("clarification-surface").classList.toggle("has-reply", !busy && !!state.latest);
-  for (const id of ["clarification-send", "clarification-done", "clarification-new", "clarification-fork", "clarification-backend-text", "clarification-backend-voice"]) {
+  for (const id of ["clarification-send", "clarification-done", "clarification-new", "clarification-fork", "clarification-backend-text", "clarification-backend-voice", "clarification-mode-toggle"]) {
     if (q(id)) q(id).disabled = busy || (id === "clarification-done" && (!state.latest?.ready_to_finish || state.learnerReplyCount < 1));
   }
   syncClarificationSendControl();
   q("clarification-job-status").textContent = busy ? (label || "running") : (state.runError ? "failed" : (state.latestJobId ? "saved" : "not run"));
   q("clarification-job-status").className = `job-status ${busy ? "is-pending" : (state.runError ? "is-failed" : (state.latestJobId ? "is-complete" : ""))}`;
+}
+
+function renderClarificationModeToggle() {
+  const state = labState.clarification;
+  const button = q("clarification-mode-toggle");
+  if (!button) return;
+  const inConversation = !q("clarification-conversation").hidden && q("clarification-complete").hidden;
+  button.hidden = !inConversation;
+  if (!inConversation) return;
+  const switchToVoice = state.mode !== "voice";
+  button.setAttribute("aria-label", switchToVoice ? "Switch to Voice" : "Switch to Text");
+  button.title = switchToVoice ? "Switch to Voice" : "Switch to Text";
+  button.innerHTML = switchToVoice
+    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3.5 19c.9-3.3 3-5 5.5-5s4.6 1.7 5.5 5M16 8.5c1.8.5 3 2.1 3 4s-1.2 3.5-3 4"/><path d="M18.5 6c2.4 1.4 3.8 3.8 3.8 6.5S20.9 17.6 18.5 19"/></svg>'
+    : '<span aria-hidden="true">Aa</span>';
+}
+
+function setClarificationConversationMode(mode) {
+  const state = labState.clarification;
+  state.mode = mode === "voice" ? "voice" : "text";
+  q("clarification-text-controls").hidden = state.mode !== "text";
+  q("clarification-ptt-hint").hidden = state.mode !== "voice";
+  q("clarification-surface").setAttribute("aria-label", state.mode === "voice" ? "Hold anywhere in the lesson area to talk" : "Clarification conversation");
+  renderClarificationModeToggle();
+}
+
+function stopClarificationCaptureForModeChange() {
+  const state = labState.clarification;
+  const recorder = state.recorder;
+  if (recorder?.state === "recording") {
+    recorder.onstop = null;
+    try { recorder.stop(); } catch (_) { /* The recorder may already be stopping. */ }
+  }
+  state.recorder = null;
+  state.recorderChunks = [];
+  q("clarification-surface").classList.remove("is-listening");
+  setClarificationMicTracksEnabled(false);
+  setClarificationAudioSession("playback");
+}
+
+async function switchClarificationConversationMode() {
+  const state = labState.clarification;
+  if (state.busy || q("clarification-conversation").hidden) return;
+  if (state.mode === "voice") {
+    stopClarificationCaptureForModeChange();
+    stopClarificationSpeech();
+    setClarificationMicStatus();
+    setClarificationConversationMode("text");
+    setMessage("clarification-message", "Text mode is ready. The conversation and its scope stay in place.");
+    q("clarification-reply").focus();
+    return;
+  }
+  if (!labState.preview && (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder)) {
+    setMessage("clarification-message", "This browser does not expose microphone recording. Text mode remains available.", "error");
+    return;
+  }
+  setClarificationConversationMode("voice");
+  setClarificationAudioSession("play-and-record");
+  primeClarificationAudio();
+  if (labState.preview || state.micStream) {
+    setClarificationMicTracksEnabled(false);
+    setClarificationAudioSession("playback");
+    setMessage("clarification-message", "Voice mode is ready. Hold the conversation area to talk.");
+    return;
+  }
+  setClarificationMicStatus("requesting", "Waiting for microphone permission…");
+  const activeRunId = state.runId;
+  const microphonePromise = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  try {
+    const stream = await microphonePromise;
+    if (state.runId !== activeRunId || state.mode !== "voice") {
+      for (const track of stream.getTracks()) track.stop();
+      return;
+    }
+    state.micStream = stream;
+    setClarificationMicTracksEnabled(false);
+    setClarificationAudioSession("playback");
+    setClarificationMicStatus();
+    setMessage("clarification-message", "Voice mode is ready. Hold the conversation area to talk.");
+  } catch (error) {
+    if (state.runId !== activeRunId) return;
+    setClarificationMicStatus();
+    setClarificationConversationMode("text");
+    setMessage("clarification-message", `Microphone unavailable: ${error.message || "permission was not granted"}. Text mode remains available.`, "error");
+  }
 }
 
 function clarificationActivityLabel(label, elapsedSeconds = 0) {
@@ -3803,6 +4000,7 @@ function resetClarificationRun(seed = "") {
   q("clarification-retry-transcription").hidden = true;
   q("clarification-reply").value = "";
   syncClarificationSendControl();
+  renderClarificationModeToggle();
   setClarificationMicStatus();
   setClarificationActivity(false);
   setMessage("clarification-message", "");
@@ -3814,6 +4012,7 @@ function resetClarificationRun(seed = "") {
 function startNewPipelineRun(seed = "") {
   labState.pipelineSelectedRunId = "";
   labState.pipelineSelectedMapJobId = "";
+  labState.pipelineSelectedMapRecordId = "";
   resetClarificationRun(seed);
   setPipelineStage("clarification");
   persistClarificationSettings();
@@ -3864,6 +4063,7 @@ function initializeClarification() {
   if (!inheritedPreviousDefault && saved.model && [...q("clarification-model").options].some((option) => option.value === saved.model)) q("clarification-model").value = saved.model;
   labState.pipelineSelectedRunId = clip(saved.pipelineSelectedRunId, 120);
   labState.pipelineSelectedMapJobId = clip(saved.pipelineSelectedMapJobId, 120);
+  labState.pipelineSelectedMapRecordId = clip(saved.pipelineSelectedMapRecordId, 120);
   for (const artifact of Array.isArray(saved.artifacts) ? saved.artifacts : []) rememberClarificationArtifact(artifact, artifact?.storage || "device");
   if (saved.finalized) rememberClarificationArtifact(saved.finalized, saved.finalizedStorage || "device");
   if (saved.finalized) restoreClarificationArtifact(saved.finalized, saved.finalizedStorage || "device");
@@ -4178,6 +4378,8 @@ async function startClarification(mode) {
   q("clarification-conversation").hidden = false;
   q("clarification-text-controls").hidden = mode !== "text";
   q("clarification-ptt-hint").hidden = mode !== "voice";
+  q("clarification-surface").setAttribute?.("aria-label", mode === "voice" ? "Hold anywhere in the lesson area to talk" : "Clarification conversation");
+  if (typeof renderClarificationModeToggle === "function") renderClarificationModeToggle();
   q("clarification-retry-transcription").hidden = true;
   q("clarification-hear").hidden = true;
   q("clarification-done").disabled = true;
@@ -4218,9 +4420,12 @@ async function startClarification(mode) {
       })
       .catch((error) => {
         if (state.runId !== activeRunId) return;
-        setClarificationMicStatus("error", `Microphone unavailable: ${error.message || "permission was not granted"}`);
+        setClarificationMicStatus();
+        state.mode = "text";
         q("clarification-ptt-hint").hidden = true;
         q("clarification-text-controls").hidden = false;
+        q("clarification-surface").setAttribute?.("aria-label", "Clarification conversation");
+        if (typeof renderClarificationModeToggle === "function") renderClarificationModeToggle();
         setMessage("clarification-message", "The response will still appear here. You can continue by typing.", "error");
       });
     setClarificationAudioSession("playback");
@@ -4434,6 +4639,7 @@ function bindClarificationEvents() {
   q("clarification-view-learner").addEventListener("click", () => setClarificationView("learner"));
   q("clarification-view-backend").addEventListener("click", () => setClarificationView("backend"));
   q("clarification-focus-toggle").addEventListener("click", () => setClarificationFocus(!labState.clarification.focusMode));
+  q("clarification-mode-toggle").addEventListener("click", switchClarificationConversationMode);
   q("clarification-topic").addEventListener("input", () => syncClarificationTopic("clarification-topic"));
   q("clarification-backend-topic").addEventListener("input", () => syncClarificationTopic("clarification-backend-topic"));
   q("clarification-start").addEventListener("click", showClarificationModeStep);
@@ -4526,7 +4732,7 @@ function initializeWorkspace() {
 function openMapPreviewFixture() {
   if (!labState.preview || new URLSearchParams(window.location.search).get("fixture") !== "map") return;
   const artifact = {
-    runId:"preview-map-v94", topic:"Trains",
+    runId:"preview-map-v98", topic:"Trains",
     scopeSummary:"Understand how trains stay on the rails, how signaling keeps traffic safe, and how rail networks move people efficiently.",
     scopeItems:["wheel and rail mechanics", "railway signals", "network planning"],
     transcript:[
@@ -4538,29 +4744,36 @@ function openMapPreviewFixture() {
   rememberClarificationArtifact(artifact, "device");
   labState.pipelineSelectedRunId = artifact.runId;
   const job = {
-    id:"preview-map-job-v94", component:"lesson", status:"completed", createdAt:now(), totalSamples:2, completedSamples:2, failedSamples:0, uncertainSamples:0,
+    id:"preview-map-job-v98", component:"lesson", status:"completed", createdAt:now(), totalSamples:2, completedSamples:2, failedSamples:0, uncertainSamples:0,
     scenario:{ pipelineRunId:artifact.runId, pipelineStage:"map" },
   };
   const failedJob = {
-    id:"preview-map-failed-v94", component:"lesson", status:"failed", createdAt:new Date(Date.now() - 3600000).toISOString(), totalSamples:1, completedSamples:0, failedSamples:1, uncertainSamples:0,
+    id:"preview-map-failed-v98", component:"lesson", status:"failed", createdAt:new Date(Date.now() - 3600000).toISOString(), totalSamples:1, completedSamples:0, failedSamples:1, uncertainSamples:0,
     scenario:{ pipelineRunId:artifact.runId, pipelineStage:"map" },
   };
   labState.jobs.unshift(job, failedJob);
   labState.pipelineSelectedMapJobId = job.id;
   const makeMap = (variant) => JSON.stringify({
+    lessonTitle:"How Trains Stay on Track and Move as a Network",
     goal:variant === "research" ? "Explain how train mechanics, modern signaling evidence, and network planning work together." : "Explain how train mechanics, signaling, and scheduling form one rail system.",
-    route:["wheel_rail","signal_control","network_integration"],
-    nodes:[
-      { id:"wheel_rail", kind:"foundation", title:"How wheel shape keeps a train centered", whyNeeded:"The wheel and rail geometry explains ordinary guidance before switches or signaling enter the picture.", prerequisites:[], masteryGoal:"Predict how a conical wheelset responds when it shifts sideways on straight track.", diagnosticQuestion:"Why does one wheel effectively travel farther after the axle shifts sideways?" },
-      { id:"signal_control", kind:"integration", title:"How signals separate trains safely", whyNeeded:"Mechanical guidance does not prevent two trains from occupying the same section of track.", prerequisites:["wheel_rail"], masteryGoal:"Trace how track occupancy changes the permission shown to the next train.", diagnosticQuestion:"What information must a signal system know before it clears a train into a block?" },
-      { id:"network_integration", kind:"goal", title:"How a rail network balances safety and throughput", whyNeeded:"The whole system must combine vehicles, track, signals, stations, and schedules.", prerequisites:["signal_control"], masteryGoal:"Explain one scheduling tradeoff that increases capacity without weakening safe separation.", diagnosticQuestion:"Why can adding one delayed train disrupt several otherwise independent services?" },
+    chapters:[
+      { id:"wheel_rail", kind:"foundation", title:"Staying on the Rails", purpose:"Wheel and rail geometry explains guidance before switches or signals enter the picture.", prerequisites:[], outcomes:[
+        { id:"wheel_geometry", title:"Self-centering wheelsets", learningOutcome:"Predict how a conical wheelset responds when it shifts sideways on straight track.", successEvidence:"The learner connects unequal rolling radii to the axle curving back toward center.", diagnosticQuestion:"Why does one wheel effectively travel farther after the axle shifts sideways?", supportNeeds:["Verify the ordinary conicity mechanism and its practical limits."] },
+        { id:"curve_forces", title:"Curves, flanges, and limits", learningOutcome:"Compare ordinary self-steering with the role of flanges on a tighter curve.", successEvidence:"The learner explains when geometry is sufficient and when flange contact matters.", diagnosticQuestion:"What would change as a curve becomes much tighter?", supportNeeds:["Find one accurate visual or case showing wheel-rail contact on curves."] },
+      ] },
+      { id:"signal_control", kind:"integration", title:"Separating Trains Safely", purpose:"Mechanical guidance does not prevent two trains from occupying the same section of track.", prerequisites:["wheel_rail"], outcomes:[
+        { id:"block_signals", title:"Blocks and movement authority", learningOutcome:"Trace how track occupancy changes the permission shown to the next train.", successEvidence:"The learner can follow one occupancy change through the next signal decision.", diagnosticQuestion:"What information must a signal system know before it clears a train into a block?", supportNeeds:["Verify which signaling details vary across modern rail systems."] },
+      ] },
+      { id:"network_integration", kind:"goal", title:"Coordinating the Network", purpose:"The whole system combines vehicles, track, signals, stations, and schedules.", prerequisites:["signal_control"], outcomes:[
+        { id:"capacity_tradeoffs", title:"Safety, delay, and throughput", learningOutcome:"Explain one scheduling tradeoff that increases capacity without weakening safe separation.", successEvidence:"The learner predicts how a delay can propagate through shared track or station constraints.", diagnosticQuestion:"Why can one delayed train disrupt several otherwise independent services?", supportNeeds:["Select one documented network-delay case without treating it as universal."] },
+      ] },
     ],
     startingQuestion:"What physical feature lets a rigid axle steer without a steering wheel?",
-    assumptions:[], researchNeeds:variant === "research" ? [] : ["How signaling rules differ between rail systems"],
+    assumptions:[], sharedResearchNeeds:variant === "research" ? [] : ["How signaling rules differ between rail systems"],
   });
   const samples = [
-    { id:"preview-no-research", provider:"anthropic", providerLabel:"Claude", model:"claude-sonnet-5", status:"completed", request:{ maxTokens:2000, research:false }, result:{ text:makeMap("plain"), inputTokens:1310, outputTokens:1044, ms:18420, researchRequested:false, researchApplied:false, searches:0, citations:[] } },
-    { id:"preview-researched", provider:"google", providerLabel:"Gemini", model:"gemini-3.1-pro-preview", status:"completed", request:{ maxTokens:2000, research:true }, result:{ text:makeMap("research"), inputTokens:1498, outputTokens:1168, ms:26750, researchRequested:true, researchApplied:true, searches:2, citations:[{ url:"https://example.test/source" }] } },
+    { id:"preview-no-research", provider:"anthropic", providerLabel:"Claude", model:"claude-sonnet-5", status:"completed", request:{ maxTokens:2000, research:false }, result:{ text:makeMap("plain"), inputTokens:1310, outputTokens:1044, ms:18420, researchRequested:false, researchApplied:false, searches:0, citations:[] }, finishReason:"end_turn" },
+    { id:"preview-researched", provider:"google", providerLabel:"Gemini", model:"gemini-3.1-pro-preview", status:"completed", request:{ maxTokens:2000, research:true }, result:{ text:makeMap("research"), inputTokens:1498, outputTokens:1168, ms:26750, researchRequested:true, researchApplied:true, searches:2, citations:[{ url:"https://example.test/source" }] }, finishReason:"STOP" },
   ];
   labState.jobDetails.set(job.id, { job, samples, attempts:[] });
   renderPipelineArtifactSelect();
