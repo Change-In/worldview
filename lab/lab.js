@@ -148,7 +148,7 @@ const LESSON_MAP_OUTPUT_CONTRACT = `Return only valid JSON with this shape:
   "assumptions": ["important map assumption not established by the learner"],
   "sharedResearchNeeds": ["fresh or contested claim shared by several outcomes"]
 }
-Chapters and their outcomes are already in learner order: prerequisites first, then integration, then the clarified goal. Use the smallest sufficient route; do not force a chapter or outcome count. Every learningOutcome and successEvidence must be observable, not a topic label. supportNeeds are research questions or evidence requirements, never invented facts or case-study details. Keep every string concise and use empty arrays when nothing is needed so the complete JSON fits within the output budget. Do not wrap the JSON in markdown.`;
+First decide the individual learning outcomes, then group adjacent outcomes into chapters only where they form one comprehensible explanatory unit. A chapter normally contains two to four related outcomes; do not create a chapter for every outcome or pad the route to meet a quota. A singleton chapter is acceptable only when its outcome is genuinely indivisible or is the final integration. Chapters and outcomes are already in learner order: prerequisites first, then integration, then the clarified goal. Use the smallest sufficient route; do not force a chapter or outcome count. Every learningOutcome and successEvidence must be observable, not a topic label. supportNeeds are research questions or evidence requirements, never invented facts or case-study details. Keep every string concise and use empty arrays when nothing is needed so the complete JSON fits within the output budget. Do not wrap the JSON in markdown.`;
 const LAB_DEFAULT_SCENARIO = Object.freeze({
   id: "builtin:scenario:first-principles",
   name: "First-principles baseline",
@@ -161,14 +161,14 @@ const LAB_DEFAULT_SCENARIO = Object.freeze({
 const LAB_PRESETS = {
   lesson: [
     {
+      id: "first-principles",
+      label: "First-principles map · default",
+      text: `Build a first-principles learning route for the learner's clarified goal. Start with the smallest load-bearing idea inside this topic—not an automatic descent into equations or generic vocabulary—and derive each later outcome from what the learner can already explain, predict, compare, or apply. Work from mechanisms and causal relationships before names, procedures, edge cases, or applications. Decide the individual learning outcomes first, then group neighboring outcomes into learner-readable chapters only when they answer one coherent "how does this part work?" question. Preserve all interests and constraints in the frozen Clarification artifact. Give the future tutor observable success evidence and optional diagnostic questions, not a script. Identify what must later be verified as supportNeeds, but do not invent facts, quotations, statistics, sources, or case-study details. This map plans the route; it does not teach, research the full support pack, decide that a learner has passed, or award mastery.\n\n${LESSON_MAP_OUTPUT_CONTRACT}`,
+    },
+    {
       id: "branch-completion-map-v4",
       label: "Branch-completion knowledge map",
       text: `Build the smallest sufficient dependency graph for the learner's clarified goal, then group that route into learner-readable chapters. Each chapter contains one or more ordered learning outcomes; those outcomes are the checkpoints. Complete one prerequisite family and its integrating outcome before crossing to the next family, then converge on the shared goal. Preserve all interests and constraints in the frozen Clarification artifact. Give the future tutor observable success evidence and optional diagnostic questions, not a script. Identify what must later be verified as supportNeeds, but do not invent facts, quotations, statistics, sources, or case-study details. This map plans the route; it does not teach, research the full support pack, decide that a learner has passed, or award mastery.\n\n${LESSON_MAP_OUTPUT_CONTRACT}`,
-    },
-    {
-      id: "first-principles",
-      label: "First-principles map",
-      text: "Map a topic into a first-principles teaching route for an adult beginner. Identify the smallest prerequisite, then a sequence of causal questions that lets the learner build the model themselves. Explain why each step must come before the next. Be concise and avoid pretending this output controls the learner app.",
     },
     {
       id: "adversarial",
@@ -3239,6 +3239,12 @@ function parsePipelineMapOutput(raw, artifact = selectedPipelineArtifact()) {
       if (normalized.nodes.length) return normalized;
     } catch (_) { /* Older saved map prose is handled below. */ }
   }
+  /* A response that starts to emit this contract but never finishes is not
+     legacy prose. Falling back to line-by-line prose parsing turned keys such
+     as "lessonTitle" and "prerequisites" into fake chapter titles. Preserve
+     the raw result for Backend review, but fail closed in the learner route. */
+  const resemblesStructuredMap = first >= 0 && /["'](?:lessonTitle|chapters|outcomes|learningOutcome|successEvidence)["']\s*:/.test(unfenced);
+  if (resemblesStructuredMap) return { ...normalizePipelineMap({}, text, artifact), sourceFormat:"invalid-structured", raw:text };
   return prosePipelineMap(text, artifact);
 }
 
@@ -3334,19 +3340,21 @@ function renderPipelineRoadmap(record, artifact) {
     card.append(goal);
   }
   const outcomeCount = map.chapters.reduce((sum, chapter) => sum + chapter.outcomes.length, 0);
-  if (map.chapters.length) card.append(element("p", { className:"map-checkpoint-instruction", text:`${map.chapters.length} chapter${map.chapters.length === 1 ? "" : "s"} · ${outcomeCount} learning outcome${outcomeCount === 1 ? "" : "s"} · Tap a chapter to open it.` }));
+  if (map.chapters.length) card.append(element("p", { className:"map-checkpoint-instruction", text:`${map.chapters.length} chapter${map.chapters.length === 1 ? "" : "s"} · ${outcomeCount} learning outcome${outcomeCount === 1 ? "" : "s"} · Tap a learning outcome to open it.` }));
+  else if (map.sourceFormat === "invalid-structured") card.append(element("p", { className:"map-route-unavailable", text:"This response began a structured roadmap but did not finish valid JSON, so no unreliable chapter titles are shown. Review the saved raw output or rerun it." }));
   const nodes = element("div", { className:"map-roadmap-nodes" });
   for (const [index, chapter] of map.chapters.entries()) {
     const item = element("article", { className:`map-roadmap-node is-${chapter.kind || "chapter"}` });
     item.append(element("span", { className:"map-roadmap-marker", attrs:{ "aria-hidden":"true" } }));
-    const disclosure = element("details", { className:"map-roadmap-copy" });
-    const summary = element("summary");
+    const copy = element("div", { className:"map-roadmap-copy" });
+    const chapterHead = element("header", { className:"map-chapter-head" });
     const summaryCopy = element("span");
     summaryCopy.append(element("small", { text:chapter.kind === "goal" ? "Final chapter" : chapter.kind === "integration" ? "Integration chapter" : index === 0 ? "Starting chapter" : `Chapter ${index + 1}` }), element("strong", { text:chapter.title }));
-    const openLabel = element("span", { className:"map-node-open-label", text:"View" });
-    summary.append(summaryCopy, openLabel);
-    disclosure.append(summary);
-    disclosure.addEventListener("toggle", () => { openLabel.textContent = disclosure.open ? "Close" : "View"; });
+    chapterHead.append(summaryCopy);
+    copy.append(chapterHead);
+    const context = element("details", { className:"map-chapter-context" });
+    const contextSummary = element("summary", { text:"Why this chapter belongs" });
+    context.append(contextSummary);
     const detail = element("div", { className:"map-node-details" });
     const addChapterField = (label, text, className = "") => {
       if (!text) return;
@@ -3356,6 +3364,9 @@ function renderPipelineRoadmap(record, artifact) {
     };
     addChapterField("Why this chapter belongs", chapter.purpose);
     addChapterField("Builds on", chapter.prerequisites.join(", "), "map-prerequisites");
+    if (!detail.childElementCount) detail.append(element("p", { className:"map-node-empty", text:"This result did not provide chapter context." }));
+    context.append(detail);
+    copy.append(context);
     const outcomes = element("section", { className:"map-chapter-outcomes" });
     outcomes.append(element("h5", { text:"Learning outcomes" }));
     for (const [outcomeIndex, outcome] of chapter.outcomes.entries()) {
@@ -3386,10 +3397,8 @@ function renderPipelineRoadmap(record, artifact) {
       outcomeDisclosure.addEventListener("toggle", () => { outcomeDisclosure.querySelector(".map-outcome-open-label").textContent = outcomeDisclosure.open ? "Close" : "View"; });
       outcomes.append(outcomeDisclosure);
     }
-    detail.append(outcomes);
-    if (!detail.childElementCount) detail.append(element("p", { className:"map-node-empty", text:"This result did not provide checkpoint details." }));
-    disclosure.append(detail);
-    item.append(disclosure);
+    copy.append(outcomes);
+    item.append(copy);
     nodes.append(item);
   }
   card.append(nodes);
