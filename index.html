@@ -2048,11 +2048,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v98 · Aug 17";
+const BUILD = "v99 · Aug 17";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v99", date: "Aug 17", changes: [
+    "First-principles is now the default Lesson Map technique. It produces valid chapter-and-learning-outcome JSON, while still letting you save and compare named prompt variants in the protected Lab.",
+    "Learning outcomes now stay visible beneath each chapter. Tap an outcome for its details; chapter context is an optional small dropdown, so a chapter can no longer collapse the outcomes unexpectedly.",
+    "Incomplete JSON-shaped model output is kept for Backend review but no longer appears as fake chapter names. Saved roadmaps become a sticky desktop sidebar instead of a long scroll back to the top.",
+  ]},
   { tag: "v98", date: "Aug 17", changes: [
     "Lesson Map now separates chapters from their learning outcomes. Open a chapter, then open any checkpoint to see its outcome, evidence of success, optional cross-examination, and research support needs.",
     "New roadmap prompts stay compact and name what later research must verify instead of inventing facts or stuffing a full research dossier into one response.",
