@@ -2048,11 +2048,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v105 · Aug 18";
+const BUILD = "v106 · Aug 18";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v106", date: "Aug 18", changes: [
+    "In the protected Lab, a completed saved roadmap can now open as a real text-based guided lesson. Choose a roadmap, inspect its chapters and outcomes, then press To Start.",
+    "Each text reply uses the durable private job path. Extraction prior knowledge is carried as unverified ideas to test; manual Continue moves to the next outcome without claiming mastery.",
+    "This is an owner-only Lab experiment: voice, Quiz, learner-facing progress, and automatic advancement are not part of this update.",
+  ]},
   { tag: "v105", date: "Aug 18", changes: [
     "Extraction now deliberately builds a broad picture: after at most two unasked follow-ups on one idea, it shifts to another part of what you know. If you are stuck or repeating uncertainty, it changes direction instead of pressing the same question.",
     "Worldview can gently suggest the Lesson when the conversation is no longer yielding much new signal. It never moves you automatically: you remain free to keep talking, end for now, or continue when the Lesson Map is ready.",

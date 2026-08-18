@@ -644,6 +644,24 @@ button.preferred-button.is-on { border-color: rgba(255, 211, 111, .4); color: va
 .pipeline-rail small { margin-top:5px; font-size:9px; line-height:1.25; }
 .pipeline-rail li.is-active { border-color:rgba(120,229,192,.52); background:linear-gradient(145deg,rgba(34,65,66,.65),rgba(20,27,39,.9)); box-shadow:0 12px 28px rgba(0,0,0,.16); }
 .pipeline-rail li.is-active span { border-color:var(--lab-mint); color:#07120f; background:var(--lab-mint); }
+.pipeline-lesson-stage { display:grid; gap:12px; }
+.pipeline-lesson-intro { margin:0; color:var(--lab-muted); font-size:12px; line-height:1.5; }
+.lesson-conversation { display:grid; gap:12px; }
+.lesson-route-context { display:grid; gap:4px; padding:12px; border:1px solid rgba(120,229,192,.26); border-radius:13px; background:rgba(120,229,192,.055); }
+.lesson-route-context small { color:var(--lab-mint); font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+.lesson-route-context strong { color:var(--lab-ink); font-size:14px; }
+.lesson-route-context span { color:var(--lab-muted); font-size:11px; line-height:1.45; }
+.lesson-current-outcome { display:grid; gap:3px; padding:10px; border-left:3px solid var(--lab-sun); background:rgba(255,211,111,.06); }
+.lesson-current-outcome small { color:var(--lab-sun); font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
+.lesson-extraction-context { padding:10px; border:1px solid rgba(126,98,211,.28); border-radius:10px; background:rgba(126,98,211,.06); color:var(--lab-muted); font-size:11px; line-height:1.48; }
+.lesson-extraction-context summary { color:#d7c9ff; font-weight:800; cursor:pointer; }
+.lesson-extraction-context p { margin:8px 0; }
+.lesson-extraction-context ul { display:grid; gap:6px; margin:8px 0 0; padding-left:18px; }
+.lesson-outcome-marker { display:grid; gap:2px; margin:4px 0; padding:8px 10px; border:1px solid var(--lab-line); border-radius:10px; background:rgba(255,255,255,.025); list-style:none; }
+.lesson-outcome-marker small { color:var(--lab-muted); font-size:10px; }
+.lesson-outcome-marker strong { color:var(--lab-ink); font-size:12px; }
+.lesson-text-controls textarea { min-height:82px; }
+.map-roadmap-start { margin:12px 0 0; }
 .pipeline-stage-grid { display:grid; gap:14px; grid-template-columns:minmax(0,1fr); align-items:start; }
 .pipeline-experience,.pipeline-inspector { min-width:0; }
 .clarification-workspace-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
