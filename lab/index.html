@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=99">
+<link rel="stylesheet" href="./lab.css?v=103">
 </head>
 <body>
 
@@ -291,6 +291,9 @@
         <div class="packet-title"><span>Editable instruction core</span><span id="lesson-edited" class="edited-badge" hidden>Edited</span></div>
         <textarea id="lesson-prompt" class="packet-editor" rows="15" maxlength="12000" spellcheck="false"></textarea>
         <p id="lesson-prompt-count" class="field-count"></p>
+        <label for="lesson-output-cap">Maximum response tokens for this Map run</label>
+        <input id="lesson-output-cap" type="number" min="64" max="8192" step="64" inputmode="numeric" aria-describedby="lesson-output-cap-note">
+        <p id="lesson-output-cap-note" class="privacy-note">Saved on this device for Map. The server accepts 64–8,192; the estimate uses this ceiling.</p>
         <div class="version-save"><input id="lesson-version-name" type="text" maxlength="80" placeholder="Name this version"><button class="button button-save-version" type="button" data-save-prompt="lesson">Save as new version</button></div>
         <div class="inline-actions"><button class="button button-danger-soft" type="button" data-delete-prompt="lesson">Delete saved version</button><button class="button button-workshop" type="button" data-workshop="lesson">Copy workshop briefing</button></div>
         <p id="lesson-prompt-state" class="form-message"></p>
@@ -324,6 +327,9 @@
         <div class="packet-title"><span>Editable tutor instruction core</span><span id="tutor-edited" class="edited-badge" hidden>Edited</span></div>
         <textarea id="tutor-prompt" class="packet-editor" rows="15" maxlength="40000" spellcheck="false"></textarea>
         <p id="tutor-prompt-count" class="field-count"></p>
+        <label for="tutor-output-cap">Maximum response tokens for this Tutor run</label>
+        <input id="tutor-output-cap" type="number" min="64" max="8192" step="64" inputmode="numeric" aria-describedby="tutor-output-cap-note">
+        <p id="tutor-output-cap-note" class="privacy-note">Saved on this device for Tutor. The server accepts 64–8,192; the estimate uses this ceiling.</p>
         <div class="version-save"><input id="tutor-version-name" type="text" maxlength="80" placeholder="Name this version"><button class="button button-save-version" type="button" data-save-prompt="tutor">Save as new version</button></div>
         <div class="inline-actions"><button class="button button-danger-soft" type="button" data-delete-prompt="tutor">Delete saved version</button><button class="button button-workshop" type="button" data-workshop="tutor">Copy workshop briefing</button></div>
         <p id="tutor-prompt-state" class="form-message"></p>
@@ -357,6 +363,9 @@
         <div class="packet-title"><span>Editable diagnostic instruction core</span><span id="brain-edited" class="edited-badge" hidden>Edited</span></div>
         <textarea id="brain-prompt" class="packet-editor" rows="13" maxlength="12000" spellcheck="false"></textarea>
         <p id="brain-prompt-count" class="field-count"></p>
+        <label for="brain-output-cap">Maximum response tokens for this Brain run</label>
+        <input id="brain-output-cap" type="number" min="64" max="8192" step="64" inputmode="numeric" aria-describedby="brain-output-cap-note">
+        <p id="brain-output-cap-note" class="privacy-note">Saved on this device for Brain. The server accepts 64–8,192; the estimate uses this ceiling.</p>
         <div class="version-save"><input id="brain-version-name" type="text" maxlength="80" placeholder="Name this version"><button class="button button-save-version" type="button" data-save-prompt="brain">Save as new version</button></div>
         <div class="inline-actions"><button class="button button-danger-soft" type="button" data-delete-prompt="brain">Delete saved version</button><button class="button button-workshop" type="button" data-workshop="brain">Copy workshop briefing</button></div>
         <p id="brain-prompt-state" class="form-message"></p>
@@ -481,6 +490,6 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=99" defer></script>
+<script src="./lab.js?v=103" defer></script>
 </body>
 </html>

@@ -110,7 +110,10 @@ const LAB_CHARS_PER_TOKEN = 4;
 
 const LAB_PROMPT_LIMITS = { lesson: 12000, tutor: 40000, brain: 12000 };
 const LAB_WORKSPACE_KEY = "worldview-owner-lab-workspace-v1";
-const LAB_WORKSPACE_SCHEMA = 3;
+const LAB_WORKSPACE_SCHEMA = 4;
+const LAB_OUTPUT_TOKEN_MIN = 64;
+const LAB_OUTPUT_TOKEN_SERVER_MAX = 8192;
+const LAB_OUTPUT_TOKEN_DEFAULTS = Object.freeze({ lesson: 8192, tutor: 760, brain: 760 });
 const LAB_ACCOUNT_STATE_PREFIX = "worldview-account-state-v1:";
 const LAB_PREVIEW_WORKSPACE_OWNER = "preview";
 const LAB_MAX_CUSTOM_PROMPTS_PER_BENCH = 8;
@@ -148,7 +151,7 @@ const LESSON_MAP_OUTPUT_CONTRACT = `Return only valid JSON with this shape:
   "assumptions": ["important map assumption not established by the learner"],
   "sharedResearchNeeds": ["fresh or contested claim shared by several outcomes"]
 }
-First decide the individual learning outcomes, then group adjacent outcomes into chapters only where they form one comprehensible explanatory unit. A chapter normally contains two to four related outcomes; do not create a chapter for every outcome or pad the route to meet a quota. A singleton chapter is acceptable only when its outcome is genuinely indivisible or is the final integration. Chapters and outcomes are already in learner order: prerequisites first, then integration, then the clarified goal. Use the smallest sufficient route; do not force a chapter or outcome count. Every learningOutcome and successEvidence must be observable, not a topic label. supportNeeds are research questions or evidence requirements, never invented facts or case-study details. Keep every string concise and use empty arrays when nothing is needed so the complete JSON fits within the output budget. Do not wrap the JSON in markdown.`;
+First decide the individual learning outcomes, then group adjacent outcomes into chapters only where they form one comprehensible explanatory unit. Every non-final chapter must contain two to four related outcomes; do not make a one-outcome chapter just to create another title—merge that outcome into its closest prerequisite or integration chapter. Only a genuinely indivisible final integration may have one outcome. Chapters and outcomes are already in learner order: prerequisites first, then integration, then the clarified goal. Use the smallest sufficient route; do not force a chapter or outcome count. Every learningOutcome and successEvidence must be observable, not a topic label. supportNeeds are research questions or evidence requirements, never invented facts or case-study details. Keep every string concise and use empty arrays when nothing is needed so the complete JSON fits within the output budget. Do not wrap the JSON in markdown.`;
 const LAB_DEFAULT_SCENARIO = Object.freeze({
   id: "builtin:scenario:first-principles",
   name: "First-principles baseline",
@@ -163,7 +166,7 @@ const LAB_PRESETS = {
     {
       id: "first-principles",
       label: "First-principles map · default",
-      text: `Build a first-principles learning route for the learner's clarified goal. Start with the smallest load-bearing idea inside this topic—not an automatic descent into equations or generic vocabulary—and derive each later outcome from what the learner can already explain, predict, compare, or apply. Work from mechanisms and causal relationships before names, procedures, edge cases, or applications. Decide the individual learning outcomes first, then group neighboring outcomes into learner-readable chapters only when they answer one coherent "how does this part work?" question. Preserve all interests and constraints in the frozen Clarification artifact. Give the future tutor observable success evidence and optional diagnostic questions, not a script. Identify what must later be verified as supportNeeds, but do not invent facts, quotations, statistics, sources, or case-study details. This map plans the route; it does not teach, research the full support pack, decide that a learner has passed, or award mastery.\n\n${LESSON_MAP_OUTPUT_CONTRACT}`,
+      text: `Build a first-principles learning route for the learner's clarified goal. Start with the smallest load-bearing idea inside this topic—not an automatic descent into equations or generic vocabulary—and derive each later outcome from what the learner can already explain, predict, compare, or apply. Work from mechanisms and causal relationships before names, procedures, edge cases, or applications. Decide the individual learning outcomes first, then group neighboring outcomes into learner-readable chapters only when they answer one coherent "how does this part work?" question. Make each ordinary chapter a numbered group such as 3.1, 3.2, and 3.3: two to four distinct outcomes under its one chapter heading. Preserve all interests and constraints in the frozen Clarification artifact. Give the future tutor observable success evidence and optional diagnostic questions, not a script. Identify what must later be verified as supportNeeds, but do not invent facts, quotations, statistics, sources, or case-study details. This map plans the route; it does not teach, research the full support pack, decide that a learner has passed, or award mastery.\n\n${LESSON_MAP_OUTPUT_CONTRACT}`,
     },
     {
       id: "branch-completion-map-v4",
@@ -392,6 +395,7 @@ const labState = {
   },
   basePrompt: { lesson: "", tutor: "", brain: "" },
   loadedPromptVersionId: { lesson: "", tutor: "", brain: "" },
+  outputTokenCaps: { ...LAB_OUTPUT_TOKEN_DEFAULTS },
   lanes: {
     lesson: [{ provider: "anthropic", model: "claude-sonnet-5", promptVersionId: "draft", quantity: 1 }],
     tutor: [{ provider: "anthropic", model: "claude-sonnet-5", promptVersionId: "draft", quantity: 1 }],
@@ -626,6 +630,7 @@ function resetWorkspaceContents() {
   labState.selectedNoteId = "";
   labState.basePrompt = { lesson: "", tutor: "", brain: "" };
   labState.loadedPromptVersionId = { lesson: "", tutor: "", brain: "" };
+  labState.outputTokenCaps = { ...LAB_OUTPUT_TOKEN_DEFAULTS };
 }
 
 function loadWorkspace(ownerId = labState.workspaceOwnerId) {
@@ -636,7 +641,7 @@ function loadWorkspace(ownerId = labState.workspaceOwnerId) {
   try {
     const stored = JSON.parse(localStorage.getItem(storageKey) || "{}");
     const storedSchema = Number(stored?.schemaVersion || 0);
-    if (storedSchema !== LAB_WORKSPACE_SCHEMA || stored?.ownerUserId !== ownerId) return;
+    if (!storedSchema || storedSchema > LAB_WORKSPACE_SCHEMA || stored?.ownerUserId !== ownerId) return;
     for (const kind of ["lesson", "tutor", "brain"]) {
       labState.promptVersions[kind] = (Array.isArray(stored?.promptVersions?.[kind]) ? stored.promptVersions[kind] : [])
         .map((item) => sanitizePromptVersion(item, kind))
@@ -660,6 +665,7 @@ function loadWorkspace(ownerId = labState.workspaceOwnerId) {
       .map(sanitizePendingCreate)
       .filter((item) => item?.ownerUserId === ownerId)
       .slice(0, LAB_MAX_PENDING_CREATES);
+    for (const kind of ["lesson", "tutor", "brain"]) labState.outputTokenCaps[kind] = normalizeOutputTokenCap(stored?.outputTokenCaps?.[kind], LAB_OUTPUT_TOKEN_DEFAULTS[kind]);
   } catch (_) {
     resetWorkspaceContents();
     labState.workspaceLoaded = true;
@@ -677,6 +683,7 @@ function workspacePayload() {
     currentScenarioId: labState.currentScenarioId,
     latencyMetrics: labState.latencyMetrics,
     pendingCreates: labState.pendingCreates,
+    outputTokenCaps: labState.outputTokenCaps,
   };
 }
 
@@ -1548,8 +1555,26 @@ function runSampleCount(kind) {
   return labState.lanes[kind].reduce((sum, lane) => sum + Number(lane.quantity || 0) * perLane, 0);
 }
 
+function normalizeOutputTokenCap(value, fallback) {
+  const numeric = Number(value);
+  const selected = Number.isFinite(numeric) ? Math.round(numeric) : fallback;
+  return Math.max(LAB_OUTPUT_TOKEN_MIN, Math.min(LAB_OUTPUT_TOKEN_SERVER_MAX, selected));
+}
+
 function maxOutputTokens(kind) {
-  return kind === "lesson" ? 2000 : 760;
+  return normalizeOutputTokenCap(labState.outputTokenCaps[kind], LAB_OUTPUT_TOKEN_DEFAULTS[kind]);
+}
+
+function syncOutputTokenCapControl(kind) {
+  const input = q(`${kind}-output-cap`);
+  if (input) input.value = String(maxOutputTokens(kind));
+}
+
+function setOutputTokenCap(kind, value) {
+  labState.outputTokenCaps[kind] = normalizeOutputTokenCap(value, LAB_OUTPUT_TOKEN_DEFAULTS[kind]);
+  syncOutputTokenCapControl(kind);
+  persistWorkspace();
+  renderRunEstimate(kind);
 }
 
 /*
@@ -5036,6 +5061,7 @@ function initializeWorkspace() {
   resetPreset("lesson");
   resetPreset("tutor");
   resetPreset("brain");
+  for (const kind of ["lesson", "tutor", "brain"]) syncOutputTokenCapControl(kind);
   renderSttChoices();
   renderScenarioSelect();
   loadScenarioFields();
@@ -5092,8 +5118,8 @@ function openMapPreviewFixture() {
     assumptions:[], sharedResearchNeeds:variant === "research" ? [] : ["How signaling rules differ between rail systems"],
   });
   const samples = [
-    { id:"preview-no-research", provider:"anthropic", providerLabel:"Claude", model:"claude-sonnet-5", status:"completed", request:{ maxTokens:2000, research:false }, result:{ text:makeMap("plain"), inputTokens:1310, outputTokens:1044, ms:18420, researchRequested:false, researchApplied:false, searches:0, citations:[] }, finishReason:"end_turn" },
-    { id:"preview-researched", provider:"google", providerLabel:"Gemini", model:"gemini-3.1-pro-preview", status:"completed", request:{ maxTokens:2000, research:true }, result:{ text:makeMap("research"), inputTokens:1498, outputTokens:1168, ms:26750, researchRequested:true, researchApplied:true, searches:2, citations:[{ url:"https://example.test/source" }] }, finishReason:"STOP" },
+    { id:"preview-no-research", provider:"anthropic", providerLabel:"Claude", model:"claude-sonnet-5", status:"completed", request:{ maxTokens:8192, research:false }, result:{ text:makeMap("plain"), inputTokens:1310, outputTokens:1044, ms:18420, researchRequested:false, researchApplied:false, searches:0, citations:[] }, finishReason:"end_turn" },
+    { id:"preview-researched", provider:"google", providerLabel:"Gemini", model:"gemini-3.1-pro-preview", status:"completed", request:{ maxTokens:8192, research:true }, result:{ text:makeMap("research"), inputTokens:1498, outputTokens:1168, ms:26750, researchRequested:true, researchApplied:true, searches:2, citations:[{ url:"https://example.test/source" }] }, finishReason:"STOP" },
   ];
   labState.jobDetails.set(job.id, { job, samples, attempts:[] });
   const extractionJob = {
@@ -5164,6 +5190,10 @@ function bindEvents() {
     q(`${kind}-version-name`).addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); savePromptVersion(kind); } });
   }
   ["lesson", "tutor", "brain"].forEach((kind) => q(`${kind}-prompt`).addEventListener("input", () => { updateEditedBadge(kind); renderRunEstimate(kind); }));
+  ["lesson", "tutor", "brain"].forEach((kind) => {
+    syncOutputTokenCapControl(kind);
+    q(`${kind}-output-cap`).addEventListener("change", (event) => setOutputTokenCap(kind, event.currentTarget.value));
+  });
   document.querySelectorAll("[data-workshop]").forEach((button) => button.addEventListener("click", () => copyWorkshopBriefing(button.dataset.workshop)));
   ["lesson", "tutor", "brain"].forEach(renderBenchRole);
   q("results-rate-note").textContent = `Costs are estimates from hand-entered list prices, last checked ${LAB_RATES_CHECKED}. The provider invoice is authoritative.`;
