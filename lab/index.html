@@ -206,9 +206,22 @@
         </div>
       </div>
       <section id="pipeline-extraction-stage" class="lab-card pipeline-extraction-stage" hidden>
-        <p class="eyebrow">Saved output for this run</p><h3>Extraction</h3>
-        <p id="pipeline-extraction-output">No saved Extraction output exists for this lesson run yet. The selected Clarification and Lesson Map remain attached and ready for this stage.</p>
-        <button class="button button-primary" type="button" data-pipeline-previous-stage="map">Review Lesson Map input</button>
+        <div class="extraction-stage-head">
+          <div><p class="eyebrow">Feynman overview</p><h3>What you already know</h3></div>
+          <span class="extraction-authority">not progress</span>
+        </div>
+        <p class="extraction-intro">Explain the chosen topic in plain language. This stage sees only the frozen Clarification conversation, starts beside Lesson Map generation, and does not teach, correct, or mark anything complete.</p>
+        <p id="pipeline-extraction-output" class="form-message" role="status">Choose a frozen Clarification run, then start its Lesson Map to open the broad overview.</p>
+        <section id="pipeline-extraction-conversation" class="extraction-conversation" aria-label="Knowledge extraction conversation" hidden>
+          <ol id="pipeline-extraction-transcript" class="extraction-transcript"></ol>
+          <div class="extraction-composer">
+            <label for="pipeline-extraction-reply">Your explanation</label>
+            <textarea id="pipeline-extraction-reply" rows="5" maxlength="4000" placeholder="Explain it as you would to a curious beginner. Uncertainty is useful too."></textarea>
+            <div class="inline-actions"><button id="pipeline-extraction-send" class="button button-primary" type="button">Share explanation</button><button id="pipeline-extraction-skip" class="button button-quiet" type="button">Skip for now</button></div>
+          </div>
+        </section>
+        <details class="extraction-backend"><summary>Backend evidence</summary><pre id="pipeline-extraction-validated">No extraction output yet.</pre><pre id="pipeline-extraction-raw" hidden></pre><pre id="pipeline-extraction-packet" hidden></pre></details>
+        <div class="inline-actions"><button id="pipeline-extraction-open-map" class="button button-quiet" type="button">Review Lesson Map</button><button id="pipeline-extraction-open-lesson" class="button button-quiet" type="button">Continue to Lesson</button></div>
       </section>
       <section id="pipeline-lesson-stage" class="lab-card pipeline-extraction-stage" hidden>
         <p class="eyebrow">Saved output for this run</p><h3>Lesson</h3>

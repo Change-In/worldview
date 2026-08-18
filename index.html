@@ -2048,11 +2048,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v99 · Aug 17";
+const BUILD = "v100 · Aug 18";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v100", date: "Aug 18", changes: [
+    "The protected Lab now includes a Feynman-style Extraction stage. When you start a Lesson Map from a frozen Clarification, it asks what you already understand at the same time instead of waiting for the map.",
+    "Extraction starts with one broad explain-back question and can ask one follow-up based only on your own wording. It does not teach, correct, change the map, or count anything as progress.",
+  ]},
   { tag: "v99", date: "Aug 17", changes: [
     "First-principles is now the default Lesson Map technique. It produces valid chapter-and-learning-outcome JSON, while still letting you save and compare named prompt variants in the protected Lab.",
     "Learning outcomes now stay visible beneath each chapter. Tap an outcome for its details; chapter context is an optional small dropdown, so a chapter can no longer collapse the outcomes unexpectedly.",
