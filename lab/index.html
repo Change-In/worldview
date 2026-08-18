@@ -210,14 +210,14 @@
           <div><p class="eyebrow">Feynman overview</p><h3>What you already know</h3></div>
           <span class="extraction-authority">not progress</span>
         </div>
-        <p class="extraction-intro">Explain the chosen topic in plain language. This stage sees only the frozen Clarification conversation, starts beside Lesson Map generation, and does not teach, correct, or mark anything complete.</p>
+        <p class="extraction-intro">Have a normal conversation about what you already understand. This stage sees only the frozen Clarification conversation, starts beside Lesson Map generation, and does not teach, correct, or mark anything complete.</p>
         <p id="pipeline-extraction-output" class="form-message" role="status">Choose a frozen Clarification run, then start its Lesson Map to open the broad overview.</p>
         <section id="pipeline-extraction-conversation" class="extraction-conversation" aria-label="Knowledge extraction conversation" hidden>
           <ol id="pipeline-extraction-transcript" class="extraction-transcript"></ol>
           <div class="extraction-composer">
-            <label for="pipeline-extraction-reply">Your explanation</label>
-            <textarea id="pipeline-extraction-reply" rows="5" maxlength="4000" placeholder="Explain it as you would to a curious beginner. Uncertainty is useful too."></textarea>
-            <div class="inline-actions"><button id="pipeline-extraction-send" class="button button-primary" type="button">Share explanation</button><button id="pipeline-extraction-skip" class="button button-quiet" type="button">Skip for now</button></div>
+            <label for="pipeline-extraction-reply">Your message</label>
+            <textarea id="pipeline-extraction-reply" rows="3" maxlength="1200" placeholder="Explain it in your own words. It is fine to be unsure."></textarea>
+            <div class="inline-actions"><button id="pipeline-extraction-send" class="button button-primary" type="button" hidden>Send</button><button id="pipeline-extraction-skip" class="button button-quiet" type="button">End for now</button></div>
           </div>
         </section>
         <details class="extraction-backend"><summary>Backend evidence</summary><pre id="pipeline-extraction-validated">No extraction output yet.</pre><pre id="pipeline-extraction-raw" hidden></pre><pre id="pipeline-extraction-packet" hidden></pre></details>

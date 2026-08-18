@@ -859,7 +859,9 @@ button.preferred-button.is-on { border-color: rgba(255, 211, 111, .4); color: va
 .extraction-transcript li[data-role="user"] strong { color:#d7c9ff; }
 .extraction-composer { display:grid; gap:8px; padding-top:12px; border-top:1px solid var(--lab-line); }
 .extraction-composer label { color:var(--lab-ink); font-size:11px; font-weight:800; }
-.extraction-composer textarea { min-height:108px; resize:vertical; }
+.extraction-composer textarea { min-height:72px; resize:vertical; }
+.extraction-composer .inline-actions { align-items:center; }
+.extraction-composer #pipeline-extraction-send[hidden] { display:none; }
 .extraction-backend { margin:12px 0; border:1px solid var(--lab-line); border-radius:12px; background:rgba(7,10,18,.35); }
 .extraction-backend summary { padding:10px 12px; color:var(--lab-mint); font-size:11px; font-weight:800; cursor:pointer; }
 .extraction-backend pre { max-height:240px; margin:0; padding:12px; overflow:auto; border-top:1px solid var(--lab-line); color:var(--lab-muted); font:10px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }

@@ -2048,11 +2048,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v100 · Aug 18";
+const BUILD = "v101 · Aug 18";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v101", date: "Aug 18", changes: [
+    "Extraction is now a normal multi-turn conversation in the protected Lab. Keep talking for as long as it is useful; every Worldview reply is saved with the same durable provider-job path as Clarification.",
+    "The conversation still starts beside Lesson Map generation and uses only the frozen Clarification plus your own messages. It does not read the map, teach, correct, score, or create progress.",
+  ]},
   { tag: "v100", date: "Aug 18", changes: [
     "The protected Lab now includes a Feynman-style Extraction stage. When you start a Lesson Map from a frozen Clarification, it asks what you already understand at the same time instead of waiting for the map.",
     "Extraction starts with one broad explain-back question and can ask one follow-up based only on your own wording. It does not teach, correct, change the map, or count anything as progress.",
