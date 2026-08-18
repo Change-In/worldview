@@ -2048,11 +2048,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v103 · Aug 18";
+const BUILD = "v105 · Aug 18";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v105", date: "Aug 18", changes: [
+    "Extraction now deliberately builds a broad picture: after at most two unasked follow-ups on one idea, it shifts to another part of what you know. If you are stuck or repeating uncertainty, it changes direction instead of pressing the same question.",
+    "Worldview can gently suggest the Lesson when the conversation is no longer yielding much new signal. It never moves you automatically: you remain free to keep talking, end for now, or continue when the Lesson Map is ready.",
+    "The Extraction Lab includes a protected ‘Lesson map ready’ demonstration switch so the handoff can be tested without waiting for a live map. Continuing keeps the conversation intact for the future Lesson input.",
+  ]},
   { tag: "v103", date: "Aug 18", changes: [
      "Extraction can now be tested by typing or by switching to Voice and holding to talk. Voice uses the same protected transcription and reply-speech services as the Lab conversation.",
      "When you are ready, Save conversation for later freezes that Extraction exchange as a private input for the future Lesson and Quiz Lab stages. Saving does not teach, score, or change progress.",
