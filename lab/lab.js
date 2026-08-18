@@ -348,6 +348,24 @@ const labState = {
   mapDetailRefreshed: new Set(),
   extractionDetailRequests: new Set(),
   extractionBusy: false,
+  extractionArtifacts: [],
+  extraction: {
+    mode: "text",
+    micStream: null,
+    recorder: null,
+    recorderChunks: [],
+    recordingStartedAt: 0,
+    retainedRecording: null,
+    retainedOperationId: "",
+    audioPrimed: false,
+    voiceAudio: null,
+    voiceSpeechCancel: null,
+    lastSpeechText: "",
+    lastSpokenJobId: "",
+    speaking: false,
+    saveBusy: false,
+    modeSwitching: false,
+  },
   jobPollTimer: 0,
   clarificationArtifacts: [],
   pipelineStage: "clarification",
@@ -618,6 +636,14 @@ function resetWorkspaceContents() {
   labState.jobDetails = new Map();
   labState.mapDetailRequests = new Set();
   labState.mapDetailRefreshed = new Set();
+  stopPipelineExtractionVoice();
+  labState.extractionBusy = false;
+  labState.extractionArtifacts = [];
+  Object.assign(labState.extraction, {
+    mode: "text", micStream: null, recorder: null, recorderChunks: [], recordingStartedAt: 0,
+    retainedRecording: null, retainedOperationId: "", audioPrimed: false, voiceAudio: null,
+    voiceSpeechCancel: null, lastSpeechText: "", lastSpokenJobId: "", speaking: false, saveBusy: false, modeSwitching: false,
+  });
   labState.clarificationArtifacts = [];
   labState.pipelineStage = "clarification";
   labState.pipelineSelectedRunId = "";
@@ -3048,8 +3074,89 @@ function rememberClarificationArtifact(value, storage = "device") {
   return artifact;
 }
 
+function sanitizeExtractionArtifact(value, storage = "server") {
+  if (!value || typeof value !== "object") return null;
+  const runId = clip(value.runId, 120);
+  const topic = clip(value.topic, 500);
+  const finalJobId = clip(value.finalJobId, 120);
+  const sourceClarificationArtifactFingerprint = clip(value.sourceClarificationArtifactFingerprint, 128);
+  const transcript = (Array.isArray(value.transcript) ? value.transcript : []).slice(0, 80)
+    .map((turn) => ({ role: turn?.role === "assistant" ? "assistant" : "user", content: clip(turn?.content, 1200) }))
+    .filter((turn) => turn.content);
+  const inputModes = [...new Set((Array.isArray(value.inputModes) ? value.inputModes : [])
+    .filter((mode) => mode === "text" || mode === "voice"))];
+  const inputMode = value.inputMode === "mixed" || value.inputMode === "voice" ? value.inputMode : "text";
+  if (!runId || !topic || !finalJobId || !sourceClarificationArtifactFingerprint || transcript.length < 3) return null;
+  return {
+    ...value,
+    runId,
+    topic,
+    finalJobId,
+    sourceClarificationArtifactFingerprint,
+    transcript,
+    inputMode,
+    inputModes,
+    createdAt: asText(value.createdAt) || now(),
+    storage: storage === "server" ? "server" : "device",
+  };
+}
+
+function rememberExtractionArtifact(value, storage = "server") {
+  const artifact = sanitizeExtractionArtifact(value, storage);
+  if (!artifact) return null;
+  const existing = labState.extractionArtifacts.find((item) => item.runId === artifact.runId);
+  if (existing) Object.assign(existing, artifact, { storage: existing.storage === "server" || artifact.storage === "server" ? "server" : "device" });
+  else labState.extractionArtifacts.unshift(artifact);
+  labState.extractionArtifacts.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  labState.extractionArtifacts = labState.extractionArtifacts.slice(0, 50);
+  renderPipelineFutureExtractionInput();
+  return artifact;
+}
+
 function selectedPipelineArtifact() {
   return labState.clarificationArtifacts.find((item) => item.runId === labState.pipelineSelectedRunId) || null;
+}
+
+function selectedPipelineExtractionArtifact(clarification = selectedPipelineArtifact()) {
+  if (!clarification?.runId) return null;
+  return labState.extractionArtifacts.find((item) => item.runId === clarification.runId) || null;
+}
+
+function renderExtractionTranscriptList(root, transcript = []) {
+  if (!root) return;
+  root.replaceChildren();
+  for (const turn of transcript) {
+    const item = element("li", { attrs:{ "data-role":turn.role } });
+    item.append(element("strong", { text:turn.role === "assistant" ? "Worldview" : "You" }), document.createTextNode(turn.content));
+    root.append(item);
+  }
+}
+
+function renderPipelineFutureExtractionInput() {
+  const clarification = selectedPipelineArtifact();
+  const extraction = selectedPipelineExtractionArtifact(clarification);
+  for (const stage of ["lesson", "quiz"]) {
+    const status = q(`pipeline-${stage}-extraction-status`);
+    const details = q(`pipeline-${stage}-extraction-input`);
+    const transcript = q(`pipeline-${stage}-extraction-transcript`);
+    if (!status || !details || !transcript) continue;
+    if (!clarification) {
+      status.textContent = "Choose a saved Clarification run before reviewing any future-stage inputs.";
+      details.hidden = true;
+      transcript.replaceChildren();
+      continue;
+    }
+    if (!extraction) {
+      status.textContent = `No saved Extraction conversation exists for “${clarification.topic}” yet. You can still leave Extraction, but save it when you want a fixed input for this future stage.`;
+      details.hidden = true;
+      transcript.replaceChildren();
+      continue;
+    }
+    const learnerTurns = extraction.transcript.filter((turn) => turn.role === "user").length;
+    status.textContent = `${learnerTurns} learner message${learnerTurns === 1 ? "" : "s"} ${learnerTurns === 1 ? "is" : "are"} saved as an immutable Extraction input for this run. The ${stage === "lesson" ? "Lesson" : "Quiz"} runner is still intentionally unfinished; it will receive this snapshot, not a live or altered conversation.`;
+    details.hidden = false;
+    renderExtractionTranscriptList(transcript, extraction.transcript);
+  }
 }
 
 function pipelineArtifactLabel(artifact) {
@@ -3071,6 +3178,7 @@ function renderPipelineArtifactSelect() {
   }
   renderPipelineSourcePreview();
   renderPipelineMapOutput();
+  renderPipelineFutureExtractionInput();
 }
 
 function selectPipelineRun(runId) {
@@ -3085,6 +3193,8 @@ function selectPipelineRun(runId) {
   if (!selectedId) { startNewPipelineRun(); return; }
   const artifact = labState.clarificationArtifacts.find((item) => item.runId === selectedId);
   if (!artifact) { renderPipelineArtifactSelect(); return; }
+  stopPipelineExtractionVoice();
+  setPipelineExtractionConversationMode("text");
   labState.pipelineSelectedRunId = artifact.runId;
   if (!pipelineMapJobs(artifact).some((job) => job.id === labState.pipelineSelectedMapJobId)) labState.pipelineSelectedMapJobId = "";
   labState.pipelineSelectedMapRecordId = "";
@@ -3788,6 +3898,86 @@ function pipelineExtractionProvider(artifact) {
   return { provider, model };
 }
 
+function pipelineExtractionInputModes(artifact = selectedPipelineArtifact()) {
+  return [...new Set(pipelineExtractionJobs(artifact)
+    .filter((job) => Number(job.scenario?.extractionTurn || 0) > 0)
+    .map((job) => job.scenario?.inputMode === "voice" ? "voice" : "text"))];
+}
+
+function pipelineExtractionSnapshot(artifact = selectedPipelineArtifact()) {
+  const jobs = pipelineExtractionJobs(artifact);
+  const latest = jobs.at(-1);
+  const transcript = pipelineExtractionTranscript(artifact).slice(0, 80);
+  const inputModes = pipelineExtractionInputModes(artifact);
+  const inputMode = inputModes.length > 1 ? "mixed" : inputModes[0] || "text";
+  const { provider, model } = pipelineExtractionProvider(artifact);
+  return {
+    schemaVersion: 1,
+    artifactType: "feynman_extraction",
+    runId: artifact?.runId || "",
+    // The final durable job supplies a stable timestamp, so a retry of the same
+    // save action has the same immutable fingerprint rather than creating noise.
+    createdAt: latest?.createdAt || now(),
+    topic: artifact?.topic || "",
+    inputMode,
+    inputModes,
+    transcript,
+    sourceClarificationArtifactFingerprint: latest?.scenario?.sourceArtifactFingerprint || fingerprint(pipelineExtractionPacket(artifact)),
+    promptVersion: latest?.scenario?.promptVersion || EXTRACTION_PROMPT_VERSION,
+    promptFingerprint: fingerprint(EXTRACTION_PROMPT),
+    provider,
+    model,
+    finalJobId: latest?.id || "",
+  };
+}
+
+async function savePipelineExtractionConversation() {
+  const clarification = selectedPipelineArtifact();
+  if (!clarification || labState.extraction.saveBusy) return;
+  const existing = selectedPipelineExtractionArtifact(clarification);
+  if (existing) {
+    setMessage("pipeline-extraction-output", "This immutable conversation is already saved for the later Lab stages.", "ok");
+    return;
+  }
+  const jobs = pipelineExtractionJobs(clarification);
+  const latest = jobs.at(-1);
+  const latestDetail = latest && labState.jobDetails.get(latest.id);
+  const transcript = pipelineExtractionTranscript(clarification);
+  if (!latest || !pipelineExtractionOutput(latestDetail).output || LAB_ACTIVE_JOB_STATES.has(latest.status)) {
+    setMessage("pipeline-extraction-output", "Wait for Worldview's current reply before saving the conversation.", "error");
+    return;
+  }
+  if (transcript.filter((turn) => turn.role === "user").length < 1) {
+    setMessage("pipeline-extraction-output", "Reply at least once before saving this conversation for a later stage.", "error");
+    return;
+  }
+  if (labState.preview) {
+    const previewSnapshot = rememberExtractionArtifact(pipelineExtractionSnapshot(clarification), "device");
+    if (!previewSnapshot) {
+      setMessage("pipeline-extraction-output", "The preview could not build a saved-conversation fixture.", "error");
+      return;
+    }
+    setMessage("pipeline-extraction-output", "Preview only: this conversation is shown as a saved future-stage input. A real Lab run saves it privately on the server.", "ok");
+    renderPipelineExtraction();
+    return;
+  }
+  labState.extraction.saveBusy = true;
+  syncPipelineExtractionSaveControl();
+  setMessage("pipeline-extraction-output", "Saving this immutable conversation for the future Lab stages…");
+  try {
+    const snapshot = pipelineExtractionSnapshot(clarification);
+    const saved = await labJobsFetch({ action:"save_artifact", runId:clarification.runId, stage:"extraction", artifact:snapshot });
+    const stored = rememberExtractionArtifact(saved?.artifact?.artifact, "server");
+    if (!stored) throw new Error("The server did not return the saved extraction conversation.");
+    setMessage("pipeline-extraction-output", "Conversation saved privately for the future Lesson and Quiz stages. Start a new run if you want to save a different version.", "ok");
+  } catch (error) {
+    setMessage("pipeline-extraction-output", `The conversation is still in the protected job history, but its reusable snapshot was not saved: ${clip(error.message, 150)}`, "error");
+  } finally {
+    labState.extraction.saveBusy = false;
+    renderPipelineExtraction();
+  }
+}
+
 async function ensurePipelineExtractionDetail(job) {
   if (!job || labState.jobDetails.has(job.id) || labState.extractionDetailRequests.has(job.id) || labState.preview) return;
   labState.extractionDetailRequests.add(job.id);
@@ -3856,11 +4046,16 @@ async function ensurePipelineExtractionOpening(artifact = selectedPipelineArtifa
   }
 }
 
-async function submitPipelineExtractionReply() {
+async function submitPipelineExtractionReply(value = q("pipeline-extraction-reply")?.value, inputMode = "text") {
   const artifact = selectedPipelineArtifact();
-  const answer = clip(q("pipeline-extraction-reply")?.value, 1200);
+  const answer = clip(value, 1200);
   if (!artifact) { setMessage("pipeline-extraction-output", "Choose a frozen Clarification run first.", "error"); return; }
   if (!answer) { setMessage("pipeline-extraction-output", "Add a message before sending it.", "error"); return; }
+  if (selectedPipelineExtractionArtifact(artifact)) {
+    setMessage("pipeline-extraction-output", "This conversation is already saved as an immutable future-stage input. Start a new run to continue a different version.", "error");
+    return;
+  }
+  if (labState.extractionBusy || labState.extraction.saveBusy) return;
   const jobs = pipelineExtractionJobs(artifact);
   const latest = jobs.at(-1);
   const latestDetail = latest && labState.jobDetails.get(latest.id);
@@ -3885,6 +4080,7 @@ async function submitPipelineExtractionReply() {
       pipelineRunId:artifact.runId,
       pipelineStage:"extraction",
       extractionTurn:nextTurn,
+      inputMode:inputMode === "voice" ? "voice" : "text",
       sourceArtifactFingerprint:fingerprint(sourcePacket),
       promptVersion:EXTRACTION_PROMPT_VERSION,
       network:currentNetworkContext(),
@@ -3943,7 +4139,310 @@ function syncPipelineExtractionSendControl() {
   if (!input || !send) return;
   const hasText = Boolean(input.value.trim());
   send.hidden = !hasText;
-  send.disabled = labState.extractionBusy || input.disabled || !hasText;
+  send.disabled = labState.extractionBusy || labState.extraction.saveBusy || labState.extraction.modeSwitching || input.disabled || !hasText;
+}
+
+function syncPipelineExtractionSaveControl() {
+  const clarification = selectedPipelineArtifact();
+  const saved = selectedPipelineExtractionArtifact(clarification);
+  const jobs = pipelineExtractionJobs(clarification);
+  const latest = jobs.at(-1);
+  const latestDetail = latest && labState.jobDetails.get(latest.id);
+  const latestReady = Boolean(latest && pipelineExtractionOutput(latestDetail).output && !LAB_ACTIVE_JOB_STATES.has(latest.status));
+  const learnerTurns = pipelineExtractionTranscript(clarification).filter((turn) => turn.role === "user").length;
+  const frozen = Boolean(saved);
+  const save = q("pipeline-extraction-save");
+  const note = q("pipeline-extraction-saved");
+  const ptt = q("pipeline-extraction-ptt");
+  const modeToggle = q("pipeline-extraction-mode-toggle");
+  if (save) save.disabled = frozen || labState.extractionBusy || labState.extraction.saveBusy || !latestReady || learnerTurns < 1;
+  if (note) {
+    note.hidden = !saved;
+    note.textContent = saved ? `Saved ${learnerTurns} learner message${learnerTurns === 1 ? "" : "s"} as an immutable input for later Lab stages.` : "";
+  }
+  if (ptt) ptt.disabled = labState.extraction.mode !== "voice" || frozen || labState.extractionBusy || labState.extraction.saveBusy || labState.extraction.modeSwitching || !labState.extraction.micStream;
+  if (modeToggle) modeToggle.disabled = labState.extractionBusy || labState.extraction.saveBusy || labState.extraction.modeSwitching;
+}
+
+function setPipelineExtractionAudioSession(type) {
+  try {
+    if (navigator.audioSession && "type" in navigator.audioSession) navigator.audioSession.type = type;
+  } catch (_) { /* The browser owns the physical route when this API is unavailable. */ }
+}
+
+function setPipelineExtractionMicTracksEnabled(enabled) {
+  for (const track of labState.extraction.micStream?.getAudioTracks?.() || []) track.enabled = enabled;
+}
+
+function renderPipelineExtractionModeControls() {
+  const state = labState.extraction;
+  const conversation = q("pipeline-extraction-conversation");
+  const toggle = q("pipeline-extraction-mode-toggle");
+  const textControls = q("pipeline-extraction-text-controls");
+  const voiceControls = q("pipeline-extraction-voice-controls");
+  const hear = q("pipeline-extraction-hear");
+  if (!conversation || !toggle || !textControls || !voiceControls) return;
+  const available = !conversation.hidden;
+  toggle.hidden = !available;
+  const switchToVoice = state.mode !== "voice";
+  toggle.setAttribute("aria-label", switchToVoice ? "Switch to Voice" : "Switch to Text");
+  toggle.title = switchToVoice ? "Switch to Voice" : "Switch to Text";
+  toggle.textContent = switchToVoice ? "Voice" : "Text";
+  textControls.hidden = !available || state.mode === "voice";
+  voiceControls.hidden = !available || state.mode !== "voice";
+  if (hear) hear.hidden = state.mode !== "voice" || !state.lastSpeechText;
+  syncPipelineExtractionSaveControl();
+}
+
+function setPipelineExtractionConversationMode(mode) {
+  labState.extraction.mode = mode === "voice" ? "voice" : "text";
+  renderPipelineExtractionModeControls();
+}
+
+function primePipelineExtractionAudio() {
+  const state = labState.extraction;
+  try {
+    const audio = state.voiceAudio || new Audio();
+    state.voiceAudio = audio;
+    audio.playsInline = true;
+    audio.muted = false;
+    audio.volume = 1;
+    audio.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+    state.audioPrimed = true;
+    Promise.resolve(audio.play()).catch(() => {});
+    try {
+      speechSynthesis.cancel();
+      const silentSpeech = new SpeechSynthesisUtterance(" ");
+      silentSpeech.volume = 0;
+      speechSynthesis.speak(silentSpeech);
+    } catch (_) { /* The protected Supabase voice remains the primary route. */ }
+  } catch (_) { /* TTS will report a useful playback error later. */ }
+}
+
+async function playPipelineExtractionSpeech(text) {
+  const state = labState.extraction;
+  const spoken = clip(text, 2000);
+  if (!spoken) return;
+  state.lastSpeechText = spoken;
+  setPipelineExtractionMicTracksEnabled(false);
+  setPipelineExtractionAudioSession("playback");
+  let cloudError = null;
+  try {
+    const response = await speechFetch(spoken);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = state.voiceAudio || new Audio();
+    state.voiceAudio = audio;
+    try {
+      audio.playsInline = true;
+      audio.muted = false;
+      audio.volume = 1;
+      audio.src = url;
+      let watchdog = 0;
+      await new Promise(async (resolve, reject) => {
+        const finish = () => { clearTimeout(watchdog); resolve(); };
+        const fail = (error) => { clearTimeout(watchdog); reject(error); };
+        watchdog = setTimeout(() => fail(new Error("Speech playback stalled on this device.")), Math.max(12000, Math.min(60000, spoken.length * 90)));
+        state.voiceSpeechCancel = finish;
+        audio.onended = finish;
+        audio.onerror = () => fail(new Error("The generated Extraction voice could not play on this device."));
+        try { await audio.play(); } catch (error) { fail(error); }
+      }).finally(() => clearTimeout(watchdog));
+      return;
+    } finally {
+      state.voiceSpeechCancel = null;
+      audio.onended = null;
+      audio.onerror = null;
+      try { audio.removeAttribute("src"); audio.load(); } catch (_) { /* already released */ }
+      URL.revokeObjectURL(url);
+    }
+  } catch (error) {
+    cloudError = error;
+  }
+  if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") throw cloudError || new Error("This device has no available speech playback route.");
+  await new Promise((resolve, reject) => {
+    try {
+      speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(spoken);
+      utterance.lang = "en-US";
+      utterance.onend = resolve;
+      utterance.onerror = () => reject(cloudError || new Error("The spoken reply could not play on this device."));
+      state.voiceSpeechCancel = () => { try { speechSynthesis.cancel(); } catch (_) { /* already stopped */ } resolve(); };
+      speechSynthesis.speak(utterance);
+    } catch (_) { reject(cloudError || new Error("The spoken reply could not play on this device.")); }
+  }).finally(() => { state.voiceSpeechCancel = null; });
+}
+
+function stopPipelineExtractionSpeech() {
+  const state = labState.extraction;
+  try { state.voiceSpeechCancel?.(); } catch (_) { /* playback already settled */ }
+  state.voiceSpeechCancel = null;
+  try { state.voiceAudio?.pause(); } catch (_) { /* playback already stopped */ }
+  try { speechSynthesis.cancel(); } catch (_) { /* device speech unavailable */ }
+  state.speaking = false;
+}
+
+function stopPipelineExtractionVoice() {
+  const state = labState.extraction;
+  const recorder = state.recorder;
+  if (recorder?.state === "recording") {
+    recorder.onstop = null;
+    try { recorder.stop(); } catch (_) { /* recorder may already be stopping */ }
+  }
+  state.recorder = null;
+  state.recorderChunks = [];
+  setPipelineExtractionMicTracksEnabled(false);
+  for (const track of state.micStream?.getTracks?.() || []) track.stop();
+  state.micStream = null;
+  state.retainedRecording = null;
+  state.retainedOperationId = "";
+  q("pipeline-extraction-ptt")?.classList.remove("is-listening");
+  stopPipelineExtractionSpeech();
+  setPipelineExtractionAudioSession("playback");
+}
+
+async function switchPipelineExtractionConversationMode() {
+  const state = labState.extraction;
+  if (labState.extractionBusy || state.saveBusy || state.modeSwitching || q("pipeline-extraction-conversation")?.hidden) return;
+  if (state.mode === "voice") {
+    stopPipelineExtractionVoice();
+    setPipelineExtractionConversationMode("text");
+    return;
+  }
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    setMessage("pipeline-extraction-output", "This browser does not expose microphone recording. You can continue by typing.", "error");
+    return;
+  }
+  state.modeSwitching = true;
+  syncPipelineExtractionSendControl();
+  syncPipelineExtractionSaveControl();
+  setMessage("pipeline-extraction-output", "Waiting for microphone permission…");
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true } });
+    if (labState.extraction.mode === "voice") {
+      for (const track of stream.getTracks()) track.stop();
+      return;
+    }
+    state.micStream = stream;
+    setPipelineExtractionMicTracksEnabled(false);
+    setPipelineExtractionAudioSession("playback");
+    primePipelineExtractionAudio();
+    const latest = pipelineExtractionJobs().at(-1);
+    state.lastSpokenJobId = latest?.id || "";
+    setPipelineExtractionConversationMode("voice");
+    setMessage("pipeline-extraction-output", "Voice is ready. Hold the button to talk; release to send.", "ok");
+  } catch (error) {
+    stopPipelineExtractionVoice();
+    setPipelineExtractionConversationMode("text");
+    setMessage("pipeline-extraction-output", "Microphone access was not available. Your conversation is unchanged; continue by typing.", "error");
+  } finally {
+    state.modeSwitching = false;
+    renderPipelineExtractionModeControls();
+  }
+}
+
+async function transcribePipelineExtractionRecording(blob, operationId = "") {
+  const state = labState.extraction;
+  if (!blob?.size) throw new Error("The phone returned an empty recording.");
+  const stableOperationId = operationId || makeId();
+  state.retainedRecording = blob;
+  state.retainedOperationId = stableOperationId;
+  q("pipeline-extraction-retry-transcription").hidden = true;
+  let lastError = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    labState.extractionBusy = true;
+    syncPipelineExtractionSaveControl();
+    try {
+      setMessage("pipeline-extraction-output", attempt ? "Transcribing again…" : "Transcribing your voice message…");
+      const result = await transcribeFetch(blob, "deepgram-nova-3", "en", stableOperationId);
+      const transcript = clip(result.text, 1200);
+      if (!transcript) {
+        const empty = new Error("No speech was found in that recording.");
+        empty.type = "empty_transcript";
+        throw empty;
+      }
+      state.retainedRecording = null;
+      state.retainedOperationId = "";
+      labState.extractionBusy = false;
+      await submitPipelineExtractionReply(transcript, "voice");
+      return;
+    } catch (error) {
+      lastError = error;
+      const retryable = error?.status === 429 || error?.status >= 500;
+      if (!retryable || attempt === 1) break;
+      await new Promise((resolve) => setTimeout(resolve, 650));
+    }
+  }
+  labState.extractionBusy = false;
+  q("pipeline-extraction-retry-transcription").hidden = false;
+  syncPipelineExtractionSaveControl();
+  throw lastError || new Error("The recording could not be transcribed.");
+}
+
+async function retryPipelineExtractionTranscription() {
+  const state = labState.extraction;
+  if (!state.retainedRecording || labState.extractionBusy) return;
+  try { await transcribePipelineExtractionRecording(state.retainedRecording, state.retainedOperationId); }
+  catch (error) { setMessage("pipeline-extraction-output", `The recording remains available to retry: ${clip(error.message, 150)}`, "error"); }
+}
+
+function startPipelineExtractionRecording(event) {
+  const state = labState.extraction;
+  if (state.mode !== "voice" || labState.extractionBusy || state.saveBusy || state.modeSwitching || !state.micStream || state.recorder?.state === "recording") return;
+  if (event?.pointerType === "mouse" && event.button !== 0) return;
+  stopPipelineExtractionSpeech();
+  try {
+    setPipelineExtractionAudioSession("play-and-record");
+    setPipelineExtractionMicTracksEnabled(true);
+    const type = recorderMimeType();
+    state.recorderChunks = [];
+    state.recorder = type ? new MediaRecorder(state.micStream, { mimeType:type }) : new MediaRecorder(state.micStream);
+    state.recordingStartedAt = performance.now();
+    state.recorder.ondataavailable = (item) => { if (item.data?.size) state.recorderChunks.push(item.data); };
+    const recorder = state.recorder;
+    state.recorder.onstop = async () => {
+      q("pipeline-extraction-ptt")?.classList.remove("is-listening");
+      setPipelineExtractionMicTracksEnabled(false);
+      setPipelineExtractionAudioSession("playback");
+      if (performance.now() - state.recordingStartedAt < 220 || !state.recorderChunks.length) {
+        setMessage("pipeline-extraction-output", "Hold a little longer, then release to send.", "error");
+        return;
+      }
+      const blob = new Blob(state.recorderChunks, { type:recorder.mimeType || state.recorderChunks[0]?.type || "audio/webm" });
+      if (blob.size < 128) {
+        setMessage("pipeline-extraction-output", "The microphone opened but returned no audio. Hold again to make a new recording.", "error");
+        return;
+      }
+      try { await transcribePipelineExtractionRecording(blob, makeId()); }
+      catch (error) { setMessage("pipeline-extraction-output", `The recording is kept on this screen, but it could not be transcribed: ${clip(error.message, 150)}`, "error"); }
+    };
+    state.recorder.start();
+    q("pipeline-extraction-ptt")?.classList.add("is-listening");
+    setMessage("pipeline-extraction-output", "Listening… release to send.");
+    event?.preventDefault?.();
+  } catch (error) {
+    setPipelineExtractionMicTracksEnabled(false);
+    setPipelineExtractionAudioSession("playback");
+    setMessage("pipeline-extraction-output", `Recording could not start: ${clip(error.message, 150)}`, "error");
+  }
+}
+
+function stopPipelineExtractionRecording(event) {
+  const recorder = labState.extraction.recorder;
+  if (recorder?.state === "recording") {
+    try { recorder.stop(); } catch (_) { /* already stopping */ }
+    event?.preventDefault?.();
+  }
+}
+
+function maybeSpeakPipelineExtractionReply(job, output) {
+  const state = labState.extraction;
+  if (state.mode !== "voice" || !job?.id || !output?.assistantMessage || state.lastSpokenJobId === job.id || state.speaking) return;
+  state.lastSpokenJobId = job.id;
+  state.speaking = true;
+  void playPipelineExtractionSpeech(output.assistantMessage)
+    .catch((error) => setMessage("pipeline-extraction-output", `The reply is visible, but speech did not play: ${clip(error.message, 150)}`, "error"))
+    .finally(() => { state.speaking = false; renderPipelineExtractionModeControls(); });
 }
 
 function renderPipelineExtraction() {
@@ -3957,23 +4456,33 @@ function renderPipelineExtraction() {
   };
   conversation.hidden = true;
   transcriptRoot.replaceChildren();
+  renderPipelineExtractionModeControls();
   q("pipeline-extraction-validated").textContent = "No extraction output yet.";
   q("pipeline-extraction-raw").textContent = "";
   q("pipeline-extraction-packet").textContent = "";
   const artifact = selectedPipelineArtifact();
-  if (!artifact) { setStatus("Choose or create a frozen Clarification run first."); return; }
+  if (!artifact) { setStatus("Choose or create a frozen Clarification run first."); renderPipelineFutureExtractionInput(); return; }
   const jobs = pipelineExtractionJobs(artifact);
   if (!jobs.length) {
     setStatus("This conversation starts automatically alongside the next Lesson Map generation. It will use only this frozen Clarification.");
+    renderPipelineFutureExtractionInput();
     return;
   }
   const missingDetails = jobs.filter((job) => !labState.jobDetails.has(job.id));
   if (missingDetails.length) {
     ensurePipelineExtractionTranscriptDetails(artifact);
     const latestPending = jobs.at(-1);
-    q("pipeline-extraction-reply").disabled = labState.extractionBusy || LAB_ACTIVE_JOB_STATES.has(latestPending.status);
+    const partialTranscript = pipelineExtractionTranscript(artifact);
+    if (partialTranscript.length) {
+      renderExtractionTranscriptList(transcriptRoot, partialTranscript);
+      conversation.hidden = false;
+      renderPipelineExtractionModeControls();
+    }
+    q("pipeline-extraction-reply").disabled = labState.extractionBusy || labState.extraction.saveBusy || Boolean(selectedPipelineExtractionArtifact(artifact)) || LAB_ACTIVE_JOB_STATES.has(latestPending.status);
     syncPipelineExtractionSendControl();
+    syncPipelineExtractionSaveControl();
     setStatus(LAB_ACTIVE_JOB_STATES.has(latestPending.status) ? "Worldview is preparing a reply alongside Lesson Map generation…" : "Loading the saved conversation…");
+    renderPipelineFutureExtractionInput();
     return;
   }
   const latest = jobs.at(-1);
@@ -3982,36 +4491,47 @@ function renderPipelineExtraction() {
   if (!record.output) {
     q("pipeline-extraction-reply").disabled = true;
     syncPipelineExtractionSendControl();
+    syncPipelineExtractionSaveControl();
     const message = record.sample?.error?.message || (LAB_ACTIVE_JOB_STATES.has(latest.status) ? "Worldview is preparing a reply alongside Lesson Map generation…" : "Worldview's reply did not return usable text.");
     setStatus(message);
+    renderPipelineFutureExtractionInput();
     return;
   }
   const transcript = pipelineExtractionTranscript(artifact);
-  for (const turn of transcript) {
-    const item = element("li", { attrs:{ "data-role":turn.role } });
-    item.append(element("strong", { text:turn.role === "assistant" ? "Worldview" : "You" }), document.createTextNode(turn.content));
-    transcriptRoot.append(item);
-  }
+  renderExtractionTranscriptList(transcriptRoot, transcript);
   conversation.hidden = false;
   const answerCount = transcript.filter((turn) => turn.role === "user").length;
-  setStatus(answerCount ? `${answerCount} message${answerCount === 1 ? "" : "s"} saved in this protected Lab conversation. It does not mark progress.` : "Worldview is ready. Explain the topic in your own words; uncertainty is useful evidence.", answerCount ? "ok" : "");
-  q("pipeline-extraction-reply").disabled = labState.extractionBusy;
+  const saved = selectedPipelineExtractionArtifact(artifact);
+  setStatus(saved
+    ? `${answerCount} message${answerCount === 1 ? "" : "s"} ${answerCount === 1 ? "is" : "are"} frozen as a reusable, private future-stage input. This conversation will not change after saving.`
+    : answerCount ? `${answerCount} message${answerCount === 1 ? "" : "s"} saved in this protected Lab conversation. It does not mark progress.` : "Worldview is ready. Explain the topic in your own words; uncertainty is useful evidence.", answerCount ? "ok" : "");
+  q("pipeline-extraction-reply").disabled = labState.extractionBusy || labState.extraction.saveBusy || Boolean(saved);
+  labState.extraction.lastSpeechText = record.output.assistantMessage;
+  renderPipelineExtractionModeControls();
   syncPipelineExtractionSendControl();
+  syncPipelineExtractionSaveControl();
   q("pipeline-extraction-validated").textContent = JSON.stringify({
     phase:"Feynman broad overview",
     source:"frozen Clarification artifact only",
     currentMessage:record.output.assistantMessage,
     learnerMessageCount:answerCount,
+    savedForFutureStages:Boolean(saved),
     authority:"No teaching, correction, mastery, checkpoint completion, or lesson-route change.",
   }, null, 2);
   q("pipeline-extraction-raw").textContent = record.raw;
   q("pipeline-extraction-packet").textContent = JSON.stringify(record.sample?.request || {}, null, 2);
+  renderPipelineFutureExtractionInput();
+  maybeSpeakPipelineExtractionReply(latest, record.output);
 }
 
 function setPipelineStage(stage = "clarification") {
   const stages = ["clarification", "map", "extraction", "lesson", "quiz"];
   const next = stages.includes(stage) ? stage : "clarification";
   if (next !== "clarification" && labState.clarification.focusMode) setClarificationFocus(false);
+  if (next !== "extraction" && labState.extraction.mode === "voice") {
+    stopPipelineExtractionVoice();
+    setPipelineExtractionConversationMode("text");
+  }
   labState.pipelineStage = next;
   for (const panel of document.querySelectorAll('[data-pipeline-stage-panel="clarification"]')) panel.hidden = next !== "clarification";
   q("pipeline-connected-stage").hidden = next === "clarification";
@@ -4021,6 +4541,7 @@ function setPipelineStage(stage = "clarification") {
   q("pipeline-quiz-stage").hidden = next !== "quiz";
   if (next === "map") setMapView(labState.mapView);
   if (next === "extraction") renderPipelineExtraction();
+  if (next === "lesson" || next === "quiz") renderPipelineFutureExtractionInput();
   for (const button of document.querySelectorAll("[data-pipeline-stage]")) {
     const active = button.dataset.pipelineStage === next;
     button.closest("li")?.classList.toggle("is-active", active);
@@ -4355,6 +4876,8 @@ function resetClarificationRun(seed = "") {
 }
 
 function startNewPipelineRun(seed = "") {
+  stopPipelineExtractionVoice();
+  setPipelineExtractionConversationMode("text");
   labState.pipelineSelectedRunId = "";
   labState.pipelineSelectedMapJobId = "";
   labState.pipelineSelectedMapRecordId = "";
@@ -4386,12 +4909,17 @@ async function refreshClarificationArtifacts() {
   if (labState.preview) { renderPipelineArtifactSelect(); return; }
   try {
     const payload = await labJobsFetch({ action: "list_artifacts" });
-    const available = (Array.isArray(payload.artifacts) ? payload.artifacts : []).filter((item) => item?.stage === "clarification" && item?.artifact?.scopeSummary);
+    const artifacts = Array.isArray(payload.artifacts) ? payload.artifacts : [];
+    const available = artifacts.filter((item) => item?.stage === "clarification" && item?.artifact?.scopeSummary);
     for (const item of available) rememberClarificationArtifact(item.artifact, "server");
+    for (const item of artifacts.filter((entry) => entry?.stage === "extraction" && entry?.artifact?.artifactType === "feynman_extraction")) {
+      rememberExtractionArtifact(item.artifact, "server");
+    }
     const latest = available[0];
     if (!latest) return;
     if (!labState.clarification.finalized) restoreClarificationArtifact(latest.artifact, "server");
     persistClarificationSettings();
+    renderPipelineFutureExtractionInput();
   } catch (error) {
     logFlow("Optional clarification artifact sync is unavailable", clip(error.message || "device fallback remains available", 160));
   }
@@ -5124,7 +5652,7 @@ function openMapPreviewFixture() {
   labState.jobDetails.set(job.id, { job, samples, attempts:[] });
   const extractionJob = {
     id:"preview-extraction-v100", component:"extraction", status:"completed", createdAt:now(), totalSamples:1, completedSamples:1, failedSamples:0, uncertainSamples:0,
-    scenario:{ pipelineRunId:artifact.runId, pipelineStage:"extraction", extractionTurn:0, promptVersion:EXTRACTION_PROMPT_VERSION },
+    scenario:{ pipelineRunId:artifact.runId, pipelineStage:"extraction", extractionTurn:0, sourceArtifactFingerprint:fingerprint(pipelineExtractionPacket(artifact)), promptVersion:EXTRACTION_PROMPT_VERSION },
   };
   const extractionPacket = pipelineExtractionPacket(artifact);
   labState.jobs.unshift(extractionJob);
@@ -5134,6 +5662,20 @@ function openMapPreviewFixture() {
       id:"preview-extraction-sample-v100", status:"completed", provider:"anthropic", model:"claude-sonnet-4-6",
       request:{ system:EXTRACTION_PROMPT, messages:[{ role:"user", content:`Immutable Clarification artifact — the only source for this conversation:\n${extractionPacket}` }], maxTokens:240, research:false },
       result:{ text:JSON.stringify({ assistant_message:"Imagine explaining how trains stay on track and a rail network stays coordinated to a curious beginner. Where would you start?" }), inputTokens:490, outputTokens:31, ms:1230 },
+    }],
+    attempts:[],
+  });
+  const extractionReplyJob = {
+    id:"preview-extraction-v101", component:"extraction", status:"completed", createdAt:now(), totalSamples:1, completedSamples:1, failedSamples:0, uncertainSamples:0,
+    scenario:{ pipelineRunId:artifact.runId, pipelineStage:"extraction", extractionTurn:1, inputMode:"text", sourceArtifactFingerprint:fingerprint(extractionPacket), promptVersion:EXTRACTION_PROMPT_VERSION },
+  };
+  labState.jobs.unshift(extractionReplyJob);
+  labState.jobDetails.set(extractionReplyJob.id, {
+    job:extractionReplyJob,
+    samples:[{
+      id:"preview-extraction-sample-v101", status:"completed", provider:"anthropic", model:"claude-sonnet-4-6",
+      request:{ system:EXTRACTION_PROMPT, messages:[{ role:"user", content:`Immutable Clarification artifact — the only source for this conversation:\n${extractionPacket}` }, { role:"assistant", content:"Imagine explaining how trains stay on track and a rail network stays coordinated to a curious beginner. Where would you start?" }, { role:"user", content:"The learner's message: The wheels have flanges and the rails guide them, but I am less sure how signals keep trains apart." }], maxTokens:240, research:false },
+      result:{ text:JSON.stringify({ assistant_message:"What do you think a signal has to communicate before one train can safely enter the space another train just used?" }), inputTokens:608, outputTokens:28, ms:980 },
     }],
     attempts:[],
   });
@@ -5244,8 +5786,26 @@ function bindEvents() {
   document.querySelectorAll("[data-pipeline-previous-stage]").forEach((button) => button.addEventListener("click", () => setPipelineStage(button.dataset.pipelinePreviousStage)));
   q("map-view-learner").addEventListener("click", () => setMapView("learner"));
   q("map-view-backend").addEventListener("click", () => setMapView("backend"));
+  q("pipeline-extraction-mode-toggle").addEventListener("click", switchPipelineExtractionConversationMode);
   q("pipeline-extraction-send").addEventListener("click", submitPipelineExtractionReply);
   q("pipeline-extraction-reply").addEventListener("input", syncPipelineExtractionSendControl);
+  q("pipeline-extraction-save").addEventListener("click", savePipelineExtractionConversation);
+  q("pipeline-extraction-hear").addEventListener("click", async () => {
+    const state = labState.extraction;
+    if (state.speaking || !state.lastSpeechText) return;
+    state.speaking = true;
+    try { await playPipelineExtractionSpeech(state.lastSpeechText); }
+    catch (error) { setMessage("pipeline-extraction-output", `The reply is visible, but speech did not play: ${clip(error.message, 150)}`, "error"); }
+    finally { state.speaking = false; renderPipelineExtractionModeControls(); }
+  });
+  q("pipeline-extraction-retry-transcription").addEventListener("click", retryPipelineExtractionTranscription);
+  q("pipeline-extraction-ptt").addEventListener("pointerdown", (event) => {
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch (_) { /* capture is optional */ }
+    startPipelineExtractionRecording(event);
+  });
+  for (const eventName of ["pointerup", "pointercancel", "lostpointercapture"]) {
+    q("pipeline-extraction-ptt").addEventListener(eventName, stopPipelineExtractionRecording);
+  }
   q("pipeline-extraction-skip").addEventListener("click", () => setPipelineStage("lesson"));
   q("pipeline-extraction-open-map").addEventListener("click", () => setPipelineStage("map"));
   q("pipeline-extraction-open-lesson").addEventListener("click", () => setPipelineStage("lesson"));
@@ -5274,6 +5834,7 @@ function bindEvents() {
   window.addEventListener("pagehide", () => {
     stopSpeechComparison();
     stopClarificationSpeech();
+    stopPipelineExtractionVoice();
     for (const track of labState.clarification.micStream?.getTracks?.() || []) track.stop();
     if (workspaceSaveTimer) persistWorkspace();
   });
