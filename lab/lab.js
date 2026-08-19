@@ -3331,7 +3331,7 @@ function renderPipelineExtractionTransition(artifact, output) {
   return ready;
 }
 
-function continuePipelineExtractionToLesson() {
+async function continuePipelineExtractionToLesson() {
   const artifact = selectedPipelineArtifact();
   const latest = pipelineExtractionJobs(artifact).at(-1);
   const output = latest ? pipelineExtractionOutput(labState.jobDetails.get(latest.id)).output : null;
@@ -3340,7 +3340,14 @@ function continuePipelineExtractionToLesson() {
     setMessage("pipeline-extraction-output", "The Lesson Map is still preparing. You can keep talking or end Extraction for now; continuing unlocks when the map is ready.", "error");
     return;
   }
-  if (selectedPipelineMapRecord()) startPipelineLesson();
+  if (selectedPipelineMapRecord()) {
+    if (!selectedPipelineExtractionArtifact(artifact)) {
+      setMessage("pipeline-extraction-output", "Saving this completed overview as the Lesson's unverified context…");
+      await savePipelineExtractionConversation();
+      if (!selectedPipelineExtractionArtifact(artifact)) return;
+    }
+    startPipelineLesson();
+  }
   else setPipelineStage("map");
 }
 
@@ -5039,6 +5046,11 @@ function renderPipelineExtraction() {
   const saved = selectedPipelineExtractionArtifact(artifact);
   const savedCurrentAttempt = Boolean(saved) && Number(saved.extractionAttempt || 0) === Number(labState.extraction.activeAttempt || 0);
   const transition = renderPipelineExtractionTransition(artifact, record.output);
+  if (transition?.ready) {
+    const notice = element("li", { attrs:{ "data-role":"assistant" }, className:"extraction-map-ready-notice" });
+    notice.append(element("strong", { text:"Worldview" }), document.createTextNode(" Your Lesson Map is ready now. You can keep exploring this overview, or continue whenever you feel ready; continuing will use what you've said here as unverified context for the Lesson."));
+    transcriptRoot.append(notice);
+  }
   setStatus(saved
     ? `${answerCount} message${answerCount === 1 ? "" : "s"} ${answerCount === 1 ? "is" : "are"} frozen as a reusable, private future-stage input. This conversation will not change after saving.`
     : transition?.ready ? "Lesson Map is ready. Keep talking or continue whenever you want."
