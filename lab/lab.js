@@ -4596,8 +4596,8 @@ function syncPipelineExtractionSaveControl() {
     save.title = frozen && !savedCurrentAttempt ? "Each lesson run keeps one immutable saved conversation. Start a new lesson run to save this retry." : "";
   }
   if (retry) {
-    retry.disabled = !clarification || labState.extractionBusy || labState.extraction.saveBusy || labState.extraction.modeSwitching;
-    retry.hidden = !frozen;
+    retry.disabled = !frozen || !clarification || labState.extractionBusy || labState.extraction.saveBusy || labState.extraction.modeSwitching;
+    retry.hidden = false;
     retry.title = frozen ? "Start a fresh test conversation without changing the saved Lesson input." : "Save this conversation first, then retry without overwriting it.";
   }
   if (note) {
