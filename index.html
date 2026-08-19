@@ -2048,11 +2048,19 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v107 · Aug 18";
+const BUILD = "v109 · Aug 19";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v109", date: "Aug 19", changes: [
+    "Retry Extraction now sits at the top of the Lab's Extraction stage and starts a clean test attempt even before you save one for Lesson."
+  ]},
+  { tag: "v108", date: "Aug 18", changes: [
+    "Lesson Map now keeps each learning outcome you open open while the page refreshes or you switch between Learner and Backend views.",
+    "The First-principles map now checks for the real conceptual prerequisite before named measurements or mechanisms. For radar, that means understanding what a wave is before frequency or Doppler shift.",
+    "Verified research support is now the required next design gate for Lesson and Quiz: future factual corrections will need source-backed evidence, not a model's memory.",
+  ]},
   { tag: "v107", date: "Aug 18", changes: [
     "Extraction's Retry button is now always visible in the Lab. It explains that saving a conversation unlocks a fresh test attempt without replacing the saved Lesson input."
   ]},
