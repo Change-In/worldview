@@ -2048,11 +2048,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v106 · Aug 18";
+const BUILD = "v107 · Aug 18";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v107", date: "Aug 18", changes: [
+    "Extraction's Retry button is now always visible in the Lab. It explains that saving a conversation unlocks a fresh test attempt without replacing the saved Lesson input."
+  ]},
   { tag: "v106", date: "Aug 18", changes: [
     "In the protected Lab, a completed saved roadmap can now open as a real text-based guided lesson. Choose a roadmap, inspect its chapters and outcomes, then press To Start.",
     "Each text reply uses the durable private job path. Extraction prior knowledge is carried as unverified ideas to test; manual Continue moves to the next outcome without claiming mastery.",
