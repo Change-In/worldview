@@ -2048,11 +2048,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v109 · Aug 19";
+const BUILD = "v110 · Aug 19";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v110", date: "Aug 19", changes: [
+    "When the Lesson Map becomes ready during Extraction, Worldview now says so in the conversation. Choosing Continue saves that completed overview as unverified Lesson context automatically."
+  ]},
   { tag: "v109", date: "Aug 19", changes: [
     "Retry Extraction now sits at the top of the Lab's Extraction stage and starts a clean test attempt even before you save one for Lesson."
   ]},
