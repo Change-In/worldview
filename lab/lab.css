@@ -810,6 +810,7 @@ button.preferred-button.is-on { border-color: rgba(255, 211, 111, .4); color: va
 .map-lesson-path { padding:16px 0 0; border-top:1px solid rgba(238,221,187,.13); }
 .map-roadmap-head { display:grid; gap:6px; margin-bottom:12px; }
 .map-roadmap-head > small { color:#edb18a; font-size:9px; font-weight:850; letter-spacing:.16em; text-transform:uppercase; }
+.map-roadmap-provenance { color:#b9aaa0; font-size:11px; }
 .map-result-badges { display:flex; flex-wrap:wrap; gap:6px; }
 .map-result-badge { padding:5px 8px; border:1px solid rgba(255,255,255,.12); border-radius:999px; color:#d6cbb8; background:rgba(255,255,255,.035); font-size:8px; font-weight:850; letter-spacing:.05em; text-transform:uppercase; }
 .map-result-badge.is-on,.map-result-summary-research.is-on { border-color:rgba(120,229,192,.34); color:#9defd3; background:rgba(120,229,192,.08); }
