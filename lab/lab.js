@@ -364,6 +364,8 @@ const labState = {
     audioPrimed: false,
     voiceAudio: null,
     voiceSpeechCancel: null,
+    speechPlaybackGeneration: 0,
+    captureGeneration: 0,
     lastSpeechText: "",
     lastSpokenJobId: "",
     speaking: false,
@@ -656,7 +658,7 @@ function resetWorkspaceContents() {
   Object.assign(labState.extraction, {
     mode: "text", micStream: null, recorder: null, recorderChunks: [], recordingStartedAt: 0,
     retainedRecording: null, retainedOperationId: "", audioPrimed: false, voiceAudio: null,
-    voiceSpeechCancel: null, lastSpeechText: "", lastSpokenJobId: "", speaking: false, saveBusy: false, modeSwitching: false, demoMapReady: false, nextReplyInstruction: "", activeAttempt: 0, handoffMode: "full",
+    voiceSpeechCancel: null, speechPlaybackGeneration: 0, captureGeneration: 0, lastSpeechText: "", lastSpokenJobId: "", speaking: false, saveBusy: false, modeSwitching: false, demoMapReady: false, nextReplyInstruction: "", activeAttempt: 0, handoffMode: "full",
   });
   labState.clarificationArtifacts = [];
   labState.pipelineStage = "clarification";
@@ -4911,6 +4913,8 @@ async function playPipelineExtractionSpeech(text) {
   const state = labState.extraction;
   const spoken = clip(text, 2000);
   if (!spoken) return;
+  const playbackGeneration = (Number(state.speechPlaybackGeneration) || 0) + 1;
+  state.speechPlaybackGeneration = playbackGeneration;
   state.lastSpeechText = spoken;
   setPipelineExtractionMicTracksEnabled(false);
   setPipelineExtractionAudioSession("playback");
@@ -4918,6 +4922,7 @@ async function playPipelineExtractionSpeech(text) {
   try {
     const response = await speechFetch(spoken);
     const blob = await response.blob();
+    if (state.speechPlaybackGeneration !== playbackGeneration) return;
     const url = URL.createObjectURL(blob);
     const audio = state.voiceAudio || new Audio();
     state.voiceAudio = audio;
@@ -4938,7 +4943,7 @@ async function playPipelineExtractionSpeech(text) {
       }).finally(() => clearTimeout(watchdog));
       return;
     } finally {
-      state.voiceSpeechCancel = null;
+      if (state.speechPlaybackGeneration === playbackGeneration) state.voiceSpeechCancel = null;
       audio.onended = null;
       audio.onerror = null;
       try { audio.removeAttribute("src"); audio.load(); } catch (_) { /* already released */ }
@@ -4947,6 +4952,7 @@ async function playPipelineExtractionSpeech(text) {
   } catch (error) {
     cloudError = error;
   }
+  if (state.speechPlaybackGeneration !== playbackGeneration) return;
   if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") throw cloudError || new Error("This device has no available speech playback route.");
   await new Promise((resolve, reject) => {
     try {
@@ -4958,11 +4964,12 @@ async function playPipelineExtractionSpeech(text) {
       state.voiceSpeechCancel = () => { try { speechSynthesis.cancel(); } catch (_) { /* already stopped */ } resolve(); };
       speechSynthesis.speak(utterance);
     } catch (_) { reject(cloudError || new Error("The spoken reply could not play on this device.")); }
-  }).finally(() => { state.voiceSpeechCancel = null; });
+  }).finally(() => { if (state.speechPlaybackGeneration === playbackGeneration) state.voiceSpeechCancel = null; });
 }
 
 function stopPipelineExtractionSpeech() {
   const state = labState.extraction;
+  state.speechPlaybackGeneration = (Number(state.speechPlaybackGeneration) || 0) + 1;
   try { state.voiceSpeechCancel?.(); } catch (_) { /* playback already settled */ }
   state.voiceSpeechCancel = null;
   try { state.voiceAudio?.pause(); } catch (_) { /* playback already stopped */ }
@@ -4972,6 +4979,7 @@ function stopPipelineExtractionSpeech() {
 
 function stopPipelineExtractionVoice() {
   const state = labState.extraction;
+  state.captureGeneration = (Number(state.captureGeneration) || 0) + 1;
   const recorder = state.recorder;
   if (recorder?.state === "recording") {
     recorder.onstop = null;
@@ -5085,14 +5093,19 @@ function startPipelineExtractionRecording(event) {
     const type = recorderMimeType();
     state.recorderChunks = [];
     state.recorder = type ? new MediaRecorder(state.micStream, { mimeType:type }) : new MediaRecorder(state.micStream);
-    state.recordingStartedAt = performance.now();
+    const captureGeneration = (Number(state.captureGeneration) || 0) + 1;
+    state.captureGeneration = captureGeneration;
+    const recordingStartedAt = performance.now();
+    state.recordingStartedAt = recordingStartedAt;
     state.recorder.ondataavailable = (item) => { if (item.data?.size) state.recorderChunks.push(item.data); };
     const recorder = state.recorder;
     state.recorder.onstop = async () => {
+      if (state.captureGeneration !== captureGeneration) return;
+      if (state.recorder === recorder) state.recorder = null;
       q("pipeline-extraction-ptt")?.classList.remove("is-listening");
       setPipelineExtractionMicTracksEnabled(false);
       setPipelineExtractionAudioSession("playback");
-      if (performance.now() - state.recordingStartedAt < 220 || !state.recorderChunks.length) {
+      if (performance.now() - recordingStartedAt < 220 || !state.recorderChunks.length) {
         setMessage("pipeline-extraction-output", "Hold a little longer, then release to send.", "error");
         return;
       }
@@ -5730,6 +5743,8 @@ async function playClarificationSpeech(text) {
   const state = labState.clarification;
   const spoken = clip(text, 2000);
   if (!spoken) return;
+  const playbackGeneration = (Number(state.speechPlaybackGeneration) || 0) + 1;
+  state.speechPlaybackGeneration = playbackGeneration;
   state.lastSpeechText = spoken;
   setClarificationMicTracksEnabled(false);
   setClarificationAudioSession("playback");
@@ -5737,6 +5752,7 @@ async function playClarificationSpeech(text) {
   try {
     const response = await speechFetch(spoken);
     const blob = await response.blob();
+    if (state.speechPlaybackGeneration !== playbackGeneration) return;
     const url = URL.createObjectURL(blob);
     const audio = state.voiceAudio || new Audio();
     state.voiceAudio = audio;
@@ -5757,7 +5773,7 @@ async function playClarificationSpeech(text) {
       }).finally(() => clearTimeout(watchdog));
       return;
     } finally {
-      state.voiceSpeechCancel = null;
+      if (state.speechPlaybackGeneration === playbackGeneration) state.voiceSpeechCancel = null;
       audio.onended = null;
       audio.onerror = null;
       try { audio.removeAttribute("src"); audio.load(); } catch (_) { /* already released */ }
@@ -5766,6 +5782,7 @@ async function playClarificationSpeech(text) {
   } catch (error) {
     cloudError = error;
   }
+  if (state.speechPlaybackGeneration !== playbackGeneration) return;
   if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") throw cloudError || new Error("This device has no available speech playback route.");
   await new Promise((resolve, reject) => {
     try {
@@ -5777,11 +5794,12 @@ async function playClarificationSpeech(text) {
       state.voiceSpeechCancel = () => { try { speechSynthesis.cancel(); } catch (_) { /* already stopped */ } resolve(); };
       speechSynthesis.speak(utterance);
     } catch (_) { reject(cloudError || new Error("The spoken reply could not play on this device.")); }
-  }).finally(() => { state.voiceSpeechCancel = null; });
+  }).finally(() => { if (state.speechPlaybackGeneration === playbackGeneration) state.voiceSpeechCancel = null; });
 }
 
 function stopClarificationSpeech() {
   const state = labState.clarification;
+  state.speechPlaybackGeneration = (Number(state.speechPlaybackGeneration) || 0) + 1;
   try { state.voiceSpeechCancel?.(); } catch (_) { /* playback already settled */ }
   state.voiceSpeechCancel = null;
   try { state.voiceAudio?.pause(); } catch (_) { /* playback already stopped */ }
@@ -6175,14 +6193,19 @@ function startClarificationRecording(event) {
     const type = recorderMimeType();
     state.recorderChunks = [];
     state.recorder = type ? new MediaRecorder(state.micStream, { mimeType: type }) : new MediaRecorder(state.micStream);
-    state.recordingStartedAt = performance.now();
+    const captureGeneration = (Number(state.captureGeneration) || 0) + 1;
+    state.captureGeneration = captureGeneration;
+    const recordingStartedAt = performance.now();
+    state.recordingStartedAt = recordingStartedAt;
     state.recorder.ondataavailable = (item) => { if (item.data?.size) state.recorderChunks.push(item.data); };
     const recorder = state.recorder;
     state.recorder.onstop = async () => {
+      if (state.captureGeneration !== captureGeneration) return;
+      if (state.recorder === recorder) state.recorder = null;
       q("clarification-surface").classList.remove("is-listening");
       setClarificationMicTracksEnabled(false);
       setClarificationAudioSession("playback");
-      if (performance.now() - state.recordingStartedAt < 220 || !state.recorderChunks.length) {
+      if (performance.now() - recordingStartedAt < 220 || !state.recorderChunks.length) {
         setMessage("clarification-message", "Hold a little longer, then release to send.", "error");
         return;
       }
