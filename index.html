@@ -2048,11 +2048,19 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v113 · Aug 20";
+const BUILD = "v115 · Aug 20";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v115", date: "Aug 20", changes: [
+    "Lesson Map now shows an inspectable, chapter-by-chapter grouping of your Extraction wording before it is used in the guided Lesson.",
+    "The Extraction map-ready demo now opens an editable instruction used for one reply only, and Clarification adds Map, then Extraction for a connected test run."
+  ]},
+  { tag: "v114", date: "Aug 20", changes: [
+    "Model Lab now has Mock run: a learner-style rehearsal that can begin from one of your existing Notes and carries a frozen Clarification straight into a protected Lesson Map run.",
+    "The same connected run can then open its map-bound Extraction conversation, while Lab controls remain available for inspecting prompts, packets, and backend evidence."
+  ]},
   { tag: "v113", date: "Aug 20", changes: [
     "Extraction now has Full Extraction and Map-ready prompt experiments. Map readiness is passed only into the model prompt for the second mode; the page no longer injects a separate message."
   ]},
