@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=111">
+<link rel="stylesheet" href="./lab.css?v=115">
 </head>
 <body>
 
@@ -34,6 +34,15 @@
 
 <main id="lab-shell" class="lab-shell" hidden>
   <section id="panel-pipeline" class="tab-panel is-active" role="region" aria-label="Lesson Pipeline" data-panel="pipeline">
+    <div class="pipeline-mode-bar" aria-label="Model Lab mode">
+      <div><p class="eyebrow">Model Lab</p><strong>Choose how to work</strong></div>
+      <div class="pipeline-mode-options" role="group" aria-label="Model Lab mode">
+        <button id="pipeline-mode-controls" class="pipeline-mode-option is-active" type="button" aria-pressed="true">Lab controls</button>
+        <button id="pipeline-mode-mock" class="pipeline-mode-option" type="button" aria-pressed="false">Mock run</button>
+      </div>
+      <p id="pipeline-mode-note" class="pipeline-mode-note">Inspect or run one phase at a time.</p>
+    </div>
+    <div id="pipeline-mock-progress" class="pipeline-mock-progress" hidden aria-label="Mock run progress"><span>Mock run</span><strong id="pipeline-mock-stage">1 · Clarification</strong><button id="pipeline-mock-exit" class="text-button" type="button">Back to controls</button></div>
     <div class="pipeline-run-browser" aria-label="Saved lesson runs">
       <label class="sr-only" for="pipeline-run-select">Selected lesson run</label>
       <select id="pipeline-run-select" aria-label="Selected lesson run"><option value="">New lesson run</option></select>
@@ -69,6 +78,7 @@
 
         <div id="clarification-setup" class="clarification-setup">
           <div class="clarification-home-copy"><p class="eyebrow">Start a lesson</p><h3>What do you want to understand?</h3><p>Enter a topic, then follow the same clarification path a learner will see.</p></div>
+          <div id="clarification-note-row" class="clarification-note-row" hidden><label for="clarification-note">Start from one of your Notes</label><select id="clarification-note"><option value="">Type a topic instead</option></select></div>
           <label for="clarification-topic">What do you want to learn?</label>
           <textarea id="clarification-topic" rows="3" maxlength="500" placeholder="Ramen&#10;How vaccines train the immune system&#10;Why cities develop where they do"></textarea>
           <button id="clarification-start" class="clarification-start" type="button">Start lesson</button>
@@ -121,7 +131,7 @@
           <div id="clarification-scope-items" class="scope-items"></div>
           <p id="clarification-storage-note" class="form-message" role="status"></p>
           <p class="privacy-note">This frozen output is the input future extraction and lesson-map stages will consume. Start a new run to create an editable fork; this result stays unchanged.</p>
-          <div class="inline-actions"><button id="clarification-open-extraction" class="button button-quiet" type="button">Continue to Extraction</button><button id="clarification-open-map" class="button button-primary" type="button">Continue to Lesson Map</button><button id="clarification-fork" class="button button-quiet" type="button">Fork into a new run</button></div>
+          <div class="inline-actions"><button id="clarification-open-extraction" class="button button-quiet" type="button">Continue to Extraction</button><button id="clarification-open-map" class="button button-primary" type="button">Continue to Lesson Map</button><button id="clarification-open-map-extraction" class="button button-quiet" type="button">Map, then Extraction</button><button id="clarification-fork" class="button button-quiet" type="button">Fork into a new run</button></div>
         </div>
       </section>
 
@@ -230,6 +240,11 @@
         <div class="extraction-stage-head">
           <div><p class="eyebrow">Feynman overview</p><h3>What you already know</h3></div>
           <div class="extraction-stage-actions"><select id="pipeline-extraction-handoff-mode" aria-label="Extraction handoff experiment"><option value="full">Full Extraction</option><option value="map-ready">Map-ready prompt</option></select><button id="pipeline-extraction-retry" class="button button-quiet" type="button" title="Start a fresh test conversation. Save an attempt later if you want Lesson to use it.">Retry Extraction</button><button id="pipeline-extraction-mode-toggle" class="extraction-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">Voice</button><button id="pipeline-extraction-demo-map-ready" class="extraction-demo-toggle" type="button" aria-pressed="false">Demo: Lesson map ready</button><span class="extraction-authority">not progress</span></div>
+        <details id="pipeline-extraction-next-reply" class="extraction-next-reply" hidden>
+          <summary>Next-reply prompt</summary>
+          <p>This is sent only with the next Worldview reply, then removed. Edit it to test the exact handoff wording.</p>
+          <textarea id="pipeline-extraction-next-reply-text" rows="3" maxlength="900" aria-label="One-time next reply instruction"></textarea>
+        </details>
         </div>
         <p class="extraction-intro">Have a normal conversation about what you already understand. Type, or switch to Voice and hold to talk. This stage sees only the frozen Clarification conversation, starts beside Lesson Map generation, and does not teach, correct, or mark anything complete.</p>
         <p id="pipeline-extraction-output" class="form-message" role="status">Choose a frozen Clarification run, then start its Lesson Map to open the broad overview.</p>
@@ -521,6 +536,6 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=113" defer></script>
+<script src="./lab.js?v=115" defer></script>
 </body>
 </html>
