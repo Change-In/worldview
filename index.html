@@ -2048,11 +2048,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v115 · Aug 20";
+const BUILD = "v116 · Aug 20";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v116", date: "Aug 20", changes: [
+    "Guided Lesson now sends the tutor reply and the separate route check at the same time, so the evaluator no longer delays the next question.",
+    "A completed route recommendation guides a following tutor turn; if it arrives late, the conversation can naturally ask one more useful question first."
+  ]},
   { tag: "v115", date: "Aug 20", changes: [
     "Lesson Map now shows an inspectable, chapter-by-chapter grouping of your Extraction wording before it is used in the guided Lesson.",
     "The Extraction map-ready demo now opens an editable instruction used for one reply only, and Clarification adds Map, then Extraction for a connected test run."
