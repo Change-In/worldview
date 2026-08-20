@@ -370,15 +370,18 @@ const labState = {
     saveBusy: false,
     modeSwitching: false,
     demoMapReady: false,
+    nextReplyInstruction: "",
     activeAttempt: 0,
     handoffMode: "full",
   },
   jobPollTimer: 0,
   clarificationArtifacts: [],
   pipelineStage: "clarification",
+  pipelineMode: "controls",
   pipelineSelectedRunId: "",
   pipelineSelectedMapJobId: "",
   pipelineSelectedMapRecordId: "",
+  autoOpenExtractionAfterMap: false,
   mapDeletingJobs: new Set(),
   mapView: "learner",
   lastPrimaryTab: "pipeline",
@@ -653,7 +656,7 @@ function resetWorkspaceContents() {
   Object.assign(labState.extraction, {
     mode: "text", micStream: null, recorder: null, recorderChunks: [], recordingStartedAt: 0,
     retainedRecording: null, retainedOperationId: "", audioPrimed: false, voiceAudio: null,
-    voiceSpeechCancel: null, lastSpeechText: "", lastSpokenJobId: "", speaking: false, saveBusy: false, modeSwitching: false, demoMapReady: false, activeAttempt: 0, handoffMode: "full",
+    voiceSpeechCancel: null, lastSpeechText: "", lastSpokenJobId: "", speaking: false, saveBusy: false, modeSwitching: false, demoMapReady: false, nextReplyInstruction: "", activeAttempt: 0, handoffMode: "full",
   });
   labState.clarificationArtifacts = [];
   labState.pipelineStage = "clarification";
@@ -1401,6 +1404,19 @@ function renderNoteSelect() {
   if ([...select.options].some((option) => option.value === prior)) select.value = prior;
 }
 
+function renderClarificationNoteSelect() {
+  const row = q("clarification-note-row");
+  const select = q("clarification-note");
+  if (!row || !select) return;
+  const prior = select.value;
+  row.hidden = !labState.notes.length;
+  select.replaceChildren(element("option", { value:"", text:"Type a topic instead" }));
+  for (const note of [...labState.notes].sort((a, b) => Number(b.addedAt || 0) - Number(a.addedAt || 0))) {
+    select.append(element("option", { value:String(note.id), text:clip(note.text, 110) }));
+  }
+  if ([...select.options].some((option) => option.value === prior)) select.value = prior;
+}
+
 function rerenderWorkspaceAfterIdentitySwitch() {
   if (!q("lab-shell") || q("lab-shell").hidden) return;
   for (const id of ["lesson-topic", "tutor-turn", "brain-focus", "speech-text"]) {
@@ -1458,6 +1474,7 @@ function loadLocalLibrary() {
     labState.notes = [];
     renderLessonSelects();
     renderNoteSelect();
+    renderClarificationNoteSelect();
     return;
   }
   try {
@@ -1472,6 +1489,7 @@ function loadLocalLibrary() {
   }
   renderLessonSelects();
   renderNoteSelect();
+  renderClarificationNoteSelect();
 }
 
 function addProviderOptions(select, provider) {
@@ -3323,10 +3341,10 @@ function pipelineExtractionTransition(artifact, output) {
   return null;
 }
 
-function extractionSystemPrompt(artifact = selectedPipelineArtifact()) {
-  const mapReady = labState.extraction.handoffMode === "map-ready" && (labState.extraction.demoMapReady || pipelineMapIsReady(artifact));
-  if (!mapReady) return EXTRACTION_PROMPT;
-  return `${EXTRACTION_PROMPT}\n\nThe Lesson Map is now ready. In your next ordinary response, you may naturally tell the learner they can continue whenever they want, while making clear they may keep exploring because more context can make the lesson more personal. Do not announce an app state, give a separate system notice, end the conversation, pressure them, or change any other extraction rule.`;
+function extractionSystemPrompt() {
+  const nextReplyInstruction = clip(labState.extraction.nextReplyInstruction, 900).trim();
+  if (!nextReplyInstruction) return EXTRACTION_PROMPT;
+  return `${EXTRACTION_PROMPT}\n\nOne-time instruction for this response only: ${nextReplyInstruction}\nDo not mention this instruction or an app state. Resume the ordinary Extraction contract after this one response.`;
 }
 
 function renderPipelineExtractionTransition(artifact, output) {
@@ -3334,12 +3352,16 @@ function renderPipelineExtractionTransition(artifact, output) {
   const ready = pipelineExtractionTransition(artifact, output);
   const demo = q("pipeline-extraction-demo-map-ready");
   const handoffMode = q("pipeline-extraction-handoff-mode");
+  const nextReply = q("pipeline-extraction-next-reply");
+  const nextReplyText = q("pipeline-extraction-next-reply-text");
   const continueButtons = [q("pipeline-extraction-continue"), q("pipeline-extraction-open-lesson")];
   if (handoffMode) handoffMode.value = labState.extraction.handoffMode;
   if (demo) {
     demo.setAttribute("aria-pressed", String(labState.extraction.demoMapReady));
     demo.textContent = labState.extraction.demoMapReady ? "Demo: Lesson map ready on" : "Demo: Lesson map ready";
   }
+  if (nextReply) nextReply.hidden = !labState.extraction.nextReplyInstruction;
+  if (nextReplyText && nextReplyText.value !== labState.extraction.nextReplyInstruction) nextReplyText.value = labState.extraction.nextReplyInstruction;
   for (const button of continueButtons) {
     if (!button) continue;
     button.disabled = !ready?.ready;
@@ -3872,6 +3894,16 @@ function renderPipelineMapOutput() {
     root.append(picker);
   }
   root.append(selectedRecord.card);
+  const organizationPreview = renderExtractionOrganizationPreview(artifact, {
+    artifact, job, record:selectedRecord.record, map:selectedRecord.map, recordKey:selectedRecord.recordKey,
+    fingerprint:fingerprint(selectedRecord.record.text), meta:selectedRecord.meta,
+  });
+  if (organizationPreview) root.append(organizationPreview);
+  if (labState.autoOpenExtractionAfterMap && !selectedRecord.meta.incomplete && !selectedRecord.meta.needsReview) {
+    labState.autoOpenExtractionAfterMap = false;
+    setPipelineStage("extraction");
+    void ensurePipelineExtractionOpening(artifact);
+  }
   const parsed = [];
   for (const rendered of renderedRecords) {
     parsed.push({
@@ -4096,6 +4128,7 @@ function pipelineLessonOutcomes(selection = selectedPipelineMapRecord()) {
   return selection.map.chapters.flatMap((chapter, chapterIndex) => (chapter.outcomes || []).map((outcome, outcomeIndex) => ({
     chapterIndex,
     outcomeIndex,
+    chapterTitle:clip(chapter.title || `Chapter ${chapterIndex + 1}`, 240),
     number:`${chapterIndex + 1}.${outcomeIndex + 1}`,
     id:clip(outcome.id || `${chapterIndex + 1}-${outcomeIndex + 1}`, 120),
     title:clip(outcome.title || outcome.learningOutcome || `Outcome ${chapterIndex + 1}.${outcomeIndex + 1}`, 320),
@@ -4104,6 +4137,46 @@ function pipelineLessonOutcomes(selection = selectedPipelineMapRecord()) {
     diagnosticQuestion:clip(outcome.diagnosticQuestion, 500),
     supportNeeds:(Array.isArray(outcome.supportNeeds) ? outcome.supportNeeds : []).map((item) => clip(item, 300)).filter(Boolean).slice(0, 4),
   })));
+}
+
+function extractionOrganizationPreview(artifact = selectedPipelineArtifact(), selection = selectedPipelineMapRecord()) {
+  if (!artifact || !selection?.map?.chapters?.length) return null;
+  const saved = selectedPipelineExtractionArtifact(artifact);
+  const liveTranscript = pipelineExtractionTranscript(artifact);
+  const snapshot = saved || (liveTranscript.length ? { transcript:liveTranscript } : null);
+  if (!snapshot) return { saved:false, empty:true, chapters:[] };
+  const organized = organizeExtractionForLesson(snapshot, pipelineLessonOutcomes(selection));
+  return { saved:Boolean(saved), empty:false, chapters:selection.map.chapters.map((chapter, chapterIndex) => ({
+    number:chapterIndex + 1,
+    title:clip(chapter.title, 240),
+    outcomes:organized.byOutcome.filter((outcome) => outcome.chapterIndex === chapterIndex),
+  })), unmatched:organized.allLearnerStatements.filter((statement) => !organized.byOutcome.some((outcome) => outcome.lexicalMatches.some((match) => match.learnerMessage === statement.index))) };
+}
+
+function renderExtractionOrganizationPreview(artifact = selectedPipelineArtifact(), selection = selectedPipelineMapRecord()) {
+  const preview = extractionOrganizationPreview(artifact, selection);
+  if (!preview) return null;
+  const details = element("details", { className:"extraction-organization-preview" });
+  details.append(element("summary", { text:"Extraction organized by this map’s chapters (unverified)" }));
+  if (preview.empty) {
+    details.append(element("p", { text:"No Extraction learner messages exist for this exact map yet. Start its Extraction conversation; save it when you want this to become the immutable Lesson input." }));
+    return details;
+  }
+  details.append(element("p", { text:preview.saved ? "Saved Extraction snapshot. These are copied learner statements grouped by word overlap; they are not a diagnosis, correction, or score." : "Live Extraction preview only. Save the conversation to freeze this exact input for Lesson. Grouping is word overlap, not a diagnosis, correction, or score." }));
+  for (const chapter of preview.chapters) {
+    const section = element("section", { className:"extraction-organization-chapter" });
+    section.append(element("strong", { text:`Chapter ${chapter.number} · ${chapter.title}` }));
+    for (const outcome of chapter.outcomes) {
+      const row = element("div", { className:"extraction-organization-outcome" });
+      row.append(element("small", { text:`${outcome.number} · ${outcome.outcome}` }));
+      if (outcome.lexicalMatches.length) row.append(element("ul", {}, outcome.lexicalMatches.map((match) => element("li", { text:`You: ${match.text}` }))));
+      else row.append(element("span", { text:"No related learner wording captured yet." }));
+      section.append(row);
+    }
+    details.append(section);
+  }
+  if (preview.unmatched?.length) details.append(element("p", { className:"extraction-organization-unmatched", text:`Not yet grouped: ${preview.unmatched.map((item) => `“${item.text}”`).join(" · ")}` }));
+  return details;
 }
 
 function extractionLearnerStatements(snapshot) {
@@ -4584,6 +4657,7 @@ async function ensurePipelineExtractionOpening(artifact = selectedPipelineArtifa
   const extractionAttempt = Number(labState.extraction.activeAttempt || 0);
   const { provider, model } = pipelineExtractionProvider(artifact);
   const sourcePacket = pipelineExtractionPacket(artifact);
+  const system = extractionSystemPrompt();
   const idempotencyKey = `extraction-opening-${artifact.runId}-${scope.key}-${extractionAttempt}`;
   const request = {
     action:"create",
@@ -4606,12 +4680,12 @@ async function ensurePipelineExtractionOpening(artifact = selectedPipelineArtifa
       clientSampleId:`${artifact.runId}:extraction:${scope.key}:${extractionAttempt}:0`,
       provider,
       model,
-      system:extractionSystemPrompt(artifact),
+      system,
       messages:[{ role:"user", content:`Immutable Clarification artifact — the only source for this conversation:\n${sourcePacket}` }],
       maxTokens:240,
       research:false,
       metadata:{
-        promptFingerprint:fingerprint(extractionSystemPrompt(artifact)),
+        promptFingerprint:fingerprint(system),
         promptCoreFingerprint:fingerprint(EXTRACTION_PROMPT),
         inputFingerprint:fingerprint(sourcePacket),
         promptVersionId:EXTRACTION_PROMPT_VERSION,
@@ -4628,6 +4702,7 @@ async function ensurePipelineExtractionOpening(artifact = selectedPipelineArtifa
     const created = await labJobsFetch(request);
     if (!created?.job?.id) throw new Error("The server did not return a saved extraction job id.");
     upsertJob(created.job);
+    labState.extraction.nextReplyInstruction = "";
     scheduleJobPoll();
     logFlow(`Started broad Feynman extraction for ${clip(artifact.topic, 80)}`, "immutable Clarification artifact only");
   } catch (error) {
@@ -4667,6 +4742,7 @@ async function submitPipelineExtractionReply(value = q("pipeline-extraction-repl
   const { provider, model } = pipelineExtractionProvider(artifact);
   const sourcePacket = pipelineExtractionPacket(artifact);
   const prior = pipelineExtractionTranscript(artifact).slice(-160).map((turn) => ({ role:turn.role, content:turn.content }));
+  const system = extractionSystemPrompt();
   const request = {
     action:"create",
     idempotencyKey:`extraction-followup-${artifact.runId}-${scope.key}-${extractionAttempt}-${nextTurn}`,
@@ -4689,7 +4765,7 @@ async function submitPipelineExtractionReply(value = q("pipeline-extraction-repl
       clientSampleId:`${artifact.runId}:extraction:${scope.key}:${extractionAttempt}:${nextTurn}`,
       provider,
       model,
-      system:extractionSystemPrompt(artifact),
+      system,
       messages:[
         { role:"user", content:`Immutable Clarification artifact — the only source for this conversation:\n${sourcePacket}` },
         ...prior,
@@ -4698,7 +4774,7 @@ async function submitPipelineExtractionReply(value = q("pipeline-extraction-repl
       maxTokens:240,
       research:false,
       metadata:{
-        promptFingerprint:fingerprint(extractionSystemPrompt(artifact)),
+        promptFingerprint:fingerprint(system),
         promptCoreFingerprint:fingerprint(EXTRACTION_PROMPT),
         inputFingerprint:fingerprint(`${sourcePacket}\n${prior.map((turn) => `${turn.role}:${turn.content}`).join("\n")}\n${answer}`),
         promptVersionId:EXTRACTION_PROMPT_VERSION,
@@ -4719,6 +4795,7 @@ async function submitPipelineExtractionReply(value = q("pipeline-extraction-repl
     const created = await labJobsFetch(request);
     if (!created?.job?.id) throw new Error("The server did not return a saved extraction job id.");
     upsertJob(created.job);
+    labState.extraction.nextReplyInstruction = "";
     q("pipeline-extraction-reply").value = "";
     scheduleJobPoll();
   } catch (error) {
@@ -5158,6 +5235,38 @@ function renderPipelineExtraction() {
   maybeSpeakPipelineExtractionReply(latest, record.output);
 }
 
+function renderPipelineMode() {
+  const mock = labState.pipelineMode === "mock";
+  document.body.classList.toggle("mock-run", mock);
+  q("pipeline-mode-controls")?.classList.toggle("is-active", !mock);
+  q("pipeline-mode-controls")?.setAttribute("aria-pressed", String(!mock));
+  q("pipeline-mode-mock")?.classList.toggle("is-active", mock);
+  q("pipeline-mode-mock")?.setAttribute("aria-pressed", String(mock));
+  if (q("pipeline-mock-progress")) q("pipeline-mock-progress").hidden = !mock;
+  const labels = { clarification:"1 · Clarification", map:"2 · Lesson Map", extraction:"3 · Extraction", lesson:"4 · Lesson", quiz:"5 · Quiz" };
+  if (q("pipeline-mock-stage")) q("pipeline-mock-stage").textContent = labels[labState.pipelineStage] || labels.clarification;
+  if (q("pipeline-mode-note")) q("pipeline-mode-note").textContent = mock
+    ? "A learner-style rehearsal. Your saved Notes can start the run; switch back anytime to inspect prompts and packets."
+    : "Inspect or run one phase at a time.";
+  const mapButton = q("clarification-open-map");
+  if (mapButton) mapButton.textContent = mock ? "Build Lesson Map" : "Continue to Lesson Map";
+  const extractionButton = q("clarification-open-extraction");
+  if (extractionButton) extractionButton.textContent = mock ? "Go to Extraction" : "Continue to Extraction";
+  const combinedButton = q("clarification-open-map-extraction");
+  if (combinedButton) combinedButton.textContent = mock ? "Map, then Extraction" : "Map, then Extraction";
+}
+
+function setPipelineMode(mode = "controls") {
+  const next = mode === "mock" ? "mock" : "controls";
+  if (labState.pipelineMode === next) { renderPipelineMode(); return; }
+  labState.pipelineMode = next;
+  if (next === "mock") {
+    startNewPipelineRun();
+    setClarificationView("learner");
+  }
+  renderPipelineMode();
+}
+
 function setPipelineStage(stage = "clarification") {
   const stages = ["clarification", "map", "extraction", "lesson", "quiz"];
   const next = stages.includes(stage) ? stage : "clarification";
@@ -5184,6 +5293,23 @@ function setPipelineStage(stage = "clarification") {
   }
   document.body.classList.toggle("clarification-learner-active", next === "clarification" && labState.clarification.view === "learner" && !q("panel-pipeline").hidden);
   renderPipelineArtifactSelect();
+  renderPipelineMode();
+}
+
+async function startMapThenExtraction() {
+  const runId = labState.clarification.finalized?.runId || selectedPipelineArtifact()?.runId;
+  if (runId) labState.pipelineSelectedRunId = runId;
+  const artifact = selectedPipelineArtifact();
+  if (!artifact) return;
+  labState.autoOpenExtractionAfterMap = true;
+  setPipelineStage("map");
+  if (pipelineMapIsReady(artifact)) { renderPipelineMapOutput(); return; }
+  if (labState.preview) {
+    labState.autoOpenExtractionAfterMap = false;
+    setMessage("pipeline-map-output-status", "Preview has no durable map generator. Choose a completed preview roadmap, then use To Start to open its Extraction conversation.", "error");
+    return;
+  }
+  await runTextExperiment("lesson");
 }
 
 function clarificationDefaultModel(provider) {
@@ -6429,16 +6555,35 @@ function bindEvents() {
   q("scenario-use").addEventListener("click", () => applyBenchmarkScenario(true));
   document.querySelectorAll("[data-pipeline-stage]").forEach((button) => button.addEventListener("click", () => setPipelineStage(button.dataset.pipelineStage)));
   q("pipeline-run-select").addEventListener("change", (event) => selectPipelineRun(event.currentTarget.value));
+  q("pipeline-mode-controls").addEventListener("click", () => setPipelineMode("controls"));
+  q("pipeline-mode-mock").addEventListener("click", () => setPipelineMode("mock"));
+  q("pipeline-mock-exit").addEventListener("click", () => setPipelineMode("controls"));
+  q("clarification-note").addEventListener("change", (event) => {
+    const note = labState.notes.find((item) => String(item.id) === event.currentTarget.value);
+    if (!note) return;
+    q("clarification-topic").value = clip(note.text, 500);
+    syncClarificationTopic("clarification-topic");
+    setMessage("clarification-setup-message", "Copied your Note into this mock run. The original Note stays unchanged.", "ok");
+  });
   document.querySelectorAll("[data-pipeline-previous-stage]").forEach((button) => button.addEventListener("click", () => setPipelineStage(button.dataset.pipelinePreviousStage)));
   q("map-view-learner").addEventListener("click", () => setMapView("learner"));
   q("map-view-backend").addEventListener("click", () => setMapView("backend"));
   q("pipeline-extraction-mode-toggle").addEventListener("click", switchPipelineExtractionConversationMode);
   q("pipeline-extraction-demo-map-ready").addEventListener("click", () => {
     labState.extraction.demoMapReady = !labState.extraction.demoMapReady;
+    if (labState.extraction.demoMapReady) {
+      labState.extraction.handoffMode = "map-ready";
+      labState.extraction.nextReplyInstruction = "The Lesson Map is ready. In this ordinary reply, you may naturally tell the learner they can continue whenever they want, while making clear they may keep exploring because more context can make the lesson more personal. Do not pressure them or end the conversation.";
+      q("pipeline-extraction-next-reply").open = true;
+    } else labState.extraction.nextReplyInstruction = "";
     renderPipelineExtraction();
   });
   q("pipeline-extraction-handoff-mode").addEventListener("change", (event) => {
     labState.extraction.handoffMode = event.currentTarget.value === "map-ready" ? "map-ready" : "full";
+    renderPipelineExtraction();
+  });
+  q("pipeline-extraction-next-reply-text").addEventListener("input", (event) => {
+    labState.extraction.nextReplyInstruction = clip(event.currentTarget.value, 900);
     renderPipelineExtraction();
   });
   q("pipeline-extraction-send").addEventListener("click", submitPipelineExtractionReply);
@@ -6482,7 +6627,9 @@ function bindEvents() {
     const runId = labState.clarification.finalized?.runId;
     if (runId) labState.pipelineSelectedRunId = runId;
     setPipelineStage("map");
+    if (labState.pipelineMode === "mock" && selectedPipelineArtifact() && !pipelineMapJobs().length) void runTextExperiment("lesson");
   });
+  q("clarification-open-map-extraction").addEventListener("click", () => { void startMapThenExtraction(); });
   q("clarification-open-extraction").addEventListener("click", () => {
     const runId = labState.clarification.finalized?.runId;
     if (runId) labState.pipelineSelectedRunId = runId;
