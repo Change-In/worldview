@@ -371,6 +371,7 @@ const labState = {
     modeSwitching: false,
     demoMapReady: false,
     activeAttempt: 0,
+    handoffMode: "full",
   },
   jobPollTimer: 0,
   clarificationArtifacts: [],
@@ -652,7 +653,7 @@ function resetWorkspaceContents() {
   Object.assign(labState.extraction, {
     mode: "text", micStream: null, recorder: null, recorderChunks: [], recordingStartedAt: 0,
     retainedRecording: null, retainedOperationId: "", audioPrimed: false, voiceAudio: null,
-    voiceSpeechCancel: null, lastSpeechText: "", lastSpokenJobId: "", speaking: false, saveBusy: false, modeSwitching: false, demoMapReady: false, activeAttempt: 0,
+    voiceSpeechCancel: null, lastSpeechText: "", lastSpokenJobId: "", speaking: false, saveBusy: false, modeSwitching: false, demoMapReady: false, activeAttempt: 0, handoffMode: "full",
   });
   labState.clarificationArtifacts = [];
   labState.pipelineStage = "clarification";
@@ -3302,7 +3303,7 @@ function pipelineMapIsReady(artifact = selectedPipelineArtifact()) {
 }
 
 function pipelineExtractionTransition(artifact, output) {
-  const mapReady = labState.extraction.demoMapReady || pipelineMapIsReady(artifact);
+  const mapReady = labState.extraction.handoffMode === "map-ready" && (labState.extraction.demoMapReady || pipelineMapIsReady(artifact));
   if (mapReady) {
     return {
       ready:true,
@@ -3322,11 +3323,19 @@ function pipelineExtractionTransition(artifact, output) {
   return null;
 }
 
+function extractionSystemPrompt(artifact = selectedPipelineArtifact()) {
+  const mapReady = labState.extraction.handoffMode === "map-ready" && (labState.extraction.demoMapReady || pipelineMapIsReady(artifact));
+  if (!mapReady) return EXTRACTION_PROMPT;
+  return `${EXTRACTION_PROMPT}\n\nThe Lesson Map is now ready. In your next ordinary response, you may naturally tell the learner they can continue whenever they want, while making clear they may keep exploring because more context can make the lesson more personal. Do not announce an app state, give a separate system notice, end the conversation, pressure them, or change any other extraction rule.`;
+}
+
 function renderPipelineExtractionTransition(artifact, output) {
   const panel = q("pipeline-extraction-transition");
   const ready = pipelineExtractionTransition(artifact, output);
   const demo = q("pipeline-extraction-demo-map-ready");
+  const handoffMode = q("pipeline-extraction-handoff-mode");
   const continueButtons = [q("pipeline-extraction-continue"), q("pipeline-extraction-open-lesson")];
+  if (handoffMode) handoffMode.value = labState.extraction.handoffMode;
   if (demo) {
     demo.setAttribute("aria-pressed", String(labState.extraction.demoMapReady));
     demo.textContent = labState.extraction.demoMapReady ? "Demo: Lesson map ready on" : "Demo: Lesson map ready";
@@ -4597,12 +4606,12 @@ async function ensurePipelineExtractionOpening(artifact = selectedPipelineArtifa
       clientSampleId:`${artifact.runId}:extraction:${scope.key}:${extractionAttempt}:0`,
       provider,
       model,
-      system:EXTRACTION_PROMPT,
+      system:extractionSystemPrompt(artifact),
       messages:[{ role:"user", content:`Immutable Clarification artifact — the only source for this conversation:\n${sourcePacket}` }],
       maxTokens:240,
       research:false,
       metadata:{
-        promptFingerprint:fingerprint(EXTRACTION_PROMPT),
+        promptFingerprint:fingerprint(extractionSystemPrompt(artifact)),
         promptCoreFingerprint:fingerprint(EXTRACTION_PROMPT),
         inputFingerprint:fingerprint(sourcePacket),
         promptVersionId:EXTRACTION_PROMPT_VERSION,
@@ -4680,7 +4689,7 @@ async function submitPipelineExtractionReply(value = q("pipeline-extraction-repl
       clientSampleId:`${artifact.runId}:extraction:${scope.key}:${extractionAttempt}:${nextTurn}`,
       provider,
       model,
-      system:EXTRACTION_PROMPT,
+      system:extractionSystemPrompt(artifact),
       messages:[
         { role:"user", content:`Immutable Clarification artifact — the only source for this conversation:\n${sourcePacket}` },
         ...prior,
@@ -4689,7 +4698,7 @@ async function submitPipelineExtractionReply(value = q("pipeline-extraction-repl
       maxTokens:240,
       research:false,
       metadata:{
-        promptFingerprint:fingerprint(EXTRACTION_PROMPT),
+        promptFingerprint:fingerprint(extractionSystemPrompt(artifact)),
         promptCoreFingerprint:fingerprint(EXTRACTION_PROMPT),
         inputFingerprint:fingerprint(`${sourcePacket}\n${prior.map((turn) => `${turn.role}:${turn.content}`).join("\n")}\n${answer}`),
         promptVersionId:EXTRACTION_PROMPT_VERSION,
@@ -5115,14 +5124,9 @@ function renderPipelineExtraction() {
   const saved = selectedPipelineExtractionArtifact(artifact);
   const savedCurrentAttempt = Boolean(saved) && Number(saved.extractionAttempt || 0) === Number(labState.extraction.activeAttempt || 0);
   const transition = renderPipelineExtractionTransition(artifact, record.output);
-  if (transition?.ready) {
-    const notice = element("li", { attrs:{ "data-role":"assistant" }, className:"extraction-map-ready-notice" });
-    notice.append(element("strong", { text:"Worldview" }), document.createTextNode(" Your Lesson Map is ready now. You can keep exploring this overview, or continue whenever you feel ready; continuing will use what you've said here as unverified context for the Lesson."));
-    transcriptRoot.append(notice);
-  }
   setStatus(saved
     ? `${answerCount} message${answerCount === 1 ? "" : "s"} ${answerCount === 1 ? "is" : "are"} frozen as a reusable, private future-stage input. This conversation will not change after saving.`
-    : transition?.ready ? "Lesson Map is ready. Keep talking or continue whenever you want."
+    : transition?.ready ? "The next reply can mention the optional Lesson handoff naturally. Keep talking or continue whenever you want."
       : transition ? "Worldview suggests a gentle next step, but you remain in control."
         : answerCount ? `${answerCount} message${answerCount === 1 ? "" : "s"} saved in this protected Lab conversation. It does not mark progress.` : "Worldview is ready. Explain the topic in your own words; uncertainty is useful evidence.", (answerCount || transition) ? "ok" : "");
   q("pipeline-extraction-reply").disabled = labState.extractionBusy || labState.extraction.saveBusy || savedCurrentAttempt;
@@ -6431,6 +6435,10 @@ function bindEvents() {
   q("pipeline-extraction-mode-toggle").addEventListener("click", switchPipelineExtractionConversationMode);
   q("pipeline-extraction-demo-map-ready").addEventListener("click", () => {
     labState.extraction.demoMapReady = !labState.extraction.demoMapReady;
+    renderPipelineExtraction();
+  });
+  q("pipeline-extraction-handoff-mode").addEventListener("change", (event) => {
+    labState.extraction.handoffMode = event.currentTarget.value === "map-ready" ? "map-ready" : "full";
     renderPipelineExtraction();
   });
   q("pipeline-extraction-send").addEventListener("click", submitPipelineExtractionReply);
