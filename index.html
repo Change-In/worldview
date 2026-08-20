@@ -2048,11 +2048,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v112 · Aug 20";
+const BUILD = "v113 · Aug 20";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v113", date: "Aug 20", changes: [
+    "Extraction now has Full Extraction and Map-ready prompt experiments. Map readiness is passed only into the model prompt for the second mode; the page no longer injects a separate message."
+  ]},
   { tag: "v112", date: "Aug 20", changes: [
     "After you finish Clarification, you can now choose Continue to Extraction or Continue to Lesson Map."
   ]},
