@@ -229,7 +229,7 @@
       <section id="pipeline-extraction-stage" class="lab-card pipeline-extraction-stage" hidden>
         <div class="extraction-stage-head">
           <div><p class="eyebrow">Feynman overview</p><h3>What you already know</h3></div>
-          <div class="extraction-stage-actions"><button id="pipeline-extraction-retry" class="button button-quiet" type="button" title="Start a fresh test conversation. Save an attempt later if you want Lesson to use it.">Retry Extraction</button><button id="pipeline-extraction-mode-toggle" class="extraction-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">Voice</button><button id="pipeline-extraction-demo-map-ready" class="extraction-demo-toggle" type="button" aria-pressed="false">Demo: Lesson map ready</button><span class="extraction-authority">not progress</span></div>
+          <div class="extraction-stage-actions"><select id="pipeline-extraction-handoff-mode" aria-label="Extraction handoff experiment"><option value="full">Full Extraction</option><option value="map-ready">Map-ready prompt</option></select><button id="pipeline-extraction-retry" class="button button-quiet" type="button" title="Start a fresh test conversation. Save an attempt later if you want Lesson to use it.">Retry Extraction</button><button id="pipeline-extraction-mode-toggle" class="extraction-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">Voice</button><button id="pipeline-extraction-demo-map-ready" class="extraction-demo-toggle" type="button" aria-pressed="false">Demo: Lesson map ready</button><span class="extraction-authority">not progress</span></div>
         </div>
         <p class="extraction-intro">Have a normal conversation about what you already understand. Type, or switch to Voice and hold to talk. This stage sees only the frozen Clarification conversation, starts beside Lesson Map generation, and does not teach, correct, or mark anything complete.</p>
         <p id="pipeline-extraction-output" class="form-message" role="status">Choose a frozen Clarification run, then start its Lesson Map to open the broad overview.</p>
@@ -521,6 +521,6 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=111" defer></script>
+<script src="./lab.js?v=113" defer></script>
 </body>
 </html>
