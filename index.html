@@ -2048,11 +2048,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v111 · Aug 19";
+const BUILD = "v112 · Aug 20";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v112", date: "Aug 20", changes: [
+    "After you finish Clarification, you can now choose Continue to Extraction or Continue to Lesson Map."
+  ]},
   { tag: "v111", date: "Aug 19", changes: [
     "A saved roadmap’s To Start button now opens that roadmap’s own Extraction conversation instead of jumping directly into Lesson.",
     "Extraction conversations are tied to the exact saved roadmap, so an older or deleted roadmap’s conversation cannot be reused as context for the one you selected."

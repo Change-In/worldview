@@ -6475,6 +6475,11 @@ function bindEvents() {
     if (runId) labState.pipelineSelectedRunId = runId;
     setPipelineStage("map");
   });
+  q("clarification-open-extraction").addEventListener("click", () => {
+    const runId = labState.clarification.finalized?.runId;
+    if (runId) labState.pipelineSelectedRunId = runId;
+    setPipelineStage("extraction");
+  });
   q("lab-open-timing").addEventListener("click", () => {
     activateTab("results");
     q("latency-title").scrollIntoView({ behavior:"smooth", block:"start" });
