@@ -160,7 +160,8 @@
         <p class="privacy-note">Web research is off for Clarification. This phase uses the model's existing knowledge and the conversation only.</p>
         <label for="clarification-prompt">Editable system prompt</label>
         <textarea id="clarification-prompt" class="packet-editor" rows="18" maxlength="18000" spellcheck="false"></textarea>
-        <div class="inline-actions"><button id="clarification-prompt-reset" class="button button-quiet" type="button">Reset prompt</button><button id="clarification-prompt-save" class="button button-quiet" type="button">Save draft on this device</button></div>
+        <div class="inline-actions"><button id="clarification-prompt-reset" class="button button-quiet" type="button">Reset prompt</button><button id="clarification-prompt-save" class="button button-quiet" type="button">Save only on this device</button><button id="clarification-prompt-global-save" class="button button-primary" type="button">Set global default</button></div>
+        <p class="privacy-note">Set global default saves this prompt, model route, and model on the protected server. It becomes the Clarification default on every verified Lab device. Only a server-authorized Lab admin can change it.</p>
         <p id="clarification-prompt-message" class="form-message"></p>
         <details open><summary>Validated output</summary><pre id="clarification-validated">No output yet.</pre></details>
         <details><summary>Raw model response</summary><pre id="clarification-raw">No output yet.</pre></details>
