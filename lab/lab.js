@@ -5245,7 +5245,12 @@ function renderPipelineMode() {
 
 function setPipelineMode(mode = "controls") {
   const next = mode === "mock" ? "mock" : "controls";
-  if (labState.pipelineMode === next) { renderPipelineMode(); return; }
+  // Selecting Mock run again is an intentional fresh learner rehearsal, not a no-op.
+  if (labState.pipelineMode === next) {
+    if (next === "mock") startNewPipelineRun();
+    renderPipelineMode();
+    return;
+  }
   labState.pipelineMode = next;
   if (next === "mock") {
     startNewPipelineRun();
@@ -5296,6 +5301,7 @@ async function startMapThenExtraction() {
     setMessage("pipeline-map-output-status", "Preview has no durable map generator. Choose a completed preview roadmap, then use To Start to open its Extraction conversation.", "error");
     return;
   }
+  setMessage("pipeline-map-output-status", "Building the Lesson Map in the background, then opening this run’s Extraction conversation…");
   await runTextExperiment("lesson");
 }
 
@@ -5626,6 +5632,7 @@ function resetClarificationRun(seed = "") {
 function startNewPipelineRun(seed = "") {
   stopPipelineExtractionVoice();
   setPipelineExtractionConversationMode("text");
+  labState.autoOpenExtractionAfterMap = false;
   labState.pipelineSelectedRunId = "";
   labState.pipelineSelectedMapJobId = "";
   labState.pipelineSelectedMapRecordId = "";
@@ -6308,7 +6315,11 @@ function bindClarificationEvents() {
   });
   q("clarification-retry-transcription").addEventListener("click", retryClarificationTranscription);
   q("clarification-reply").addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submitClarificationReply(event.currentTarget.value); } });
-  q("clarification-done").addEventListener("click", () => finishClarification());
+  q("clarification-done").addEventListener("click", async () => {
+    await finishClarification();
+    // Mock run is the learner-style rehearsal: completion owns the map-to-Extraction handoff.
+    if (labState.pipelineMode === "mock" && labState.clarification.finalized) await startMapThenExtraction();
+  });
   q("clarification-new").addEventListener("click", () => startNewPipelineRun());
   q("clarification-fork").addEventListener("click", () => startNewPipelineRun(labState.clarification.finalized?.topic || ""));
   q("clarification-surface").addEventListener("pointerdown", startClarificationRecording);
@@ -6556,6 +6567,7 @@ function bindEvents() {
   q("pipeline-run-select").addEventListener("change", (event) => selectPipelineRun(event.currentTarget.value));
   q("pipeline-mode-controls").addEventListener("click", () => setPipelineMode("controls"));
   q("pipeline-mode-mock").addEventListener("click", () => setPipelineMode("mock"));
+  q("pipeline-mock-new").addEventListener("click", () => startNewPipelineRun());
   q("pipeline-mock-exit").addEventListener("click", () => setPipelineMode("controls"));
   q("clarification-note").addEventListener("change", (event) => {
     const note = labState.notes.find((item) => String(item.id) === event.currentTarget.value);
