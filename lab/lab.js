@@ -424,6 +424,7 @@ const labState = {
     activityStartedAt: 0,
     activityLabel: "",
     focusMode: false,
+    promptSource: "built-in",
   },
   basePrompt: { lesson: "", tutor: "", brain: "" },
   loadedPromptVersionId: { lesson: "", tutor: "", brain: "" },
@@ -5362,10 +5363,37 @@ function clarificationEditorSettings() {
   };
 }
 
-function applyClarificationEditorSettings(value, source = "built-in") {
-  const settings = value && typeof value === "object" ? value : {};
+function clarificationConfig(value) {
+  if (!value || typeof value !== "object") return null;
+  const settings = value;
+  const prompt = clip(settings.prompt, 18000);
+  if (!prompt) return null;
   const provider = LAB_PROVIDER_CATALOG[settings.provider] ? settings.provider : "anthropic";
-  const prompt = clip(settings.prompt, 18000) || CLARIFICATION_PROMPT;
+  const model = String(settings.model || "");
+  return {
+    prompt,
+    provider,
+    model: LAB_PROVIDER_CATALOG[provider]?.models?.some((item) => item.id === model) ? model : clarificationDefaultModel(provider),
+    promptVersion: clip(settings.promptVersion, 120) || CLARIFICATION_PROMPT_VERSION,
+  };
+}
+
+function clarificationDeviceDraft(saved) {
+  return saved?.deviceDraft ? clarificationConfig(saved.deviceDraft) : null;
+}
+
+function clarificationGlobalDefault(value) {
+  const clarification = clarificationConfig(value?.clarification);
+  return clarification ? {
+    clarification,
+    updatedAt: clip(value.updatedAt, 80),
+  } : null;
+}
+
+function applyClarificationEditorSettings(value, source = "built-in") {
+  const settings = clarificationConfig(value) || clarificationConfig({ prompt: CLARIFICATION_PROMPT });
+  const provider = settings.provider;
+  const prompt = settings.prompt;
   q("clarification-provider").value = provider;
   renderClarificationModels();
   if (settings.model && [...q("clarification-model").options].some((option) => option.value === settings.model)) {
@@ -5375,11 +5403,13 @@ function applyClarificationEditorSettings(value, source = "built-in") {
   labState.clarification.promptSource = source;
 }
 
-function persistClarificationSettings({ saveEditor = false } = {}) {
+function persistClarificationSettings({ deviceDraft = null, globalDefault = null } = {}) {
   const state = labState.clarification;
-  const existing = savedClarificationSettings();
+  const previous = savedClarificationSettings();
   const payload = {
-    ...existing,
+    ...previous,
+    deviceDraft: clarificationConfig(previous.deviceDraft),
+    globalDefaultCache: clarificationGlobalDefault(previous.globalDefaultCache),
     finalized: state.finalized,
     finalizedStorage: state.finalizedStorage,
     artifacts: labState.clarificationArtifacts.slice(0, 12),
@@ -5387,32 +5417,34 @@ function persistClarificationSettings({ saveEditor = false } = {}) {
     pipelineSelectedMapJobId: labState.pipelineSelectedMapJobId,
     pipelineSelectedMapRecordId: labState.pipelineSelectedMapRecordId,
   };
-  if (saveEditor) {
-    const editor = clarificationEditorSettings();
-    payload.prompt = editor.prompt;
-    payload.promptVersion = CLARIFICATION_PROMPT_VERSION;
-    payload.promptEdited = editor.prompt !== CLARIFICATION_PROMPT;
-    payload.provider = editor.provider;
-    payload.model = editor.model;
-  }
+  if (deviceDraft) payload.deviceDraft = clarificationConfig(deviceDraft);
+  if (globalDefault) payload.globalDefaultCache = clarificationGlobalDefault(globalDefault);
   try { localStorage.setItem(clarificationStorageKey(), JSON.stringify(payload)); return true; }
   catch (_) { return false; }
 }
 
-async function loadClarificationGlobalDefault() {
-  if (labState.preview) return;
+function saveClarificationDeviceDraft() {
+  const config = clarificationConfig(clarificationEditorSettings());
+  const saved = savedClarificationSettings();
+  saved.deviceDraft = config;
+  return persistClarificationSettings({ deviceDraft: saved.deviceDraft });
+}
+
+async function loadGlobalClarificationDefault() {
+  if (labState.preview || !labState.accessVerified) return;
   try {
     const payload = await labJobsFetch({ action: "get_clarification_global_default" });
     const globalDefault = payload?.default?.clarification;
     if (!globalDefault || typeof globalDefault !== "object") return;
     applyClarificationEditorSettings(globalDefault, "global");
+    persistClarificationSettings({ globalDefault: payload.default });
     setMessage("clarification-prompt-message", "Using the shared Clarification default from the server.", "ok");
   } catch (error) {
     logFlow("Shared Clarification default unavailable", clip(error.message || "local fallback remains available", 160));
   }
 }
 
-async function saveClarificationGlobalDefault() {
+async function saveGlobalClarificationDefault() {
   const editor = clarificationEditorSettings();
   try {
     const payload = await labJobsFetch({
@@ -5421,6 +5453,7 @@ async function saveClarificationGlobalDefault() {
     });
     if (!payload?.default?.clarification) throw new Error("The server did not confirm the shared default.");
     applyClarificationEditorSettings(payload.default.clarification, "global");
+    persistClarificationSettings({ globalDefault: payload.default });
     setMessage("clarification-prompt-message", "Global default saved. Every verified Lab device will use it when Clarification opens.", "ok");
   } catch (error) {
     setMessage("clarification-prompt-message", error.message || "The global default could not be saved.", "error");
@@ -5760,12 +5793,13 @@ async function refreshClarificationArtifacts() {
 
 function initializeClarification() {
   const saved = savedClarificationSettings();
-  const savedPrompt = clip(saved.prompt, 18000);
+  const deviceDraft = clarificationDeviceDraft(saved) || (saved.prompt ? clarificationConfig(saved) : null);
+  const savedPrompt = clip(deviceDraft?.prompt, 18000);
   const previousBuiltIn = savedPrompt && CLARIFICATION_PREVIOUS_BUILTIN_FINGERPRINTS.has(fingerprint(savedPrompt));
   applyClarificationEditorSettings({
     prompt: savedPrompt && !previousBuiltIn ? savedPrompt : CLARIFICATION_PROMPT,
-    provider: saved.provider,
-    model: saved.model,
+    provider: deviceDraft?.provider,
+    model: deviceDraft?.model,
   }, savedPrompt && !previousBuiltIn ? "device" : "built-in");
   const inheritedPreviousDefault = previousBuiltIn && q("clarification-provider").value === "anthropic" && saved.model === "claude-haiku-4-5";
   if (!inheritedPreviousDefault && saved.model && [...q("clarification-model").options].some((option) => option.value === saved.model)) q("clarification-model").value = saved.model;
@@ -5984,6 +6018,13 @@ function clarificationRequestPacket() {
   return { provider, model, system, messages: state.turns.map(({ role, content }) => ({ role, content })), maxTokens: 240, research: false };
 }
 
+function clarificationPromptProvenance(packet) {
+  const source = ["built-in", "global", "device"].includes(labState.clarification.promptSource)
+    ? labState.clarification.promptSource
+    : "unsaved";
+  return { source, fingerprint: fingerprint(packet.system) };
+}
+
 async function runClarificationModel() {
   const state = labState.clarification;
   if (state.busy) return;
@@ -5995,6 +6036,7 @@ async function runClarificationModel() {
     setMessage("clarification-backend-message", message, "error");
     return;
   }
+  const provenance = clarificationPromptProvenance(packet);
   const firstTurn = state.turns.filter((turn) => turn.role === "assistant").length === 0;
   const idempotencyKey = makeId();
   const request = {
@@ -6002,7 +6044,7 @@ async function runClarificationModel() {
     idempotencyKey,
     component: "clarification",
     name: `Clarification · ${clip(state.topic, 100)}`,
-    scenario: { pipelineRunId: state.runId, turn: state.learnerReplyCount, topic: state.topic, mode: state.mode, promptVersion: CLARIFICATION_PROMPT_VERSION },
+    scenario: { pipelineRunId: state.runId, turn: state.learnerReplyCount, topic: state.topic, mode: state.mode, promptVersion: CLARIFICATION_PROMPT_VERSION, promptSource: provenance.source },
     samples: [{
       clientSampleId: `${state.runId}:${state.learnerReplyCount}:${idempotencyKey}`,
       provider: packet.provider,
@@ -6012,9 +6054,9 @@ async function runClarificationModel() {
       maxTokens: packet.maxTokens,
       research: packet.research,
       metadata: {
-        promptFingerprint: fingerprint(packet.system), promptCoreFingerprint: fingerprint(CLARIFICATION_PROMPT),
+        promptFingerprint: provenance.fingerprint, promptCoreFingerprint: fingerprint(CLARIFICATION_PROMPT),
         inputFingerprint: fingerprint(JSON.stringify(packet.messages)), promptVersionId: CLARIFICATION_PROMPT_VERSION,
-        promptVersionName: "Clarification conversation v6", replicate: 1, inputLabel: `Clarification turn ${state.learnerReplyCount + 1}`,
+        promptVersionName: "Clarification conversation v8", promptSource: provenance.source, replicate: 1, inputLabel: `Clarification turn ${state.learnerReplyCount + 1}`,
         source: `lesson pipeline ${state.runId}`, promptEdited: packet.system !== CLARIFICATION_PROMPT, checks: [],
       },
     }],
@@ -6377,11 +6419,11 @@ function bindClarificationEvents() {
   q("clarification-provider").addEventListener("change", renderClarificationModels);
   q("clarification-prompt-reset").addEventListener("click", () => { q("clarification-prompt").value = CLARIFICATION_PROMPT; labState.clarification.promptSource = "built-in"; setMessage("clarification-prompt-message", "Restored the built-in prompt. Choose a save action if you want it to persist.", "ok"); });
   q("clarification-prompt-save").addEventListener("click", () => {
-    const saved = persistClarificationSettings({ saveEditor: true });
+    const saved = saveClarificationDeviceDraft();
     labState.clarification.promptSource = "device";
     setMessage("clarification-prompt-message", saved ? "Saved only on this device. The server default will still win the next time Clarification opens." : "This browser could not save the prompt draft.", saved ? "ok" : "error");
   });
-  q("clarification-prompt-global-save").addEventListener("click", saveClarificationGlobalDefault);
+  q("clarification-prompt-save-shared").addEventListener("click", saveGlobalClarificationDefault);
   q("clarification-voice").addEventListener("click", () => startClarification("voice"));
   q("clarification-text").addEventListener("click", () => startClarification("text"));
   q("clarification-send").addEventListener("click", () => submitClarificationReply(q("clarification-reply").value));
@@ -6574,7 +6616,7 @@ async function openLab() {
     localStorage.setItem("wv-lab-code", labState.code);
     initializeWorkspace();
     await probeProviders();
-    await loadClarificationGlobalDefault();
+    await loadGlobalClarificationDefault();
     await refreshJobs();
     await refreshClarificationArtifacts();
     setMessage("lab-gate-message", "");
