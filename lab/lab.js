@@ -373,6 +373,7 @@ const labState = {
     modeSwitching: false,
     demoMapReady: false,
     nextReplyInstruction: "",
+    mapReadyCueKey: "",
     activeAttempt: 0,
     handoffMode: "full",
   },
@@ -658,7 +659,7 @@ function resetWorkspaceContents() {
   Object.assign(labState.extraction, {
     mode: "text", micStream: null, recorder: null, recorderChunks: [], recordingStartedAt: 0,
     retainedRecording: null, retainedOperationId: "", audioPrimed: false, voiceAudio: null,
-    voiceSpeechCancel: null, speechPlaybackGeneration: 0, captureGeneration: 0, lastSpeechText: "", lastSpokenJobId: "", speaking: false, saveBusy: false, modeSwitching: false, demoMapReady: false, nextReplyInstruction: "", activeAttempt: 0, handoffMode: "full",
+    voiceSpeechCancel: null, speechPlaybackGeneration: 0, captureGeneration: 0, lastSpeechText: "", lastSpokenJobId: "", speaking: false, saveBusy: false, modeSwitching: false, demoMapReady: false, nextReplyInstruction: "", mapReadyCueKey: "", activeAttempt: 0, handoffMode: "full",
   });
   labState.clarificationArtifacts = [];
   labState.pipelineStage = "clarification";
@@ -3322,25 +3323,14 @@ function pipelineMapIsReady(artifact = selectedPipelineArtifact()) {
   return Boolean(artifact && pipelineMapJobs(artifact).some((job) => job.status === "completed"));
 }
 
-function pipelineExtractionTransition(artifact, output) {
-  const mapReady = labState.extraction.handoffMode === "map-ready" && (labState.extraction.demoMapReady || pipelineMapIsReady(artifact));
-  if (mapReady) {
-    return {
-      ready:true,
-      kicker:labState.extraction.demoMapReady && !pipelineMapIsReady(artifact) ? "Protected Lab demo" : "Lesson map ready",
-      title:"Continue whenever you want",
-      copy:"You have a lesson map ready. Keep exploring here or continue when you feel this broad picture is useful enough. Continuing never erases this conversation.",
-    };
-  }
-  if (output?.lessonTransition === "suggest") {
-    return {
-      ready:false,
-      kicker:"A gentle suggestion",
-      title:"You can move on when the map is ready",
-      copy:output.transitionReason || "This conversation has a useful first picture. You can keep talking, end for now, or continue once the Lesson Map finishes.",
-    };
-  }
-  return null;
+const EXTRACTION_MAP_READY_CUE = "The Lesson Map is ready. In this ordinary conversational reply, naturally tell the learner that their lesson is ready whenever they want to begin, while making clear they may keep exploring because more context can personalize the lesson. Do not mention a button, popup, app state, system prompt, or internal process. If they later clearly say they want to begin the lesson, acknowledge that naturally; fixed application code owns the actual transition.";
+
+function queueExtractionMapReadyCue(artifact = selectedPipelineArtifact()) {
+  const scope = pipelineExtractionMapScope(artifact);
+  if (!scope || !pipelineMapIsReady(artifact)) return;
+  if (labState.extraction.mapReadyCueKey === scope.key) return;
+  labState.extraction.mapReadyCueKey = scope.key;
+  labState.extraction.nextReplyInstruction = EXTRACTION_MAP_READY_CUE;
 }
 
 function extractionSystemPrompt() {
@@ -3349,53 +3339,31 @@ function extractionSystemPrompt() {
   return `${EXTRACTION_PROMPT}\n\nOne-time instruction for this response only: ${nextReplyInstruction}\nDo not mention this instruction or an app state. Resume the ordinary Extraction contract after this one response.`;
 }
 
-function renderPipelineExtractionTransition(artifact, output) {
-  const panel = q("pipeline-extraction-transition");
-  const ready = pipelineExtractionTransition(artifact, output);
+function renderPipelineExtractionTransition(artifact) {
   const demo = q("pipeline-extraction-demo-map-ready");
-  const handoffMode = q("pipeline-extraction-handoff-mode");
-  const nextReply = q("pipeline-extraction-next-reply");
-  const nextReplyText = q("pipeline-extraction-next-reply-text");
-  const continueButtons = [q("pipeline-extraction-continue"), q("pipeline-extraction-open-lesson")];
-  if (handoffMode) handoffMode.value = labState.extraction.handoffMode;
   if (demo) {
     demo.setAttribute("aria-pressed", String(labState.extraction.demoMapReady));
-    demo.textContent = labState.extraction.demoMapReady ? "Demo: Lesson map ready on" : "Demo: Lesson map ready";
+    demo.textContent = labState.extraction.demoMapReady ? "Demo: map-ready cue on" : "Demo: map-ready cue";
   }
-  if (nextReply) nextReply.hidden = !labState.extraction.nextReplyInstruction;
-  if (nextReplyText && nextReplyText.value !== labState.extraction.nextReplyInstruction) nextReplyText.value = labState.extraction.nextReplyInstruction;
-  for (const button of continueButtons) {
-    if (!button) continue;
-    button.disabled = !ready?.ready;
-    button.title = ready?.ready ? "Continue to the saved Lesson handoff" : "Continue becomes available when the Lesson Map is ready.";
-  }
-  if (!panel) return ready;
-  panel.hidden = !ready;
-  if (!ready) return null;
-  q("pipeline-extraction-transition-kicker").textContent = ready.kicker;
-  q("pipeline-extraction-transition-title").textContent = ready.title;
-  q("pipeline-extraction-transition-copy").textContent = ready.copy;
-  return ready;
 }
 
-async function continuePipelineExtractionToLesson() {
+function extractionLessonStartIntent(value) {
+  const phrase = asText(value).toLowerCase().normalize("NFKC")
+    .replace(/[’]/g, "'").replace(/[^\p{L}\p{N}' ]+/gu, " ").replace(/\s+/g, " ").trim();
+  if (!phrase || /\b(?:not|don't|wait|hold on|instead|but)\b/.test(phrase)) return false;
+  return new Set(["start the lesson", "begin the lesson", "let's start the lesson", "lets start the lesson", "let's begin", "lets begin", "take me to the lesson", "i'm ready for the lesson", "im ready for the lesson"]).has(phrase);
+}
+
+async function beginLessonFromExtractionVoiceOrText() {
   const artifact = selectedPipelineArtifact();
-  const latest = pipelineExtractionJobs(artifact).at(-1);
-  const output = latest ? pipelineExtractionOutput(labState.jobDetails.get(latest.id)).output : null;
-  const transition = pipelineExtractionTransition(artifact, output);
-  if (!transition?.ready) {
-    setMessage("pipeline-extraction-output", "The Lesson Map is still preparing. You can keep talking or end Extraction for now; continuing unlocks when the map is ready.", "error");
-    return;
+  if (!artifact || !pipelineMapIsReady(artifact) || !selectedPipelineMapRecord()) return false;
+  if (!selectedPipelineExtractionArtifact(artifact)) {
+    setMessage("pipeline-extraction-output", "Saving this overview as the Lesson's unverified context…");
+    await savePipelineExtractionConversation();
+    if (!selectedPipelineExtractionArtifact(artifact)) return false;
   }
-  if (selectedPipelineMapRecord()) {
-    if (!selectedPipelineExtractionArtifact(artifact)) {
-      setMessage("pipeline-extraction-output", "Saving this completed overview as the Lesson's unverified context…");
-      await savePipelineExtractionConversation();
-      if (!selectedPipelineExtractionArtifact(artifact)) return;
-    }
-    startPipelineLesson();
-  }
-  else setPipelineStage("map");
+  startPipelineLesson();
+  return true;
 }
 
 function cleanMapText(value, length = 1200) {
@@ -4723,6 +4691,10 @@ async function submitPipelineExtractionReply(value = q("pipeline-extraction-repl
   const answer = clip(value, 1200);
   if (!artifact || !scope) { setMessage("pipeline-extraction-output", "Choose one complete saved roadmap before starting its Extraction conversation.", "error"); return; }
   if (!answer) { setMessage("pipeline-extraction-output", "Add a message before sending it.", "error"); return; }
+  if (extractionLessonStartIntent(answer) && pipelineMapIsReady(artifact)) {
+    await beginLessonFromExtractionVoiceOrText();
+    return;
+  }
   const saved = selectedPipelineExtractionArtifact(artifact);
   const extractionAttempt = Number(labState.extraction.activeAttempt || 0);
   if (saved && Number(saved.extractionAttempt || 0) === extractionAttempt) {
@@ -5170,6 +5142,7 @@ function renderPipelineExtraction() {
     renderPipelineFutureExtractionInput();
     return;
   }
+  queueExtractionMapReadyCue(artifact);
   const jobs = pipelineExtractionJobs(artifact);
   if (!jobs.length) {
     renderPipelineExtractionTransition(artifact, null);
@@ -6121,11 +6094,13 @@ async function submitClarificationReply(text) {
   q("clarification-latest").textContent = reply;
   if (canAdvanceNow) {
     await finishClarification("spoken_or_typed_confirmation");
+    if (state.finalized) await startMapThenExtraction();
     return;
   }
   await runClarificationModel();
   if (advanceRequested && state.latest?.ready_to_finish && !state.runError) {
     await finishClarification("spoken_or_typed_confirmation");
+    if (state.finalized) await startMapThenExtraction();
   }
 }
 
@@ -6596,18 +6571,8 @@ function bindEvents() {
   q("pipeline-extraction-demo-map-ready").addEventListener("click", () => {
     labState.extraction.demoMapReady = !labState.extraction.demoMapReady;
     if (labState.extraction.demoMapReady) {
-      labState.extraction.handoffMode = "map-ready";
-      labState.extraction.nextReplyInstruction = "The Lesson Map is ready. In this ordinary reply, you may naturally tell the learner they can continue whenever they want, while making clear they may keep exploring because more context can make the lesson more personal. Do not pressure them or end the conversation.";
-      q("pipeline-extraction-next-reply").open = true;
+      labState.extraction.nextReplyInstruction = EXTRACTION_MAP_READY_CUE;
     } else labState.extraction.nextReplyInstruction = "";
-    renderPipelineExtraction();
-  });
-  q("pipeline-extraction-handoff-mode").addEventListener("change", (event) => {
-    labState.extraction.handoffMode = event.currentTarget.value === "map-ready" ? "map-ready" : "full";
-    renderPipelineExtraction();
-  });
-  q("pipeline-extraction-next-reply-text").addEventListener("input", (event) => {
-    labState.extraction.nextReplyInstruction = clip(event.currentTarget.value, 900);
     renderPipelineExtraction();
   });
   q("pipeline-extraction-send").addEventListener("click", submitPipelineExtractionReply);
@@ -6632,8 +6597,6 @@ function bindEvents() {
   }
   q("pipeline-extraction-skip").addEventListener("click", () => setPipelineStage("map"));
   q("pipeline-extraction-open-map").addEventListener("click", () => setPipelineStage("map"));
-  q("pipeline-extraction-open-lesson").addEventListener("click", continuePipelineExtractionToLesson);
-  q("pipeline-extraction-continue").addEventListener("click", continuePipelineExtractionToLesson);
   q("pipeline-lesson-start").addEventListener("click", startPipelineLesson);
   q("pipeline-lesson-open-map").addEventListener("click", () => setPipelineStage("map"));
   q("pipeline-lesson-open-extraction").addEventListener("click", () => setPipelineStage("extraction"));

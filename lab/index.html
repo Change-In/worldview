@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=116">
+<link rel="stylesheet" href="./lab.css?v=118">
 </head>
 <body>
 
@@ -239,12 +239,7 @@
       <section id="pipeline-extraction-stage" class="lab-card pipeline-extraction-stage" hidden>
         <div class="extraction-stage-head">
           <div><p class="eyebrow">Feynman overview</p><h3>What you already know</h3></div>
-          <div class="extraction-stage-actions"><select id="pipeline-extraction-handoff-mode" aria-label="Extraction handoff experiment"><option value="full">Full Extraction</option><option value="map-ready">Map-ready prompt</option></select><button id="pipeline-extraction-retry" class="button button-quiet" type="button" title="Start a fresh test conversation. Save an attempt later if you want Lesson to use it.">Retry Extraction</button><button id="pipeline-extraction-mode-toggle" class="extraction-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">Voice</button><button id="pipeline-extraction-demo-map-ready" class="extraction-demo-toggle" type="button" aria-pressed="false">Demo: Lesson map ready</button><span class="extraction-authority">not progress</span></div>
-        <details id="pipeline-extraction-next-reply" class="extraction-next-reply" hidden>
-          <summary>Next-reply prompt</summary>
-          <p>This is sent only with the next Worldview reply, then removed. Edit it to test the exact handoff wording.</p>
-          <textarea id="pipeline-extraction-next-reply-text" rows="3" maxlength="900" aria-label="One-time next reply instruction"></textarea>
-        </details>
+          <div class="extraction-stage-actions"><button id="pipeline-extraction-retry" class="button button-quiet" type="button" title="Start a fresh test conversation. Save an attempt later if you want Lesson to use it.">Retry Extraction</button><button id="pipeline-extraction-mode-toggle" class="extraction-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">Voice</button><button id="pipeline-extraction-demo-map-ready" class="extraction-demo-toggle" type="button" aria-pressed="false">Demo: map-ready cue</button><span class="extraction-authority">not progress</span></div>
         </div>
         <p class="extraction-intro">Have a normal conversation about what you already understand. Type, or switch to Voice and hold to talk. This stage sees only the frozen Clarification conversation, starts beside Lesson Map generation, and does not teach, correct, or mark anything complete.</p>
         <p id="pipeline-extraction-output" class="form-message" role="status">Choose a frozen Clarification run, then start its Lesson Map to open the broad overview.</p>
@@ -261,11 +256,10 @@
             <div class="inline-actions"><button id="pipeline-extraction-hear" class="button button-quiet" type="button" hidden>Hear last reply</button><button id="pipeline-extraction-retry-transcription" class="button button-quiet" type="button" hidden>Retry transcription</button></div>
           </div>
           <div class="extraction-conversation-actions"><button id="pipeline-extraction-save" class="button button-primary" type="button" disabled>Save conversation for later</button><button id="pipeline-extraction-skip" class="button button-quiet" type="button">End for now</button></div>
-          <aside id="pipeline-extraction-transition" class="extraction-transition" hidden aria-live="polite"><p id="pipeline-extraction-transition-kicker" class="eyebrow"></p><strong id="pipeline-extraction-transition-title"></strong><p id="pipeline-extraction-transition-copy"></p><button id="pipeline-extraction-continue" class="button button-primary" type="button">Continue to Lesson</button></aside>
           <p id="pipeline-extraction-saved" class="extraction-saved-note" hidden></p>
         </section>
         <details class="extraction-backend"><summary>Backend evidence</summary><pre id="pipeline-extraction-validated">No extraction output yet.</pre><pre id="pipeline-extraction-raw" hidden></pre><pre id="pipeline-extraction-packet" hidden></pre></details>
-        <div class="inline-actions"><button id="pipeline-extraction-open-map" class="button button-quiet" type="button">Review Lesson Map</button><button id="pipeline-extraction-open-lesson" class="button button-quiet" type="button" disabled>Continue to Lesson</button></div>
+        <div class="inline-actions"><button id="pipeline-extraction-open-map" class="button button-quiet" type="button">Review Lesson Map</button></div>
       </section>
       <section id="pipeline-lesson-stage" class="lab-card pipeline-extraction-stage pipeline-lesson-stage" hidden>
         <div class="pipeline-card-head"><div><p class="eyebrow">Guided conversation</p><h3>Lesson</h3></div><span class="extraction-authority">Lab only</span></div>
@@ -536,6 +530,6 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=117" defer></script>
+<script src="./lab.js?v=118" defer></script>
 </body>
 </html>
