@@ -875,6 +875,18 @@ body.mock-run #pipeline-map-stage .map-workspace-bar { display:none; }
 .map-support-needs { display:grid; gap:4px; color:#c8bba6; font-size:10px; line-height:1.4; }
 .map-support-needs > strong { color:#f1e5d2; font-size:8px; letter-spacing:.07em; text-transform:uppercase; }
 .map-support-needs ul { display:grid; gap:3px; margin:0; padding-left:16px; }
+.map-verified-support { display:grid; gap:6px; padding:10px; border:1px solid rgba(120,229,192,.28); border-radius:10px; background:rgba(120,229,192,.05); color:#d8efe6; font-size:10px; line-height:1.45; }
+.map-verified-support > strong,.map-verified-examples > strong { color:#8fd8c0; font-size:8px; letter-spacing:.08em; text-transform:uppercase; }
+.map-verified-support.is-unavailable { border-color:rgba(255,196,112,.3); background:rgba(255,196,112,.05); color:#e6cda9; }
+.map-verified-support.is-unavailable > strong { color:#f4c77e; }
+.map-verified-support.is-conflicting { border-color:rgba(255,118,118,.35); background:rgba(255,118,118,.05); color:#ffd1d1; }
+.map-verified-support.is-conflicting > strong { color:#ff9d9d; }
+.map-verified-support p { margin:0; }
+.map-verified-claims,.map-verified-examples ul,.map-verified-sources ul { display:grid; gap:4px; margin:0; padding-left:16px; }
+.map-verified-sources { display:grid; gap:4px; }
+.map-verified-sources > summary { width:max-content; color:#8fd8c0; cursor:pointer; font-size:9px; font-weight:800; }
+.map-verified-sources a { color:#b8f0df; }
+.map-verified-boundaries { color:#e4c8a8; }
 .map-starting-question { margin:0 0 0 44px; padding:12px 14px; border-left:2px solid var(--lab-mint); color:#d9f4ea; background:rgba(120,229,192,.05); font:600 14px/1.45 Georgia,serif; }
 .map-route-unavailable { margin:0 0 16px; padding:11px; border-left:3px solid #ff7676; color:#ffd1d1; background:rgba(255,118,118,.07); font-size:11px; line-height:1.5; }
 .extraction-organization-preview { display:grid; gap:10px; margin:15px 0 0; padding:13px; border:1px solid rgba(120,229,192,.28); border-radius:14px; background:rgba(120,229,192,.045); }

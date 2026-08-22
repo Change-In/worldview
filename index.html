@@ -2048,11 +2048,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v119 · Aug 21";
+const BUILD = "v120 · Aug 22";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v120", date: "Aug 22", changes: [
+    "Lesson Map outcomes can now include additive verified support: a concise researched explanation, claim-level source links, boundaries, and verified examples when research was actually applied.",
+    "The guided Lesson receives verified support only for its current outcome and must not use model memory to present an unsupported factual correction as truth.",
+    "Clarification now starts open-ended, offers optional directions only after learner context, and carries explicit time, breadth, depth, and science-versus-engineering preferences into Lesson Map planning as soft guidance."
+  ]},
   { tag: "v119", date: "Aug 21", changes: [
     "Mock run now has a visible New mock run control, and choosing Mock run again starts a clean rehearsal.",
     "Completing Clarification in Mock run now starts Lesson Map generation in the background and carries the same run straight into Extraction; the ordinary map-ready conversation cue arrives when that map is ready.",
