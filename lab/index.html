@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=118">
+<link rel="stylesheet" href="./lab.css?v=121">
 </head>
 <body>
 
@@ -43,6 +43,12 @@
       <p id="pipeline-mode-note" class="pipeline-mode-note">Inspect or run one phase at a time.</p>
     </div>
     <div id="pipeline-mock-progress" class="pipeline-mock-progress" hidden aria-label="Mock run progress"><span>Mock run</span><strong id="pipeline-mock-stage">1 · Clarification</strong><button id="pipeline-mock-new" class="text-button" type="button">New mock run</button><button id="pipeline-mock-exit" class="text-button" type="button">Back to controls</button></div>
+    <aside id="mock-run-config" class="mock-run-config" hidden aria-label="Mock run setup and live work">
+      <div class="mock-run-config-head"><div><p class="eyebrow">This mock run</p><h3>Models &amp; spend</h3></div><span id="mock-run-total-cost">Estimate unavailable</span></div>
+      <p class="mock-run-config-note">These choices use the same protected Lab jobs and prompt core as Lab controls. Defaults are saved on this device.</p>
+      <div class="mock-run-stage-config" id="mock-run-stage-config"></div>
+      <div class="mock-run-live" id="mock-run-live" aria-live="polite"><strong>Run status</strong><span id="mock-run-live-status">Waiting for Clarification.</span></div>
+    </aside>
     <div class="pipeline-run-browser" aria-label="Saved lesson runs">
       <label class="sr-only" for="pipeline-run-select">Selected lesson run</label>
       <select id="pipeline-run-select" aria-label="Selected lesson run"><option value="">New lesson run</option></select>

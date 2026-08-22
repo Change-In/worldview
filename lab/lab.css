@@ -640,6 +640,24 @@ button.preferred-button.is-on { border-color: rgba(255, 211, 111, .4); color: va
 .pipeline-mock-progress > span { color:var(--lab-mint); font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
 .pipeline-mock-progress > strong { color:var(--lab-ink); }
 .pipeline-mock-progress .text-button { margin-left:auto; }
+.mock-run-config { display:none; }
+body.mock-run .mock-run-config { display:block; position:fixed; z-index:4; top:104px; right:max(14px,calc((100vw - 1180px)/2)); width:min(292px,calc(100vw - 28px)); padding:14px; border:1px solid rgba(120,229,192,.32); border-radius:16px; background:rgba(17,21,32,.96); box-shadow:var(--lab-shadow); }
+.mock-run-config-head { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+.mock-run-config-head h3 { margin:0; font:650 1.2rem/1.1 Georgia,serif; }
+#mock-run-total-cost { color:var(--lab-sun); font-size:11px; text-align:right; }
+.mock-run-config-note { margin:10px 0 13px; color:var(--lab-muted); font-size:11px; line-height:1.4; }
+.mock-run-stage-card { padding:10px 0; border-top:1px solid var(--lab-line); }
+.mock-run-stage-card:first-child { border-top:0; }
+.mock-run-stage-card label { display:block; margin-bottom:5px; color:var(--lab-ink); font-size:12px; font-weight:750; }
+.mock-run-stage-card select { width:100%; min-height:34px; margin-top:5px; border:1px solid var(--lab-line); border-radius:8px; background:var(--lab-card-strong); color:var(--lab-ink); font:inherit; font-size:11px; }
+.mock-run-stage-meta { display:flex; justify-content:space-between; gap:8px; margin-top:6px; color:var(--lab-muted); font-size:10px; }
+.mock-run-stage-meta strong { color:var(--lab-mint); font-weight:700; }
+.mock-run-stage-research,.mock-run-stage-output { display:block; margin-top:5px; color:var(--lab-muted); font-size:10px; line-height:1.35; }
+.mock-run-stage-output { color:var(--lab-ink); }
+.mock-run-live { display:grid; gap:3px; margin-top:8px; padding-top:10px; border-top:1px solid var(--lab-line); color:var(--lab-muted); font-size:11px; }
+.mock-run-live strong { color:var(--lab-ink); }
+@media(max-width:900px){body.mock-run .mock-run-config{position:relative;top:auto;right:auto;width:100%;margin:0 0 12px}.mock-run-config{order:-1}}
+@media(min-width:901px){body.mock-run #panel-pipeline{padding-right:320px}}
 .clarification-note-row { display:grid; gap:6px; margin:0 0 10px; }
 .clarification-note-row select { width:100%; }
 body.mock-run #panel-pipeline > .pipeline-run-browser,

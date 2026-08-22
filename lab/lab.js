@@ -103,6 +103,13 @@ const LAB_MODEL_RATES = {
   "grok-4-1-fast": { input: 0.2, output: 0.5 },
   "grok-3-mini": { input: 0.3, output: 0.5 },
 };
+const MOCK_RUN_CONFIG_KEY = "worldview-lab-mock-run-config-v1";
+const MOCK_STAGE_DEFAULTS = Object.freeze({
+  clarification:{ provider:"anthropic", model:"claude-sonnet-4-6", outputTokens:240, research:false },
+  map:{ provider:"anthropic", model:"claude-sonnet-5", outputTokens:8192, research:true },
+  extraction:{ provider:"anthropic", model:"claude-sonnet-4-6", outputTokens:240, research:false },
+  lesson:{ provider:"anthropic", model:"claude-sonnet-5", outputTokens:900, research:true },
+});
 
 /* Rough pre-flight sizing. ~4 characters per token is the usual English
    approximation; it is deliberately labelled an estimate everywhere it shows. */
@@ -390,6 +397,12 @@ const labState = {
   clarificationArtifacts: [],
   pipelineStage: "clarification",
   pipelineMode: "controls",
+  mockRunConfig: {
+    clarification: { ...MOCK_STAGE_DEFAULTS.clarification },
+    map: { ...MOCK_STAGE_DEFAULTS.map },
+    extraction: { ...MOCK_STAGE_DEFAULTS.extraction },
+    lesson: { ...MOCK_STAGE_DEFAULTS.lesson },
+  },
   pipelineSelectedRunId: "",
   pipelineSelectedMapJobId: "",
   pipelineSelectedMapRecordId: "",
@@ -1241,6 +1254,156 @@ function formatCost(value) {
   return number === null ? "Estimate unavailable" : `Estimated $${number.toFixed(number < 0.01 ? 4 : 2)}`;
 }
 
+const MOCK_RUN_STAGES = ["clarification", "map", "extraction", "lesson"];
+const MOCK_RUN_STAGE_LABELS = Object.freeze({ clarification: "Clarification", map: "Lesson Map", extraction: "Extraction", lesson: "Lesson" });
+
+function mockStageConfig(stage) {
+  return labState.mockRunConfig?.[stage] || MOCK_STAGE_DEFAULTS[stage];
+}
+
+function validMockModel(provider, model) {
+  return Boolean(LAB_PROVIDER_CATALOG[provider]?.models?.some((item) => item.id === model));
+}
+
+function loadMockRunConfig() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(MOCK_RUN_CONFIG_KEY) || "null"); } catch (_) { saved = null; }
+  for (const stage of MOCK_RUN_STAGES) {
+    const fallback = MOCK_STAGE_DEFAULTS[stage];
+    const value = saved?.[stage] && typeof saved[stage] === "object" ? saved[stage] : {};
+    const provider = LAB_PROVIDER_CATALOG[value.provider] ? value.provider : fallback.provider;
+    const model = validMockModel(provider, value.model) ? value.model : (validMockModel(fallback.provider, fallback.model) ? fallback.model : defaultModel(provider));
+    labState.mockRunConfig[stage] = { ...fallback, provider, model };
+  }
+}
+
+function persistMockRunConfig() {
+  try { localStorage.setItem(MOCK_RUN_CONFIG_KEY, JSON.stringify(labState.mockRunConfig)); return true; }
+  catch (_) { return false; }
+}
+
+function mockStageJobs(stage, artifact = selectedPipelineArtifact()) {
+  if (!artifact?.runId) return [];
+  const jobs = stage === "map" ? pipelineMapJobs(artifact)
+    : stage === "extraction" ? allPipelineExtractionJobs(artifact)
+      : stage === "lesson" ? labState.jobs.filter((job) => job.component === "lesson" && job.scenario?.pipelineStage === "lesson" && job.scenario?.pipelineRunId === artifact.runId)
+        : labState.jobs.filter((job) => job.component === "clarification" && job.scenario?.pipelineRunId === artifact.runId);
+  return jobs.slice().sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0));
+}
+
+function mockStageStatus(stage, artifact = selectedPipelineArtifact()) {
+  if (stage === "clarification") {
+    if (labState.clarification.busy) return "Running";
+    return artifact?.runId && labState.clarification.finalized?.runId === artifact.runId ? "Complete" : "Waiting";
+  }
+  const jobs = mockStageJobs(stage, artifact);
+  if (!jobs.length) return stage === "map" && labState.extraction.preMapRunId === artifact?.runId ? "Starting" : "Waiting";
+  const latest = jobs[0];
+  if (LAB_ACTIVE_JOB_STATES.has(latest.status)) return stage === "map" ? "Running in background" : "Running";
+  if (latest.status === "completed" && Number(latest.failedSamples || 0) === 0) return "Complete";
+  if (latest.status === "failed" || Number(latest.failedSamples || 0) > 0) return "Needs review";
+  return clip(latest.status, 28) || "Waiting";
+}
+
+function mockStageActualCost(stage, artifact = selectedPipelineArtifact()) {
+  const jobs = mockStageJobs(stage, artifact);
+  let total = 0;
+  let priced = false;
+  for (const job of jobs) {
+    for (const output of labState.outputs.filter((item) => item.jobId === job.id)) {
+      const cost = numeric(output.cost);
+      if (cost !== null) { total += cost; priced = true; }
+    }
+  }
+  return priced ? total : null;
+}
+
+function mockStageEstimatedCost(stage, artifact = selectedPipelineArtifact()) {
+  const config = mockStageConfig(stage);
+  const rate = LAB_MODEL_RATES[config.model];
+  if (!rate) return null;
+  const turns = Math.max(1, Number(labState.clarification.learnerReplyCount || 0) + 1);
+  const inputChars = stage === "clarification" ? 1600 + (turns * 850)
+    : stage === "map" ? (artifact ? pipelineMapPacket(artifact).length : 2200) + 6000
+      : stage === "extraction" ? (artifact ? pipelineExtractionPacket(artifact).length : 1800) + 4200
+        : (artifact ? 5200 : 3000) + 5200;
+  const inputTokens = Math.ceil(inputChars / LAB_CHARS_PER_TOKEN);
+  return estimateTextCost(config.model, inputTokens, config.outputTokens);
+}
+
+function mockStageCost(stage, artifact = selectedPipelineArtifact()) {
+  return mockStageActualCost(stage, artifact) ?? mockStageEstimatedCost(stage, artifact);
+}
+
+function mockStageOutputSummary(stage, artifact = selectedPipelineArtifact()) {
+  const latest = mockStageJobs(stage, artifact)[0];
+  const detail = latest && labState.jobDetails.get(latest.id);
+  const sample = detail?.samples?.[0];
+  const text = attemptResultText(null, sample);
+  return text ? clip(text.replace(/\s+/g, " "), 220) : "";
+}
+
+function renderMockRunConfig() {
+  const panel = q("mock-run-config");
+  const root = q("mock-run-stage-config");
+  if (!panel || !root) return;
+  const mock = labState.pipelineMode === "mock";
+  panel.hidden = !mock;
+  if (!mock) return;
+  const artifact = selectedPipelineArtifact();
+  root.replaceChildren();
+  let total = 0;
+  let hasCost = false;
+  let hasActual = false;
+  let hasEstimate = false;
+  for (const stage of MOCK_RUN_STAGES) {
+    const config = mockStageConfig(stage);
+    const card = element("article", { className: "mock-run-stage-card" });
+    const label = element("label", { text: MOCK_RUN_STAGE_LABELS[stage] });
+    const provider = element("select", { attrs: { "aria-label": `${MOCK_RUN_STAGE_LABELS[stage]} provider`, "data-mock-stage-provider": stage } });
+    for (const [id, info] of Object.entries(LAB_PROVIDER_CATALOG)) provider.append(element("option", { value: id, text: info.label }));
+    provider.value = config.provider;
+    const model = element("select", { attrs: { "aria-label": `${MOCK_RUN_STAGE_LABELS[stage]} model`, "data-mock-stage-model": stage } });
+    for (const item of LAB_PROVIDER_CATALOG[config.provider]?.models || []) model.append(element("option", { value: item.id, text: item.label }));
+    model.value = config.model;
+    provider.addEventListener("change", () => {
+      const nextProvider = provider.value;
+      const nextModel = defaultModel(nextProvider);
+      labState.mockRunConfig[stage] = { ...mockStageConfig(stage), provider: nextProvider, model: nextModel };
+      persistMockRunConfig();
+      if (stage === "clarification") { q("clarification-provider").value = nextProvider; renderClarificationModels(); q("clarification-model").value = nextModel; }
+      renderMockRunConfig();
+    });
+    model.addEventListener("change", () => {
+      labState.mockRunConfig[stage] = { ...mockStageConfig(stage), provider: provider.value, model: model.value };
+      persistMockRunConfig();
+      if (stage === "clarification") { q("clarification-provider").value = provider.value; renderClarificationModels(); q("clarification-model").value = model.value; }
+      renderMockRunConfig();
+    });
+    label.append(provider, model);
+    const actualCost = mockStageActualCost(stage, artifact);
+    const cost = actualCost ?? mockStageEstimatedCost(stage, artifact);
+    if (cost !== null) { total += cost; hasCost = true; }
+    if (actualCost !== null) hasActual = true;
+    else if (cost !== null) hasEstimate = true;
+    const meta = element("div", { className: "mock-run-stage-meta" });
+    const costLabel = cost === null ? "Estimate unavailable" : `${actualCost !== null ? "Actual" : "Estimate"} ${formatCost(cost).replace("Estimated ", "")}`;
+    meta.append(element("span", { text: mockStageStatus(stage, artifact) }), element("strong", { text: costLabel }));
+    card.append(label, meta);
+    if (stage === "map" || stage === "lesson") card.append(element("small", { className: "mock-run-stage-research", text: "Research automatic" }));
+    const outputSummary = mockStageOutputSummary(stage, artifact);
+    if (outputSummary) card.append(element("small", { className: "mock-run-stage-output", text: `Latest output · ${outputSummary}` }));
+    const jump = element("button", { className: "button button-quiet mock-run-stage-jump", type: "button", text: `Open ${MOCK_RUN_STAGE_LABELS[stage]}`, attrs: { "data-mock-stage": stage } });
+    jump.addEventListener("click", () => setPipelineStage(stage));
+    card.append(jump);
+    root.append(card);
+  }
+  const totalLabel = hasCost ? (hasActual && !hasEstimate ? "Actual total" : "Total estimate") : "Estimate unavailable";
+  q("mock-run-total-cost").textContent = hasCost ? `${totalLabel} ${formatCost(total).replace("Estimated ", "")}` : totalLabel;
+  const status = q("mock-run-live-status");
+  if (status) status.textContent = artifact ? `${MOCK_RUN_STAGE_LABELS[labState.pipelineStage] || "Clarification"} · ${mockStageStatus(labState.pipelineStage === "quiz" ? "lesson" : labState.pipelineStage, artifact)}` : "Waiting for Clarification.";
+}
+
 function selectedLesson(selectId) {
   const index = Number(q(selectId)?.value);
   return Number.isInteger(index) && labState.lessons[index] ? labState.lessons[index] : null;
@@ -2001,7 +2164,10 @@ function validatePromptLength(kind, system) {
 const LAB_MODEL_SHAPE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$/;
 
 function buildRun(kind) {
-  const lanes = labState.lanes[kind].map((lane) => ({ ...lane, quantity: Number(lane.quantity) }));
+  const pipelineArtifact = kind === "lesson" ? pipelineMapGenerationArtifact() : null;
+  const lanes = (labState.pipelineMode === "mock" && pipelineArtifact)
+    ? [{ ...mockStageConfig("map"), quantity: 1, promptVersionId: "draft", research: true }]
+    : labState.lanes[kind].map((lane) => ({ ...lane, quantity: Number(lane.quantity) }));
   if (!lanes.length) throw new Error("Add at least one model lane before running.");
   if (lanes.some((lane) => !Number.isInteger(lane.quantity) || lane.quantity < 1 || lane.quantity > 4)) throw new Error("Each lane must have between 1 and 4 samples.");
   if (lanes.some((lane) => !lane.model)) throw new Error("Every lane needs a model. Pick one, or type an exact model id.");
@@ -2011,7 +2177,6 @@ function buildRun(kind) {
   if (unavailable.length) throw new Error(`${[...new Set(unavailable)].join(", ")} is not configured on the protected server.`);
 
   if (kind === "lesson") {
-    const pipelineArtifact = pipelineMapGenerationArtifact();
     if (pipelineArtifact) {
       const fixtures = [{
         label: `Clarification run: ${pipelineArtifact.topic}`,
@@ -2127,6 +2292,7 @@ function upsertJob(value) {
   if (existing >= 0) labState.jobs[existing] = job;
   else labState.jobs.unshift(job);
   labState.jobs.sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0));
+  renderMockRunConfig();
   return job;
 }
 
@@ -3410,6 +3576,9 @@ function renderPipelineExtractionTransition(artifact) {
     demo.setAttribute("aria-pressed", String(labState.extraction.demoMapReady));
     demo.textContent = labState.extraction.demoMapReady ? "Demo: map-ready cue on" : "Demo: map-ready cue";
   }
+  const selection = selectedPipelineMapRecord(artifact);
+  const ready = Boolean(labState.extraction.demoMapReady || (selection && !selection.meta?.incomplete && !selection.meta?.needsReview));
+  return { ready, cueQueued: Boolean(labState.extraction.nextReplyInstruction) };
 }
 
 function extractionLessonStartIntent(value) {
@@ -4495,11 +4664,11 @@ async function createPipelineLessonTurn(action, answer = "", targetOutcomeIndex 
   if (labState.preview) { previewPipelineLessonTurn(selection, outcomeIndex, action, answer); setPipelineStage("lesson"); renderPipelineLesson(); return; }
   const packet = pipelineLessonPacket(selection, outcomeIndex);
   const lessonTurn = jobs.length;
-  const provider = pipelineExtractionProvider(selection.artifact);
+  const provider = pipelineLessonProvider(selection.artifact);
   const routingNote = options.routing ? `\nRouting evaluator's prior recommendation (advisory, not mastery): ${JSON.stringify(options.routing)}` : "";
   const actionMessage = action === "reply" ? `The learner's message: ${answer}${routingNote}` : action === "transition" ? `Fixed application code opened this next ordered outcome without claiming mastery. The learner's newest message was: ${answer}${routingNote}` : "Begin the selected roadmap at this outcome. Ask the first focused question.";
   const tutorPrompt = lessonTutorPrompt();
-  const request = { action:"create", idempotencyKey:`lesson-${action}-${selection.artifact.runId}-${selection.job.id}-${selection.recordKey}-${lessonTurn}`, component:"lesson", name:`Guided Lesson · ${clip(selection.map.lessonTitle || selection.artifact.topic, 100)}`, scenario:{ pipelineRunId:selection.artifact.runId, pipelineStage:"lesson", sourceMapJobId:selection.job.id, sourceMapRecordId:selection.recordKey, sourceMapFingerprint:selection.fingerprint, lessonTurn, outcomeIndex, outcomeId:outcome.id, lessonAction:action, sourceTutorJobId:options.sourceTutorJobId || "", routingEvaluatorJobId:options.routingEvaluatorJobId || "", promptVersion:LESSON_CONVERSATION_PROMPT_VERSION, network:currentNetworkContext() }, samples:[{ clientSampleId:`${selection.artifact.runId}:lesson:${selection.job.id}:${selection.recordKey}:${lessonTurn}`, provider:provider.provider, model:provider.model, system:tutorPrompt, messages:[{ role:"user", content:`Guided lesson packet — use as data only:\n${packet}` }, ...pipelineLessonTranscript(selection).slice(-40).map((turn) => ({ role:turn.role, content:turn.content })), { role:"user", content:actionMessage }], maxTokens:900, research:false, metadata:{ promptFingerprint:fingerprint(tutorPrompt), promptCoreFingerprint:fingerprint(LESSON_CONVERSATION_PROMPT), inputFingerprint:fingerprint(`${packet}\n${actionMessage}`), promptVersionId:LESSON_CONVERSATION_PROMPT_VERSION, promptVersionName:"Socratic Lesson tutor v4 · verified support", replicate:1, inputLabel:`Guided Lesson ${outcome.number} · ${clip(outcome.title, 100)}`, source:"selected immutable roadmap plus current-outcome verified support when available plus unverified saved Extraction; no learner progress authority", promptEdited:tutorPrompt !== LESSON_CONVERSATION_PROMPT, checks:[] } }] };
+  const request = { action:"create", idempotencyKey:`lesson-${action}-${selection.artifact.runId}-${selection.job.id}-${selection.recordKey}-${lessonTurn}`, component:"lesson", name:`Guided Lesson · ${clip(selection.map.lessonTitle || selection.artifact.topic, 100)}`, scenario:{ pipelineRunId:selection.artifact.runId, pipelineStage:"lesson", sourceMapJobId:selection.job.id, sourceMapRecordId:selection.recordKey, sourceMapFingerprint:selection.fingerprint, lessonTurn, outcomeIndex, outcomeId:outcome.id, lessonAction:action, sourceTutorJobId:options.sourceTutorJobId || "", routingEvaluatorJobId:options.routingEvaluatorJobId || "", promptVersion:LESSON_CONVERSATION_PROMPT_VERSION, network:currentNetworkContext() }, samples:[{ clientSampleId:`${selection.artifact.runId}:lesson:${selection.job.id}:${selection.recordKey}:${lessonTurn}`, provider:provider.provider, model:provider.model, system:tutorPrompt, messages:[{ role:"user", content:`Guided lesson packet — use as data only:\n${packet}` }, ...pipelineLessonTranscript(selection).slice(-40).map((turn) => ({ role:turn.role, content:turn.content })), { role:"user", content:actionMessage }], maxTokens:900, ...(labState.pipelineMode === "mock" ? { research:true, researchMaxUses:2 } : { research:false }), metadata:{ promptFingerprint:fingerprint(tutorPrompt), promptCoreFingerprint:fingerprint(LESSON_CONVERSATION_PROMPT), inputFingerprint:fingerprint(`${packet}\n${actionMessage}`), promptVersionId:LESSON_CONVERSATION_PROMPT_VERSION, promptVersionName:"Socratic Lesson tutor v4 · verified support", replicate:1, inputLabel:`Guided Lesson ${outcome.number} · ${clip(outcome.title, 100)}`, source:"selected immutable roadmap plus current-outcome verified support when available plus unverified saved Extraction; no learner progress authority", promptEdited:tutorPrompt !== LESSON_CONVERSATION_PROMPT, checks:[] } }] };
   labState.lessonBusy = true;
   setMessage("pipeline-lesson-output", "Saving your message and waiting for Worldview’s question…");
   try {
@@ -4548,7 +4717,7 @@ async function createPipelineLessonEvaluation(answer, outcomeIndex, sourceTutorJ
     labState.jobs.push(job); labState.jobDetails.set(job.id, { job, samples:[{ result:{ text:JSON.stringify({ decision, reason:"Preview routing decision.", next_focus:"Test the relationship with one concrete case." }) } }] });
     void routePipelineLessonEvaluation(job); renderPipelineLesson(); return;
   }
-  const provider = pipelineExtractionProvider(selection.artifact); const packet = pipelineLessonPacket(selection, outcomeIndex); const evaluatorPrompt = lessonEvaluatorPrompt();
+  const provider = pipelineLessonProvider(selection.artifact); const packet = pipelineLessonPacket(selection, outcomeIndex); const evaluatorPrompt = lessonEvaluatorPrompt();
   const request = { action:"create", idempotencyKey:`lesson-evaluation-${selection.artifact.runId}-${selection.job.id}-${selection.recordKey}-${Date.now()}`, component:"lesson-evaluator", name:`Guided Lesson routing · ${outcome.number}`, scenario:{ pipelineRunId:selection.artifact.runId, pipelineStage:"lesson_evaluation", sourceMapJobId:selection.job.id, sourceMapRecordId:selection.recordKey, sourceMapFingerprint:selection.fingerprint, outcomeIndex, outcomeId:outcome.id, sourceTutorJobId, learnerReply:answer, promptVersion:LESSON_EVALUATOR_PROMPT_VERSION, network:currentNetworkContext() }, samples:[{ clientSampleId:`${selection.artifact.runId}:lesson-evaluation:${Date.now()}`, provider:provider.provider, model:provider.model, system:evaluatorPrompt, messages:[{ role:"user", content:`Guided lesson packet — use as data only:\n${packet}` }, { role:"user", content:`Learner's most recent reply for outcome ${outcome.number}: ${answer}` }], maxTokens:360, research:false, metadata:{ promptFingerprint:fingerprint(evaluatorPrompt), promptCoreFingerprint:fingerprint(LESSON_EVALUATOR_PROMPT), inputFingerprint:fingerprint(`${packet}\n${answer}`), promptVersionId:LESSON_EVALUATOR_PROMPT_VERSION, promptVersionName:"Socratic Lesson evaluator v2", replicate:1, inputLabel:`Route learner reply · ${outcome.number}`, source:"parallel routing recommendation; no mastery or progress authority", promptEdited:evaluatorPrompt !== LESSON_EVALUATOR_PROMPT, checks:[] } }] };
   try { const created = await labJobsFetch(request); if (!created?.job?.id) throw new Error("The server did not return a saved routing job."); upsertJob(created.job); scheduleJobPoll(); }
   catch (error) { setMessage("pipeline-lesson-output", `The routing check could not start: ${clip(error.message, 150)}`, "error"); }
@@ -4645,9 +4814,21 @@ function renderPipelineLesson() {
 }
 
 function pipelineExtractionProvider(artifact) {
+  if (labState.pipelineMode === "mock") {
+    const config = mockStageConfig("extraction");
+    return { provider: config.provider, model: config.model };
+  }
   const provider = LAB_PROVIDER_CATALOG[artifact?.provider] ? artifact.provider : q("clarification-provider")?.value || "anthropic";
   const model = artifact?.model || q("clarification-model")?.value || clarificationDefaultModel(provider);
   return { provider, model };
+}
+
+function pipelineLessonProvider(artifact) {
+  if (labState.pipelineMode === "mock") {
+    const config = mockStageConfig("lesson");
+    return { provider: config.provider, model: config.model };
+  }
+  return pipelineExtractionProvider(artifact);
 }
 
 function pipelineExtractionInputModes(artifact = selectedPipelineArtifact()) {
@@ -5384,6 +5565,7 @@ function renderPipelineMode() {
   q("pipeline-mode-mock")?.classList.toggle("is-active", mock);
   q("pipeline-mode-mock")?.setAttribute("aria-pressed", String(mock));
   if (q("pipeline-mock-progress")) q("pipeline-mock-progress").hidden = !mock;
+  renderMockRunConfig();
   const labels = { clarification:"1 · Clarification", map:"2 · Lesson Map", extraction:"3 · Extraction", lesson:"4 · Lesson", quiz:"5 · Quiz" };
   if (q("pipeline-mock-stage")) q("pipeline-mock-stage").textContent = labels[labState.pipelineStage] || labels.clarification;
   if (q("pipeline-mode-note")) q("pipeline-mode-note").textContent = mock
@@ -5619,6 +5801,7 @@ function setClarificationBusy(busy, label = "") {
   syncClarificationSendControl();
   q("clarification-job-status").textContent = busy ? (label || "running") : (state.runError ? "failed" : (state.latestJobId ? "saved" : "not run"));
   q("clarification-job-status").className = `job-status ${busy ? "is-pending" : (state.runError ? "is-failed" : (state.latestJobId ? "is-complete" : ""))}`;
+  renderMockRunConfig();
 }
 
 function renderClarificationModeToggle() {
@@ -6133,6 +6316,7 @@ function renderClarificationOutput(output, raw, detail, packet, elapsed) {
     element("span", { text: Number.isFinite(cost) ? `Est. $${cost.toFixed(4)}` : "Cost unavailable" }),
   );
   q("clarification-done").disabled = state.busy || !output.ready_to_finish || state.learnerReplyCount < 1;
+  renderMockRunConfig();
 }
 
 async function waitForClarificationJob(jobId) {
@@ -6156,8 +6340,9 @@ async function waitForClarificationJob(jobId) {
 
 function clarificationRequestPacket() {
   const state = labState.clarification;
-  const provider = q("clarification-provider").value;
-  const model = q("clarification-model").value;
+  const configured = labState.pipelineMode === "mock" ? mockStageConfig("clarification") : null;
+  const provider = configured?.provider || q("clarification-provider").value;
+  const model = configured?.model || q("clarification-model").value;
   const system = q("clarification-prompt").value.trim();
   if (!system) throw new Error("The clarification prompt is empty.");
   return { provider, model, system, messages: state.turns.map(({ role, content }) => ({ role, content })), maxTokens: 240, research: false };
@@ -6506,8 +6691,8 @@ async function finishClarification(completionMethod = "done_control") {
     transcript: state.turns.map((turn) => ({ role: turn.role, content: turn.content })),
     promptVersion: CLARIFICATION_PROMPT_VERSION,
     promptFingerprint: fingerprint(q("clarification-prompt").value),
-    provider: q("clarification-provider").value,
-    model: q("clarification-model").value,
+    provider: (labState.pipelineMode === "mock" ? mockStageConfig("clarification") : clarificationEditorSettings()).provider,
+    model: (labState.pipelineMode === "mock" ? mockStageConfig("clarification") : clarificationEditorSettings()).model,
     finalJobId: state.latestJobId,
     completionMethod,
   };
@@ -6626,6 +6811,7 @@ function initializeWorkspace() {
   q("lab-gate").hidden = true;
   q("lab-shell").hidden = false;
   q("lab-open-timing").disabled = false;
+  loadMockRunConfig();
   loadLocalLibrary();
   resetPreset("lesson");
   resetPreset("tutor");
