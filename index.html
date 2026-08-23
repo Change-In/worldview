@@ -2048,11 +2048,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v127 · Aug 23";
+const BUILD = "v128 · Aug 23";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v128", date: "Aug 23", changes: [
+    "Clarification no longer collapses when a provider returns no visible text: it keeps the conversation moving with a short local follow-up, labels the empty provider result, and never shows the request packet as the learner reply."
+  ]},
   { tag: "v127", date: "Aug 23", changes: [
     "Clarification Backend now keeps a read-only history of completed backend turns, so you can flip through the exact system prompt, request packet, raw response, and validated output from earlier turns and runs."
   ]},
