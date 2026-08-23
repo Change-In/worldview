@@ -922,7 +922,8 @@ const LATENCY_COMPONENT_LABELS = {
   brain: "Brain",
 };
 
-const CLARIFICATION_PROMPT_VERSION = "clarification-conversation-v10";
+const CLARIFICATION_PROMPT_VERSION = "clarification-conversation-v11";
+const CLARIFICATION_CONTINUITY_GUARD = `Worldview runtime continuity rule (fixed): answer the latest User message in this conversation. Do not repeat, paraphrase, or recycle any earlier Worldview question or sentence. Ask one new short question grounded in the latest User message; if it is unclear, ask a different concrete question rather than returning the opening question. Keep the editable prompt's role and response style.`;
 const CLARIFICATION_PROMPT = `You are part of Phase One. Renew AI learning tool, and your job is to lead the way, pointing the User in different directions that they can explore. Would be worth exploring. Your job is to socratically converse in such a way that you do not lead, but you assist in helping the User Discover areas of interest worth pursuing. Further phases will focus on teaching, and developing lesson paths.
 
 Your response should be digestible and short. It should be as for a person driving a car. Take that as you will. should not take away from the lesson or distract by adding humanlike language. Be formal and an expert at opening the floor.
@@ -6398,17 +6399,52 @@ function clarificationReplyKey(value) {
   return String(value || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
 
+function clarificationReplyMeaningTokens(value) {
+  const ignored = new Set("a an and are about as at be been but by can could did do does for from further had has have how i in into is it its just made me more my of on or our part please shared should that the their them these they this those to us was we were what when where which who why with would you your".split(" "));
+  return new Set(clarificationReplyKey(value).split(" ").filter((word) => word.length > 2 && !ignored.has(word)));
+}
+
+function clarificationRepliesRepeat(left, right) {
+  const leftKey = clarificationReplyKey(left);
+  const rightKey = clarificationReplyKey(right);
+  if (!leftKey || !rightKey) return false;
+  if (leftKey === rightKey) return true;
+  const leftTokens = clarificationReplyMeaningTokens(leftKey);
+  const rightTokens = clarificationReplyMeaningTokens(rightKey);
+  const smaller = Math.min(leftTokens.size, rightTokens.size);
+  if (smaller < 3) return false;
+  let shared = 0;
+  for (const token of leftTokens) if (rightTokens.has(token)) shared += 1;
+  const union = leftTokens.size + rightTokens.size - shared;
+  return shared / smaller >= 0.8 && shared / Math.max(1, union) >= 0.55;
+}
+
+function clarificationRepeatFallback(turns) {
+  const candidates = [
+    "What part of what you just shared would you like to explore further?",
+    "Which detail from your latest message should we examine next?",
+    "What is the main point in your last answer that you want to understand more clearly?",
+    "Which part of that answer matters most to you right now?",
+    "What would you like to make clearer about your last answer?",
+  ];
+  const previous = (Array.isArray(turns) ? turns : [])
+    .filter((turn) => turn?.role === "assistant")
+    .map((turn) => turn.content)
+    .filter(Boolean);
+  return candidates.find((candidate) => !previous.some((reply) => clarificationRepliesRepeat(candidate, reply))) || candidates[candidates.length - 1];
+}
+
 function avoidClarificationRepeat(output, turns) {
   const current = clarificationReplyKey(output?.assistant_message);
   if (!current) return output;
   const previous = (Array.isArray(turns) ? turns : [])
     .filter((turn) => turn?.role === "assistant")
-    .map((turn) => clarificationReplyKey(turn.content))
+    .map((turn) => turn.content)
     .filter(Boolean);
-  if (!previous.includes(current)) return output;
+  if (!previous.some((reply) => clarificationRepliesRepeat(current, reply))) return output;
   return {
     ...output,
-    assistant_message: "What part of what you just shared would you like to explore further?",
+    assistant_message: clarificationRepeatFallback(turns),
   };
 }
 
@@ -6460,9 +6496,11 @@ function clarificationRequestPacket() {
   const configured = labState.pipelineMode === "mock" ? mockStageConfig("clarification") : null;
   const provider = configured?.provider || q("clarification-provider").value;
   const model = configured?.model || q("clarification-model").value;
-  const system = q("clarification-prompt").value.trim();
-  if (!system) throw new Error("The clarification prompt is empty.");
-  return { provider, model, system, messages: state.turns.map(({ role, content }) => ({ role, content })), maxTokens: 240, research: false };
+  const editableSystem = q("clarification-prompt").value.trim();
+  if (!editableSystem) throw new Error("The clarification prompt is empty.");
+  const laterTurn = state.turns.some((turn) => turn.role === "assistant");
+  const system = laterTurn ? `${editableSystem}\\n\\n${CLARIFICATION_CONTINUITY_GUARD}` : editableSystem;
+  return { provider, model, system, editableSystem, messages: state.turns.map(({ role, content }) => ({ role, content })), maxTokens: 240, research: false };
 }
 
 function clarificationPromptProvenance(packet) {
@@ -6503,8 +6541,8 @@ async function runClarificationModel() {
       metadata: {
         promptFingerprint: provenance.fingerprint, promptCoreFingerprint: fingerprint(CLARIFICATION_PROMPT),
         inputFingerprint: fingerprint(JSON.stringify(packet.messages)), promptVersionId: CLARIFICATION_PROMPT_VERSION,
-        promptVersionName: "Clarification conversation v10", promptSource: provenance.source, replicate: 1, inputLabel: `Clarification turn ${state.learnerReplyCount + 1}`,
-        source: `lesson pipeline ${state.runId}`, promptEdited: packet.system !== CLARIFICATION_PROMPT, checks: [],
+        promptVersionName: "Clarification conversation v11", promptSource: provenance.source, replicate: 1, inputLabel: `Clarification turn ${state.learnerReplyCount + 1}`,
+        source: `lesson pipeline ${state.runId}`, promptEdited: packet.editableSystem !== CLARIFICATION_PROMPT, checks: [],
       },
     }],
   };
