@@ -120,6 +120,10 @@ const LAB_WORKSPACE_KEY = "worldview-owner-lab-workspace-v1";
 const LAB_WORKSPACE_SCHEMA = 4;
 const LAB_OUTPUT_TOKEN_MIN = 64;
 const LAB_OUTPUT_TOKEN_SERVER_MAX = 65536;
+// Clarification replies are short for the learner, but the provider must also
+// have room for the JSON envelope and any model-side reasoning. 240 was
+// needlessly tight for newer models and could end in a no-visible-text result.
+const CLARIFICATION_OUTPUT_TOKENS = 512;
 const LAB_OUTPUT_TOKEN_DEFAULTS = Object.freeze({ lesson: 8192, tutor: 760, brain: 760 });
 const LAB_ACCOUNT_STATE_PREFIX = "worldview-account-state-v1:";
 const LAB_PREVIEW_WORKSPACE_OWNER = "preview";
@@ -6077,7 +6081,6 @@ function syncClarificationTopic(sourceId) {
   if (source && target && target.value !== source.value) target.value = source.value;
 }
 
-
 function clarificationBackendJobs() {
   return labState.jobs
     .filter((job) => job?.component === "clarification" && !LAB_ACTIVE_JOB_STATES.has(job.status))
@@ -6132,7 +6135,7 @@ function clarificationCurrentBackendPacket() {
     system: laterTurn ? `${editableSystem}\n\n${CLARIFICATION_CONTINUITY_GUARD}` : editableSystem,
     editableSystem,
     messages: state.turns.map(({ role, content }) => ({ role, content })),
-    maxTokens: 240,
+    maxTokens: CLARIFICATION_OUTPUT_TOKENS,
     research: false,
   };
 }
@@ -6603,7 +6606,6 @@ function avoidClarificationRepeat(output, turns) {
   };
 }
 
-
 function clarificationEmptyReplyFallback(firstTurn, turns, topic, previous = null) {
   const assistantMessage = firstTurn
     ? "What first made this topic feel worth exploring: something you heard, a problem you noticed, or a question that keeps returning?"
@@ -6672,8 +6674,8 @@ function clarificationRequestPacket() {
   const editableSystem = q("clarification-prompt").value.trim();
   if (!editableSystem) throw new Error("The clarification prompt is empty.");
   const laterTurn = state.turns.some((turn) => turn.role === "assistant");
-  const system = laterTurn ? `${editableSystem}\\n\\n${CLARIFICATION_CONTINUITY_GUARD}` : editableSystem;
-  return { provider, model, system, editableSystem, messages: state.turns.map(({ role, content }) => ({ role, content })), maxTokens: 240, research: false };
+  const system = laterTurn ? `${editableSystem}\n\n${CLARIFICATION_CONTINUITY_GUARD}` : editableSystem;
+  return { provider, model, system, editableSystem, messages: state.turns.map(({ role, content }) => ({ role, content })), maxTokens: CLARIFICATION_OUTPUT_TOKENS, research: false };
 }
 
 function clarificationPromptProvenance(packet) {
@@ -7510,3 +7512,4 @@ async function boot() {
 }
 
 void boot();
+
