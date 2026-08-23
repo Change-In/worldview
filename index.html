@@ -2048,11 +2048,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v123 · Aug 22";
+const BUILD = "v124 · Aug 23";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v124", date: "Aug 23", changes: [
+    "When a Lesson Map finishes while you are already talking in Extraction, Worldview now adds one ordinary conversational reply saying the lesson is ready—no need to send another message first.",
+    "The optional Demo: map-ready cue control remains available for testing the same one-time conversational wording."
+  ]},
   { tag: "v123", date: "Aug 22", changes: [
       "Mock run's Models & spend panel now scrolls independently, can be minimized and restored, and collapses automatically when the Lesson starts so it stays available without covering the learner view."
     ] },
