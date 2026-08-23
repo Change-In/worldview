@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=121">
+<link rel="stylesheet" href="./lab.css?v=122">
 </head>
 <body>
 
@@ -44,10 +44,12 @@
     </div>
     <div id="pipeline-mock-progress" class="pipeline-mock-progress" hidden aria-label="Mock run progress"><span>Mock run</span><strong id="pipeline-mock-stage">1 · Clarification</strong><button id="pipeline-mock-new" class="text-button" type="button">New mock run</button><button id="pipeline-mock-exit" class="text-button" type="button">Back to controls</button></div>
     <aside id="mock-run-config" class="mock-run-config" hidden aria-label="Mock run setup and live work">
-      <div class="mock-run-config-head"><div><p class="eyebrow">This mock run</p><h3>Models &amp; spend</h3></div><span id="mock-run-total-cost">Estimate unavailable</span></div>
-      <p class="mock-run-config-note">These choices use the same protected Lab jobs and prompt core as Lab controls. Defaults are saved on this device.</p>
-      <div class="mock-run-stage-config" id="mock-run-stage-config"></div>
-      <div class="mock-run-live" id="mock-run-live" aria-live="polite"><strong>Run status</strong><span id="mock-run-live-status">Waiting for Clarification.</span></div>
+      <div class="mock-run-config-head"><div><p class="eyebrow">This mock run</p><h3>Models &amp; spend</h3></div><div class="mock-run-config-actions"><span id="mock-run-total-cost">Estimate unavailable</span><button id="mock-run-config-toggle" class="text-button" type="button" aria-expanded="true">Minimize</button></div></div>
+      <div id="mock-run-config-body" class="mock-run-config-body">
+        <p class="mock-run-config-note">These choices use the same protected Lab jobs and prompt core as Lab controls. Defaults are saved on this device.</p>
+        <div class="mock-run-stage-config" id="mock-run-stage-config"></div>
+        <div class="mock-run-live" id="mock-run-live" aria-live="polite"><strong>Run status</strong><span id="mock-run-live-status">Waiting for Clarification.</span></div>
+      </div>
     </aside>
     <div class="pipeline-run-browser" aria-label="Saved lesson runs">
       <label class="sr-only" for="pipeline-run-select">Selected lesson run</label>
@@ -539,6 +541,7 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=120" defer></script>
+<script src="./lab.js?v=122" defer></script>
 </body>
 </html>
+
