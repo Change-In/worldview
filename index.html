@@ -2048,11 +2048,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v124 · Aug 23";
+const BUILD = "v125 · Aug 23";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v125", date: "Aug 23", changes: [
+    "Extraction replies no longer cut off mid-sentence: normal responses can be longer, and an unusually long one ends at a sentence boundary."
+  ]},
   { tag: "v124", date: "Aug 23", changes: [
     "When a Lesson Map finishes while you are already talking in Extraction, Worldview now adds one ordinary conversational reply saying the lesson is ready—no need to send another message first.",
     "The optional Demo: map-ready cue control remains available for testing the same one-time conversational wording."
