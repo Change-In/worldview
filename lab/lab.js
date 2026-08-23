@@ -389,6 +389,7 @@ const labState = {
     demoMapReady: false,
     nextReplyInstruction: "",
     mapReadyCueKey: "",
+    mapReadyNoticeBusy: false,
     preMapRunId: "",
     activeAttempt: 0,
     handoffMode: "full",
@@ -683,7 +684,7 @@ function resetWorkspaceContents() {
   Object.assign(labState.extraction, {
     mode: "text", micStream: null, recorder: null, recorderChunks: [], recordingStartedAt: 0,
     retainedRecording: null, retainedOperationId: "", audioPrimed: false, voiceAudio: null,
-    voiceSpeechCancel: null, speechPlaybackGeneration: 0, captureGeneration: 0, lastSpeechText: "", lastSpokenJobId: "", speaking: false, saveBusy: false, modeSwitching: false, demoMapReady: false, nextReplyInstruction: "", mapReadyCueKey: "", preMapRunId: "", activeAttempt: 0, handoffMode: "full",
+    voiceSpeechCancel: null, speechPlaybackGeneration: 0, captureGeneration: 0, lastSpeechText: "", lastSpokenJobId: "", speaking: false, saveBusy: false, modeSwitching: false, demoMapReady: false, nextReplyInstruction: "", mapReadyCueKey: "", mapReadyNoticeBusy: false, preMapRunId: "", activeAttempt: 0, handoffMode: "full",
   });
   labState.clarificationArtifacts = [];
   labState.pipelineStage = "clarification";
@@ -3582,6 +3583,48 @@ function queueExtractionMapReadyCue(artifact = selectedPipelineArtifact()) {
   labState.extraction.nextReplyInstruction = EXTRACTION_MAP_READY_CUE;
 }
 
+function mapReadyNoticeExists(artifact, cueKey) {
+  return pipelineExtractionJobs(artifact).some((job) => job.scenario?.mapReadyNoticeKey === cueKey);
+}
+
+async function ensurePipelineMapReadyNotice(artifact = selectedPipelineArtifact()) {
+  const selection = selectedPipelineMapRecord(artifact);
+  const scope = pipelineExtractionMapScope(artifact);
+  const cueKey = labState.extraction.mapReadyCueKey;
+  if (!artifact?.runId || !selection || selection.meta?.incomplete || selection.meta?.needsReview || !scope || !cueKey || labState.extraction.mapReadyNoticeBusy) return;
+  const jobs = pipelineExtractionJobs(artifact);
+  const latest = jobs.at(-1);
+  if (!latest || !pipelineExtractionOutput(labState.jobDetails.get(latest.id)).output || mapReadyNoticeExists(artifact, cueKey)) return;
+  // If the map was ready before Extraction opened, its opening reply already
+  // has the cue. This additional normal reply is only for a background map.
+  if (Number(latest.scenario?.extractionTurn || 0) === 0 && !labState.extraction.preMapRunId) return;
+  const sourcePacket = pipelineExtractionPacket(artifact);
+  const prior = pipelineExtractionTranscript(artifact).slice(-160).map((turn) => ({ role:turn.role, content:turn.content }));
+  const { provider, model } = pipelineExtractionProvider(artifact);
+  const nextTurn = Number(latest.scenario?.extractionTurn || 0) + 1;
+  const system = extractionSystemPrompt();
+  labState.extraction.mapReadyNoticeBusy = true;
+  try {
+    const created = await labJobsFetch({
+      action:"create",
+      idempotencyKey:`extraction-map-ready-notice-${artifact.runId}-${scope.key}-${labState.extraction.activeAttempt}-${cueKey}`,
+      component:"extraction",
+      name:`Feynman overview · ${clip(artifact.topic, 100)}`,
+      scenario:{ pipelineRunId:artifact.runId, pipelineStage:"extraction", extractionAttempt:Number(labState.extraction.activeAttempt || 0), extractionTurn:nextTurn, mapReadyNoticeKey:cueKey, sourceArtifactFingerprint:fingerprint(sourcePacket), sourceMapJobId:scope.sourceMapJobId, sourceMapRecordId:scope.sourceMapRecordId, sourceMapFingerprint:scope.sourceMapFingerprint, promptVersion:EXTRACTION_PROMPT_VERSION, network:currentNetworkContext() },
+      samples:[{ clientSampleId:`${artifact.runId}:extraction:${scope.key}:${labState.extraction.activeAttempt}:${nextTurn}:map-ready`, provider, model, system, messages:[{ role:"user", content:`Immutable Clarification artifact — the only source for this conversation:\n${sourcePacket}` }, ...prior], maxTokens:240, research:false, metadata:{ promptFingerprint:fingerprint(system), promptCoreFingerprint:fingerprint(EXTRACTION_PROMPT), inputFingerprint:fingerprint(`${sourcePacket}\n${prior.map((turn) => `${turn.role}:${turn.content}`).join("\n")}`), promptVersionId:EXTRACTION_PROMPT_VERSION, promptVersionName:"Feynman extraction conversation v3", replicate:1, inputLabel:"Lesson Map ready conversational cue", source:"immutable Clarification artifact plus the existing Extraction conversation; map readiness is a one-time conversational cue only", promptEdited:false, checks:[] } }],
+    });
+    if (!created?.job?.id) throw new Error("The server did not return the map-ready conversation reply.");
+    upsertJob(created.job);
+    labState.extraction.nextReplyInstruction = "";
+    scheduleJobPoll();
+  } catch (error) {
+    logFlow(`Could not add the map-ready conversation reply: ${clip(error.message, 120)}`, "lab-jobs");
+  } finally {
+    labState.extraction.mapReadyNoticeBusy = false;
+    if (labState.pipelineStage === "extraction") renderPipelineExtraction();
+  }
+}
+
 function extractionSystemPrompt() {
   const nextReplyInstruction = clip(labState.extraction.nextReplyInstruction, 900).trim();
   if (!nextReplyInstruction) return EXTRACTION_PROMPT;
@@ -5534,6 +5577,7 @@ function renderPipelineExtraction() {
     renderPipelineFutureExtractionInput();
     return;
   }
+  void ensurePipelineMapReadyNotice(artifact);
   const transcript = pipelineExtractionTranscript(artifact);
   renderExtractionTranscriptList(transcriptRoot, transcript);
   conversation.hidden = false;
@@ -5543,7 +5587,8 @@ function renderPipelineExtraction() {
   const transition = renderPipelineExtractionTransition(artifact, record.output);
   setStatus(saved
     ? `${answerCount} message${answerCount === 1 ? "" : "s"} ${answerCount === 1 ? "is" : "are"} frozen as a reusable, private future-stage input. This conversation will not change after saving.`
-    : transition?.ready ? "The next reply can mention the optional Lesson handoff naturally. Keep talking or continue whenever you want."
+    : labState.extraction.mapReadyNoticeBusy ? "Your Lesson Map is ready. Worldview is adding that naturally to this conversation now…"
+      : transition?.ready ? "Your Lesson Map is ready. Worldview will say so naturally in this conversation; you can keep exploring or start the Lesson whenever you want."
       : transition ? "Worldview suggests a gentle next step, but you remain in control."
         : answerCount ? `${answerCount} message${answerCount === 1 ? "" : "s"} saved in this protected Lab conversation. It does not mark progress.` : "Worldview is ready. Explain the topic in your own words; uncertainty is useful evidence.", (answerCount || transition) ? "ok" : "");
   q("pipeline-extraction-reply").disabled = labState.extractionBusy || labState.extraction.saveBusy || savedCurrentAttempt;
@@ -7214,4 +7259,3 @@ async function boot() {
 }
 
 void boot();
-
