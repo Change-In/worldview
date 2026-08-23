@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 100048)
-Total output lines: 7195
-
 "use strict";
 
 /*
@@ -406,6 +403,7 @@ const labState = {
     extraction: { ...MOCK_STAGE_DEFAULTS.extraction },
     lesson: { ...MOCK_STAGE_DEFAULTS.lesson },
   },
+  mockRunConfigCollapsed: false,
   pipelineSelectedRunId: "",
   pipelineSelectedMapJobId: "",
   pipelineSelectedMapRecordId: "",
@@ -1355,6 +1353,16 @@ function renderMockRunConfig() {
   const mock = labState.pipelineMode === "mock";
   panel.hidden = !mock;
   if (!mock) return;
+  const collapsed = Boolean(labState.mockRunConfigCollapsed);
+  panel.classList.toggle("is-collapsed", collapsed);
+  const body = q("mock-run-config-body");
+  if (body) body.hidden = collapsed;
+  const toggle = q("mock-run-config-toggle");
+  if (toggle) {
+    toggle.textContent = collapsed ? "Show" : "Minimize";
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    toggle.setAttribute("aria-label", collapsed ? "Show Models and spend" : "Minimize Models and spend");
+  }
   const artifact = selectedPipelineArtifact();
   root.replaceChildren();
   let total = 0;
@@ -1407,6 +1415,11 @@ function renderMockRunConfig() {
   q("mock-run-total-cost").textContent = hasCost ? `${totalLabel} ${formatCost(total).replace("Estimated ", "")}` : totalLabel;
   const status = q("mock-run-live-status");
   if (status) status.textContent = artifact ? `${MOCK_RUN_STAGE_LABELS[labState.pipelineStage] || "Clarification"} · ${mockStageStatus(labState.pipelineStage === "quiz" ? "lesson" : labState.pipelineStage, artifact)}` : "Waiting for Clarification.";
+}
+
+function setMockRunConfigCollapsed(collapsed) {
+  labState.mockRunConfigCollapsed = Boolean(collapsed);
+  renderMockRunConfig();
 }
 
 function selectedLesson(selectId) {
@@ -3755,7 +3768,8 @@ function prosePipelineMap(raw, artifact = selectedPipelineArtifact()) {
   commit();
   if (!nodes.length) {
     const steps = lines.map((line) => line.match(/^\s*(?:\d+[.)]|[-*])\s+(.+)$/)?.[1]).filter(Boolean)
-      .filter((l…48 tokens truncated… 1}`, kind:"checkpoint", title:cleanMapText(step, 180), whyNeeded:"", prerequisites:[], masteryGoal:"", diagnosticQuestion:"" });
+      .filter((line) => !/^(prerequisites?|mastery|diagnostic|question|assumptions?|research)\s*:/i.test(line)).slice(0, 12);
+    for (const [index, step] of steps.entries()) nodes.push({ id:`step_${index + 1}`, kind:"checkpoint", title:cleanMapText(step, 180), whyNeeded:"", prerequisites:[], masteryGoal:"", diagnosticQuestion:"" });
   }
   if (!nodes.length) {
     const paragraphs = text.split(/\n\s*\n|(?<=[.!?])\s+(?=[A-Z])/).map((item) => cleanMapText(item, 500)).filter((item) => item.length >= 18).slice(0, 8);
@@ -5602,12 +5616,16 @@ function setPipelineMode(mode = "controls") {
 function setPipelineStage(stage = "clarification") {
   const stages = ["clarification", "map", "extraction", "lesson", "quiz"];
   const next = stages.includes(stage) ? stage : "clarification";
+  const previous = labState.pipelineStage;
   if (next !== "clarification" && labState.clarification.focusMode) setClarificationFocus(false);
   if (next !== "extraction" && labState.extraction.mode === "voice") {
     stopPipelineExtractionVoice();
     setPipelineExtractionConversationMode("text");
   }
   labState.pipelineStage = next;
+  if (labState.pipelineMode === "mock" && next === "lesson" && previous !== "lesson") {
+    setMockRunConfigCollapsed(true);
+  }
   for (const panel of document.querySelectorAll('[data-pipeline-stage-panel="clarification"]')) panel.hidden = next !== "clarification";
   q("pipeline-connected-stage").hidden = next === "clarification";
   q("pipeline-map-stage").hidden = next !== "map";
@@ -6071,6 +6089,7 @@ function startNewPipelineRun(seed = "") {
   labState.pipelineSelectedRunId = "";
   labState.pipelineSelectedMapJobId = "";
   labState.pipelineSelectedMapRecordId = "";
+  labState.mockRunConfigCollapsed = false;
   resetClarificationRun(seed);
   setPipelineStage("clarification");
   persistClarificationSettings();
@@ -7055,6 +7074,7 @@ function bindEvents() {
   q("pipeline-mode-mock").addEventListener("click", () => setPipelineMode("mock"));
   q("pipeline-mock-new").addEventListener("click", () => startNewPipelineRun());
   q("pipeline-mock-exit").addEventListener("click", () => setPipelineMode("controls"));
+  q("mock-run-config-toggle")?.addEventListener("click", () => setMockRunConfigCollapsed(!labState.mockRunConfigCollapsed));
   q("clarification-note").addEventListener("change", (event) => {
     const note = labState.notes.find((item) => String(item.id) === event.currentTarget.value);
     if (!note) return;
