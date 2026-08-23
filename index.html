@@ -2048,11 +2048,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v126 · Aug 23";
+const BUILD = "v127 · Aug 23";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v127", date: "Aug 23", changes: [
+    "Clarification Backend now keeps a read-only history of completed backend turns, so you can flip through the exact system prompt, request packet, raw response, and validated output from earlier turns and runs."
+  ]},
   { tag: "v126", date: "Aug 23", changes: [
     "Clarification continuity is now protected even when its editable system prompt changes: later requests carry a fixed latest-message guard, and near-duplicate questions are replaced with a fresh follow-up."
   ]},
