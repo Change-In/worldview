@@ -2319,7 +2319,13 @@ function upsertJob(value) {
 
 function attemptResultText(attempt, sample) {
   const result = attempt?.result && typeof attempt.result === "object" ? attempt.result : (sample?.result && typeof sample.result === "object" ? sample.result : {});
-  return asText(result.text ?? attempt?.text ?? sample?.text ?? sample?.resultText);
+  const candidate = result.text ?? attempt?.text ?? sample?.text ?? sample?.resultText;
+  if (typeof candidate === "string") return candidate;
+  if (Array.isArray(candidate)) return candidate.map((part) => typeof part === "string" ? part : asText(part?.text)).join("");
+  if (candidate && typeof candidate === "object" && Array.isArray(candidate.content)) {
+    return candidate.content.map((part) => asText(part?.text)).join("");
+  }
+  return "";
 }
 
 function syncJobDetail(detail) {
@@ -6186,7 +6192,8 @@ function renderClarificationBackendSnapshot(selection = labState.clarification.b
     const promptVersion = sample?.metadata?.promptVersionName || job.scenario?.promptVersion || "saved prompt";
     const model = sample?.model || packet.model || "unknown model";
     const route = sample?.provider || packet.provider || "unknown provider";
-    statusNode.textContent = `${job.scenario?.topic || "Clarification"} · turn ${turn + 1} · ${promptVersion} · ${route}/${model}`;
+    const finishReason = sample?.metadata?.providerFinishReason ? ` · finish ${sample.metadata.providerFinishReason}` : "";
+    statusNode.textContent = `${job.scenario?.topic || "Clarification"} · turn ${turn + 1} · ${promptVersion} · ${route}/${model}${finishReason}`;
   }
 }
 
@@ -6596,6 +6603,22 @@ function avoidClarificationRepeat(output, turns) {
   };
 }
 
+
+function clarificationEmptyReplyFallback(firstTurn, turns, topic, previous = null) {
+  const assistantMessage = firstTurn
+    ? "What first made this topic feel worth exploring: something you heard, a problem you noticed, or a question that keeps returning?"
+    : clarificationRepeatFallback(turns);
+  return {
+    assistant_message: assistantMessage,
+    scope_summary: clip(previous?.scope_summary || (topic
+      ? `Explore ${topic} and narrow the direction through conversation.`
+      : "Keep the lesson broad until the learner names a direction."), 700),
+    scope_items: Array.isArray(previous?.scope_items) ? previous.scope_items.slice(0, 12) : [],
+    scope_preferences: normalizeClarificationPreferences(previous?.scope_preferences),
+    ready_to_finish: false,
+  };
+}
+
 function renderClarificationOutput(output, raw, detail, packet, elapsed) {
   const state = labState.clarification;
   state.latest = output;
@@ -6606,7 +6629,7 @@ function renderClarificationOutput(output, raw, detail, packet, elapsed) {
   q("clarification-surface").classList.add("has-reply");
   scrollClarificationReplyToTop();
   q("clarification-validated").textContent = JSON.stringify(output, null, 2);
-  q("clarification-raw").textContent = raw;
+  q("clarification-raw").textContent = raw || "The provider returned no visible text for this turn.";
   q("clarification-packet").textContent = JSON.stringify(packet, null, 2);
   const sample = detail?.samples?.[0] || {};
   const result = sample.result || {};
@@ -6712,15 +6735,22 @@ async function runClarificationModel() {
     syncJobDetail(detail);
     const sample = detail.samples?.[0];
     if (!sample || sample.status !== "completed") throw new Error(sample?.error?.message || "The clarification model turn did not complete.");
-    const raw = sample.result?.text ?? sample.text ?? "";
-    const output = avoidClarificationRepeat(parseClarificationOutput(raw, firstTurn, state.topic), state.turns);
+    const raw = attemptResultText(null, sample);
+    const providerReturnedNoText = !String(raw).trim();
+    const providerFinishReason = String(sample.metadata?.providerFinishReason || "").trim();
+    const parsed = providerReturnedNoText
+      ? clarificationEmptyReplyFallback(firstTurn, state.turns, state.topic, state.latest)
+      : parseClarificationOutput(raw, firstTurn, state.topic);
+    const output = avoidClarificationRepeat(parsed, state.turns);
     // Keep the next model turn as ordinary dialogue rather than replaying the
     // prior turn's structured validation envelope.
     state.turns.push({ role: "assistant", content: output.assistant_message });
     renderClarificationOutput(output, raw, detail, packet, Math.round(performance.now() - started));
     state.runError = "";
     setMessage("clarification-message", "");
-    setMessage("clarification-backend-message", "Run completed. The prompt, exact request, raw reply, and validated output below all belong to this learner turn.", "ok");
+    setMessage("clarification-backend-message", providerReturnedNoText
+      ? `The provider returned no visible text${providerFinishReason ? ` (finish reason: ${providerFinishReason})` : ""}, so a local follow-up kept the conversation moving. The empty provider result remains inspectable below.`
+      : "Run completed. The prompt, exact request, raw reply, and validated output below all belong to this learner turn.", "ok");
     if (state.mode === "voice") {
       setClarificationBusy(false);
       state.speaking = true;
