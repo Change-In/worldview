@@ -448,6 +448,7 @@ const labState = {
     activityLabel: "",
     focusMode: false,
     promptSource: "built-in",
+    backendHistorySelection: "current",
   },
   basePrompt: { lesson: "", tutor: "", brain: "" },
   loadedPromptVersionId: { lesson: "", tutor: "", brain: "" },
@@ -2417,6 +2418,7 @@ async function refreshJobs() {
     await Promise.allSettled(labState.jobs.slice(0, 12).map((job) => refreshJob(job.id)));
     q("jobs-status").textContent = `${labState.jobs.length} recent job${labState.jobs.length === 1 ? "" : "s"}`;
     renderJobHistory();
+    renderClarificationBackendHistory();
     scheduleJobPoll();
   } catch (error) {
     q("jobs-status").textContent = `Could not load jobs: ${clip(error.message, 100)}`;
@@ -6060,12 +6062,157 @@ function setClarificationView(view) {
     button.classList.toggle("is-active", active);
     button.setAttribute("aria-selected", String(active));
   }
+  if (next === "backend") renderClarificationBackendHistory();
 }
 
 function syncClarificationTopic(sourceId) {
   const source = q(sourceId);
   const target = q(sourceId === "clarification-topic" ? "clarification-backend-topic" : "clarification-topic");
   if (source && target && target.value !== source.value) target.value = source.value;
+}
+
+
+function clarificationBackendJobs() {
+  return labState.jobs
+    .filter((job) => job?.component === "clarification" && !LAB_ACTIVE_JOB_STATES.has(job.status))
+    .slice()
+    .sort((left, right) => {
+      const leftAt = Date.parse(left.createdAt) || 0;
+      const rightAt = Date.parse(right.createdAt) || 0;
+      return rightAt - leftAt;
+    });
+}
+
+function clarificationBackendSample(detail) {
+  if (!detail || !Array.isArray(detail.samples)) return null;
+  return detail.samples.find((sample) => sample?.status === "completed") || detail.samples[0] || null;
+}
+
+function clarificationBackendRequest(sample) {
+  const value = sample && typeof sample === "object" ? sample : {};
+  const nested = value.request && typeof value.request === "object" ? value.request : {};
+  const read = (key, fallback = null) => value[key] !== undefined ? value[key] : (nested[key] !== undefined ? nested[key] : fallback);
+  return {
+    provider: asText(read("provider")),
+    model: asText(read("model")),
+    system: asText(read("system")),
+    messages: Array.isArray(read("messages")) ? read("messages") : [],
+    maxTokens: Number(read("maxTokens", read("max_tokens", null))) || null,
+    research: Boolean(read("research", false)),
+  };
+}
+
+function clarificationBackendResult(sample, detail) {
+  const attempts = Array.isArray(detail?.attempts) ? detail.attempts : [];
+  const sampleId = String(sample?.id || sample?.clientSampleId || sample?.client_sample_id || "");
+  const attempt = attempts
+    .filter((item) => !sampleId || String(item.sampleId || item.sample_id || "") === sampleId)
+    .sort((left, right) => (Number(right.attemptNo || right.attempt_no) || 0) - (Number(left.attemptNo || left.attempt_no) || 0))[0];
+  const result = attempt?.result && typeof attempt.result === "object"
+    ? attempt.result
+    : (sample?.result && typeof sample.result === "object" ? sample.result : {});
+  return { attempt, raw: attemptResultText(attempt, sample), result };
+}
+
+function clarificationCurrentBackendPacket() {
+  const state = labState.clarification;
+  const editableSystem = q("clarification-prompt")?.value.trim() || CLARIFICATION_PROMPT;
+  const laterTurn = state.turns.some((turn) => turn.role === "assistant");
+  const provider = q("clarification-provider")?.value || "anthropic";
+  const model = q("clarification-model")?.value || clarificationDefaultModel(provider);
+  return {
+    provider,
+    model,
+    system: laterTurn ? `${editableSystem}\n\n${CLARIFICATION_CONTINUITY_GUARD}` : editableSystem,
+    editableSystem,
+    messages: state.turns.map(({ role, content }) => ({ role, content })),
+    maxTokens: 240,
+    research: false,
+  };
+}
+
+function renderClarificationBackendSnapshot(selection = labState.clarification.backendHistorySelection) {
+  const state = labState.clarification;
+  const promptNode = q("clarification-history-prompt");
+  const packetNode = q("clarification-history-packet");
+  const rawNode = q("clarification-history-raw");
+  const validatedNode = q("clarification-history-validated");
+  const statusNode = q("clarification-backend-history-status");
+  if (!promptNode || !packetNode || !rawNode || !validatedNode) return;
+  state.backendHistorySelection = selection || "current";
+  if (state.backendHistorySelection === "current") {
+    const packet = clarificationCurrentBackendPacket();
+    promptNode.textContent = packet.system || "The current editor is empty.";
+    packetNode.textContent = JSON.stringify(packet, null, 2);
+    rawNode.textContent = "The current editor has not been sent yet.";
+    validatedNode.textContent = "The current editor has not been sent yet.";
+    if (statusNode) statusNode.textContent = "Showing the unsent editor.";
+    return;
+  }
+  const job = clarificationBackendJobs().find((item) => item.id === state.backendHistorySelection);
+  if (!job) {
+    state.backendHistorySelection = "current";
+    renderClarificationBackendSnapshot("current");
+    return;
+  }
+  let detail = labState.jobDetails.get(job.id);
+  if (!detail) {
+    promptNode.textContent = "Loading the saved backend turn…";
+    packetNode.textContent = "Loading the saved backend turn…";
+    rawNode.textContent = "Loading the saved backend turn…";
+    validatedNode.textContent = "Loading the saved backend turn…";
+    if (statusNode) statusNode.textContent = "Reading saved evidence; no model request is being sent.";
+    void refreshJob(job.id).then((loaded) => {
+      if (state.backendHistorySelection === job.id) renderClarificationBackendSnapshot(job.id);
+      return loaded;
+    }).catch((error) => {
+      if (state.backendHistorySelection !== job.id) return;
+      if (statusNode) statusNode.textContent = `Saved turn could not be loaded: ${clip(error.message, 180)}`;
+    });
+    return;
+  }
+  const sample = clarificationBackendSample(detail);
+  const packet = clarificationBackendRequest(sample);
+  const { raw, result } = clarificationBackendResult(sample, detail);
+  const turn = Number(job.scenario?.turn) || 0;
+  let validated;
+  try { validated = parseClarificationOutput(raw, turn === 0, job.scenario?.topic || ""); }
+  catch (error) { validated = { error: error.message || "The saved response could not be validated." }; }
+  promptNode.textContent = packet.system || "The saved turn did not include a system prompt.";
+  packetNode.textContent = JSON.stringify(packet, null, 2);
+  rawNode.textContent = raw || "The saved turn did not include a raw model response.";
+  validatedNode.textContent = JSON.stringify(validated, null, 2);
+  if (statusNode) {
+    const promptVersion = sample?.metadata?.promptVersionName || job.scenario?.promptVersion || "saved prompt";
+    const model = sample?.model || packet.model || "unknown model";
+    const route = sample?.provider || packet.provider || "unknown provider";
+    statusNode.textContent = `${job.scenario?.topic || "Clarification"} · turn ${turn + 1} · ${promptVersion} · ${route}/${model}`;
+  }
+}
+
+function renderClarificationBackendHistory() {
+  const select = q("clarification-backend-history");
+  if (!select) return;
+  const state = labState.clarification;
+  const jobs = clarificationBackendJobs();
+  const selected = state.backendHistorySelection || "current";
+  const current = element("option", { value: "current", text: "Current editor (not yet sent)" });
+  select.replaceChildren(current);
+  if (jobs.length) {
+    const group = element("optgroup", { attrs: { label: "Saved backend turns" } });
+    for (const job of jobs) {
+      const turn = (Number(job.scenario?.turn) || 0) + 1;
+      const topic = clip(job.scenario?.topic || "Untitled topic", 56);
+      const date = prettyDate(job.createdAt);
+      const stateLabel = job.status === "completed" || job.status === "partial" ? "" : ` · ${job.status}`;
+      group.append(element("option", { value: job.id, text: `${topic} · turn ${turn} · ${date}${stateLabel}` }));
+    }
+    select.append(group);
+  }
+  const validSelection = selected === "current" || jobs.some((job) => job.id === selected);
+  state.backendHistorySelection = validSelection ? selected : "current";
+  select.value = state.backendHistorySelection;
+  renderClarificationBackendSnapshot(state.backendHistorySelection);
 }
 
 function showClarificationModeStep() {
@@ -6106,7 +6253,7 @@ function resetClarificationRun(seed = "") {
     busy: false, micStream: null, recorder: null, recorderChunks: [], recordingStartedAt: 0,
     recordingPromise: null, retainedRecording: null, retainedRecordingMime: "", retainedOperationId: "",
     audioPrimed: false, voiceAudio: null, voiceSpeechCancel: null, lastSpeechText: "", speaking: false,
-    activityTimer: 0, activityStartedAt: 0, activityLabel: "",
+    activityTimer: 0, activityStartedAt: 0, activityLabel: "", backendHistorySelection: "current",
   });
   q("clarification-topic").value = seed || "";
   q("clarification-backend-topic").value = seed || "";
@@ -6134,6 +6281,7 @@ function resetClarificationRun(seed = "") {
   setMessage("clarification-message", "");
   setMessage("clarification-setup-message", "");
   setMessage("clarification-backend-message", "");
+  renderClarificationBackendHistory();
   setClarificationView("learner");
 }
 
@@ -6453,6 +6601,7 @@ function renderClarificationOutput(output, raw, detail, packet, elapsed) {
   state.latest = output;
   state.latestRaw = raw;
   state.latestPacket = packet;
+  state.backendHistorySelection = state.latestJobId || "current";
   q("clarification-latest").textContent = output.assistant_message;
   q("clarification-surface").classList.add("has-reply");
   scrollClarificationReplyToTop();
@@ -6469,6 +6618,7 @@ function renderClarificationOutput(output, raw, detail, packet, elapsed) {
     element("span", { text: Number.isFinite(cost) ? `Est. $${cost.toFixed(4)}` : "Cost unavailable" }),
   );
   q("clarification-done").disabled = state.busy || !output.ready_to_finish || state.learnerReplyCount < 1;
+  renderClarificationBackendHistory();
   renderMockRunConfig();
 }
 
@@ -6892,6 +7042,10 @@ function bindClarificationEvents() {
   q("clarification-mode-toggle").addEventListener("click", switchClarificationConversationMode);
   q("clarification-topic").addEventListener("input", () => syncClarificationTopic("clarification-topic"));
   q("clarification-backend-topic").addEventListener("input", () => syncClarificationTopic("clarification-backend-topic"));
+  q("clarification-backend-history").addEventListener("change", (event) => {
+    labState.clarification.backendHistorySelection = event.currentTarget.value || "current";
+    renderClarificationBackendSnapshot(labState.clarification.backendHistorySelection);
+  });
   q("clarification-start").addEventListener("click", showClarificationModeStep);
   q("clarification-mode-back").addEventListener("click", hideClarificationModeStep);
   q("clarification-backend-text").addEventListener("click", async () => {
@@ -6906,6 +7060,9 @@ function bindClarificationEvents() {
   });
   q("clarification-provider").addEventListener("change", renderClarificationModels);
   q("clarification-prompt-reset").addEventListener("click", () => { q("clarification-prompt").value = CLARIFICATION_PROMPT; labState.clarification.promptSource = "built-in"; setMessage("clarification-prompt-message", "Restored the built-in prompt. Choose a save action if you want it to persist.", "ok"); });
+  q("clarification-prompt").addEventListener("input", () => {
+    if (labState.clarification.backendHistorySelection === "current") renderClarificationBackendSnapshot("current");
+  });
   q("clarification-prompt-save").addEventListener("click", () => {
     const saved = saveClarificationDeviceDraft();
     labState.clarification.promptSource = "device";
