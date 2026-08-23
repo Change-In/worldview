@@ -4388,6 +4388,20 @@ function pipelineExtractionOutput(detail) {
   return { raw, output:parseExtractionOutput(raw), sample };
 }
 
+function extractionMessageText(value, fallback) {
+  const clean = String(value || fallback || "")
+    .replace(/(?:^|\s)#{1,6}\s+/g, " ")
+    .replace(/(?:^|\r?\n)\s*(?:[-*•]|\d+[.)])\s*/g, " ")
+    .replace(/[*_~`]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (clean.length <= 1200) return clean;
+  const prefix = clean.slice(0, 1201);
+  const boundary = Math.max(prefix.lastIndexOf(". "), prefix.lastIndexOf("? "), prefix.lastIndexOf("! "));
+  if (boundary >= 600) return clean.slice(0, boundary + 1).trim();
+  return `${clean.slice(0, 1200).replace(/\s+\S*$/, "").trim()}…`;
+}
+
 function parseExtractionOutput(raw) {
   const clean = String(raw || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   let value = null;
@@ -4397,12 +4411,7 @@ function parseExtractionOutput(raw) {
     if (!candidate || value) continue;
     try { value = JSON.parse(candidate); } catch (_) { /* A plain question remains usable. */ }
   }
-  const assistantMessage = clip(value?.assistant_message || value?.question || (start < 0 ? clean : "") || "How would you explain this to a curious beginner, using the words and examples that make sense to you?", 500)
-    .replace(/(?:^|\s)#{1,6}\s+/g, " ")
-    .replace(/(?:^|\r?\n)\s*(?:[-*•]|\d+[.)])\s*/g, " ")
-    .replace(/[*_~`]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const assistantMessage = extractionMessageText(value?.assistant_message || value?.question || (start < 0 ? clean : ""), "How would you explain this to a curious beginner, using the words and examples that make sense to you?");
   const lessonTransition = value?.lesson_transition === "suggest" ? "suggest" : "none";
   const transitionReason = lessonTransition === "suggest" ? clip(value?.transition_reason, 180).replace(/\s+/g, " ").trim() : "";
   // `question` keeps v100 saved jobs readable while newer contracts use the ordinary
@@ -6105,6 +6114,7 @@ function resetClarificationRun(seed = "") {
   q("clarification-mode-step").hidden = true;
   q("clarification-conversation").hidden = true;
   q("clarification-complete").hidden = true;
+  renderClarificationTranscript([]);
   q("clarification-latest").replaceChildren();
   q("clarification-surface").classList.remove("has-reply", "is-listening");
   q("clarification-raw").textContent = "No output yet.";
@@ -6124,6 +6134,21 @@ function resetClarificationRun(seed = "") {
   setMessage("clarification-setup-message", "");
   setMessage("clarification-backend-message", "");
   setClarificationView("learner");
+}
+
+function renderClarificationTranscript(transcript = []) {
+  const details = q("clarification-transcript-details");
+  const root = q("clarification-transcript");
+  if (!details || !root) return;
+  const turns = (Array.isArray(transcript) ? transcript : [])
+    .map((turn) => ({ role: turn?.role === "assistant" ? "assistant" : "user", content: clip(turn?.content, 1200) }))
+    .filter((turn) => turn.content);
+  details.hidden = !turns.length;
+  root.replaceChildren(...turns.map((turn) => {
+    const item = element("li", { attrs: { "data-role": turn.role } });
+    item.append(element("strong", { text: turn.role === "assistant" ? "Worldview" : "You" }), document.createTextNode(turn.content));
+    return item;
+  }));
 }
 
 function startNewPipelineRun(seed = "") {
@@ -6153,6 +6178,7 @@ function restoreClarificationArtifact(artifact, storage = "device") {
   q("clarification-complete").hidden = false;
   q("clarification-scope").textContent = artifact.scopeSummary;
   q("clarification-scope-items").replaceChildren(...(artifact.scopeItems || []).map((item) => element("span", { text: item })));
+  renderClarificationTranscript(artifact.transcript);
   const preferenceNode = q("clarification-scope-preferences");
   if (preferenceNode) {
     const preferenceText = clarificationPreferenceText(artifact.scopePreferences);
