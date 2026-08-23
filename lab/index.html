@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=126">
+<link rel="stylesheet" href="./lab.css?v=127">
 </head>
 <body>
 
@@ -176,7 +176,19 @@
         <div class="inline-actions"><button id="clarification-prompt-reset" class="button button-quiet" type="button">Reset prompt</button><button id="clarification-prompt-save" class="button button-quiet" type="button">Save only on this device</button><button id="clarification-prompt-save-shared" class="button button-primary" type="button">Set global default</button></div>
         <p class="privacy-note">Set global default saves this prompt, model route, and model on the protected server. It becomes the Clarification default on every verified Lab device. Only a server-authorized Lab admin can change it.</p>
         <p id="clarification-prompt-message" class="form-message"></p>
-        <details open><summary>Validated output</summary><pre id="clarification-validated">No output yet.</pre></details>
+        <div class="clarification-backend-history">
+                  <label for="clarification-backend-history">Backend prompt history</label>
+                  <select id="clarification-backend-history" aria-describedby="clarification-backend-history-note">
+                    <option value="current">Current editor (not yet sent)</option>
+                  </select>
+                  <p id="clarification-backend-history-note" class="privacy-note">Flip through the exact system prompts saved with completed Clarification turns, including earlier runs. This is read-only and does not send a model request.</p>
+                  <p id="clarification-backend-history-status" class="form-message" role="status"></p>
+                  <details open><summary>Selected system prompt</summary><pre id="clarification-history-prompt">The current editor has not been sent yet.</pre></details>
+                  <details><summary>Selected request packet</summary><pre id="clarification-history-packet">No saved turn selected.</pre></details>
+                  <details><summary>Selected raw model response</summary><pre id="clarification-history-raw">No saved turn selected.</pre></details>
+                  <details><summary>Selected validated output</summary><pre id="clarification-history-validated">No saved turn selected.</pre></details>
+                </div>
+                <details open><summary>Validated output</summary><pre id="clarification-validated">No output yet.</pre></details>
         <details><summary>Raw model response</summary><pre id="clarification-raw">No output yet.</pre></details>
         <details><summary>Exact request packet</summary><pre id="clarification-packet">No request yet.</pre></details>
         <div id="clarification-metrics" class="clarification-metrics"><span>Latency —</span><span>Tokens —</span><span>Cost —</span></div>
@@ -545,6 +557,6 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=126" defer></script>
+<script src="./lab.js?v=127" defer></script>
 </body>
 </html>
