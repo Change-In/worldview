@@ -441,6 +441,7 @@ const labState = {
     recorderChunks: [],
     recordingStartedAt: 0,
     recordingArmTimer: 0,
+    recordingArmPrepared: false,
     recordingPointerId: null,
     recordingPointerStartX: 0,
     recordingPointerStartY: 0,
@@ -6471,10 +6472,15 @@ function setClarificationFocus(enabled) {
   if (state.focusMode) q("clarification-learner-panel").scrollTop = 0;
 }
 
-function clearClarificationRecordingArm() {
+function clearClarificationRecordingArm(releasePreparedMic = true) {
   const state = labState.clarification;
   if (state.recordingArmTimer) clearTimeout(state.recordingArmTimer);
+  if (releasePreparedMic && state.recordingArmPrepared && state.recorder?.state !== "recording") {
+    setClarificationMicTracksEnabled(false);
+    setClarificationAudioSession("playback");
+  }
   state.recordingArmTimer = 0;
+  state.recordingArmPrepared = false;
   state.recordingPointerId = null;
   state.recordingPointerStartX = 0;
   state.recordingPointerStartY = 0;
@@ -6490,9 +6496,18 @@ function armClarificationRecording(event) {
   state.recordingPointerStartY = Number(event?.clientY || 0);
   const pointerType = event?.pointerType || "touch";
   const button = event?.button ?? 0;
+  // iPhone needs the capture route and retained track re-enabled during the
+  // original finger gesture. The short delay still distinguishes a stationary
+  // hold from a vertical swipe, and a cancelled arm releases the route below.
+  stopSpeechComparison();
+  stopClarificationSpeech();
+  setClarificationAudioSession("play-and-record");
+  setClarificationMicTracksEnabled(true);
+  state.recordingArmPrepared = true;
   state.recordingArmTimer = setTimeout(() => {
     state.recordingArmTimer = 0;
-    startClarificationRecording({ pointerType, button, preventDefault() {} });
+    state.recordingArmPrepared = false;
+    startClarificationRecording({ pointerType, button, preventDefault() {} }, { micPrepared: true });
   }, 240);
 }
 
@@ -6730,6 +6745,7 @@ function resetClarificationRun(seed = "") {
   stopSpeechComparison();
   stopClarificationSpeech();
   const state = labState.clarification;
+  clearClarificationRecordingArm();
   if (state.recorder?.state === "recording") { try { state.recorder.stop(); } catch (_) { /* already stopping */ } }
   if (state.micStream) for (const track of state.micStream.getTracks()) track.stop();
   clearInterval(state.activityTimer);
@@ -6737,6 +6753,7 @@ function resetClarificationRun(seed = "") {
     runId: "", topic: seed || "", mode: "", turns: [], learnerReplyCount: 0,
     latest: null, latestRaw: "", latestPacket: null, latestJobId: "", runError: "", finalized: null, finalizedStorage: "",
     busy: false, micStream: null, recorder: null, recorderChunks: [], recordingStartedAt: 0,
+    recordingArmTimer: 0, recordingArmPrepared: false, recordingPointerId: null, recordingPointerStartX: 0, recordingPointerStartY: 0,
     recordingPromise: null, retainedRecording: null, retainedRecordingMime: "", retainedOperationId: "",
     audioPrimed: false, voiceAudio: null, voiceSpeechCancel: null, lastSpeechText: "", speaking: false,
     activityTimer: 0, activityStartedAt: 0, activityLabel: "", backendHistorySelection: "current",
@@ -7410,15 +7427,25 @@ async function retryClarificationTranscription() {
   }
 }
 
-function startClarificationRecording(event) {
+function startClarificationRecording(event, options = {}) {
   const state = labState.clarification;
-  if (state.mode !== "voice" || state.busy || !state.micStream || state.recorder?.state === "recording") return;
-  if (event?.pointerType === "mouse" && event.button !== 0) return;
-  stopSpeechComparison();
-  stopClarificationSpeech();
+  const micPrepared = options.micPrepared === true;
+  if (state.mode !== "voice" || state.busy || !state.micStream || state.recorder?.state === "recording" || (event?.pointerType === "mouse" && event.button !== 0)) {
+    if (micPrepared && state.recorder?.state !== "recording") {
+      setClarificationMicTracksEnabled(false);
+      setClarificationAudioSession("playback");
+    }
+    return;
+  }
+  if (!micPrepared) {
+    stopSpeechComparison();
+    stopClarificationSpeech();
+  }
   try {
-    setClarificationAudioSession("play-and-record");
-    setClarificationMicTracksEnabled(true);
+    if (!micPrepared) {
+      setClarificationAudioSession("play-and-record");
+      setClarificationMicTracksEnabled(true);
+    }
     const type = recorderMimeType();
     state.recorderChunks = [];
     state.recorder = type ? new MediaRecorder(state.micStream, { mimeType: type }) : new MediaRecorder(state.micStream);
