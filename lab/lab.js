@@ -440,6 +440,10 @@ const labState = {
     recorder: null,
     recorderChunks: [],
     recordingStartedAt: 0,
+    recordingArmTimer: 0,
+    recordingPointerId: null,
+    recordingPointerStartX: 0,
+    recordingPointerStartY: 0,
     recordingPromise: null,
     retainedRecording: null,
     retainedRecordingMime: "",
@@ -5898,6 +5902,34 @@ function maybeSpeakPipelineExtractionReply(job, output) {
     .finally(() => { state.speaking = false; renderPipelineExtractionModeControls(); });
 }
 
+function appendMockRunMapPreview(root, artifact = selectedPipelineArtifact()) {
+  if (!root || labState.pipelineMode !== "mock") return;
+  const selection = selectedPipelineMapRecord(artifact);
+  if (!selection || selection.meta?.incomplete || selection.meta?.needsReview || !selection.map?.chapters?.length) return;
+  const map = selection.map;
+  const outcomeCount = map.chapters.reduce((sum, chapter) => sum + chapter.outcomes.length, 0);
+  const item = element("li", { className:"mock-run-map-preview" });
+  item.append(
+    element("small", { text:"Lesson Map ready" }),
+    element("h4", { text:map.lessonTitle || artifact?.topic || "Your lesson route" }),
+    element("p", { text:`${map.chapters.length} chapter${map.chapters.length === 1 ? "" : "s"} · ${outcomeCount} learning outcome${outcomeCount === 1 ? "" : "s"}. This route is ready in the background; you can read it here without leaving Extraction.` }),
+  );
+  if (map.goal) item.append(element("p", { className:"mock-run-map-goal", text:map.goal }));
+  const chapters = element("ol", { className:"mock-run-map-chapters" });
+  for (const [chapterIndex, chapter] of map.chapters.entries()) {
+    const chapterItem = element("li");
+    chapterItem.append(element("strong", { text:`${chapterIndex + 1}. ${chapter.title}` }));
+    if (chapter.outcomes.length) {
+      const outcomes = element("ul");
+      for (const outcome of chapter.outcomes) outcomes.append(element("li", { text:outcome.title }));
+      chapterItem.append(outcomes);
+    }
+    chapters.append(chapterItem);
+  }
+  item.append(chapters);
+  root.append(item);
+}
+
 function renderPipelineExtraction() {
   const status = q("pipeline-extraction-output");
   const conversation = q("pipeline-extraction-conversation");
@@ -5940,6 +5972,7 @@ function renderPipelineExtraction() {
     const partialTranscript = pipelineExtractionTranscript(artifact);
     if (partialTranscript.length) {
       renderExtractionTranscriptList(transcriptRoot, partialTranscript);
+      appendMockRunMapPreview(transcriptRoot, artifact);
       conversation.hidden = false;
       renderPipelineExtractionModeControls();
     }
@@ -5965,6 +5998,7 @@ function renderPipelineExtraction() {
   }
   const transcript = pipelineExtractionTranscript(artifact);
   renderExtractionTranscriptList(transcriptRoot, transcript);
+  appendMockRunMapPreview(transcriptRoot, artifact);
   conversation.hidden = false;
   const answerCount = transcript.filter((turn) => turn.role === "user").length;
   const latestIsBroad = latest.scenario?.extractionPass !== "map-aware";
@@ -6323,6 +6357,7 @@ function setClarificationConversationMode(mode) {
 
 function stopClarificationCaptureForModeChange() {
   const state = labState.clarification;
+  clearClarificationRecordingArm();
   const recorder = state.recorder;
   if (recorder?.state === "recording") {
     recorder.onstop = null;
@@ -6434,6 +6469,39 @@ function setClarificationFocus(enabled) {
   button.setAttribute("aria-label", state.focusMode ? "Exit full screen" : "Open full screen");
   button.title = state.focusMode ? "Exit full screen" : "Open full screen";
   if (state.focusMode) q("clarification-learner-panel").scrollTop = 0;
+}
+
+function clearClarificationRecordingArm() {
+  const state = labState.clarification;
+  if (state.recordingArmTimer) clearTimeout(state.recordingArmTimer);
+  state.recordingArmTimer = 0;
+  state.recordingPointerId = null;
+  state.recordingPointerStartX = 0;
+  state.recordingPointerStartY = 0;
+}
+
+function armClarificationRecording(event) {
+  const state = labState.clarification;
+  if (state.mode !== "voice" || state.busy || !state.micStream || state.recorder?.state === "recording") return;
+  if (event?.pointerType === "mouse" && event.button !== 0) return;
+  clearClarificationRecordingArm();
+  state.recordingPointerId = event?.pointerId ?? null;
+  state.recordingPointerStartX = Number(event?.clientX || 0);
+  state.recordingPointerStartY = Number(event?.clientY || 0);
+  const pointerType = event?.pointerType || "touch";
+  const button = event?.button ?? 0;
+  state.recordingArmTimer = setTimeout(() => {
+    state.recordingArmTimer = 0;
+    startClarificationRecording({ pointerType, button, preventDefault() {} });
+  }, 240);
+}
+
+function cancelClarificationRecordingArmOnMove(event) {
+  const state = labState.clarification;
+  if (!state.recordingArmTimer || (state.recordingPointerId !== null && event?.pointerId !== state.recordingPointerId)) return;
+  const x = Number(event?.clientX || 0);
+  const y = Number(event?.clientY || 0);
+  if (Math.hypot(x - state.recordingPointerStartX, y - state.recordingPointerStartY) > 12) clearClarificationRecordingArm();
 }
 
 function setClarificationAudioSession(type) {
@@ -6733,6 +6801,7 @@ function startNewPipelineRun(seed = "") {
   labState.mockRunConfigCollapsed = false;
   resetClarificationRun(seed);
   setPipelineStage("clarification");
+  if (labState.pipelineMode === "mock") setClarificationFocus(true);
   persistClarificationSettings();
   renderPipelineArtifactSelect();
 }
@@ -7394,6 +7463,7 @@ function startClarificationRecording(event) {
 }
 
 function stopClarificationRecording(event) {
+  clearClarificationRecordingArm();
   const recorder = labState.clarification.recorder;
   if (recorder?.state === "recording") {
     try { recorder.stop(); } catch (_) { /* already stopping */ }
@@ -7510,7 +7580,8 @@ function bindClarificationEvents() {
   });
   q("clarification-new").addEventListener("click", () => startNewPipelineRun());
   q("clarification-fork").addEventListener("click", () => startNewPipelineRun(labState.clarification.finalized?.topic || ""));
-  q("clarification-surface").addEventListener("pointerdown", startClarificationRecording);
+  q("clarification-surface").addEventListener("pointerdown", armClarificationRecording);
+  q("clarification-surface").addEventListener("pointermove", cancelClarificationRecordingArmOnMove);
   window.addEventListener("pointerup", stopClarificationRecording);
   window.addEventListener("pointercancel", stopClarificationRecording);
   window.addEventListener("keydown", (event) => {
