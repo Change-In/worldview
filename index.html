@@ -2048,11 +2048,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v131 · Aug 23";
+const BUILD = "v132 · Aug 23";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v132", date: "Aug 23", changes: [
+    "Fixed the automatic map-ready reply request so it always ends with a provider-valid internal user event; that event never appears as a learner transcript message."
+  ]},
   { tag: "v131", date: "Aug 23", changes: [
     "Fixed a race where the background map-ready reply could compete with the learner's first Extraction response; learner turns now always finish before that notice is created."
   ]},
