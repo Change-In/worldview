@@ -2048,11 +2048,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v133 · Aug 23";
+const BUILD = "v134 · Aug 23";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v134", date: "Aug 23", changes: [
+    "Removed Worldview's short output-token caps from Clarification, Extraction, and guided Lesson conversations so long replies are not discarded as max_tokens failures."
+  ]},
   { tag: "v133", date: "Aug 23", changes: [
     "Lesson Map readiness now joins the next normal Extraction reply as one fuller message, while the Done button leaves the phase transition entirely up to you."
   ]},
