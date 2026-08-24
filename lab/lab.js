@@ -120,6 +120,8 @@ const LAB_WORKSPACE_KEY = "worldview-owner-lab-workspace-v1";
 const LAB_WORKSPACE_SCHEMA = 4;
 const LAB_OUTPUT_TOKEN_MIN = 64;
 const LAB_OUTPUT_TOKEN_SERVER_MAX = 65536;
+const CONVERSATION_RESPONSE_CONTRACT = "complete_question_v1";
+const RECOVERABLE_CONVERSATION_FAILURES = new Set(["provider_empty", "provider_truncated", "provider_incomplete"]);
 // Conversational stages must not be cut off by a small browser-selected cap.
 // Providers still require a finite generation budget, so use the Lab's maximum
 // supported allowance; the provider/model remains authoritative if it is lower.
@@ -2351,6 +2353,18 @@ function attemptResultText(attempt, sample) {
   return "";
 }
 
+function conversationFailureType(sample) {
+  return String(sample?.error?.type || sample?.metadata?.providerResultState || "").trim();
+}
+
+function recoverableConversationFailure(sample) {
+  return sample?.status === "failed" && RECOVERABLE_CONVERSATION_FAILURES.has(conversationFailureType(sample));
+}
+
+function completeConversationQuestion(value) {
+  return /\?(?:["')\]]*)$/.test(String(value || "").replace(/\s+/g, " ").trim());
+}
+
 function syncJobDetail(detail) {
   const job = upsertJob(detail?.job);
   if (!job) return;
@@ -3370,7 +3384,7 @@ function sanitizeClarificationArtifact(value, storage = "device") {
   const scopeSummary = clip(value.scopeSummary, 1700);
   if (!runId || !topic || !scopeSummary) return null;
   const transcript = (Array.isArray(value.transcript) ? value.transcript : []).slice(0, 60)
-    .map((turn) => ({ role: turn?.role === "assistant" ? "assistant" : "user", content: clip(turn?.content, 1200) }))
+    .map((turn) => ({ role: turn?.role === "assistant" ? "assistant" : "user", content: asText(turn?.content).trim() }))
     .filter((turn) => turn.content);
   return {
     ...value,
@@ -3411,7 +3425,7 @@ function sanitizeExtractionArtifact(value, storage = "server") {
   const transcript = (Array.isArray(value.transcript) ? value.transcript : []).slice(0, 80)
     .map((turn) => ({
       role: turn?.role === "assistant" ? "assistant" : "user",
-      content: clip(turn?.content, 1200),
+      content: asText(turn?.content).trim(),
       extractionPass: turn?.extractionPass === "map-aware" ? "map-aware" : "broad",
       chapterId: clip(turn?.chapterId, 120),
       outcomeId: clip(turn?.outcomeId, 120),
@@ -4452,6 +4466,25 @@ function pipelineExtractionPacket(artifact) {
 function pipelineExtractionOutput(detail) {
   const sample = detail?.samples?.[0];
   const raw = sample?.result?.text ?? sample?.text ?? "";
+  if (recoverableConversationFailure(sample)) {
+    const scenario = detail?.job?.scenario || {};
+    const mapAware = scenario.extractionPass === "map-aware";
+    const opening = Number(scenario.extractionTurn || 0) === 0;
+    const assistantMessage = mapAware
+      ? "Which part of the current Lesson route would you feel most comfortable explaining in your own words?"
+      : opening
+        ? "What part of this topic would you begin by explaining to a curious beginner?"
+        : "Which part of your last explanation would you like to examine more carefully?";
+    return {
+      raw,
+      output:{ assistantMessage, question:assistantMessage, lessonTransition:"none", transitionReason:"", routeChapterId:"", routeOutcomeId:"", format:"local-complete-recovery" },
+      sample,
+    };
+  }
+  if (sample?.status === "completed" && !String(raw).trim()) {
+    const assistantMessage = "Which part of this topic would you begin by explaining to a curious beginner?";
+    return { raw:"", output:{ assistantMessage, question:assistantMessage, lessonTransition:"none", transitionReason:"", routeChapterId:"", routeOutcomeId:"", format:"local-complete-recovery" }, sample };
+  }
   if (!raw || sample?.status !== "completed") return { raw:"", output:null, sample };
   return { raw, output:parseExtractionOutput(raw), sample };
 }
@@ -4463,11 +4496,9 @@ function extractionMessageText(value, fallback) {
     .replace(/[*_~`]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  if (clean.length <= 1200) return clean;
-  const prefix = clean.slice(0, 1201);
-  const boundary = Math.max(prefix.lastIndexOf(". "), prefix.lastIndexOf("? "), prefix.lastIndexOf("! "));
-  if (boundary >= 600) return clean.slice(0, boundary + 1).trim();
-  return `${clean.slice(0, 1200).replace(/\s+\S*$/, "").trim()}…`;
+  // Concision belongs in the prompt. Learner-visible code must never turn a
+  // complete provider response into a visibly chopped sentence.
+  return clean;
 }
 
 function parseExtractionOutput(raw) {
@@ -4479,14 +4510,16 @@ function parseExtractionOutput(raw) {
     if (!candidate || value) continue;
     try { value = JSON.parse(candidate); } catch (_) { /* A plain question remains usable. */ }
   }
-  const assistantMessage = extractionMessageText(value?.assistant_message || value?.question || (start < 0 ? clean : ""), "How would you explain this to a curious beginner, using the words and examples that make sense to you?");
+  const fallbackMessage = "Which part of your explanation would you like to examine more carefully?";
+  const candidateMessage = extractionMessageText(value?.assistant_message || value?.question || (start < 0 ? clean : ""), fallbackMessage);
+  const assistantMessage = completeConversationQuestion(candidateMessage) ? candidateMessage : fallbackMessage;
   const lessonTransition = value?.lesson_transition === "suggest" ? "suggest" : "none";
   const transitionReason = lessonTransition === "suggest" ? clip(value?.transition_reason, 180).replace(/\s+/g, " ").trim() : "";
   const routeChapterId = clip(value?.route_chapter_id, 120).replace(/\s+/g, " ").trim();
   const routeOutcomeId = clip(value?.route_outcome_id, 120).replace(/\s+/g, " ").trim();
   // `question` keeps v100 saved jobs readable while newer contracts use the ordinary
   // conversation-shaped assistant_message field.
-  return { assistantMessage, question:assistantMessage, lessonTransition, transitionReason, routeChapterId, routeOutcomeId };
+  return { assistantMessage, question:assistantMessage, lessonTransition, transitionReason, routeChapterId, routeOutcomeId, format:assistantMessage === candidateMessage ? "provider" : "local-complete-recovery" };
 }
 
 function extractionLearnerMessage(content) {
@@ -4720,7 +4753,20 @@ function pipelineLessonEvaluatorJobs(selection = selectedPipelineMapRecord()) {
 function parsePipelineLessonOutput(detail) {
   const sample = detail?.samples?.[0];
   const raw = attemptResultText(null, sample).trim();
-  if (!raw) return { raw:"", output:null, sample };
+  if (recoverableConversationFailure(sample)) {
+    const action = String(detail?.job?.scenario?.lessonAction || "");
+    const assistantMessage = action === "reply"
+      ? "Which part of your last answer should we examine more carefully, and why?"
+      : "What do you already understand about this part, and where would you begin explaining it?";
+    return { raw, output:{ assistantMessage, format:"local-complete-recovery" }, sample };
+  }
+  if (!raw) {
+    if (sample?.status === "completed") {
+      const assistantMessage = "What do you already understand about this part, and where would you begin explaining it?";
+      return { raw:"", output:{ assistantMessage, format:"local-complete-recovery" }, sample };
+    }
+    return { raw:"", output:null, sample };
+  }
   const unfenced = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
   const first = unfenced.indexOf("{");
   const last = unfenced.lastIndexOf("}");
@@ -4728,15 +4774,16 @@ function parsePipelineLessonOutput(detail) {
   for (const candidate of candidates) {
     try {
       const value = JSON.parse(candidate);
-      const assistantMessage = clip(value?.assistant_message ?? value?.assistantMessage, 1400);
-      if (assistantMessage) return { raw, output:{ assistantMessage, format:"structured" }, sample };
+      const assistantMessage = String(value?.assistant_message ?? value?.assistantMessage ?? "").replace(/\s+/g, " ").trim();
+      if (completeConversationQuestion(assistantMessage)) return { raw, output:{ assistantMessage, format:"structured" }, sample };
     } catch (_) { /* The raw response remains visible in Backend evidence. */ }
   }
   // A provider can still give a useful normal reply while missing the JSON wrapper.
   // Keep that response usable rather than stranding the learner after a valid turn.
-  const plainText = clip(unfenced, 1400).replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim();
-  if (plainText && !/^\{/.test(plainText)) return { raw, output:{ assistantMessage:plainText, format:"plain-text-fallback" }, sample };
-  return { raw, output:null, sample };
+  const plainText = unfenced.replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim();
+  if (completeConversationQuestion(plainText) && !/^\{/.test(plainText)) return { raw, output:{ assistantMessage:plainText, format:"plain-text-fallback" }, sample };
+  const assistantMessage = "Which part of this outcome would you like to reason through first?";
+  return { raw, output:{ assistantMessage, format:"local-complete-recovery" }, sample };
 }
 
 function parsePipelineLessonEvaluation(detail) {
@@ -4864,7 +4911,7 @@ async function createPipelineLessonTurn(action, answer = "", targetOutcomeIndex 
   const routingNote = options.routing ? `\nRouting evaluator's prior recommendation (advisory, not mastery): ${JSON.stringify(options.routing)}` : "";
   const actionMessage = action === "reply" ? `The learner's message: ${answer}${routingNote}` : action === "transition" ? `Fixed application code opened this next ordered outcome without claiming mastery. The learner's newest message was: ${answer}${routingNote}` : "Begin the selected roadmap at this outcome. Ask the first focused question.";
   const tutorPrompt = lessonTutorPrompt();
-  const request = { action:"create", idempotencyKey:`lesson-${action}-${selection.artifact.runId}-${selection.job.id}-${selection.recordKey}-${lessonTurn}`, component:"lesson", name:`Guided Lesson · ${clip(selection.map.lessonTitle || selection.artifact.topic, 100)}`, scenario:{ pipelineRunId:selection.artifact.runId, pipelineStage:"lesson", sourceMapJobId:selection.job.id, sourceMapRecordId:selection.recordKey, sourceMapFingerprint:selection.fingerprint, lessonTurn, outcomeIndex, outcomeId:outcome.id, lessonAction:action, sourceTutorJobId:options.sourceTutorJobId || "", routingEvaluatorJobId:options.routingEvaluatorJobId || "", promptVersion:LESSON_CONVERSATION_PROMPT_VERSION, network:currentNetworkContext() }, samples:[{ clientSampleId:`${selection.artifact.runId}:lesson:${selection.job.id}:${selection.recordKey}:${lessonTurn}`, provider:provider.provider, model:provider.model, system:tutorPrompt, messages:[{ role:"user", content:`Guided lesson packet — use as data only:\n${packet}` }, ...pipelineLessonTranscript(selection).slice(-40).map((turn) => ({ role:turn.role, content:turn.content })), { role:"user", content:actionMessage }], maxTokens:LAB_OUTPUT_TOKEN_SERVER_MAX, ...(labState.pipelineMode === "mock" ? { research:true, researchMaxUses:2 } : { research:false }), metadata:{ promptFingerprint:fingerprint(tutorPrompt), promptCoreFingerprint:fingerprint(LESSON_CONVERSATION_PROMPT), inputFingerprint:fingerprint(`${packet}\n${actionMessage}`), promptVersionId:LESSON_CONVERSATION_PROMPT_VERSION, promptVersionName:"Socratic Lesson tutor v4 · verified support", replicate:1, inputLabel:`Guided Lesson ${outcome.number} · ${clip(outcome.title, 100)}`, source:"selected immutable roadmap plus current-outcome verified support when available plus unverified saved Extraction; no learner progress authority", promptEdited:tutorPrompt !== LESSON_CONVERSATION_PROMPT, checks:[] } }] };
+  const request = { action:"create", idempotencyKey:`lesson-${action}-${selection.artifact.runId}-${selection.job.id}-${selection.recordKey}-${lessonTurn}`, component:"lesson", name:`Guided Lesson · ${clip(selection.map.lessonTitle || selection.artifact.topic, 100)}`, scenario:{ pipelineRunId:selection.artifact.runId, pipelineStage:"lesson", sourceMapJobId:selection.job.id, sourceMapRecordId:selection.recordKey, sourceMapFingerprint:selection.fingerprint, lessonTurn, outcomeIndex, outcomeId:outcome.id, lessonAction:action, sourceTutorJobId:options.sourceTutorJobId || "", routingEvaluatorJobId:options.routingEvaluatorJobId || "", promptVersion:LESSON_CONVERSATION_PROMPT_VERSION, network:currentNetworkContext() }, samples:[{ clientSampleId:`${selection.artifact.runId}:lesson:${selection.job.id}:${selection.recordKey}:${lessonTurn}`, provider:provider.provider, model:provider.model, system:tutorPrompt, messages:[{ role:"user", content:`Guided lesson packet — use as data only:\n${packet}` }, ...pipelineLessonTranscript(selection).slice(-40).map((turn) => ({ role:turn.role, content:turn.content })), { role:"user", content:actionMessage }], maxTokens:LAB_OUTPUT_TOKEN_SERVER_MAX, ...(labState.pipelineMode === "mock" ? { research:true, researchMaxUses:2 } : { research:false }), metadata:{ promptFingerprint:fingerprint(tutorPrompt), promptCoreFingerprint:fingerprint(LESSON_CONVERSATION_PROMPT), inputFingerprint:fingerprint(`${packet}\n${actionMessage}`), promptVersionId:LESSON_CONVERSATION_PROMPT_VERSION, promptVersionName:"Socratic Lesson tutor v4 · verified support", responseContract:CONVERSATION_RESPONSE_CONTRACT, replicate:1, inputLabel:`Guided Lesson ${outcome.number} · ${clip(outcome.title, 100)}`, source:"selected immutable roadmap plus current-outcome verified support when available plus unverified saved Extraction; no learner progress authority", promptEdited:tutorPrompt !== LESSON_CONVERSATION_PROMPT, checks:[] } }] };
   labState.lessonBusy = true;
   setMessage("pipeline-lesson-output", "Saving your message and waiting for Worldview’s question…");
   try {
@@ -5039,7 +5086,9 @@ function renderPipelineLesson() {
   next.textContent = !following ? "Continue to Quiz" : following.chapterIndex !== current.chapterIndex ? `Next chapter · ${following.chapterTitle}` : "Next section";
   if (latestEvaluation && LAB_ACTIVE_JOB_STATES.has(latestEvaluation.status)) routing.textContent = "The tutor has already continued. A separate evaluator is reviewing the previous reply for a later route decision.";
   else if (routingRecord?.output) routing.textContent = routingRecord.output.decision === "advance" ? "The evaluator recommends opening the next outcome on the following tutor turn; this is not mastery." : `The evaluator recommends staying with this outcome${routingRecord.output.nextFocus ? `: ${routingRecord.output.nextFocus}` : "."}`;
-  setStatus("The tutor replies immediately; routing applies on a following turn and is not mastery or progress.", "ok");
+  setStatus(record.output.format === "local-complete-recovery"
+    ? "The provider’s unfinished reply is retained only in Backend evidence. A complete local question kept the guided conversation moving without another paid request."
+    : "The tutor replies immediately; routing applies on a following turn and is not mastery or progress.", "ok");
   labState.extraction.lastSpeechText = record.output.assistantMessage;
   renderPipelineExtractionModeControls();
   maybeSpeakPipelineLessonReply(latest, record.output);
@@ -5238,6 +5287,7 @@ async function ensurePipelineExtractionOpening(artifact = selectedPipelineArtifa
         inputFingerprint:fingerprint(sourcePacket),
         promptVersionId:EXTRACTION_PROMPT_VERSION,
         promptVersionName:"Feynman extraction Broad Pass v5",
+        responseContract:CONVERSATION_RESPONSE_CONTRACT,
         replicate:1,
         inputLabel:`Broad overview from Clarification · ${clip(artifact.topic, 100)}`,
         source:"immutable Clarification artifact only; map selection is stored solely as provenance, never prompt context",
@@ -5336,6 +5386,7 @@ async function startMapAwareExtraction({ answer = "", inputMode = "text", trigge
         inputFingerprint:fingerprint(`${sourcePacket}\n${prior.map((turn) => `${turn.role}:${turn.content}`).join("\n")}\n${answer || trigger}`),
         promptVersionId:MAP_AWARE_EXTRACTION_PROMPT_VERSION,
         promptVersionName:"Feynman extraction Map-Aware Pass v2",
+        responseContract:CONVERSATION_RESPONSE_CONTRACT,
         replicate:1,
         inputLabel:`Map-Aware Extraction turn ${nextTurn} · ${clip(artifact.topic, 100)}`,
         source:"selected Lesson Map chapter/outcome route plus unverified learner wording; route labels are not facts or answer keys",
@@ -5450,6 +5501,7 @@ async function submitPipelineExtractionReply(value = q("pipeline-extraction-repl
         inputFingerprint:fingerprint(`${sourcePacket}\n${prior.map((turn) => `${turn.role}:${turn.content}`).join("\n")}\n${answer}`),
         promptVersionId:mapAware ? MAP_AWARE_EXTRACTION_PROMPT_VERSION : EXTRACTION_PROMPT_VERSION,
         promptVersionName:mapAware ? "Feynman extraction Map-Aware Pass v2" : "Feynman extraction Broad Pass v5",
+        responseContract:CONVERSATION_RESPONSE_CONTRACT,
         replicate:1,
         inputLabel:`Feynman conversation turn ${nextTurn} · ${clip(artifact.topic, 100)}`,
         source:mapAware ? "selected Lesson Map route plus the learner's own extraction wording; route labels are unverified and not answer keys" : "immutable Clarification artifact plus the learner's own extraction wording; map selection is provenance only, never prompt context",
@@ -6029,10 +6081,12 @@ function renderPipelineExtraction() {
       : transition?.broadComplete
         ? "Broad Pass is complete. Connecting its next question to the Lesson route now."
         : "Keep building the broad overview. Lesson-map readiness stays silent until this pass is complete.";
-  setStatus(saved
-    ? `${answerCount} message${answerCount === 1 ? "" : "s"} ${answerCount === 1 ? "is" : "are"} frozen as a reusable, private future-stage input. This conversation will not change after saving.`
-    : transition ? `${passLabel} · ${transitionStatus}`
-        : answerCount ? `${answerCount} message${answerCount === 1 ? "" : "s"} saved in this protected Lab conversation. It does not mark progress.` : "Worldview is ready. Explain the topic in your own words; uncertainty is useful evidence.", (answerCount || transition) ? "ok" : "");
+  setStatus(record.output.format === "local-complete-recovery"
+    ? "The provider’s unfinished reply is retained only in Backend evidence. A complete local question kept this phase moving without another paid request."
+    : saved
+      ? `${answerCount} message${answerCount === 1 ? "" : "s"} ${answerCount === 1 ? "is" : "are"} frozen as a reusable, private future-stage input. This conversation will not change after saving.`
+      : transition ? `${passLabel} · ${transitionStatus}`
+          : answerCount ? `${answerCount} message${answerCount === 1 ? "" : "s"} saved in this protected Lab conversation. It does not mark progress.` : "Worldview is ready. Explain the topic in your own words; uncertainty is useful evidence.", (record.output.format === "local-complete-recovery" || answerCount || transition) ? "ok" : "");
   q("pipeline-extraction-reply").disabled = labState.extractionBusy || labState.extraction.saveBusy || savedCurrentAttempt;
   labState.extraction.lastSpeechText = record.output.assistantMessage;
   renderPipelineExtractionModeControls();
@@ -6683,8 +6737,14 @@ function renderClarificationBackendSnapshot(selection = labState.clarification.b
     const model = sample?.model || packet.model || "unknown model";
     const route = sample?.provider || packet.provider || "unknown provider";
     const finishReason = sample?.metadata?.providerFinishReason ? ` · finish ${sample.metadata.providerFinishReason}` : "";
-    const resultState = sample?.metadata?.providerResultState === "no_visible_text" || sample?.error?.type === "provider_empty"
-      ? " · no visible provider text" : "";
+    const providerState = String(sample?.error?.type || sample?.metadata?.providerResultState || "");
+    const resultState = providerState === "provider_empty" || providerState === "no_visible_text"
+      ? " · recoverable no visible provider text"
+      : providerState === "provider_truncated"
+        ? " · rejected partial provider reply"
+        : providerState === "provider_incomplete"
+          ? " · rejected unfinished conversational reply"
+          : "";
     const blockTypes = Array.isArray(sample?.metadata?.providerBlockTypes) && sample.metadata.providerBlockTypes.length
       ? ` · blocks ${sample.metadata.providerBlockTypes.join(", ")}` : "";
     statusNode.textContent = `${job.scenario?.topic || "Clarification"} · turn ${turn + 1} · ${promptVersion} · ${route}/${model}${finishReason}${resultState}${blockTypes}`;
@@ -6793,7 +6853,7 @@ function renderClarificationTranscript(transcript = []) {
   const root = q("clarification-transcript");
   if (!details || !root) return;
   const turns = (Array.isArray(transcript) ? transcript : [])
-    .map((turn) => ({ role: turn?.role === "assistant" ? "assistant" : "user", content: clip(turn?.content, 1200) }))
+    .map((turn) => ({ role: turn?.role === "assistant" ? "assistant" : "user", content: asText(turn?.content).trim() }))
     .filter((turn) => turn.content);
   details.hidden = !turns.length;
   root.replaceChildren(...turns.map((turn) => {
@@ -6991,20 +7051,10 @@ function stripClarificationEmoji(text) {
 
 function digestibleClarificationReply(text, maxWords = 45) {
   const clean = String(text || "").trim();
-  const words = clean.split(/\s+/).filter(Boolean);
-  if (words.length <= maxWords) return clean;
-  const sentences = clean.match(/[^.!?]+[.!?]+(?:["')\]]+)?|[^.!?]+$/g) || [];
-  const kept = [];
-  let count = 0;
-  for (const sentence of sentences) {
-    const sentenceWords = sentence.trim().split(/\s+/).filter(Boolean);
-    if (!sentenceWords.length) continue;
-    if (count + sentenceWords.length > maxWords) break;
-    kept.push(sentence.trim());
-    count += sentenceWords.length;
-  }
-  if (kept.length) return kept.join(" ");
-  return `${words.slice(0, maxWords).join(" ").replace(/[,:;—-]+$/, "")}…`;
+  void maxWords; // retained for saved test fixtures and historic call sites
+  // The 45-word preference is a model instruction, not a rendering knife.
+  // Showing a slightly long complete thought is always safer than clipping it.
+  return clean;
 }
 
 function parseClarificationOutput(raw, firstTurn, topic = "") {
@@ -7023,17 +7073,15 @@ function parseClarificationOutput(raw, firstTurn, topic = "") {
   const fallbackMessage = firstTurn
     ? "What first made this topic feel worth exploring: something you heard, a problem you noticed, or a question that keeps returning?"
     : "What part of what you just shared would you like to explore further?";
-  const sourceMessage = clip(
-    value.assistant_message || value.reply || value.message || value.text || (objectStart < 0 ? clean : "") || fallbackMessage,
-    700,
-  );
+  const sourceMessage = String(value.assistant_message || value.reply || value.message || value.text || (objectStart < 0 ? clean : "") || fallbackMessage);
   const normalizedMessage = stripClarificationEmoji(sourceMessage)
     .replace(/(?:^|\s)#{1,6}\s+/g, " ")
     .replace(/(?:^|\r?\n)\s*(?:[-*•]|\d+[.)])\s*/g, " ")
     .replace(/[*_~`]+/g, "")
     .replace(/\s+/g, " ")
     .trim();
-  const assistantMessage = digestibleClarificationReply(normalizedMessage);
+  const candidateMessage = digestibleClarificationReply(normalizedMessage);
+  const assistantMessage = completeConversationQuestion(candidateMessage) ? candidateMessage : fallbackMessage;
   const scopeSummary = clip(value.scope_summary || (topic
     ? `Explore ${topic} and narrow the direction through conversation.`
     : "Keep the lesson broad until the learner names a direction."), 700);
@@ -7214,7 +7262,7 @@ async function runClarificationModel() {
       metadata: {
         promptFingerprint: provenance.fingerprint, promptCoreFingerprint: fingerprint(CLARIFICATION_PROMPT),
         inputFingerprint: fingerprint(JSON.stringify(packet.messages)), promptVersionId: CLARIFICATION_PROMPT_VERSION,
-        promptVersionName: "Clarification conversation v11", promptSource: provenance.source, replicate: 1, inputLabel: `Clarification turn ${state.learnerReplyCount + 1}`,
+        promptVersionName: "Clarification conversation v11", promptSource: provenance.source, responseContract: CONVERSATION_RESPONSE_CONTRACT, replicate: 1, inputLabel: `Clarification turn ${state.learnerReplyCount + 1}`,
         source: `lesson pipeline ${state.runId}`, promptEdited: packet.editableSystem !== CLARIFICATION_PROMPT, checks: [],
       },
     }],
@@ -7234,12 +7282,13 @@ async function runClarificationModel() {
     const detail = await waitForClarificationJob(created.job.id);
     syncJobDetail(detail);
     const sample = detail.samples?.[0];
-    const recoverableProviderEmpty = sample?.status === "failed" && sample?.error?.type === "provider_empty";
-    if (!sample || (sample.status !== "completed" && !recoverableProviderEmpty)) throw new Error(sample?.error?.message || "The clarification model turn did not complete.");
+    const recoverableProviderFailure = recoverableConversationFailure(sample);
+    if (!sample || (sample.status !== "completed" && !recoverableProviderFailure)) throw new Error(sample?.error?.message || "The clarification model turn did not complete.");
     const raw = attemptResultText(null, sample);
-    const providerReturnedNoText = recoverableProviderEmpty || !String(raw).trim();
+    const providerReturnedUnsafeReply = recoverableProviderFailure || !String(raw).trim();
+    const providerFailureType = conversationFailureType(sample);
     const providerFinishReason = String(sample.metadata?.providerFinishReason || "").trim();
-    const parsed = providerReturnedNoText
+    const parsed = providerReturnedUnsafeReply
       ? clarificationEmptyReplyFallback(firstTurn, state.turns, state.topic, state.latest)
       : parseClarificationOutput(raw, firstTurn, state.topic);
     const output = avoidClarificationRepeat(parsed, state.turns);
@@ -7249,8 +7298,8 @@ async function runClarificationModel() {
     renderClarificationOutput(output, raw, detail, packet, Math.round(performance.now() - started));
     state.runError = "";
     setMessage("clarification-message", "");
-    setMessage("clarification-backend-message", providerReturnedNoText
-      ? `The provider result was recorded as recoverable no-text${providerFinishReason ? ` (finish reason: ${providerFinishReason})` : ""}; a local follow-up kept the conversation moving. The response shape remains inspectable below.`
+    setMessage("clarification-backend-message", providerReturnedUnsafeReply
+      ? `The provider result was recorded as recoverable ${providerFailureType || "no-text"}${providerFinishReason ? ` (finish reason: ${providerFinishReason})` : ""}; the unsafe partial was kept only in Backend evidence and a complete local question kept the conversation moving.`
       : "Run completed. The prompt, exact request, raw reply, and validated output below all belong to this learner turn.", "ok");
     if (state.mode === "voice") {
       setClarificationBusy(false);
