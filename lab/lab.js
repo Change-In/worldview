@@ -394,6 +394,7 @@ const labState = {
     nextReplyInstruction: "",
     mapReadyCueKey: "",
     mapReadyNoticeBusy: false,
+    autoLessonHandoffJobId: "",
     preMapRunId: "",
     activeAttempt: 0,
     handoffMode: "full",
@@ -689,7 +690,7 @@ function resetWorkspaceContents() {
   Object.assign(labState.extraction, {
     mode: "text", micStream: null, recorder: null, recorderChunks: [], recordingStartedAt: 0,
     retainedRecording: null, retainedOperationId: "", audioPrimed: false, voiceAudio: null,
-    voiceSpeechCancel: null, speechPlaybackGeneration: 0, captureGeneration: 0, lastSpeechText: "", lastSpokenJobId: "", speaking: false, saveBusy: false, modeSwitching: false, demoMapReady: false, nextReplyInstruction: "", mapReadyCueKey: "", mapReadyNoticeBusy: false, preMapRunId: "", activeAttempt: 0, handoffMode: "full",
+    voiceSpeechCancel: null, speechPlaybackGeneration: 0, captureGeneration: 0, lastSpeechText: "", lastSpokenJobId: "", speaking: false, saveBusy: false, modeSwitching: false, demoMapReady: false, nextReplyInstruction: "", mapReadyCueKey: "", mapReadyNoticeBusy: false, autoLessonHandoffJobId: "", preMapRunId: "", activeAttempt: 0, handoffMode: "full",
   });
   labState.clarificationArtifacts = [];
   labState.pipelineStage = "clarification";
@@ -3674,6 +3675,16 @@ async function beginLessonFromExtractionVoiceOrText() {
   return true;
 }
 
+async function maybeAutoStartLessonAfterExtraction(record, job, learnerMessageCount) {
+  const artifact = selectedPipelineArtifact();
+  if (!record?.output || record.output.lessonTransition !== "suggest" || !job?.id || learnerMessageCount < 1 || labState.extraction.autoLessonHandoffJobId === job.id) return;
+  if (!artifact || !pipelineMapIsReady(artifact) || !selectedPipelineMapRecord()) return;
+  labState.extraction.autoLessonHandoffJobId = job.id;
+  setMessage("pipeline-extraction-output", "Extraction is complete. Saving what you shared and opening the guided Lesson…");
+  const started = await beginLessonFromExtractionVoiceOrText();
+  if (!started) labState.extraction.autoLessonHandoffJobId = "";
+}
+
 function cleanMapText(value, length = 1200) {
   return clip(asText(value).replace(/\*\*|__|`/g, "").replace(/^#+\s*/g, "").trim(), length);
 }
@@ -5607,6 +5618,7 @@ function renderPipelineExtraction() {
   const saved = selectedPipelineExtractionArtifact(artifact);
   const savedCurrentAttempt = Boolean(saved) && Number(saved.extractionAttempt || 0) === Number(labState.extraction.activeAttempt || 0);
   const transition = renderPipelineExtractionTransition(artifact, record.output);
+  void maybeAutoStartLessonAfterExtraction(record, latest, answerCount);
   setStatus(saved
     ? `${answerCount} message${answerCount === 1 ? "" : "s"} ${answerCount === 1 ? "is" : "are"} frozen as a reusable, private future-stage input. This conversation will not change after saving.`
     : labState.extraction.mapReadyNoticeBusy ? "Your Lesson Map is ready. Worldview is adding that naturally to this conversation now…"
@@ -6196,7 +6208,11 @@ function renderClarificationBackendSnapshot(selection = labState.clarification.b
     const model = sample?.model || packet.model || "unknown model";
     const route = sample?.provider || packet.provider || "unknown provider";
     const finishReason = sample?.metadata?.providerFinishReason ? ` · finish ${sample.metadata.providerFinishReason}` : "";
-    statusNode.textContent = `${job.scenario?.topic || "Clarification"} · turn ${turn + 1} · ${promptVersion} · ${route}/${model}${finishReason}`;
+    const resultState = sample?.metadata?.providerResultState === "no_visible_text" || sample?.error?.type === "provider_empty"
+      ? " · no visible provider text" : "";
+    const blockTypes = Array.isArray(sample?.metadata?.providerBlockTypes) && sample.metadata.providerBlockTypes.length
+      ? ` · blocks ${sample.metadata.providerBlockTypes.join(", ")}` : "";
+    statusNode.textContent = `${job.scenario?.topic || "Clarification"} · turn ${turn + 1} · ${promptVersion} · ${route}/${model}${finishReason}${resultState}${blockTypes}`;
   }
 }
 
@@ -6736,9 +6752,10 @@ async function runClarificationModel() {
     const detail = await waitForClarificationJob(created.job.id);
     syncJobDetail(detail);
     const sample = detail.samples?.[0];
-    if (!sample || sample.status !== "completed") throw new Error(sample?.error?.message || "The clarification model turn did not complete.");
+    const recoverableProviderEmpty = sample?.status === "failed" && sample?.error?.type === "provider_empty";
+    if (!sample || (sample.status !== "completed" && !recoverableProviderEmpty)) throw new Error(sample?.error?.message || "The clarification model turn did not complete.");
     const raw = attemptResultText(null, sample);
-    const providerReturnedNoText = !String(raw).trim();
+    const providerReturnedNoText = recoverableProviderEmpty || !String(raw).trim();
     const providerFinishReason = String(sample.metadata?.providerFinishReason || "").trim();
     const parsed = providerReturnedNoText
       ? clarificationEmptyReplyFallback(firstTurn, state.turns, state.topic, state.latest)
@@ -6751,7 +6768,7 @@ async function runClarificationModel() {
     state.runError = "";
     setMessage("clarification-message", "");
     setMessage("clarification-backend-message", providerReturnedNoText
-      ? `The provider returned no visible text${providerFinishReason ? ` (finish reason: ${providerFinishReason})` : ""}, so a local follow-up kept the conversation moving. The empty provider result remains inspectable below.`
+      ? `The provider result was recorded as recoverable no-text${providerFinishReason ? ` (finish reason: ${providerFinishReason})` : ""}; a local follow-up kept the conversation moving. The response shape remains inspectable below.`
       : "Run completed. The prompt, exact request, raw reply, and validated output below all belong to this learner turn.", "ok");
     if (state.mode === "voice") {
       setClarificationBusy(false);
@@ -7512,4 +7529,3 @@ async function boot() {
 }
 
 void boot();
-
