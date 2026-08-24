@@ -2048,11 +2048,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v139 · Aug 24";
+const BUILD = "v140 · Aug 24";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v140", date: "Aug 24", changes: [
+    "Conversation replies now have a completion gate across Clarification, Extraction, guided Lesson, and the existing tutor/Quiz conversation path. Worldview no longer displays, saves, or speaks a provider response that stopped early or failed to finish its question; the protected Lab keeps the raw partial for diagnosis and continues with a complete safe question."
+  ]},
   { tag: "v139", date: "Aug 24", changes: [
     "Fixed Mock Run Voice on iPhone so the retained microphone and recording route activate on the original finger-down gesture before the swipe-versus-hold delay. A swipe or short tap still cancels cleanly without sending a recording."
   ]},
@@ -4028,6 +4031,23 @@ function visibleTutorStream(text) {
     .replace(/\s*\[\[checkpoint:[a-z0-9-]+(?:;mastery:(?:hold|demonstrated))?\]\]/gi,"")
     .replace(/\s*\[\[[^\n]*$/,"");
 }
+function providerFinishWasTruncated(value) {
+  return new Set(["length","max_token","max_tokens","max_tokens_reached","max_tokens_stop","max_output_token","max_output_tokens","max_output_tokens_reached","token_limit","token_limit_reached"])
+    .has(String(value || "").trim().toLowerCase().replace(/[\s-]+/g,"_"));
+}
+function assertCompleteTutorResult(result) {
+  const raw = String(result && result.text || "").trim();
+  const visible = visibleTutorStream(raw).trim();
+  const stoppedEarly = !!(result && (result.truncated === true || providerFinishWasTruncated(result.stopReason)));
+  const terminalMissing = result && result.complete === false;
+  const missingQuestion = !/\?(?:["')\]]*)$/.test(visible);
+  if (!raw || stoppedEarly || terminalMissing || missingQuestion) {
+    throw claudeError("The model stopped before it returned a complete conversational question.", {
+      type:"incomplete_response", transient:true, partialText:raw,
+    });
+  }
+  return result;
+}
 function latestLearnerTurn(lesson) {
   const messages = Array.isArray(lesson && lesson.messages) ? lesson.messages : [];
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -5072,11 +5092,13 @@ async function altProviderChat(model, system, messages, onText, maxTokens, signa
   const text = String(json.text || "");
   if (!text.trim()) throw new Error("That model returned an empty reply.");
   if (onText) onText(text, text);
+  const stopReason = String(json.finishReason || "");
+  const truncated = json.truncated === true || providerFinishWasTruncated(stopReason);
   return {
     text,
     usage:{ input:Number(json.inputTokens) || 0, output:Number(json.outputTokens) || 0, cacheWrite:0, cacheRead:0, searches:0 },
     sources:[],fetchedSources:[],
-    truncated:false,complete:true,stopReason:"end_turn",
+    truncated,complete:!truncated,stopReason:stopReason || "end_turn",
   };
 }
 /* A lesson keeps the model it was started with. Developer comparison can
@@ -5201,14 +5223,9 @@ async function streamChat(system, messages, onText, onSearch, modelOverride, max
       }
     }
   }
-  // A truncated JSON planning response is unusable and correctly throws in
-  // jsonCall(). Ordinary conversational text is different: the system prompt
-  // already asks for 1-3 short sentences, so hitting the limit here is rare
-  // and usually means the model ran unusually long, not that the reply is
-  // garbage. Delivering the truncated text is far better than discarding an
-  // already-generated (and possibly already-spoken) reply and forcing a
-  // full retry — so this is surfaced as a flag on the result, not a thrown
-  // error that loses the content.
+  // The caller decides whether the terminal result satisfies its output
+  // contract. Conversational callers buffer until this stop reason is known,
+  // so a partial stream is never committed or spoken as a finished reply.
   const citations = [...citedTextBlocks.values()].flatMap(block =>
     block.citations.map(citation => ({
       type:String(citation && citation.type || ""),
@@ -9865,11 +9882,9 @@ async function reenterCheck(lesson, existingBubble) {
     const policy = tutorRequestPolicy(lesson,apiMessages,false);
     recordTutorContext(lesson,"text-reentry",system,apiMessages);
     const { text: full, usage } = await withClaudeRetries(
-      () => streamChat(system, apiMessages, partial => {
-        if (!pendingTutorTurnMatches(lesson,turnEnvelope)) return;
-        thinkingBubble.classList.remove("thinking");
-        thinkingBubble.innerHTML = md(visibleTutorStream(partial));
-      }, () => {}, undefined, 512, policy),
+      async () => assertCompleteTutorResult(await streamChat(
+        system, apiMessages, () => {}, () => {}, undefined, 512, policy
+      )),
       () => {
         thinkingBubble.classList.add("thinking");
         thinkingBubble.innerHTML = md("*temporarily busy — trying again…*");
@@ -9980,16 +9995,10 @@ async function runTextLessonResponse(lesson, thinkingBubble) {
     const system = buildSystem(lesson);
     const policy = tutorRequestPolicy(lesson,apiMessages);
     recordTutorContext(lesson,"text",system,apiMessages);
-    const sc = $("chat-scroll");
     const { text: full, usage, sources } = await withClaudeRetries(
-      () => streamChat(system, apiMessages, partial => {
-        if (!pendingTutorTurnMatches(lesson,turnEnvelope)) return;
-        thinkingBubble.classList.remove("thinking");
-        thinkingBubble.innerHTML = md(visibleTutorStream(partial));
-        sc.scrollTop = sc.scrollHeight;
-      }, () => {
+      async () => assertCompleteTutorResult(await streamChat(system, apiMessages, () => {}, () => {
         if (thinkingBubble.classList.contains("thinking")) thinkingBubble.innerHTML = md("*researching the topic…*");
-      }, undefined, 768, policy),
+      }, undefined, 768, policy)),
       () => {
         thinkingBubble.classList.add("thinking");
         thinkingBubble.innerHTML = md("*temporarily busy — trying again…*");
@@ -13090,18 +13099,12 @@ async function voiceSend(text, reuseExistingTurn = false) {
     const policy = tutorRequestPolicy(lesson,apiMessages);
     recordTutorContext(lesson,"voice",system,apiMessages);
     const { text: full, usage, sources } = await withClaudeRetries(
-      () => streamChat(system, apiMessages, partial => {
-        if (!pendingTutorTurnMatches(lesson,turnEnvelope)) return;
-        const spoken = stripForSpeech(visibleTutorStream(partial)); // keep display & TTS offsets aligned
-        markSpokenTurnTiming("firstTextMs");
-        presenter.push(spoken);
-        if (!voice.mutedThisTurn) enqueuedUpTo = enqueueSentences(spoken, enqueuedUpTo, false);
-      }, () => {
+      async () => assertCompleteTutorResult(await streamChat(system, apiMessages, () => {}, () => {
         if (!voice.queue.length && !voice.utter) {
           $("voice-status-text").textContent = "researching…";
           sayFiller(); // break the silence the way a person would
         }
-      }, undefined, 512, policy),
+      }, undefined, 512, policy)),
       ({ nextAttempt, maxAttempts }) => {
         setVoiceStatus("thinking");
         $("voice-status-text").textContent = `temporarily busy · retrying ${nextAttempt}/${maxAttempts}`;
@@ -13112,6 +13115,7 @@ async function voiceSend(text, reuseExistingTurn = false) {
     const cleanFull = finalizeTutorReply(full,lesson,{turnEnvelope});
     if (!cleanFull) throw claudeError("Claude returned an empty response", { transient: true });
     const spokenFull = stripForSpeech(cleanFull);
+    markSpokenTurnTiming("firstTextMs");
     voice.speechText = spokenFull;
     voice.expectedSpeechEnd = spokenFull.length;
     markSpokenTurnTiming("textCompleteMs");
@@ -13181,13 +13185,9 @@ async function voiceReenter(lesson) {
     const policy = tutorRequestPolicy(lesson,apiMessages,false);
     recordTutorContext(lesson,"voice-reentry",system,apiMessages);
     const { text: full, usage } = await withClaudeRetries(
-      () => streamChat(system, apiMessages, partial => {
-        if (!pendingTutorTurnMatches(lesson,turnEnvelope)) return;
-        const spoken = stripForSpeech(visibleTutorStream(partial));
-        markSpokenTurnTiming("firstTextMs");
-        presenter.push(spoken);
-        if (!voice.mutedThisTurn) enqueuedUpTo = enqueueSentences(spoken, enqueuedUpTo, false);
-      }, () => {}, undefined, 512, policy),
+      async () => assertCompleteTutorResult(await streamChat(
+        system, apiMessages, () => {}, () => {}, undefined, 512, policy
+      )),
       ({ nextAttempt, maxAttempts }) => {
         setVoiceStatus("thinking");
         $("voice-status-text").textContent = `temporarily busy · retrying ${nextAttempt}/${maxAttempts}`;
@@ -13198,6 +13198,7 @@ async function voiceReenter(lesson) {
     const cleanFull = finalizeTutorReply(full,lesson,{forceHold:true,turnEnvelope});
     if (!cleanFull) throw claudeError("Claude returned an empty response", { transient:true });
     const spokenFull = stripForSpeech(cleanFull);
+    markSpokenTurnTiming("firstTextMs");
     voice.speechText = spokenFull;
     voice.expectedSpeechEnd = spokenFull.length;
     markSpokenTurnTiming("textCompleteMs");
