@@ -2048,11 +2048,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v137 · Aug 24";
+const BUILD = "v138 · Aug 24";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v138", date: "Aug 24", changes: [
+    "Mock Run now opens as one phone-sized full-screen journey, restores vertical scrolling during Clarification without removing hold-to-talk, and places the completed Lesson Map directly inside the ongoing Extraction view as soon as it is ready. Done continues the run without stage-navigation taps."
+  ]},
   { tag: "v137", date: "Aug 24", changes: [
     "Mock Run now stays in one learner-facing conversation from Clarification through two-pass Extraction and the guided Lesson. Voice or Text carries forward, Models & spend stays minimized but reachable, Lesson controls can move to the next section or chapter, and the unfinished Quiz is now a truthful reachable frame."
   ]},
