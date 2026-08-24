@@ -2048,11 +2048,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v130 · Aug 23";
+const BUILD = "v131 · Aug 23";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v131", date: "Aug 23", changes: [
+    "Fixed a race where the background map-ready reply could compete with the learner's first Extraction response; learner turns now always finish before that notice is created."
+  ]},
   { tag: "v130", date: "Aug 23", changes: [
     "When Extraction signals it has enough broad understanding, Worldview now saves that context and opens the guided Lesson automatically.",
     "Clarification now records provider response shape and treats a no-visible-text result as a recoverable provider failure, preserving the conversation instead of treating an empty completion as success."
@@ -15279,4 +15282,3 @@ window.addEventListener("blur", () => {
 </script>
 </body>
 </html>
-
