@@ -2048,11 +2048,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v132 · Aug 23";
+const BUILD = "v133 · Aug 23";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v133", date: "Aug 23", changes: [
+    "Lesson Map readiness now joins the next normal Extraction reply as one fuller message, while the Done button leaves the phase transition entirely up to you."
+  ]},
   { tag: "v132", date: "Aug 23", changes: [
     "Fixed the automatic map-ready reply request so it always ends with a provider-valid internal user event; that event never appears as a learner transcript message."
   ]},
