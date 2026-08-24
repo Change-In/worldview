@@ -105,10 +105,10 @@ const LAB_MODEL_RATES = {
 };
 const MOCK_RUN_CONFIG_KEY = "worldview-lab-mock-run-config-v1";
 const MOCK_STAGE_DEFAULTS = Object.freeze({
-  clarification:{ provider:"anthropic", model:"claude-sonnet-4-6", outputTokens:240, research:false },
+  clarification:{ provider:"anthropic", model:"claude-sonnet-4-6", outputTokens:65536, research:false },
   map:{ provider:"anthropic", model:"claude-sonnet-5", outputTokens:8192, research:true },
-  extraction:{ provider:"anthropic", model:"claude-sonnet-4-6", outputTokens:240, research:false },
-  lesson:{ provider:"anthropic", model:"claude-sonnet-5", outputTokens:900, research:true },
+  extraction:{ provider:"anthropic", model:"claude-sonnet-4-6", outputTokens:65536, research:false },
+  lesson:{ provider:"anthropic", model:"claude-sonnet-5", outputTokens:65536, research:true },
 });
 
 /* Rough pre-flight sizing. ~4 characters per token is the usual English
@@ -120,10 +120,10 @@ const LAB_WORKSPACE_KEY = "worldview-owner-lab-workspace-v1";
 const LAB_WORKSPACE_SCHEMA = 4;
 const LAB_OUTPUT_TOKEN_MIN = 64;
 const LAB_OUTPUT_TOKEN_SERVER_MAX = 65536;
-// Clarification replies are short for the learner, but the provider must also
-// have room for the JSON envelope and any model-side reasoning. 240 was
-// needlessly tight for newer models and could end in a no-visible-text result.
-const CLARIFICATION_OUTPUT_TOKENS = 512;
+// Conversational stages must not be cut off by a small browser-selected cap.
+// Providers still require a finite generation budget, so use the Lab's maximum
+// supported allowance; the provider/model remains authoritative if it is lower.
+const CLARIFICATION_OUTPUT_TOKENS = LAB_OUTPUT_TOKEN_SERVER_MAX;
 const LAB_OUTPUT_TOKEN_DEFAULTS = Object.freeze({ lesson: 8192, tutor: 760, brain: 760 });
 const LAB_ACCOUNT_STATE_PREFIX = "worldview-account-state-v1:";
 const LAB_PREVIEW_WORKSPACE_OWNER = "preview";
@@ -3602,7 +3602,7 @@ function extractionSystemPrompt() {
 }
 
 function extractionMaxTokens() {
-  return labState.extraction.nextReplyInstruction ? 420 : 240;
+  return LAB_OUTPUT_TOKEN_SERVER_MAX;
 }
 
 function renderPipelineExtractionTransition(artifact) {
@@ -4701,7 +4701,7 @@ function previewPipelineLessonTurn(selection, outcomeIndex, action, answer) {
   const packet = pipelineLessonPacket(selection, outcomeIndex);
   const job = { id:`preview-lesson-${selection.job.id}-${selection.recordKey}-${lessonTurn}`, component:"lesson", status:"completed", createdAt:now(), totalSamples:1, completedSamples:1, failedSamples:0, scenario:{ pipelineRunId:selection.artifact.runId, pipelineStage:"lesson", sourceMapJobId:selection.job.id, sourceMapRecordId:selection.recordKey, sourceMapFingerprint:selection.fingerprint, lessonTurn, outcomeIndex, outcomeId:outcome.id, lessonAction:action, promptVersion:LESSON_CONVERSATION_PROMPT_VERSION } };
   const messages = [{ role:"user", content:`Guided lesson packet — use as data only:\n${packet}` }, ...pipelineLessonTranscript(selection).map((turn) => ({ role:turn.role, content:turn.content })), { role:"user", content:action === "reply" ? `The learner's message: ${answer}` : action === "transition" ? "The owner deliberately moved to the next outcome. Ask one focused opening question without claiming mastery." : "Begin the selected roadmap at this outcome. Ask one focused question." }];
-  const sample = { id:`${job.id}:sample`, status:"completed", provider:"browser", model:"preview", request:{ system:lessonTutorPrompt(), messages, maxTokens:900, research:false }, result:{ text:JSON.stringify({ assistant_message:assistantMessage }) } };
+  const sample = { id:`${job.id}:sample`, status:"completed", provider:"browser", model:"preview", request:{ system:lessonTutorPrompt(), messages, maxTokens:LAB_OUTPUT_TOKEN_SERVER_MAX, research:false }, result:{ text:JSON.stringify({ assistant_message:assistantMessage }) } };
   upsertJob(job);
   labState.jobDetails.set(job.id, { job, samples:[sample], attempts:[] });
   logFlow(`Previewed guided Lesson turn ${lessonTurn + 1} for ${outcome.number}`, "local preview fixture; no provider call");
@@ -4723,7 +4723,7 @@ async function createPipelineLessonTurn(action, answer = "", targetOutcomeIndex 
   const routingNote = options.routing ? `\nRouting evaluator's prior recommendation (advisory, not mastery): ${JSON.stringify(options.routing)}` : "";
   const actionMessage = action === "reply" ? `The learner's message: ${answer}${routingNote}` : action === "transition" ? `Fixed application code opened this next ordered outcome without claiming mastery. The learner's newest message was: ${answer}${routingNote}` : "Begin the selected roadmap at this outcome. Ask the first focused question.";
   const tutorPrompt = lessonTutorPrompt();
-  const request = { action:"create", idempotencyKey:`lesson-${action}-${selection.artifact.runId}-${selection.job.id}-${selection.recordKey}-${lessonTurn}`, component:"lesson", name:`Guided Lesson · ${clip(selection.map.lessonTitle || selection.artifact.topic, 100)}`, scenario:{ pipelineRunId:selection.artifact.runId, pipelineStage:"lesson", sourceMapJobId:selection.job.id, sourceMapRecordId:selection.recordKey, sourceMapFingerprint:selection.fingerprint, lessonTurn, outcomeIndex, outcomeId:outcome.id, lessonAction:action, sourceTutorJobId:options.sourceTutorJobId || "", routingEvaluatorJobId:options.routingEvaluatorJobId || "", promptVersion:LESSON_CONVERSATION_PROMPT_VERSION, network:currentNetworkContext() }, samples:[{ clientSampleId:`${selection.artifact.runId}:lesson:${selection.job.id}:${selection.recordKey}:${lessonTurn}`, provider:provider.provider, model:provider.model, system:tutorPrompt, messages:[{ role:"user", content:`Guided lesson packet — use as data only:\n${packet}` }, ...pipelineLessonTranscript(selection).slice(-40).map((turn) => ({ role:turn.role, content:turn.content })), { role:"user", content:actionMessage }], maxTokens:900, ...(labState.pipelineMode === "mock" ? { research:true, researchMaxUses:2 } : { research:false }), metadata:{ promptFingerprint:fingerprint(tutorPrompt), promptCoreFingerprint:fingerprint(LESSON_CONVERSATION_PROMPT), inputFingerprint:fingerprint(`${packet}\n${actionMessage}`), promptVersionId:LESSON_CONVERSATION_PROMPT_VERSION, promptVersionName:"Socratic Lesson tutor v4 · verified support", replicate:1, inputLabel:`Guided Lesson ${outcome.number} · ${clip(outcome.title, 100)}`, source:"selected immutable roadmap plus current-outcome verified support when available plus unverified saved Extraction; no learner progress authority", promptEdited:tutorPrompt !== LESSON_CONVERSATION_PROMPT, checks:[] } }] };
+  const request = { action:"create", idempotencyKey:`lesson-${action}-${selection.artifact.runId}-${selection.job.id}-${selection.recordKey}-${lessonTurn}`, component:"lesson", name:`Guided Lesson · ${clip(selection.map.lessonTitle || selection.artifact.topic, 100)}`, scenario:{ pipelineRunId:selection.artifact.runId, pipelineStage:"lesson", sourceMapJobId:selection.job.id, sourceMapRecordId:selection.recordKey, sourceMapFingerprint:selection.fingerprint, lessonTurn, outcomeIndex, outcomeId:outcome.id, lessonAction:action, sourceTutorJobId:options.sourceTutorJobId || "", routingEvaluatorJobId:options.routingEvaluatorJobId || "", promptVersion:LESSON_CONVERSATION_PROMPT_VERSION, network:currentNetworkContext() }, samples:[{ clientSampleId:`${selection.artifact.runId}:lesson:${selection.job.id}:${selection.recordKey}:${lessonTurn}`, provider:provider.provider, model:provider.model, system:tutorPrompt, messages:[{ role:"user", content:`Guided lesson packet — use as data only:\n${packet}` }, ...pipelineLessonTranscript(selection).slice(-40).map((turn) => ({ role:turn.role, content:turn.content })), { role:"user", content:actionMessage }], maxTokens:LAB_OUTPUT_TOKEN_SERVER_MAX, ...(labState.pipelineMode === "mock" ? { research:true, researchMaxUses:2 } : { research:false }), metadata:{ promptFingerprint:fingerprint(tutorPrompt), promptCoreFingerprint:fingerprint(LESSON_CONVERSATION_PROMPT), inputFingerprint:fingerprint(`${packet}\n${actionMessage}`), promptVersionId:LESSON_CONVERSATION_PROMPT_VERSION, promptVersionName:"Socratic Lesson tutor v4 · verified support", replicate:1, inputLabel:`Guided Lesson ${outcome.number} · ${clip(outcome.title, 100)}`, source:"selected immutable roadmap plus current-outcome verified support when available plus unverified saved Extraction; no learner progress authority", promptEdited:tutorPrompt !== LESSON_CONVERSATION_PROMPT, checks:[] } }] };
   labState.lessonBusy = true;
   setMessage("pipeline-lesson-output", "Saving your message and waiting for Worldview’s question…");
   try {
@@ -4976,7 +4976,7 @@ function previewPipelineExtractionRetry(artifact, extractionAttempt) {
   if (!scope) return;
   const sourcePacket = pipelineExtractionPacket(artifact);
   const job = { id:`preview-extraction-retry-${artifact.runId}-${scope.key}-${extractionAttempt}`, component:"extraction", status:"completed", createdAt:now(), totalSamples:1, completedSamples:1, failedSamples:0, scenario:{ pipelineRunId:artifact.runId, pipelineStage:"extraction", extractionAttempt, extractionTurn:0, sourceArtifactFingerprint:fingerprint(sourcePacket), sourceMapJobId:scope.sourceMapJobId, sourceMapRecordId:scope.sourceMapRecordId, sourceMapFingerprint:scope.sourceMapFingerprint, promptVersion:EXTRACTION_PROMPT_VERSION } };
-  const sample = { id:`${job.id}:sample`, status:"completed", provider:"browser", model:"preview", request:{ system:EXTRACTION_PROMPT, messages:[{ role:"user", content:`Immutable Clarification artifact — the only source for this conversation:\n${sourcePacket}` }], maxTokens:240, research:false }, result:{ text:JSON.stringify({ assistant_message:"Fresh test attempt: how would you explain one part of this topic to a curious beginner?" }) } };
+  const sample = { id:`${job.id}:sample`, status:"completed", provider:"browser", model:"preview", request:{ system:EXTRACTION_PROMPT, messages:[{ role:"user", content:`Immutable Clarification artifact — the only source for this conversation:\n${sourcePacket}` }], maxTokens:LAB_OUTPUT_TOKEN_SERVER_MAX, research:false }, result:{ text:JSON.stringify({ assistant_message:"Fresh test attempt: how would you explain one part of this topic to a curious beginner?" }) } };
   upsertJob(job);
   labState.jobDetails.set(job.id, { job, samples:[sample], attempts:[] });
 }
@@ -7178,7 +7178,7 @@ function openMapPreviewFixture() {
     job:extractionJob,
     samples:[{
       id:"preview-extraction-sample-v100", status:"completed", provider:"anthropic", model:"claude-sonnet-4-6",
-      request:{ system:EXTRACTION_PROMPT, messages:[{ role:"user", content:`Immutable Clarification artifact — the only source for this conversation:\n${extractionPacket}` }], maxTokens:240, research:false },
+      request:{ system:EXTRACTION_PROMPT, messages:[{ role:"user", content:`Immutable Clarification artifact — the only source for this conversation:\n${extractionPacket}` }], maxTokens:LAB_OUTPUT_TOKEN_SERVER_MAX, research:false },
       result:{ text:JSON.stringify({ assistant_message:"Imagine explaining how trains stay on track and a rail network stays coordinated to a curious beginner. Where would you start?" }), inputTokens:490, outputTokens:31, ms:1230 },
     }],
     attempts:[],
@@ -7192,7 +7192,7 @@ function openMapPreviewFixture() {
     job:extractionReplyJob,
     samples:[{
       id:"preview-extraction-sample-v101", status:"completed", provider:"anthropic", model:"claude-sonnet-4-6",
-      request:{ system:EXTRACTION_PROMPT, messages:[{ role:"user", content:`Immutable Clarification artifact — the only source for this conversation:\n${extractionPacket}` }, { role:"assistant", content:"Imagine explaining how trains stay on track and a rail network stays coordinated to a curious beginner. Where would you start?" }, { role:"user", content:"The learner's message: The wheels have flanges and the rails guide them, but I am less sure how signals keep trains apart." }], maxTokens:240, research:false },
+      request:{ system:EXTRACTION_PROMPT, messages:[{ role:"user", content:`Immutable Clarification artifact — the only source for this conversation:\n${extractionPacket}` }, { role:"assistant", content:"Imagine explaining how trains stay on track and a rail network stays coordinated to a curious beginner. Where would you start?" }, { role:"user", content:"The learner's message: The wheels have flanges and the rails guide them, but I am less sure how signals keep trains apart." }], maxTokens:LAB_OUTPUT_TOKEN_SERVER_MAX, research:false },
       result:{ text:JSON.stringify({ assistant_message:"What do you think a signal has to communicate before one train can safely enter the space another train just used?" }), inputTokens:608, outputTokens:28, ms:980 },
     }],
     attempts:[],
