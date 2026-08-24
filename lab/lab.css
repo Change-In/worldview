@@ -947,6 +947,8 @@ body.mock-run #pipeline-map-stage .map-workspace-bar { display:none; }
 .pipeline-extraction-stage h3 { margin:4px 0 9px; font:650 1.5rem/1.15 Georgia,serif; }
 .pipeline-extraction-stage > p:not(.eyebrow) { color:var(--lab-muted); }
 .extraction-stage-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.extraction-stage-title { display:flex; align-items:center; gap:10px; min-width:0; }
+.extraction-stage-title h3 { margin:4px 0 9px; }
 .extraction-stage-actions { display:flex; align-items:center; gap:8px; }
 .extraction-mode-toggle { display:grid; min-height:34px; padding:6px 9px; place-items:center; border:1px solid rgba(238,221,187,.2); border-radius:10px; color:#f2e6d0; background:rgba(255,255,255,.035); font:800 11px/1 system-ui,sans-serif; cursor:pointer; }
 .extraction-mode-toggle:hover,.extraction-mode-toggle:focus-visible { border-color:rgba(237,152,95,.55); outline:none; }
@@ -960,6 +962,14 @@ body.mock-run #pipeline-map-stage .map-workspace-bar { display:none; }
 .extraction-next-reply p { margin:8px 0; color:var(--lab-muted); font-size:11px; line-height:1.45; }
 .extraction-next-reply textarea { width:100%; min-height:74px; resize:vertical; }
 .extraction-authority { flex:0 0 auto; margin-top:4px; padding:5px 8px; border:1px solid rgba(255,190,108,.32); border-radius:999px; color:#ffdba7; background:rgba(255,190,108,.07); font-size:9px; font-weight:850; letter-spacing:.04em; text-transform:uppercase; }
+.extraction-progress { display:flex; align-items:center; gap:10px; margin:0 0 12px; padding:10px 12px; border:1px solid rgba(120,229,192,.28); border-radius:13px; color:var(--lab-muted); background:rgba(120,229,192,.045); }
+.extraction-progress-dot { width:9px; height:9px; flex:0 0 auto; border-radius:50%; background:var(--lab-mint); box-shadow:0 0 0 0 rgba(120,229,192,.45); }
+.extraction-progress[data-state="working"] .extraction-progress-dot { animation:extractionProgressPulse 1.3s ease-out infinite; }
+.extraction-progress[data-state="ready"] .extraction-progress-dot { background:var(--lab-sun); }
+.extraction-progress div { display:grid; gap:2px; min-width:0; }
+.extraction-progress strong { color:var(--lab-ink); font-size:11px; }
+.extraction-progress small { color:var(--lab-muted); font-size:10px; line-height:1.35; }
+@keyframes extractionProgressPulse { 65% { box-shadow:0 0 0 7px rgba(120,229,192,0); } 100% { box-shadow:0 0 0 0 rgba(120,229,192,0); } }
 .extraction-intro { max-width:720px; margin:0 0 16px; line-height:1.55; }
 .extraction-conversation { display:grid; gap:14px; margin:16px 0; padding:14px; border:1px solid rgba(120,229,192,.22); border-radius:16px; background:rgba(120,229,192,.035); }
 .extraction-transcript { display:grid; gap:9px; margin:0; padding:0; list-style:none; }
@@ -1037,6 +1047,115 @@ body.clarification-focus .clarification-text-controls { margin:0; padding:10px 1
 body.clarification-focus .clarification-voice-actions,
 body.clarification-focus .clarification-done,
 body.clarification-focus .clarification-conversation > .form-message { margin-right:14px; margin-left:14px; flex:0 0 auto; }
+
+/* Mock Extraction is the learner surface, not the Lab inspector. It keeps the
+   same full-screen conversation shell as Clarification while the existing
+   protected jobs and background map generation continue underneath it. */
+body.mock-run.extraction-learner-active { overflow:hidden; }
+body.mock-run.extraction-learner-active #panel-pipeline { position:fixed; z-index:1000; inset:0; display:flex!important; padding:0!important; overflow:hidden; flex-direction:column; background:#11100f; }
+body.mock-run.extraction-learner-active #panel-pipeline > .pipeline-mode-bar,
+body.mock-run.extraction-learner-active #panel-pipeline > .pipeline-mock-progress,
+body.mock-run.extraction-learner-active #panel-pipeline > .pipeline-run-browser,
+body.mock-run.extraction-learner-active #panel-pipeline > .pipeline-rail { display:none!important; }
+body.mock-run.extraction-learner-active #pipeline-connected-stage { display:block!important; height:100%; min-height:0; overflow:hidden; }
+body.mock-run.extraction-learner-active .pipeline-source-card,
+body.mock-run.extraction-learner-active #pipeline-map-stage,
+body.mock-run.extraction-learner-active #pipeline-lesson-stage,
+body.mock-run.extraction-learner-active #pipeline-quiz-stage,
+body.mock-run.extraction-learner-active #pipeline-extraction-retry,
+body.mock-run.extraction-learner-active #pipeline-extraction-demo-map-ready,
+body.mock-run.extraction-learner-active #pipeline-extraction-save,
+body.mock-run.extraction-learner-active #pipeline-extraction-open-map,
+body.mock-run.extraction-learner-active .extraction-backend,
+body.mock-run.extraction-learner-active .extraction-authority { display:none!important; }
+body.mock-run.extraction-learner-active #pipeline-extraction-stage { display:flex!important; width:100%; height:100%; min-height:0; padding:0; overflow:hidden; border:0; border-radius:0; flex-direction:column; background:#11100f; }
+body.mock-run.extraction-learner-active .extraction-stage-head { position:relative; display:flex; min-height:70px; padding:10px 58px; align-items:center; justify-content:center; flex:0 0 auto; border-bottom:1px solid rgba(255,255,255,.08); }
+body.mock-run.extraction-learner-active .extraction-stage-title { justify-content:center; text-align:center; }
+body.mock-run.extraction-learner-active .extraction-stage-title .eyebrow { margin-bottom:1px; font-size:8px; letter-spacing:.14em; }
+body.mock-run.extraction-learner-active .extraction-stage-title h3 { margin:0; font-size:1.18rem; }
+body.mock-run.extraction-learner-active .extraction-stage-title .extraction-mode-toggle { position:absolute; top:50%; left:12px; display:grid; width:40px; height:40px; min-height:40px; padding:0; place-items:center; border:0; border-radius:50%; color:#f2e6d0; background:transparent; font-size:10px; transform:translateY(-50%); }
+body.mock-run.extraction-learner-active .extraction-stage-actions { position:absolute; top:50%; right:12px; transform:translateY(-50%); }
+body.mock-run.extraction-learner-active .extraction-progress { margin:8px 14px 0; flex:0 0 auto; }
+body.mock-run.extraction-learner-active .extraction-intro { display:none; }
+body.mock-run.extraction-learner-active #pipeline-extraction-output { margin:8px 14px 0; flex:0 0 auto; }
+body.mock-run.extraction-learner-active #pipeline-extraction-conversation:not([hidden]) { display:flex; min-height:0; margin:0; padding:0; overflow:hidden; border:0; border-radius:0; flex:1; flex-direction:column; background:#171715; }
+body.mock-run.extraction-learner-active #pipeline-extraction-transcript { min-height:0; padding:22px 22px max(48px,calc(env(safe-area-inset-bottom) + 38px)); overflow-y:auto; flex:1; background:radial-gradient(circle at 50% 28%,rgba(126,98,211,.08),transparent 42%),#171715; }
+body.mock-run.extraction-learner-active .extraction-composer { margin:0; padding:10px 14px max(10px,env(safe-area-inset-bottom)); border-top:0; background:#171715; }
+body.mock-run.extraction-learner-active .extraction-voice-controls { margin:0; padding:10px 14px max(10px,env(safe-area-inset-bottom)); border:0; border-top:1px solid var(--lab-line); border-radius:0; background:#171715; }
+body.mock-run.extraction-learner-active .extraction-voice-hint { text-align:center; }
+body.mock-run.extraction-learner-active .extraction-conversation-actions { margin:0; padding:10px 14px max(10px,env(safe-area-inset-bottom)); border-top:1px solid var(--lab-line); background:#171715; }
+body.mock-run.extraction-learner-active #pipeline-extraction-skip { margin-left:auto; }
+body.mock-run.extraction-learner-active #pipeline-extraction-saved { margin:0 14px; flex:0 0 auto; }
+
+/* Keep Models & spend reachable but tucked away during learner phases. */
+body.mock-run.extraction-learner-active #mock-run-config,
+body.mock-run.lesson-learner-active #mock-run-config,
+body.mock-run.quiz-learner-active #mock-run-config { position:fixed!important; z-index:1004; top:12px!important; right:12px!important; width:auto!important; max-width:min(330px,calc(100vw - 24px)); max-height:calc(100vh - 24px)!important; margin:0!important; order:initial; }
+body.mock-run.extraction-learner-active #mock-run-config:not(.is-collapsed),
+body.mock-run.lesson-learner-active #mock-run-config:not(.is-collapsed),
+body.mock-run.quiz-learner-active #mock-run-config:not(.is-collapsed) { width:min(330px,calc(100vw - 24px))!important; overflow:hidden; }
+body.mock-run.extraction-learner-active #mock-run-config:not(.is-collapsed) .mock-run-config-body,
+body.mock-run.lesson-learner-active #mock-run-config:not(.is-collapsed) .mock-run-config-body,
+body.mock-run.quiz-learner-active #mock-run-config:not(.is-collapsed) .mock-run-config-body { max-height:calc(100vh - 118px); overflow-y:auto; }
+
+/* Mock Lesson continues the exact learner conversation shell. */
+body.mock-run.lesson-learner-active,
+body.mock-run.quiz-learner-active { overflow:hidden; }
+body.mock-run.lesson-learner-active #panel-pipeline,
+body.mock-run.quiz-learner-active #panel-pipeline { position:fixed; z-index:1000; inset:0; display:flex!important; padding:0!important; overflow:hidden; flex-direction:column; background:#11100f; }
+body.mock-run.lesson-learner-active #panel-pipeline > .pipeline-mode-bar,
+body.mock-run.lesson-learner-active #panel-pipeline > .pipeline-mock-progress,
+body.mock-run.lesson-learner-active #panel-pipeline > .pipeline-run-browser,
+body.mock-run.lesson-learner-active #panel-pipeline > .pipeline-rail,
+body.mock-run.quiz-learner-active #panel-pipeline > .pipeline-mode-bar,
+body.mock-run.quiz-learner-active #panel-pipeline > .pipeline-mock-progress,
+body.mock-run.quiz-learner-active #panel-pipeline > .pipeline-run-browser,
+body.mock-run.quiz-learner-active #panel-pipeline > .pipeline-rail { display:none!important; }
+body.mock-run.lesson-learner-active #pipeline-connected-stage,
+body.mock-run.quiz-learner-active #pipeline-connected-stage { display:block!important; height:100%; min-height:0; overflow:hidden; }
+body.mock-run.lesson-learner-active .pipeline-source-card,
+body.mock-run.lesson-learner-active #pipeline-map-stage,
+body.mock-run.lesson-learner-active #pipeline-extraction-stage,
+body.mock-run.lesson-learner-active #pipeline-quiz-stage { display:none!important; }
+body.mock-run.lesson-learner-active #pipeline-lesson-stage { display:flex!important; width:100%; height:100%; min-height:0; padding:0; overflow:hidden; border:0; border-radius:0; flex-direction:column; background:#11100f; }
+body.mock-run.lesson-learner-active .lesson-stage-head { position:relative; display:flex; min-height:70px; padding:10px 58px; align-items:center; justify-content:center; flex:0 0 auto; border-bottom:1px solid rgba(255,255,255,.08); }
+.lesson-stage-title { display:flex; align-items:center; justify-content:center; text-align:center; }
+body.mock-run.lesson-learner-active .lesson-stage-title .eyebrow { margin-bottom:1px; font-size:8px; letter-spacing:.14em; }
+body.mock-run.lesson-learner-active .lesson-stage-title h3 { margin:0; font-size:1.18rem; }
+body.mock-run.lesson-learner-active .lesson-stage-title .extraction-mode-toggle { position:absolute; top:50%; left:12px; display:grid; width:40px; height:40px; min-height:40px; padding:0; place-items:center; border:0; border-radius:50%; color:#f2e6d0; background:transparent; font-size:10px; transform:translateY(-50%); }
+body.mock-run.lesson-learner-active .pipeline-lesson-intro,
+body.mock-run.lesson-learner-active #pipeline-lesson-extraction-status,
+body.mock-run.lesson-learner-active #pipeline-lesson-extraction-input,
+body.mock-run.lesson-learner-active .extraction-backend,
+body.mock-run.lesson-learner-active #pipeline-lesson-stage > .inline-actions,
+body.mock-run.lesson-learner-active .extraction-authority { display:none!important; }
+body.mock-run.lesson-learner-active #pipeline-lesson-output { margin:8px 14px 0; flex:0 0 auto; }
+body.mock-run.lesson-learner-active #pipeline-lesson-conversation:not([hidden]) { display:flex; min-height:0; margin:0; padding:0; overflow:hidden; flex:1; flex-direction:column; background:#171715; }
+body.mock-run.lesson-learner-active .lesson-route-context { margin:8px 14px 0; padding:9px 12px; flex:0 0 auto; }
+body.mock-run.lesson-learner-active .lesson-route-context > span,
+body.mock-run.lesson-learner-active .lesson-extraction-context { display:none; }
+body.mock-run.lesson-learner-active #pipeline-lesson-transcript { min-height:0; padding:22px 22px 30px; overflow-y:auto; flex:1; background:radial-gradient(circle at 50% 28%,rgba(126,98,211,.08),transparent 42%),#171715; }
+body.mock-run.lesson-learner-active .lesson-text-controls,
+body.mock-run.lesson-learner-active .lesson-voice-controls { margin:0; padding:10px 14px max(10px,env(safe-area-inset-bottom)); border:0; border-top:1px solid var(--lab-line); border-radius:0; background:#171715; }
+body.mock-run.lesson-learner-active #pipeline-lesson-routing { margin:0; padding:7px 14px; flex:0 0 auto; text-align:center; background:#171715; }
+body.mock-run.lesson-learner-active .lesson-conversation-actions { display:flex; padding:8px 14px max(10px,env(safe-area-inset-bottom)); justify-content:flex-end; flex:0 0 auto; background:#171715; }
+
+/* Quiz is a truthful reachable frame until its conversation engine is built. */
+body.mock-run.quiz-learner-active .pipeline-source-card,
+body.mock-run.quiz-learner-active #pipeline-map-stage,
+body.mock-run.quiz-learner-active #pipeline-extraction-stage,
+body.mock-run.quiz-learner-active #pipeline-lesson-stage { display:none!important; }
+body.mock-run.quiz-learner-active #pipeline-quiz-stage { display:flex!important; width:100%; height:100%; min-height:0; padding:0; overflow:hidden; border:0; border-radius:0; flex-direction:column; background:#11100f; }
+body.mock-run.quiz-learner-active .quiz-stage-head { display:flex; min-height:70px; padding:10px 58px; align-items:center; justify-content:center; flex:0 0 auto; border-bottom:1px solid rgba(255,255,255,.08); text-align:center; }
+body.mock-run.quiz-learner-active .quiz-stage-title .eyebrow { margin-bottom:1px; font-size:8px; letter-spacing:.14em; }
+body.mock-run.quiz-learner-active .quiz-stage-title h3 { margin:0; font-size:1.18rem; }
+.quiz-learner-frame { display:grid; width:min(620px,calc(100% - 32px)); margin:auto; padding:28px; gap:14px; border:1px solid rgba(120,229,192,.24); border-radius:18px; background:rgba(23,23,21,.96); box-shadow:var(--lab-shadow); }
+.quiz-learner-frame h4 { margin:0; color:var(--lab-ink); font:650 clamp(1.45rem,4vw,2.1rem)/1.12 Georgia,serif; }
+.quiz-learner-frame p { margin:0; color:var(--lab-muted); line-height:1.6; }
+.quiz-learner-frame .button { justify-self:start; }
+body.mock-run.quiz-learner-active #pipeline-quiz-extraction-status,
+body.mock-run.quiz-learner-active #pipeline-quiz-extraction-input { display:none!important; }
+
 @media (max-width:900px) { .pipeline-stage-grid { grid-template-columns:1fr; } }
 @media (max-width:700px) { .pipeline-mode-bar { align-items:flex-start; flex-wrap:wrap; } .pipeline-mode-note { max-width:none; width:100%; text-align:left; } }
 @media (max-width:520px) {
