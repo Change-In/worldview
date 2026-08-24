@@ -1097,6 +1097,15 @@ body.mock-run.quiz-learner-active #mock-run-config:not(.is-collapsed) { width:mi
 body.mock-run.extraction-learner-active #mock-run-config:not(.is-collapsed) .mock-run-config-body,
 body.mock-run.lesson-learner-active #mock-run-config:not(.is-collapsed) .mock-run-config-body,
 body.mock-run.quiz-learner-active #mock-run-config:not(.is-collapsed) .mock-run-config-body { max-height:calc(100vh - 118px); overflow-y:auto; }
+body.mock-run.extraction-learner-active #mock-run-config.is-collapsed .mock-run-config-head > div:first-child,
+body.mock-run.lesson-learner-active #mock-run-config.is-collapsed .mock-run-config-head > div:first-child,
+body.mock-run.quiz-learner-active #mock-run-config.is-collapsed .mock-run-config-head > div:first-child,
+body.mock-run.extraction-learner-active #mock-run-config.is-collapsed #mock-run-total-cost,
+body.mock-run.lesson-learner-active #mock-run-config.is-collapsed #mock-run-total-cost,
+body.mock-run.quiz-learner-active #mock-run-config.is-collapsed #mock-run-total-cost { display:none; }
+body.mock-run.extraction-learner-active #mock-run-config.is-collapsed .mock-run-config-head::before,
+body.mock-run.lesson-learner-active #mock-run-config.is-collapsed .mock-run-config-head::before,
+body.mock-run.quiz-learner-active #mock-run-config.is-collapsed .mock-run-config-head::before { content:"Models"; color:var(--lab-ink); font:700 11px/1 system-ui,sans-serif; }
 
 /* Mock Lesson continues the exact learner conversation shell. */
 body.mock-run.lesson-learner-active,
@@ -1187,3 +1196,4 @@ body.mock-run.quiz-learner-active #pipeline-quiz-extraction-input { display:none
   body.clarification-focus .pipeline-experience > .pipeline-card-head { display:flex; }
   body.clarification-focus .clarification-surface { min-height:0; }
 }
+
