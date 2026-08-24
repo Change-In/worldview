@@ -3605,8 +3605,9 @@ async function ensurePipelineMapReadyNotice(artifact = selectedPipelineArtifact(
   const selection = selectedPipelineMapRecord(artifact);
   const scope = pipelineExtractionMapScope(artifact);
   const cueKey = labState.extraction.mapReadyCueKey;
-  if (!artifact?.runId || !selection || selection.meta?.incomplete || selection.meta?.needsReview || !scope || !cueKey || labState.extraction.mapReadyNoticeBusy) return;
+  if (!artifact?.runId || !selection || selection.meta?.incomplete || selection.meta?.needsReview || !scope || !cueKey || labState.extraction.mapReadyNoticeBusy || labState.extractionBusy || labState.extraction.saveBusy) return;
   const jobs = pipelineExtractionJobs(artifact);
+  if (jobs.some((job) => LAB_ACTIVE_JOB_STATES.has(job.status))) return;
   const latest = jobs.at(-1);
   if (!latest || !pipelineExtractionOutput(labState.jobDetails.get(latest.id)).output || mapReadyNoticeExists(artifact, cueKey)) return;
   // If the map was ready before Extraction opened, its opening reply already
@@ -7529,4 +7530,3 @@ async function boot() {
 }
 
 void boot();
-
