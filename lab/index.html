@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=148">
+<link rel="stylesheet" href="./lab.css?v=150">
 </head>
 <body>
 
@@ -47,8 +47,8 @@
     <aside id="mock-run-config" class="mock-run-config" hidden aria-label="Mock run setup and live work">
       <div class="mock-run-config-head"><div><p class="eyebrow">This mock run</p><h3>Models &amp; spend</h3></div><div class="mock-run-config-actions"><span id="mock-run-total-cost">Estimate unavailable</span><button id="mock-run-config-toggle" class="text-button" type="button" aria-expanded="true">Minimize</button></div></div>
       <div id="mock-run-config-body" class="mock-run-config-body">
-        <p class="mock-run-config-note">These choices use the same protected Lab jobs and prompt core as Lab controls. Defaults are saved on this device.</p>
-        <div class="mock-run-stage-config" id="mock-run-stage-config"></div>
+        <div class="mock-run-defaults"><p class="mock-run-config-note">Recommended defaults are ready. Model choices stay on this device; each run still uses the protected Lab jobs and fixed prompt core. Change a model only when you are testing it.</p><button id="mock-run-reset-all" class="button button-quiet" type="button">Use all defaults</button></div>
+        <details class="mock-run-advanced"><summary>Advanced · models by phase</summary><div class="mock-run-stage-config" id="mock-run-stage-config"></div></details>
         <div class="mock-run-live" id="mock-run-live" aria-live="polite"><strong>Run status</strong><span id="mock-run-live-status">Waiting for Clarification.</span></div>
       </div>
     </aside>
@@ -284,6 +284,7 @@
             <button id="pipeline-extraction-ptt" class="extraction-ptt" type="button">Hold to talk</button>
             <div class="inline-actions"><button id="pipeline-extraction-hear" class="button button-quiet" type="button" hidden>Hear last reply</button><button id="pipeline-extraction-retry-transcription" class="button button-quiet" type="button" hidden>Retry transcription</button></div>
           </div>
+          <div class="inline-actions extraction-recovery-actions"><button id="pipeline-extraction-retry-transition" class="button button-primary" type="button" hidden>Retry Lesson connection</button></div>
           <div class="extraction-conversation-actions"><button id="pipeline-extraction-save" class="button button-primary" type="button" disabled>Save conversation for later</button><button id="pipeline-extraction-skip" class="button button-primary" type="button">Done</button></div>
           <p id="pipeline-extraction-saved" class="extraction-saved-note" hidden></p>
         </section>
@@ -315,11 +316,17 @@
         <details class="extraction-backend"><summary>Lesson controls and backend evidence</summary><p class="privacy-note">These two prompts are separate: the tutor teaches; the evaluator only recommends whether to stay or move on. Neither creates mastery or progress.</p><label for="pipeline-lesson-tutor-prompt">Tutor prompt</label><textarea id="pipeline-lesson-tutor-prompt" rows="7" maxlength="12000"></textarea><label for="pipeline-lesson-evaluator-prompt">Evaluator prompt</label><textarea id="pipeline-lesson-evaluator-prompt" rows="6" maxlength="12000"></textarea><pre id="pipeline-lesson-validated">No lesson output yet.</pre><pre id="pipeline-lesson-raw" hidden></pre><pre id="pipeline-lesson-packet" hidden></pre></details>
         <div class="inline-actions"><button id="pipeline-lesson-start" class="button button-primary" type="button">To Start</button><button id="pipeline-lesson-open-map" class="button button-quiet" type="button">Choose roadmap</button><button id="pipeline-lesson-open-extraction" class="button button-quiet" type="button">Review Extraction input</button></div>
       </section>
-      <section id="pipeline-quiz-stage" class="lab-card pipeline-extraction-stage" hidden>
-        <div class="pipeline-card-head quiz-stage-head"><div class="quiz-stage-title"><p class="eyebrow">Final understanding · Quiz phase</p><h3>Worldview</h3></div></div>
-        <div class="quiz-learner-frame"><p class="eyebrow">You reached the Quiz</p><h4>The quiz conversation comes next.</h4><p>This frame keeps the complete mock journey reachable without pretending the unfinished Quiz engine is ready. It will receive this run's Lesson Map, guided Lesson conversation, and saved Extraction snapshot.</p><button class="button button-quiet" type="button" data-pipeline-previous-stage="lesson">Back to Lesson</button></div>
-        <p id="pipeline-quiz-extraction-status">No saved Quiz output exists for this lesson run yet. Save an Extraction conversation first if you want this future stage to receive it.</p>
-        <details id="pipeline-quiz-extraction-input" class="pipeline-future-input" hidden><summary>Saved Extraction conversation</summary><ol id="pipeline-quiz-extraction-transcript" class="extraction-transcript"></ol></details>
+      <section id="pipeline-quiz-stage" class="lab-card pipeline-extraction-stage pipeline-quiz-stage" hidden>
+        <div class="pipeline-card-head quiz-stage-head"><div class="quiz-stage-title lesson-stage-title"><button id="pipeline-quiz-mode-toggle" class="extraction-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">Voice</button><div><p class="eyebrow">Final understanding · Quiz phase</p><h3>Worldview</h3></div></div><span class="extraction-authority">teach-back</span></div>
+        <p class="pipeline-lesson-intro">Explain the lesson in your own words. Worldview may ask up to two neutral follow-ups, using the frozen Lesson Map as the checklist.</p>
+        <p id="pipeline-quiz-output" class="form-message" role="status"></p>
+        <section id="pipeline-quiz-conversation" class="lesson-conversation quiz-conversation">
+          <div id="pipeline-quiz-route" class="lesson-route-context"></div>
+          <ol id="pipeline-quiz-transcript" class="extraction-transcript lesson-transcript"></ol>
+          <div id="pipeline-quiz-text-controls" class="extraction-text-controls lesson-text-controls"><label class="sr-only" for="pipeline-quiz-reply">Your reply</label><textarea id="pipeline-quiz-reply" rows="3" maxlength="2400" placeholder="Explain what you learned as if you were teaching a curious beginner."></textarea><button id="pipeline-quiz-send" class="button button-primary" type="button" hidden>Send</button></div>
+          <div id="pipeline-quiz-voice-controls" class="extraction-voice-controls lesson-voice-controls" hidden><p class="extraction-voice-hint">Hold to talk. Release to transcribe and send your words.</p><button id="pipeline-quiz-ptt" class="extraction-ptt" type="button">Hold to talk</button><div class="inline-actions"><button id="pipeline-quiz-hear" class="button button-quiet" type="button" hidden>Hear last reply</button></div></div>
+        </section>
+        <details class="extraction-backend"><summary>Quiz backend evidence</summary><p class="privacy-note">The assessor receives only the frozen Lesson Map and this Quiz's learner answers. Extraction and the guided Lesson transcript are deliberately excluded from scoring.</p><pre id="pipeline-quiz-validated">No Quiz assessment yet.</pre><pre id="pipeline-quiz-raw" hidden></pre><pre id="pipeline-quiz-packet" hidden></pre></details>
       </section>
     </section>
   </section>
@@ -569,7 +576,8 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=148" defer></script>
+<script src="./lab.js?v=150" defer></script>
 </body>
 </html>
+
 

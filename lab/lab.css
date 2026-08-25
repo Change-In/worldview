@@ -654,10 +654,18 @@ body.mock-run .mock-run-config { display:block; position:fixed; z-index:4; top:1
 #mock-run-total-cost { color:var(--lab-sun); font-size:11px; text-align:right; }
 .mock-run-config-body { max-height:calc(100vh - 218px); overflow-y:auto; padding-right:4px; scrollbar-width:thin; }
 .mock-run-config-note { margin:10px 0 13px; color:var(--lab-muted); font-size:11px; line-height:1.4; }
+.mock-run-defaults { display:flex; gap:10px; align-items:center; justify-content:space-between; }
+.mock-run-defaults .mock-run-config-note { margin:10px 0; }
+.mock-run-defaults .button { min-height:32px; padding:7px 10px; flex:0 0 auto; font-size:10px; }
+.mock-run-advanced { margin-top:7px; border-top:1px solid var(--lab-line); }
+.mock-run-advanced > summary { padding:10px 0; color:var(--lab-muted); font-size:11px; font-weight:800; cursor:pointer; }
 .mock-run-stage-card { padding:10px 0; border-top:1px solid var(--lab-line); }
 .mock-run-stage-card:first-child { border-top:0; }
 .mock-run-stage-card label { display:block; margin-bottom:5px; color:var(--lab-ink); font-size:12px; font-weight:750; }
 .mock-run-stage-card select { width:100%; min-height:34px; margin-top:5px; border:1px solid var(--lab-line); border-radius:8px; background:var(--lab-card-strong); color:var(--lab-ink); font:inherit; font-size:11px; }
+.mock-run-stage-card-head { display:flex; gap:8px; align-items:center; justify-content:space-between; }
+.mock-run-stage-default { min-height:28px; padding:5px 8px; font-size:9px; }
+.mock-run-stage-default[disabled] { opacity:.45; }
 .mock-run-stage-output-cap { display:flex!important; align-items:center; justify-content:space-between; gap:8px; margin-top:7px; color:var(--lab-muted)!important; font-size:10px!important; font-weight:600!important; }
 .mock-run-stage-output-cap input { width:116px; min-height:30px; padding:5px 7px; border:1px solid var(--lab-line); border-radius:8px; background:var(--lab-card-strong); color:var(--lab-ink); font:inherit; font-size:11px; }
 .mock-run-stage-meta { display:flex; justify-content:space-between; gap:8px; margin-top:6px; color:var(--lab-muted); font-size:10px; }
@@ -1101,6 +1109,7 @@ body.mock-run.extraction-learner-active #pipeline-extraction-save,
 body.mock-run.extraction-learner-active #pipeline-extraction-open-map,
 body.mock-run.extraction-learner-active .extraction-backend,
 body.mock-run.extraction-learner-active .extraction-authority { display:none!important; }
+body.mock-run.extraction-learner-active #pipeline-extraction-retry.is-critical-retry { display:inline-flex!important; }
 body.mock-run.extraction-learner-active #pipeline-extraction-stage { display:flex!important; width:100%; height:100%; min-height:0; padding:0; overflow:hidden; border:0; border-radius:0; flex-direction:column; background:#11100f; }
 body.mock-run.extraction-learner-active .extraction-stage-head { position:relative; display:flex; min-height:70px; padding:10px 58px; align-items:center; justify-content:center; flex:0 0 auto; border-bottom:1px solid rgba(255,255,255,.08); }
 body.mock-run.extraction-learner-active .extraction-stage-title { justify-content:center; text-align:center; }
@@ -1164,10 +1173,10 @@ body.mock-run.extraction-learner-active #pipeline-extraction-saved { margin:0 14
 /* Keep Models & spend reachable but tucked away during learner phases. */
 body.mock-run.extraction-learner-active #mock-run-config,
 body.mock-run.lesson-learner-active #mock-run-config,
-body.mock-run.quiz-learner-active #mock-run-config { position:fixed!important; z-index:1004; top:12px!important; right:12px!important; width:auto!important; max-width:min(330px,calc(100vw - 24px)); max-height:calc(100vh - 24px)!important; margin:0!important; order:initial; }
+body.mock-run.quiz-learner-active #mock-run-config { position:fixed!important; z-index:1004; top:12px!important; right:118px!important; width:auto!important; max-width:min(330px,calc(100vw - 24px)); max-height:calc(100vh - 24px)!important; margin:0!important; order:initial; }
 body.mock-run.extraction-learner-active #mock-run-config:not(.is-collapsed),
 body.mock-run.lesson-learner-active #mock-run-config:not(.is-collapsed),
-body.mock-run.quiz-learner-active #mock-run-config:not(.is-collapsed) { width:min(330px,calc(100vw - 24px))!important; overflow:hidden; }
+body.mock-run.quiz-learner-active #mock-run-config:not(.is-collapsed) { top:60px!important; right:12px!important; width:min(330px,calc(100vw - 24px))!important; overflow:hidden; }
 body.mock-run.extraction-learner-active #mock-run-config:not(.is-collapsed) .mock-run-config-body,
 body.mock-run.lesson-learner-active #mock-run-config:not(.is-collapsed) .mock-run-config-body,
 body.mock-run.quiz-learner-active #mock-run-config:not(.is-collapsed) .mock-run-config-body { max-height:calc(100vh - 118px); overflow-y:auto; }
@@ -1236,8 +1245,44 @@ body.mock-run.quiz-learner-active .quiz-stage-title h3 { margin:0; font-size:1.1
 .quiz-learner-frame h4 { margin:0; color:var(--lab-ink); font:650 clamp(1.45rem,4vw,2.1rem)/1.12 Georgia,serif; }
 .quiz-learner-frame p { margin:0; color:var(--lab-muted); line-height:1.6; }
 .quiz-learner-frame .button { justify-self:start; }
+.pipeline-quiz-stage { display:grid; gap:12px; }
+.quiz-conversation { display:flex; min-height:0; flex-direction:column; }
+.quiz-checkpoint-summary { display:flex; gap:7px; align-items:center; flex-wrap:wrap; }
+.quiz-checkpoint-summary span { display:inline-flex; min-height:24px; padding:4px 8px; border:1px solid var(--lab-line); border-radius:999px; align-items:center; }
+body.mock-run .clarification-done,
+body.mock-run #pipeline-extraction-skip,
+body.mock-run #pipeline-extraction-save,
+body.mock-run #pipeline-lesson-next { display:none!important; }
+body.mock-run.lesson-learner-active .lesson-route-context { display:block; }
+body.mock-run.lesson-learner-active .lesson-checkpoints { display:flex; gap:7px; align-items:center; overflow-x:auto; scrollbar-width:none; }
+body.mock-run.lesson-learner-active .lesson-checkpoints::-webkit-scrollbar { display:none; }
+body.mock-run.lesson-learner-active .lesson-checkpoint { display:flex; min-width:max-content; gap:6px; align-items:center; color:var(--lab-muted); font-size:10px; }
+body.mock-run.lesson-learner-active .lesson-checkpoint::before { width:9px; height:9px; border:1px solid rgba(255,255,255,.34); border-radius:50%; content:""; }
+body.mock-run.lesson-learner-active .lesson-checkpoint.is-complete { color:var(--lab-mint); }
+body.mock-run.lesson-learner-active .lesson-checkpoint.is-complete::before { border-color:var(--lab-mint); background:var(--lab-mint); box-shadow:0 0 0 3px rgba(120,229,192,.12); }
+body.mock-run.lesson-learner-active .lesson-checkpoint.is-current { color:var(--lab-ink); }
+body.mock-run.lesson-learner-active .lesson-checkpoint.is-current::before { border-color:#c8b7ff; box-shadow:0 0 0 3px rgba(169,143,255,.12); }
+body.mock-run.lesson-learner-active .lesson-outcome-marker strong { display:none; }
+body.mock-run.quiz-learner-active .pipeline-lesson-intro { display:none; }
+body.mock-run.quiz-learner-active #pipeline-quiz-output { margin:8px 14px 0; flex:0 0 auto; }
+body.mock-run.quiz-learner-active #pipeline-quiz-conversation { display:flex; min-height:0; margin:0; padding:0; overflow:hidden; flex:1; background:#171715; }
+body.mock-run.quiz-learner-active #pipeline-quiz-route { margin:8px 14px 0; padding:9px 12px; flex:0 0 auto; }
+body.mock-run.quiz-learner-active #pipeline-quiz-transcript { min-height:0; padding:22px 22px 30px; overflow-y:auto; flex:1; background:radial-gradient(circle at 50% 28%,rgba(126,98,211,.08),transparent 42%),#171715; overscroll-behavior-y:contain; touch-action:pan-y; -webkit-overflow-scrolling:touch; }
+body.mock-run.quiz-learner-active #pipeline-quiz-stage > .extraction-backend { display:none!important; }
 body.mock-run.quiz-learner-active #pipeline-quiz-extraction-status,
 body.mock-run.quiz-learner-active #pipeline-quiz-extraction-input { display:none!important; }
+
+/* This override intentionally comes after every stage's `inset:0` rule so
+   the visual-viewport coordinates win in the cascade on iOS keyboard pan. */
+body.clarification-focus #panel-pipeline,
+body.mock-run.extraction-learner-active #panel-pipeline,
+body.mock-run.lesson-learner-active #panel-pipeline,
+body.mock-run.quiz-learner-active #panel-pipeline {
+  top:var(--lab-viewport-top,0px)!important;
+  left:var(--lab-viewport-left,0px)!important;
+  right:auto!important;
+  bottom:auto!important;
+}
 
 @media (max-width:900px) { .pipeline-stage-grid { grid-template-columns:1fr; } }
 @media (max-width:700px) { .pipeline-mode-bar { align-items:flex-start; flex-wrap:wrap; } .pipeline-mode-note { max-width:none; width:100%; text-align:left; } }
@@ -1270,4 +1315,5 @@ body.mock-run.quiz-learner-active #pipeline-quiz-extraction-input { display:none
   body.clarification-focus .pipeline-experience > .pipeline-card-head { display:flex; }
   body.clarification-focus .clarification-surface { min-height:0; }
 }
+
 
