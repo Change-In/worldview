@@ -493,6 +493,12 @@ function syncLabViewportLayout() {
   const height = Math.max(1, Math.round(Number(viewport?.height) || window.innerHeight || document.documentElement.clientHeight || 1));
   document.documentElement.style.setProperty("--lab-viewport-width", `${width}px`);
   document.documentElement.style.setProperty("--lab-viewport-height", `${height}px`);
+  const learnerViewportActive = labLearnerViewportActive();
+  document.documentElement.classList.toggle("lab-viewport-locked", learnerViewportActive);
+  if (learnerViewportActive) {
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }
   document.documentElement.scrollLeft = 0;
   document.body.scrollLeft = 0;
   const panel = q("panel-pipeline");
@@ -516,14 +522,50 @@ syncLabViewportLayout();
    without scrolling the fixed Lab surface. Keep the focused field in the
    usable portion of that viewport and repaint twice around WebKit's keyboard
    animation so typed text/caret never sit behind the keyboard. */
+function labLearnerViewportActive() {
+  return document.body.classList.contains("clarification-focus")
+    || document.body.classList.contains("extraction-learner-active")
+    || document.body.classList.contains("lesson-learner-active")
+    || document.body.classList.contains("quiz-learner-active");
+}
+function resetLabRootScroll() {
+  if (!labLearnerViewportActive()) return;
+  document.documentElement.classList.add("lab-viewport-locked");
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+  try { window.scrollTo(0, 0); } catch (_) {}
+}
+function nearestLabScrollOwner(target) {
+  let node = target?.parentElement;
+  while (node && node !== document.body) {
+    const style = window.getComputedStyle(node);
+    if (/(auto|scroll|overlay)/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 1) return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+function revealLabField(target) {
+  resetLabRootScroll();
+  syncLabViewportLayout();
+  const owner = nearestLabScrollOwner(target);
+  if (owner) {
+    const targetRect = target.getBoundingClientRect();
+    const ownerRect = owner.getBoundingClientRect();
+    const targetCenter = targetRect.top - ownerRect.top + (targetRect.height / 2);
+    const desiredCenter = owner.clientHeight / 2;
+    const maxScroll = Math.max(0, owner.scrollHeight - owner.clientHeight);
+    owner.scrollTop = Math.max(0, Math.min(maxScroll, owner.scrollTop + targetCenter - desiredCenter));
+  }
+  // WebKit may apply its own focus scroll after focusin. Reassert the root
+  // lock after the owner adjustment so the fixed learner shell stays at y=0.
+  resetLabRootScroll();
+}
 function keepLabFieldVisible(event) {
   const target = event.target;
   if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
   if (target.type === "file" || target.type === "checkbox" || target.type === "radio" || target.disabled) return;
   const reveal = () => {
-    syncLabViewportLayout();
-    try { target.scrollIntoView({ behavior:"auto", block:"center", inline:"nearest" }); }
-    catch (_) { try { target.scrollIntoView({ block:"center", inline:"nearest" }); } catch (_) {} }
+    revealLabField(target);
   };
   requestAnimationFrame(reveal);
   setTimeout(reveal, 180);
