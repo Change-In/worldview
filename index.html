@@ -2051,11 +2051,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v145 · Aug 25";
+const BUILD = "v146 · Aug 25";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v146", date: "Aug 25", changes: [
+    "Restored the protected Model Lab entrypoint after a stale deployed HTML shell no longer matched the Lab client. The reviewed Lab markup and cache-busted assets now load together so the access gate can initialize instead of failing before Supabase."
+  ]},
   { tag: "v145", date: "Aug 25", changes: [
     "Clarification now recognizes closure replies such as ‘I said everything already’, ‘Nothing’, and ‘Nothing else’ before another model request. If a provider repeats itself, fixed code allows at most two topic-specific repair questions, then presents the Lesson Map handoff instead of looping. This is shared by Lab Controls and Mock Run.",
     "Full-screen mobile conversations now reapply the dynamic visual viewport after rotation, clear stale horizontal scroll, and keep the voice lesson and Mock Run readable across orientation changes.",
