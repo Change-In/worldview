@@ -482,6 +482,36 @@ const labState = {
 };
 
 const q = (id) => document.getElementById(id);
+/* Safari may report the previous landscape layout viewport for one or more
+   frames after a phone rotates back to portrait. Publish the dynamic visual
+   viewport to the full-screen learner shell so it cannot remain wider than
+   the physical screen until a later scroll or input focus causes a repaint. */
+let labViewportLayoutTimer = 0;
+function syncLabViewportLayout() {
+  const viewport = window.visualViewport;
+  const width = Math.max(1, Math.round(Number(viewport?.width) || window.innerWidth || document.documentElement.clientWidth || 1));
+  const height = Math.max(1, Math.round(Number(viewport?.height) || window.innerHeight || document.documentElement.clientHeight || 1));
+  document.documentElement.style.setProperty("--lab-viewport-width", `${width}px`);
+  document.documentElement.style.setProperty("--lab-viewport-height", `${height}px`);
+  document.documentElement.scrollLeft = 0;
+  document.body.scrollLeft = 0;
+  const panel = q("panel-pipeline");
+  if (panel && (document.body.classList.contains("clarification-focus") || document.body.classList.contains("extraction-learner-active") || document.body.classList.contains("lesson-learner-active") || document.body.classList.contains("quiz-learner-active"))) {
+    panel.getBoundingClientRect();
+  }
+}
+function scheduleLabViewportLayout() {
+  if (labViewportLayoutTimer) clearTimeout(labViewportLayoutTimer);
+  const paint = () => requestAnimationFrame(() => syncLabViewportLayout());
+  paint();
+  labViewportLayoutTimer = setTimeout(() => { labViewportLayoutTimer = 0; paint(); }, 90);
+  setTimeout(paint, 320);
+}
+window.addEventListener("resize", scheduleLabViewportLayout, { passive:true });
+window.addEventListener("orientationchange", scheduleLabViewportLayout, { passive:true });
+window.visualViewport?.addEventListener("resize", scheduleLabViewportLayout, { passive:true });
+window.addEventListener("pageshow", scheduleLabViewportLayout, { passive:true });
+syncLabViewportLayout();
 const now = () => new Date().toISOString();
 const clip = (value, length = 1700) => {
   const text = String(value ?? "").trim();
@@ -6971,6 +7001,7 @@ function setClarificationFocus(enabled) {
   const state = labState.clarification;
   state.focusMode = enabled === true;
   document.body.classList.toggle("clarification-focus", state.focusMode);
+  scheduleLabViewportLayout();
   const button = q("clarification-focus-toggle");
   button.setAttribute("aria-pressed", String(state.focusMode));
   button.textContent = state.focusMode ? "←" : "Full screen";
@@ -7593,6 +7624,7 @@ function clarificationRepliesRepeat(left, right) {
 }
 
 function clarificationRepeatFallback(turns, topic = "") {
+  const MAX_CLARIFICATION_REPAIR_QUESTIONS = 2;
   const label = clip(String(topic || "").replace(/[\s]+/g, " ").trim(), 100) || "this topic";
   const candidates = [
     `What would you like to clarify next about ${label}?`,
@@ -7605,7 +7637,13 @@ function clarificationRepeatFallback(turns, topic = "") {
     .filter((turn) => turn?.role === "assistant")
     .map((turn) => turn.content)
     .filter(Boolean);
-  return candidates.find((candidate) => !previous.some((reply) => clarificationRepliesRepeat(candidate, reply))) || candidates[candidates.length - 1];
+  const repairCount = previous.filter((reply) => candidates.some((candidate) => clarificationRepliesRepeat(candidate, reply))).length;
+  // A provider repeat is recoverable, but it must never become an endless
+  // client-side conversation. After two repair questions, hand authority to
+  // the learner-owned readiness/Done boundary instead of inventing a sixth
+  // wording variant.
+  if (repairCount >= MAX_CLARIFICATION_REPAIR_QUESTIONS) return "";
+  return candidates.find((candidate) => !previous.some((reply) => clarificationRepliesRepeat(candidate, reply))) || "";
 }
 
 function avoidClarificationRepeat(output, turns, topic = "") {
@@ -7616,9 +7654,11 @@ function avoidClarificationRepeat(output, turns, topic = "") {
     .map((turn) => turn.content)
     .filter(Boolean);
   if (!previous.some((reply) => clarificationRepliesRepeat(current, reply))) return output;
+  const fallback = clarificationRepeatFallback(turns, topic);
+  if (!fallback) return clarificationReadinessOutput(topic, output);
   return {
     ...output,
-    assistant_message: clarificationRepeatFallback(turns, topic),
+    assistant_message: fallback,
   };
 }
 
@@ -7627,7 +7667,8 @@ function clarificationLearnerSettled(value) {
   if (!text) return false;
   if (/\b(?:not yet|not ready|keep going|more questions|continue asking|i want to explore more|not finished)\b/i.test(text)) return false;
   if (/\b(?:but|however)\b[^.!?]{0,120}\b(?:more|another|continue|explore|question|angle)\b/i.test(text)) return false;
-  return /\b(?:i(?:['’]m| am)\s+(?:happy|satisfied|good|comfortable)\s+(?:with|about|on)|(?:this|that)(?:['’]s| is)\s+(?:what|the|a|our)\s+(?:i|we)\s+want|(?:i|we)\s+(?:want|would like)\s+to\s+focus\s+on|that(?:['’]s| is)\s+(?:the|a|our)\s+direction|let(?:['’]s| us)\s+(?:go|move|continue)\s+(?:with|on)|go with|that works|sounds (?:good|fine|right)|i(?:['’]m| am)\s+ready|ready to (?:move|continue|start)|nothing else|no more(?: questions)?|that['’]s enough|we can move on)\b/i.test(text);
+  if (/^(?:nothing|none|no(?:thing)?(?: else| more)?|all done|done|that['’]s all|that is all|all set)[.!?\s]*$/i.test(text)) return true;
+  return /\b(?:i(?:['’]m| am)\s+(?:happy|satisfied|good|comfortable)\s+(?:with|about|on)|(?:i(?:['’]ve| have)?|we)\s+(?:already\s+)?(?:said|covered|shared|explained|told you)\s+(?:everything|all|enough)|(?:this|that)(?:['’]s| is)\s+(?:what|the|a|our)\s+(?:i|we)\s+want|(?:i|we)\s+(?:want|would like)\s+to\s+focus\s+on|that(?:['’]s| is)\s+(?:the|a|our)\s+direction|let(?:['’]s| us)\s+(?:go|move|continue)\s+(?:with|on)|go with|that works|sounds (?:good|fine|right)|i(?:['’]m| am)\s+ready|ready to (?:move|continue|start)|nothing else|no more(?: questions)?|that['’]s enough|we can move on)\b/i.test(text);
 }
 
 function clarificationReadinessOutput(topic, previous = null) {
@@ -7645,6 +7686,7 @@ function clarificationEmptyReplyFallback(firstTurn, turns, topic, previous = nul
   const assistantMessage = firstTurn
     ? "What first made this topic feel worth exploring: something you heard, a problem you noticed, or a question that keeps returning?"
     : clarificationRepeatFallback(turns, topic);
+  if (!assistantMessage) return clarificationReadinessOutput(topic, previous);
   return {
     assistant_message: assistantMessage,
     scope_summary: clip(previous?.scope_summary || (topic
@@ -8443,7 +8485,10 @@ function bindEvents() {
     labState.extraction.demoMapReady = !labState.extraction.demoMapReady;
     renderPipelineExtraction();
   });
-  q("pipeline-extraction-send").addEventListener("click", submitPipelineExtractionReply);
+  // Do not pass the DOM click event as the learner's reply. The submitter's
+  // first argument is message text; passing this callback directly turns a
+  // typed send into the literal string "[object PointerEvent]".
+  q("pipeline-extraction-send").addEventListener("click", () => { void submitPipelineExtractionReply(); });
   q("pipeline-extraction-reply").addEventListener("input", syncPipelineExtractionSendControl);
   q("pipeline-extraction-save").addEventListener("click", savePipelineExtractionConversation);
   q("pipeline-extraction-retry").addEventListener("click", retryPipelineExtraction);
@@ -8494,7 +8539,7 @@ function bindEvents() {
   q("pipeline-lesson-next").addEventListener("click", () => { void continuePipelineLesson(); });
   q("pipeline-lesson-open-map").addEventListener("click", () => setPipelineStage("map"));
   q("pipeline-lesson-open-extraction").addEventListener("click", () => setPipelineStage("extraction"));
-  q("pipeline-lesson-send").addEventListener("click", submitPipelineLessonReply);
+  q("pipeline-lesson-send").addEventListener("click", () => { void submitPipelineLessonReply(); });
   if (!q("pipeline-lesson-tutor-prompt").value) q("pipeline-lesson-tutor-prompt").value = LESSON_CONVERSATION_PROMPT;
   if (!q("pipeline-lesson-evaluator-prompt").value) q("pipeline-lesson-evaluator-prompt").value = LESSON_EVALUATOR_PROMPT;
   q("pipeline-lesson-reply").addEventListener("input", renderPipelineLesson);
