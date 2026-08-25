@@ -512,6 +512,24 @@ window.addEventListener("orientationchange", scheduleLabViewportLayout, { passiv
 window.visualViewport?.addEventListener("resize", scheduleLabViewportLayout, { passive:true });
 window.addEventListener("pageshow", scheduleLabViewportLayout, { passive:true });
 syncLabViewportLayout();
+/* On iPhone, opening the software keyboard can resize the visual viewport
+   without scrolling the fixed Lab surface. Keep the focused field in the
+   usable portion of that viewport and repaint twice around WebKit's keyboard
+   animation so typed text/caret never sit behind the keyboard. */
+function keepLabFieldVisible(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
+  if (target.type === "file" || target.type === "checkbox" || target.type === "radio" || target.disabled) return;
+  const reveal = () => {
+    syncLabViewportLayout();
+    try { target.scrollIntoView({ behavior:"auto", block:"center", inline:"nearest" }); }
+    catch (_) { try { target.scrollIntoView({ block:"center", inline:"nearest" }); } catch (_) {} }
+  };
+  requestAnimationFrame(reveal);
+  setTimeout(reveal, 180);
+  setTimeout(reveal, 420);
+}
+document.addEventListener("focusin", keepLabFieldVisible, { passive:true });
 const now = () => new Date().toISOString();
 const clip = (value, length = 1700) => {
   const text = String(value ?? "").trim();
