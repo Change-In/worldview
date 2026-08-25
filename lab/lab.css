@@ -334,6 +334,9 @@ button.lab-tab-secondary { min-width: 126px; border-style: dashed; color: #b9b1c
   border-radius: 12px;
   background: rgba(6, 8, 16, .45);
   color: var(--lab-ink);
+  -webkit-text-fill-color: var(--lab-ink);
+  caret-color: var(--lab-mint);
+  color-scheme: dark;
   font: inherit;
 }
 .lab-shell input,
@@ -742,6 +745,7 @@ body.mock-run #pipeline-map-stage .map-workspace-bar { display:none; }
 .clarification-setup > label,.clarification-setup > textarea,.clarification-setup > .privacy-note,.clarification-setup > .clarification-start,.clarification-setup > .form-message { display:block; width:min(100%,660px); margin-left:auto; margin-right:auto; }
 .clarification-setup > label { color:#d7c8ae; }
 .clarification-setup textarea { min-height:118px; border-color:rgba(238,221,187,.2); color:#fff8ec; background:rgba(11,10,9,.42); font:500 clamp(1.05rem,2.3vw,1.3rem)/1.45 Georgia,serif; }
+.clarification-setup textarea:focus { border-color:rgba(120,229,192,.72); background:rgba(11,10,9,.7); box-shadow:0 0 0 3px rgba(120,229,192,.16); }
 .clarification-setup textarea::placeholder { color:#817767; }
 .clarification-start { min-height:62px; margin-top:17px; border:0; border-radius:19px; color:#21160f; background:#eda06b; font-size:16px; font-weight:900; cursor:pointer; box-shadow:0 12px 30px rgba(237,152,95,.16); }
 .clarification-mode-step { width:min(100%,660px); margin:24px auto 0; padding:22px; border:1px solid rgba(238,221,187,.16); border-radius:20px; background:rgba(8,8,7,.34); }
@@ -1141,6 +1145,18 @@ body.mock-run.extraction-learner-active #pipeline-extraction-saved { margin:0 14
   .extraction-map-dialog { padding:0; place-items:stretch; }
   .extraction-map-dialog-card { width:100%; max-height:100dvh; height:100dvh; border:0; border-radius:0; }
   .extraction-map-dialog-content { padding:14px; }
+}
+
+/* iPhone Safari can leave a focused field under the software keyboard when a
+   fixed/full-screen Lab surface owns the scroll. The focus handler in lab.js
+   recenters the field; these margins give that scroll a visible landing zone
+   and preserve readable typed text/caret contrast on the dark surface. */
+@media (max-width:700px) {
+  .lab-shell input,
+  .lab-shell textarea,
+  .lab-shell select { scroll-margin-block: 24px 220px; }
+  .clarification-setup { scroll-padding-block: 24px max(24px,env(safe-area-inset-bottom)); }
+  .clarification-setup textarea { position:relative; z-index:2; }
 }
 
 /* Keep Models & spend reachable but tucked away during learner phases. */
