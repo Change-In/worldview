@@ -2048,11 +2048,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v140 · Aug 24";
+const BUILD = "v141 · Aug 24";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v141", date: "Aug 24", changes: [
+    "Mock Extraction now follows each new message automatically and its Lesson Map indicator reports the exact background state; tap it to inspect the current map in a dismissible in-place viewer without leaving the conversation.",
+    "After the broad overview and Lesson Map are ready, Worldview offers optional map-specific personalization, recognizes clear spoken or typed readiness without another model request, and moves into the Lesson. Questions rotate through exact unsampled outcomes, then say when little more useful remains to extract.",
+    "Extraction recovery no longer repeats vague ‘which part’ questions. Saved learner wording is organized as direct or related, unverified context for the relevant Lesson outcomes; factual correction still requires verified support."
+  ]},
   { tag: "v140", date: "Aug 24", changes: [
     "Conversation replies now have a completion gate across Clarification, Extraction, guided Lesson, and the existing tutor/Quiz conversation path. Worldview no longer displays, saves, or speaks a provider response that stopped early or failed to finish its question; the protected Lab keeps the raw partial for diagnosis and continues with a complete safe question."
   ]},

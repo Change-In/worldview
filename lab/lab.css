@@ -962,13 +962,17 @@ body.mock-run #pipeline-map-stage .map-workspace-bar { display:none; }
 .extraction-next-reply p { margin:8px 0; color:var(--lab-muted); font-size:11px; line-height:1.45; }
 .extraction-next-reply textarea { width:100%; min-height:74px; resize:vertical; }
 .extraction-authority { flex:0 0 auto; margin-top:4px; padding:5px 8px; border:1px solid rgba(255,190,108,.32); border-radius:999px; color:#ffdba7; background:rgba(255,190,108,.07); font-size:9px; font-weight:850; letter-spacing:.04em; text-transform:uppercase; }
-.extraction-progress { display:flex; align-items:center; gap:10px; margin:0 0 12px; padding:10px 12px; border:1px solid rgba(120,229,192,.28); border-radius:13px; color:var(--lab-muted); background:rgba(120,229,192,.045); }
+.extraction-progress { display:flex; width:100%; align-items:center; gap:10px; margin:0 0 12px; padding:10px 12px; border:1px solid rgba(120,229,192,.28); border-radius:13px; color:var(--lab-muted); background:rgba(120,229,192,.045); font:inherit; text-align:left; cursor:pointer; }
+.extraction-progress:hover,.extraction-progress:focus-visible { border-color:rgba(120,229,192,.65); outline:none; background:rgba(120,229,192,.075); }
+.extraction-progress:disabled { cursor:default; opacity:.72; }
 .extraction-progress-dot { width:9px; height:9px; flex:0 0 auto; border-radius:50%; background:var(--lab-mint); box-shadow:0 0 0 0 rgba(120,229,192,.45); }
 .extraction-progress[data-state="working"] .extraction-progress-dot { animation:extractionProgressPulse 1.3s ease-out infinite; }
 .extraction-progress[data-state="ready"] .extraction-progress-dot { background:var(--lab-sun); }
-.extraction-progress div { display:grid; gap:2px; min-width:0; }
+.extraction-progress[data-state="needs-attention"] .extraction-progress-dot { background:#ff8f8f; }
+.extraction-progress-copy { display:grid; min-width:0; flex:1; gap:2px; }
 .extraction-progress strong { color:var(--lab-ink); font-size:11px; }
 .extraction-progress small { color:var(--lab-muted); font-size:10px; line-height:1.35; }
+.extraction-progress-action { flex:0 0 auto; padding:4px 7px; border:1px solid rgba(255,255,255,.12); border-radius:999px; color:var(--lab-mint); font-size:9px; font-weight:850; white-space:nowrap; }
 @keyframes extractionProgressPulse { 65% { box-shadow:0 0 0 7px rgba(120,229,192,0); } 100% { box-shadow:0 0 0 0 rgba(120,229,192,0); } }
 .extraction-intro { max-width:720px; margin:0 0 16px; line-height:1.55; }
 .extraction-conversation { display:grid; gap:14px; margin:16px 0; padding:14px; border:1px solid rgba(120,229,192,.22); border-radius:16px; background:rgba(120,229,192,.035); }
@@ -1089,15 +1093,25 @@ body.mock-run.extraction-learner-active .extraction-voice-hint { text-align:cent
 body.mock-run.extraction-learner-active .extraction-conversation-actions { margin:0; padding:10px 14px max(10px,env(safe-area-inset-bottom)); border-top:1px solid var(--lab-line); background:#171715; }
 body.mock-run.extraction-learner-active #pipeline-extraction-skip { margin-left:auto; }
 body.mock-run.extraction-learner-active #pipeline-extraction-saved { margin:0 14px; flex:0 0 auto; }
-.mock-run-map-preview { display:grid; gap:9px; margin:18px 0 4px!important; padding:17px!important; border:1px solid rgba(120,229,192,.34)!important; border-radius:16px!important; background:linear-gradient(145deg,rgba(120,229,192,.1),rgba(126,98,211,.08))!important; }
-.mock-run-map-preview > small { color:var(--lab-mint); font-size:9px; font-weight:850; letter-spacing:.14em; text-transform:uppercase; }
-.mock-run-map-preview h4 { margin:0; color:var(--lab-ink); font:650 1.2rem/1.22 Georgia,serif; }
-.mock-run-map-preview p { margin:0; color:var(--lab-muted); font-size:12px; line-height:1.5; }
-.mock-run-map-preview .mock-run-map-goal { color:#e7e2d8; }
-.mock-run-map-chapters { display:grid; gap:12px; margin:3px 0 0; padding-left:20px; }
-.mock-run-map-chapters > li::marker { color:var(--lab-mint); font-weight:800; }
-.mock-run-map-chapters strong { color:var(--lab-ink); font-size:12px; }
-.mock-run-map-chapters ul { display:grid; gap:3px; margin:5px 0 0; padding-left:18px; color:var(--lab-muted); font-size:11px; line-height:1.42; }
+.extraction-map-dialog[hidden] { display:none; }
+.extraction-map-dialog { position:fixed; z-index:1010; inset:0; display:grid; padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom)); place-items:center; background:rgba(5,5,5,.76); backdrop-filter:blur(8px); }
+.extraction-map-dialog-card { display:flex; width:min(860px,100%); max-height:min(880px,calc(100dvh - 24px)); min-height:0; overflow:hidden; border:1px solid rgba(120,229,192,.3); border-radius:20px; flex-direction:column; background:#171715; box-shadow:0 24px 80px rgba(0,0,0,.5); }
+.extraction-map-dialog-head { display:flex; min-height:70px; padding:14px 16px; align-items:center; justify-content:space-between; gap:16px; border-bottom:1px solid rgba(255,255,255,.09); }
+.extraction-map-dialog-head .eyebrow { margin:0 0 3px; }
+.extraction-map-dialog-head h3 { margin:0; color:var(--lab-ink); font:650 1.25rem/1.2 Georgia,serif; }
+.extraction-map-dialog-close { display:grid; width:42px; height:42px; flex:0 0 auto; padding:0; place-items:center; border:1px solid rgba(255,255,255,.12); border-radius:50%; color:var(--lab-ink); background:rgba(255,255,255,.035); font:300 27px/1 system-ui,sans-serif; cursor:pointer; }
+.extraction-map-dialog-close:hover,.extraction-map-dialog-close:focus-visible { border-color:rgba(237,152,95,.6); outline:none; }
+.extraction-map-dialog-status { margin:0; padding:11px 16px; border-bottom:1px solid rgba(255,255,255,.07); color:var(--lab-muted); font-size:11px; line-height:1.45; }
+.extraction-map-dialog-content { min-height:0; padding:16px; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+.extraction-map-dialog-content .map-roadmap { margin:0; }
+.extraction-map-dialog-placeholder { display:grid; min-height:220px; padding:28px; place-items:center; border:1px dashed rgba(120,229,192,.28); border-radius:16px; color:var(--lab-muted); text-align:center; line-height:1.55; }
+
+@media (max-width:520px) {
+  .extraction-progress-action { display:none; }
+  .extraction-map-dialog { padding:0; place-items:stretch; }
+  .extraction-map-dialog-card { width:100%; max-height:100dvh; height:100dvh; border:0; border-radius:0; }
+  .extraction-map-dialog-content { padding:14px; }
+}
 
 /* Keep Models & spend reachable but tucked away during learner phases. */
 body.mock-run.extraction-learner-active #mock-run-config,
