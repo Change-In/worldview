@@ -7626,7 +7626,8 @@ function clarificationLearnerSettled(value) {
   const text = String(value || "").trim();
   if (!text) return false;
   if (/\b(?:not yet|not ready|keep going|more questions|continue asking|i want to explore more|not finished)\b/i.test(text)) return false;
-  return /\b(?:i(?:['’]m| am)\s+(?:happy|satisfied|good|comfortable)\s+(?:with|about|on)|that(?:['’]s| is)\s+(?:the|a|our)\s+direction|let(?:['’]s| us)\s+(?:go|move|continue)\s+(?:with|on)|go with|that works|sounds (?:good|fine|right)|i(?:['’]m| am)\s+ready|ready to (?:move|continue|start)|nothing else|no more(?: questions)?|that['’]s enough|we can move on)\b/i.test(text);
+  if (/\b(?:but|however)\b[^.!?]{0,120}\b(?:more|another|continue|explore|question|angle)\b/i.test(text)) return false;
+  return /\b(?:i(?:['’]m| am)\s+(?:happy|satisfied|good|comfortable)\s+(?:with|about|on)|(?:this|that)(?:['’]s| is)\s+(?:what|the|a|our)\s+(?:i|we)\s+want|(?:i|we)\s+(?:want|would like)\s+to\s+focus\s+on|that(?:['’]s| is)\s+(?:the|a|our)\s+direction|let(?:['’]s| us)\s+(?:go|move|continue)\s+(?:with|on)|go with|that works|sounds (?:good|fine|right)|i(?:['’]m| am)\s+ready|ready to (?:move|continue|start)|nothing else|no more(?: questions)?|that['’]s enough|we can move on)\b/i.test(text);
 }
 
 function clarificationReadinessOutput(topic, previous = null) {
@@ -8589,4 +8590,5 @@ async function boot() {
 }
 
 void boot();
+
 
