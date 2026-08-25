@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=141">
+<link rel="stylesheet" href="./lab.css?v=142">
 </head>
 <body>
 
@@ -43,6 +43,7 @@
       <p id="pipeline-mode-note" class="pipeline-mode-note">Inspect or run one phase at a time.</p>
     </div>
     <div id="pipeline-mock-progress" class="pipeline-mock-progress" hidden aria-label="Mock run progress"><span>Mock run</span><strong id="pipeline-mock-stage">1 · Clarification</strong><button id="pipeline-mock-new" class="text-button" type="button">New mock run</button><button id="pipeline-mock-exit" class="text-button" type="button">Back to controls</button></div>
+    <button id="pipeline-learner-exit" class="pipeline-learner-exit" type="button" hidden aria-label="Exit Mock Run and return to Lab controls" title="Return to Lab controls. Your durable run stays saved.">Exit Mock Run</button>
     <aside id="mock-run-config" class="mock-run-config" hidden aria-label="Mock run setup and live work">
       <div class="mock-run-config-head"><div><p class="eyebrow">This mock run</p><h3>Models &amp; spend</h3></div><div class="mock-run-config-actions"><span id="mock-run-total-cost">Estimate unavailable</span><button id="mock-run-config-toggle" class="text-button" type="button" aria-expanded="true">Minimize</button></div></div>
       <div id="mock-run-config-body" class="mock-run-config-body">
@@ -238,7 +239,7 @@
                 <div>
                   <label for="lesson-output-cap">Maximum response tokens for Map</label>
                   <input id="lesson-output-cap" type="number" min="64" max="65536" step="64" inputmode="numeric" aria-describedby="lesson-output-cap-note">
-                  <p id="lesson-output-cap-note" class="privacy-note">Map starts at 8,192. The protected server accepts 64–65,536.</p>
+                  <p id="lesson-output-cap-note" class="privacy-note">Map starts at 65,536. The protected server accepts 64–65,536.</p>
                 </div>
                 <div>
                   <label for="tutor-output-cap">Maximum response tokens for Tutor</label>
@@ -292,6 +293,7 @@
           <div class="extraction-map-dialog-card">
             <header class="extraction-map-dialog-head"><div><p class="eyebrow">Generated in the background</p><h3 id="pipeline-extraction-map-dialog-title">Your Lesson Map</h3></div><button id="pipeline-extraction-map-dialog-close" class="extraction-map-dialog-close" type="button" aria-label="Close Lesson Map">×</button></header>
             <p id="pipeline-extraction-map-dialog-status" class="extraction-map-dialog-status" role="status"></p>
+            <div class="extraction-map-dialog-actions"><button id="pipeline-extraction-map-dialog-retry" class="button button-primary" type="button" hidden>Retry Lesson Map</button></div>
             <div id="pipeline-extraction-map-dialog-content" class="extraction-map-dialog-content"></div>
           </div>
         </section>
@@ -567,6 +569,7 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=141" defer></script>
+<script src="./lab.js?v=142" defer></script>
 </body>
 </html>
+

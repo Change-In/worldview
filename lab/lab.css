@@ -640,6 +640,8 @@ button.preferred-button.is-on { border-color: rgba(255, 211, 111, .4); color: va
 .pipeline-mock-progress > span { color:var(--lab-mint); font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
 .pipeline-mock-progress > strong { color:var(--lab-ink); }
 .pipeline-mock-progress .text-button { margin-left:auto; }
+.pipeline-learner-exit[hidden] { display:none; }
+.pipeline-learner-exit { display:none; }
 .mock-run-config { display:none; }
 body.mock-run .mock-run-config { display:block; position:fixed; z-index:4; top:104px; right:max(14px,calc((100vw - 1180px)/2)); width:min(292px,calc(100vw - 28px)); max-height:calc(100vh - 124px); padding:14px; border:1px solid rgba(120,229,192,.32); border-radius:16px; background:rgba(17,21,32,.96); box-shadow:var(--lab-shadow); overflow:hidden; }
 .mock-run-config-head { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
@@ -653,8 +655,13 @@ body.mock-run .mock-run-config { display:block; position:fixed; z-index:4; top:1
 .mock-run-stage-card:first-child { border-top:0; }
 .mock-run-stage-card label { display:block; margin-bottom:5px; color:var(--lab-ink); font-size:12px; font-weight:750; }
 .mock-run-stage-card select { width:100%; min-height:34px; margin-top:5px; border:1px solid var(--lab-line); border-radius:8px; background:var(--lab-card-strong); color:var(--lab-ink); font:inherit; font-size:11px; }
+.mock-run-stage-output-cap { display:flex!important; align-items:center; justify-content:space-between; gap:8px; margin-top:7px; color:var(--lab-muted)!important; font-size:10px!important; font-weight:600!important; }
+.mock-run-stage-output-cap input { width:116px; min-height:30px; padding:5px 7px; border:1px solid var(--lab-line); border-radius:8px; background:var(--lab-card-strong); color:var(--lab-ink); font:inherit; font-size:11px; }
 .mock-run-stage-meta { display:flex; justify-content:space-between; gap:8px; margin-top:6px; color:var(--lab-muted); font-size:10px; }
 .mock-run-stage-meta strong { color:var(--lab-mint); font-weight:700; }
+.mock-run-stage-diagnostic { display:block; margin-top:7px; color:var(--lab-muted); font-size:10px; line-height:1.4; }
+.mock-run-stage-diagnostic.is-error { color:#ffb0b0; }
+.mock-run-stage-diagnostic.is-working { color:#c7f6e3; }
 .mock-run-stage-research,.mock-run-stage-output { display:block; margin-top:5px; color:var(--lab-muted); font-size:10px; line-height:1.35; }
 .mock-run-stage-output { color:var(--lab-ink); }
 .mock-run-live { display:grid; gap:3px; margin-top:8px; padding-top:10px; border-top:1px solid var(--lab-line); color:var(--lab-muted); font-size:11px; }
@@ -1054,6 +1061,19 @@ body.clarification-focus .clarification-text-controls { margin:0; padding:10px 1
 body.clarification-focus .clarification-voice-actions,
 body.clarification-focus .clarification-done,
 body.clarification-focus .clarification-conversation > .form-message { margin-right:14px; margin-left:14px; flex:0 0 auto; }
+body.mock-run .pipeline-learner-exit,
+body.mock-run.clarification-focus .pipeline-learner-exit,
+body.mock-run.extraction-learner-active .pipeline-learner-exit,
+body.mock-run.lesson-learner-active .pipeline-learner-exit,
+body.mock-run.quiz-learner-active .pipeline-learner-exit { position:fixed; z-index:1006; top:max(12px,env(safe-area-inset-top)); right:12px; display:block; min-height:40px; padding:8px 11px; border:1px solid rgba(255,190,108,.5); border-radius:999px; color:#fff0d9; background:rgba(71,40,28,.9); box-shadow:0 8px 24px rgba(0,0,0,.28); font:800 10px/1 system-ui,sans-serif; cursor:pointer; }
+body.mock-run.clarification-focus .pipeline-learner-exit:hover,
+body.mock-run.clarification-focus .pipeline-learner-exit:focus-visible,
+body.mock-run.extraction-learner-active .pipeline-learner-exit:hover,
+body.mock-run.extraction-learner-active .pipeline-learner-exit:focus-visible,
+body.mock-run.lesson-learner-active .pipeline-learner-exit:hover,
+body.mock-run.lesson-learner-active .pipeline-learner-exit:focus-visible,
+body.mock-run.quiz-learner-active .pipeline-learner-exit:hover,
+body.mock-run.quiz-learner-active .pipeline-learner-exit:focus-visible { border-color:#ffd19b; outline:2px solid rgba(255,209,155,.28); outline-offset:2px; }
 
 /* Mock Extraction is the learner surface, not the Lab inspector. It keeps the
    same full-screen conversation shell as Clarification while the existing
@@ -1102,6 +1122,8 @@ body.mock-run.extraction-learner-active #pipeline-extraction-saved { margin:0 14
 .extraction-map-dialog-close { display:grid; width:42px; height:42px; flex:0 0 auto; padding:0; place-items:center; border:1px solid rgba(255,255,255,.12); border-radius:50%; color:var(--lab-ink); background:rgba(255,255,255,.035); font:300 27px/1 system-ui,sans-serif; cursor:pointer; }
 .extraction-map-dialog-close:hover,.extraction-map-dialog-close:focus-visible { border-color:rgba(237,152,95,.6); outline:none; }
 .extraction-map-dialog-status { margin:0; padding:11px 16px; border-bottom:1px solid rgba(255,255,255,.07); color:var(--lab-muted); font-size:11px; line-height:1.45; }
+.extraction-map-dialog-actions { display:flex; padding:10px 16px 0; gap:8px; }
+.extraction-map-dialog-actions[hidden] { display:none; }
 .extraction-map-dialog-content { min-height:0; padding:16px; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
 .extraction-map-dialog-content .map-roadmap { margin:0; }
 .extraction-map-dialog-placeholder { display:grid; min-height:220px; padding:28px; place-items:center; border:1px dashed rgba(120,229,192,.28); border-radius:16px; color:var(--lab-muted); text-align:center; line-height:1.55; }
@@ -1222,3 +1244,4 @@ body.mock-run.quiz-learner-active #pipeline-quiz-extraction-input { display:none
   body.clarification-focus .pipeline-experience > .pipeline-card-head { display:flex; }
   body.clarification-focus .clarification-surface { min-height:0; }
 }
+
