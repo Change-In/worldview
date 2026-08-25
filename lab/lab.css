@@ -1033,6 +1033,8 @@ body.mock-run #pipeline-map-stage .map-workspace-bar { display:none; }
   .map-learner-panel { display:grid; grid-template-columns:minmax(220px,270px) minmax(0,1fr); align-items:start; gap:26px; }
   .map-run-library { position:sticky; top:18px; max-height:calc(100vh - 42px); margin:0; padding:0 18px 0 0; overflow-y:auto; border-right:1px solid rgba(238,221,187,.13); border-bottom:0; }
 }
+html.lab-viewport-locked,
+html.lab-viewport-locked body { overflow:hidden; overscroll-behavior:none; }
 body.clarification-focus { overflow:hidden; }
 body.clarification-focus #panel-pipeline { position:fixed; z-index:1000; inset:0; display:flex!important; width:var(--lab-viewport-width,100dvw); max-width:var(--lab-viewport-width,100dvw); height:var(--lab-viewport-height,100dvh); max-height:var(--lab-viewport-height,100dvh); padding:0!important; overflow:hidden; overflow-x:clip; flex-direction:column; background:#11100f; }
 body.clarification-focus #panel-pipeline > .pipeline-head,
