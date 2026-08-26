@@ -2051,11 +2051,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v156 · Aug 26";
+const BUILD = "v157 · Aug 26";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v157", date: "Aug 26", changes: [
+    "Rewrote Clarification for natural, non-repeating, grammatically clean turns and made every conversational phase car-digestible: one short question at a time with no hidden Talker or Brain text.",
+    "Lesson Maps now use up to ten web searches, require source-bound support for every outcome, follow the learner's stated time, and display clean chapter numbering and current progress.",
+    "Hardened iPhone speech startup, fresh-run isolation, saved-run access, parallel guided routing, and the complete final teach-back and review flow."
+  ]},
   { tag: "v156", date: "Aug 26", changes: [
     "An unfinished Clarification conversation now reopens after a reload and reconnects to its exact saved model turn without repeating the learner reply or paying for a second provider call.",
     "Live voice transcription now has a 20-second limit, cancels cleanly when the lesson moves on, and stays bound to the signed-in account that made the recording.",
