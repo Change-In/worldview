@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=151">
+<link rel="stylesheet" href="./lab.css?v=152">
 </head>
 <body>
 
@@ -51,8 +51,8 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16h14l-1.2-5.1a2 2 0 0 0-1.9-1.5H8.1a2 2 0 0 0-1.9 1.5L5 16Z"/><path d="M7.5 16v2M16.5 16v2M3.8 13.5h2.1M18.1 13.5h2.1"/><circle cx="8" cy="14.2" r=".7"/><circle cx="16" cy="14.2" r=".7"/></svg>
         </button>
       </div>
-      <p id="mock-car-status" class="mock-car-status" role="status" aria-live="polite">Hold to talk</p>
-      <button id="mock-car-ptt" class="mock-car-ptt" type="button" aria-label="Hold to talk">
+      <p id="mock-car-status" class="mock-car-status" role="status" aria-live="polite">Hold, wait for the tone, then talk</p>
+      <button id="mock-car-ptt" class="mock-car-ptt" type="button" aria-label="Hold and wait for the ready tone to talk">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M8.5 21h7"/></svg>
       </button>
       <button id="mock-car-replay" class="button button-quiet mock-car-replay" type="button" hidden>Hear reply</button>
@@ -121,7 +121,7 @@
             <h3>Voice or text?</h3>
             <p>Voice opens the conversation and asks for microphone access immediately.</p>
           <div class="clarification-mode-grid">
-            <button id="clarification-voice" class="clarification-mode" type="button"><strong>Voice</strong><span>Open the chat, allow the mic, then hold anywhere to talk.</span></button>
+            <button id="clarification-voice" class="clarification-mode" type="button"><strong>Voice</strong><span>Open the chat, allow the mic, then hold and begin after the tone.</span></button>
             <button id="clarification-text" class="clarification-mode" type="button"><strong>Text</strong><span>Have the same conversation by typing.</span></button>
           </div>
           </div>
@@ -138,10 +138,10 @@
             <strong id="clarification-activity-text">Starting…</strong>
             <small id="clarification-activity-time">0s</small>
           </div>
-          <div id="clarification-surface" class="clarification-surface" tabindex="0" aria-label="Hold anywhere in the lesson area to talk">
+          <div id="clarification-surface" class="clarification-surface" tabindex="0" aria-label="Hold anywhere in the lesson area and begin talking after the ready tone">
             <div id="clarification-waiting" class="clarification-waiting" hidden><span></span><p id="clarification-waiting-text">Preparing a short reply…</p></div>
             <div id="clarification-latest" class="clarification-latest" aria-live="polite"></div>
-            <p id="clarification-ptt-hint" class="clarification-ptt-hint">Hold anywhere on this screen to talk.</p>
+            <p id="clarification-ptt-hint" class="clarification-ptt-hint">Hold anywhere, wait for the tone, then talk.</p>
           </div>
           <div id="clarification-text-controls" class="clarification-text-controls" hidden>
             <label class="sr-only" for="clarification-reply">Your reply</label>
@@ -303,7 +303,7 @@
             <div class="inline-actions"><button id="pipeline-extraction-send" class="button button-primary" type="button" hidden>Send</button></div>
           </div>
           <div id="pipeline-extraction-voice-controls" class="extraction-voice-controls" hidden>
-            <p class="extraction-voice-hint">Hold to talk. Release to transcribe and send your words.</p>
+            <p class="extraction-voice-hint">Hold, wait for the tone, then talk. Release to transcribe and send.</p>
             <button id="pipeline-extraction-ptt" class="extraction-ptt" type="button">Hold to talk</button>
             <div class="inline-actions"><button id="pipeline-extraction-hear" class="button button-quiet" type="button" hidden>Hear last reply</button><button id="pipeline-extraction-retry-transcription" class="button button-quiet" type="button" hidden>Retry transcription</button></div>
           </div>
@@ -330,7 +330,7 @@
           <div id="pipeline-lesson-route" class="lesson-route-context"></div>
           <ol id="pipeline-lesson-transcript" class="extraction-transcript lesson-transcript"></ol>
           <div id="pipeline-lesson-text-controls" class="extraction-text-controls lesson-text-controls"><label class="sr-only" for="pipeline-lesson-reply">Your reply</label><textarea id="pipeline-lesson-reply" rows="3" maxlength="1200" placeholder="Write what you think, predict, or notice."></textarea><button id="pipeline-lesson-send" class="button button-primary" type="button" hidden>Send</button></div>
-          <div id="pipeline-lesson-voice-controls" class="extraction-voice-controls lesson-voice-controls" hidden><p class="extraction-voice-hint">Hold to talk. Release to transcribe and send your words.</p><button id="pipeline-lesson-ptt" class="extraction-ptt" type="button">Hold to talk</button><div class="inline-actions"><button id="pipeline-lesson-hear" class="button button-quiet" type="button" hidden>Hear last reply</button></div></div>
+          <div id="pipeline-lesson-voice-controls" class="extraction-voice-controls lesson-voice-controls" hidden><p class="extraction-voice-hint">Hold, wait for the tone, then talk. Release to transcribe and send.</p><button id="pipeline-lesson-ptt" class="extraction-ptt" type="button">Hold to talk</button><div class="inline-actions"><button id="pipeline-lesson-hear" class="button button-quiet" type="button" hidden>Hear last reply</button></div></div>
           <p id="pipeline-lesson-routing" class="privacy-note">Worldview will check each reply before deciding whether to keep teaching this idea or move to the next one.</p>
           <div class="lesson-conversation-actions"><button id="pipeline-lesson-next" class="button button-quiet" type="button" hidden>Next section</button></div>
         </section>
@@ -347,7 +347,7 @@
           <div id="pipeline-quiz-route" class="lesson-route-context"></div>
           <ol id="pipeline-quiz-transcript" class="extraction-transcript lesson-transcript"></ol>
           <div id="pipeline-quiz-text-controls" class="extraction-text-controls lesson-text-controls"><label class="sr-only" for="pipeline-quiz-reply">Your reply</label><textarea id="pipeline-quiz-reply" rows="3" maxlength="2400" placeholder="Explain what you learned as if you were teaching a curious beginner."></textarea><button id="pipeline-quiz-send" class="button button-primary" type="button" hidden>Send</button></div>
-          <div id="pipeline-quiz-voice-controls" class="extraction-voice-controls lesson-voice-controls" hidden><p class="extraction-voice-hint">Hold to talk. Release to transcribe and send your words.</p><button id="pipeline-quiz-ptt" class="extraction-ptt" type="button">Hold to talk</button><div class="inline-actions"><button id="pipeline-quiz-hear" class="button button-quiet" type="button" hidden>Hear last reply</button></div></div>
+          <div id="pipeline-quiz-voice-controls" class="extraction-voice-controls lesson-voice-controls" hidden><p class="extraction-voice-hint">Hold, wait for the tone, then talk. Release to transcribe and send.</p><button id="pipeline-quiz-ptt" class="extraction-ptt" type="button">Hold to talk</button><div class="inline-actions"><button id="pipeline-quiz-hear" class="button button-quiet" type="button" hidden>Hear last reply</button></div></div>
         </section>
         <details class="extraction-backend"><summary>Quiz backend evidence</summary><p class="privacy-note">The assessor receives only the frozen Lesson Map and this Quiz's learner answers. Extraction and the guided Lesson transcript are deliberately excluded from scoring.</p><pre id="pipeline-quiz-validated">No Quiz assessment yet.</pre><pre id="pipeline-quiz-raw" hidden></pre><pre id="pipeline-quiz-packet" hidden></pre></details>
       </section>
@@ -599,7 +599,7 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=151" defer></script>
+<script src="./lab.js?v=152" defer></script>
 </body>
 </html>
 
