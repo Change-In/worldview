@@ -428,6 +428,8 @@ const labState = {
     lessonHandoffToken: "",
     mapRetryBusy: false,
     mapRetryToken: "",
+    mapStartFailureRunId: "",
+    mapStartFailureMessage: "",
     openingFailureKey: "",
     openingFailureMessage: "",
     openingToken: "",
@@ -912,7 +914,7 @@ function resetWorkspaceContents() {
     mode: "text", micStream: null, recorder: null, recorderChunks: [], recordingStartedAt: 0,
     recordingStopTimer: 0, recordingPointerActive: false, recordingPointerId: null, micAcquirePromise: null, micAcquireGeneration: 0,
     retainedRecording: null, retainedOperationId: "", audioPrimed: false, voiceAudio: null,
-    voiceSpeechCancel: null, speechPlaybackGeneration: 0, captureGeneration: 0, lastSpeechText: "", lastSpokenJobId: "", speaking: false, saveBusy: false, modeSwitching: false, demoMapReady: false, nextReplyInstruction: "", mapReadyCueKey: "", preMapRunId: "", activeAttempt: 0, handoffMode: "full", modeInheritedFromClarification: false, pass: "broad", broadComplete: false, lessonRequested: false, lessonHandoffBusy: false, lessonHandoffToken: "", mapRetryBusy: false, mapRetryToken: "", openingFailureKey: "", openingFailureMessage: "", openingToken: "", mapAwareFailureKey: "", mapAwareFailureMessage: "", voiceTranscriptionToken: "", retainedCaptureContext: null, completionMethod: "", personalizationExhausted: false, lastTranscriptRenderKey: "", mapDialogOpen: false, mapDialogReturnFocus: null,
+    voiceSpeechCancel: null, speechPlaybackGeneration: 0, captureGeneration: 0, lastSpeechText: "", lastSpokenJobId: "", speaking: false, saveBusy: false, modeSwitching: false, demoMapReady: false, nextReplyInstruction: "", mapReadyCueKey: "", preMapRunId: "", activeAttempt: 0, handoffMode: "full", modeInheritedFromClarification: false, pass: "broad", broadComplete: false, lessonRequested: false, lessonHandoffBusy: false, lessonHandoffToken: "", mapRetryBusy: false, mapRetryToken: "", mapStartFailureRunId: "", mapStartFailureMessage: "", openingFailureKey: "", openingFailureMessage: "", openingToken: "", mapAwareFailureKey: "", mapAwareFailureMessage: "", voiceTranscriptionToken: "", retainedCaptureContext: null, completionMethod: "", personalizationExhausted: false, lastTranscriptRenderKey: "", mapDialogOpen: false, mapDialogReturnFocus: null,
   });
   labState.clarificationArtifacts = [];
   labState.pipelineStage = "clarification";
@@ -1912,12 +1914,6 @@ function renderMockRunConfig() {
     if (stage === "map") card.append(element("small", { className: "mock-run-stage-research", text: "Research automatic · OpenAI is unavailable here because its protected route cannot run web research." }));
     const outputSummary = mockStageOutputSummary(stage, artifact);
     if (outputSummary) card.append(element("small", { className: "mock-run-stage-output", text: `Latest output · ${outputSummary}` }));
-    if (!["brain"].includes(stage)) {
-      const jumpStage = stage === "quiz" ? "quiz" : stage;
-      const jump = element("button", { className: "button button-quiet mock-run-stage-jump", type: "button", text: `Open ${MOCK_RUN_STAGE_LABELS[stage]}`, attrs: { "data-mock-stage": jumpStage } });
-      jump.addEventListener("click", () => setPipelineStage(jumpStage));
-      card.append(jump);
-    }
     root.append(card);
   }
   const totalLabel = hasCost ? (hasActual && !hasEstimate ? "Actual total" : "Total estimate") : "Estimate unavailable";
@@ -1941,6 +1937,7 @@ function stopMockRunLearnerMedia() {
   labState.clarification.micStream = null;
   stopPipelineExtractionVoice();
   setPipelineExtractionConversationMode("text");
+  releaseLabRecordingCueContext();
   labState.mockTurnTimings = new Map();
 }
 
@@ -4123,6 +4120,8 @@ function selectPipelineRun(runId) {
   labState.extraction.lessonRequested = false;
   labState.extraction.mapRetryBusy = false;
   labState.extraction.mapRetryToken = "";
+  labState.extraction.mapStartFailureRunId = "";
+  labState.extraction.mapStartFailureMessage = "";
   labState.extraction.lessonHandoffBusy = false;
   labState.extraction.lessonHandoffToken = "";
   labState.extraction.openingFailureKey = "";
@@ -4214,8 +4213,11 @@ function syncExtractionPassFromJobs(artifact = selectedPipelineArtifact()) {
     labState.extraction.pass = "map-aware";
     labState.extraction.broadComplete = true;
     labState.extraction.preMapRunId = "";
-  } else if (jobs.some((job) => job.scenario?.broadComplete)) {
-    labState.extraction.broadComplete = true;
+  } else {
+    // A local transition flag is never authority. After reload, only a durable
+    // Map-Aware job may restore the second Extraction pass.
+    labState.extraction.pass = "broad";
+    if (jobs.some((job) => job.scenario?.broadComplete)) labState.extraction.broadComplete = true;
   }
   if (jobs.some((job) => job.scenario?.personalizationExhausted)) labState.extraction.personalizationExhausted = true;
   return extractionPass(artifact);
@@ -4431,6 +4433,8 @@ async function retryPipelineMapFromExtraction() {
   const previousJobIds = new Set(pipelineMapJobs(artifact).map((job) => job.id));
   labState.extraction.mapRetryToken = retryToken;
   labState.extraction.mapRetryBusy = true;
+  labState.extraction.mapStartFailureRunId = "";
+  labState.extraction.mapStartFailureMessage = "";
   labState.extraction.lessonRequested = false;
   labState.extraction.preMapRunId = artifact.runId;
   labState.pipelineSelectedMapJobId = "";
@@ -4443,7 +4447,10 @@ async function retryPipelineMapFromExtraction() {
     if (!retryIsCurrent()) return false;
     const replacement = pipelineMapJobs(artifact).find((job) => !previousJobIds.has(job.id));
     if (!replacement) {
-      labState.extraction.preMapRunId = "";
+      // Broad Extraction remains bound to the frozen Clarification even when
+      // the independent Map request did not return a durable job.
+      labState.extraction.mapStartFailureRunId = artifact.runId;
+      labState.extraction.mapStartFailureMessage = "The Lesson Map retry could not be started.";
       setMessage("pipeline-extraction-output", "The Lesson Map retry could not be started. Extraction remains available; open the Map stage to review the Lab error.", "error");
     }
   } finally {
@@ -4922,7 +4929,8 @@ function renderPipelineRoadmap(record, artifact, { includeStart = true } = {}) {
   }
   card.append(nodes);
   if (map.startingQuestion) card.append(element("p", { className:"map-starting-question", text:map.startingQuestion }));
-  if (includeStart && !meta.incomplete && !meta.needsReview && map.chapters.length && outcomeCount) {
+  const selectedJob = pipelineMapJob(artifact);
+  if (includeStart && selectedJob?.status === "completed" && !meta.incomplete && !meta.needsReview && map.chapters.length && outcomeCount) {
     const action = element("div", { className:"inline-actions map-roadmap-start" });
     const start = element("button", { className:"button button-primary", attrs:{ type:"button" }, text:"To Start" });
     start.addEventListener("click", () => {
@@ -4950,10 +4958,13 @@ function pipelineMapRunState(job) {
     return pipelineMapRecordMeta(record, map).needsReview;
   });
   if (LAB_ACTIVE_JOB_STATES.has(job.status)) return { label:"Generating", className:"" };
+  if (["failed", "partial", "needs_attention", "cancelled"].includes(job.status)) {
+    return { label:job.status === "cancelled" ? "Cancelled" : job.status === "partial" ? "Incomplete" : "Failed", className:"is-failed" };
+  }
   if (records.length && incomplete) return { label:"Incomplete", className:"is-incomplete" };
   if (records.length && needsReview) return { label:"Review", className:"is-review" };
-  if (records.length) return { label:"Ready", className:"is-ready" };
-  if (["failed", "partial", "needs_attention", "cancelled"].includes(job.status)) return { label:job.status === "cancelled" ? "Cancelled" : "Failed", className:"is-failed" };
+  if (job.status === "completed" && records.length) return { label:"Ready", className:"is-ready" };
+  if (job.status === "completed") return { label:"Needs attention", className:"is-failed" };
   return { label:job.status.replaceAll("_", " "), className:"" };
 }
 
@@ -5017,7 +5028,7 @@ function renderPipelineMapRuns(artifact = selectedPipelineArtifact()) {
   if (!root || !count) return;
   root.replaceChildren();
   const jobs = pipelineMapJobs(artifact);
-  const readyCount = jobs.filter((job) => pipelineMapOutputRecords(labState.jobDetails.get(job.id), job).length).length;
+  const readyCount = jobs.filter((job) => pipelineMapRunState(job).label === "Ready").length;
   count.textContent = jobs.length ? `${readyCount} ready · ${jobs.length} total` : "0 runs";
   if (!jobs.length) {
     root.append(element("p", { className:"map-run-empty", text:"No roadmap runs yet. Generate one from the clarification shown above." }));
@@ -5080,7 +5091,8 @@ function renderPipelineMapOutput() {
   const renderedRecords = records.map((record, index) => ({ record, recordKey:cleanMapText(record.id, 120) || `result-${index}`, ...renderPipelineRoadmap(record, artifact) }));
   const incompleteCount = renderedRecords.filter((item) => item.meta.incomplete).length;
   const reviewCount = renderedRecords.filter((item) => item.meta.needsReview).length;
-  setStatus(`${records.length} roadmap${records.length === 1 ? "" : "s"} returned${incompleteCount ? ` · ${incompleteCount} incomplete` : ""}${reviewCount ? ` · ${reviewCount} older run${reviewCount === 1 ? "" : "s"} needs review` : ""}`, !incompleteCount && !reviewCount);
+  const terminalFailure = ["failed", "partial", "needs_attention", "cancelled"].includes(job.status);
+  setStatus(`${records.length} roadmap${records.length === 1 ? "" : "s"} returned${terminalFailure ? ` · job ${job.status.replaceAll("_", " ")}` : ""}${incompleteCount ? ` · ${incompleteCount} incomplete` : ""}${reviewCount ? ` · ${reviewCount} older run${reviewCount === 1 ? "" : "s"} needs review` : ""}`, job.status === "completed" && !incompleteCount && !reviewCount);
   const selectedRecord = renderedRecords.find((item) => item.recordKey === labState.pipelineSelectedMapRecordId) || renderedRecords[0];
   labState.pipelineSelectedMapRecordId = selectedRecord.recordKey;
   if (renderedRecords.length > 1) {
@@ -5339,6 +5351,12 @@ function pipelineExtractionOutput(detail) {
   const fallback = extractionRecoveryOutput(detail, recoverableConversationFailure(sample) ? "provider" : "format");
   if (recoverableConversationFailure(sample)) return { raw, output:fallback, sample };
   if (sample?.status === "completed" && !String(raw).trim()) return { raw:"", output:fallback, sample };
+  if (detail?.job && !LAB_ACTIVE_JOB_STATES.has(detail.job.status) && (!raw || sample?.status !== "completed")) {
+    // A locally generated question has no teaching or progress authority, but
+    // it is safer than permanently disabling a learner after a terminal
+    // provider/sample failure. The exact failed result remains in Backend.
+    return { raw:String(raw || ""), output:extractionRecoveryOutput(detail, "terminal"), sample };
+  }
   if (!raw || sample?.status !== "completed") return { raw:"", output:null, sample };
   return { raw, output:validateExtractionRouteOutput(parseExtractionOutput(raw, fallback), detail, fallback), sample };
 }
@@ -5428,24 +5446,30 @@ function selectedPipelineMapRecord(artifact = selectedPipelineArtifact()) {
   };
 }
 
-function pipelineExtractionMapViewState(artifact = selectedPipelineArtifact()) {
-  const job = pipelineMapJob(artifact);
-  if (!artifact) return { state:"unavailable", job:null, selection:null, detail:null, message:"Start a mock run before opening its Lesson Map." };
-  if (!job) {
-    const starting = labState.extraction.preMapRunId === artifact.runId;
-    return {
-      state:starting ? "starting" : "needs-attention", job:null, selection:null, detail:null,
-      message:starting ? "The Lesson Map request is starting. If this does not change shortly, its generator did not accept the run." : "No Lesson Map job is attached to this run yet.",
-    };
-  }
-  const detail = labState.jobDetails.get(job.id) || null;
-  const selection = selectedPipelineMapRecord(artifact);
-  const usable = Boolean(job.status === "completed"
-    && selection
+function pipelineMapSelectionIsUsable(selection) {
+  return Boolean(selection?.job?.status === "completed"
     && !selection.meta?.incomplete
     && !selection.meta?.needsReview
     && selection.map?.chapters?.length
     && pipelineLessonOutcomes(selection).length);
+}
+
+function pipelineExtractionMapViewState(artifact = selectedPipelineArtifact()) {
+  const job = pipelineMapJob(artifact);
+  if (!artifact) return { state:"unavailable", job:null, selection:null, detail:null, message:"Start a mock run before opening its Lesson Map." };
+  if (!job) {
+    const failed = labState.extraction.mapStartFailureRunId === artifact.runId;
+    const starting = labState.extraction.preMapRunId === artifact.runId;
+    return {
+      state:failed ? "needs-attention" : starting ? "starting" : "needs-attention", job:null, selection:null, detail:null,
+      message:failed
+        ? (labState.extraction.mapStartFailureMessage || "The Lesson Map request did not return a durable job. Retry it while Extraction remains available.")
+        : starting ? "The Lesson Map request is starting. If this does not change shortly, its generator did not accept the run." : "No Lesson Map job is attached to this run yet.",
+    };
+  }
+  const detail = labState.jobDetails.get(job.id) || null;
+  const selection = selectedPipelineMapRecord(artifact);
+  const usable = pipelineMapSelectionIsUsable(selection);
   if (usable) return { state:"ready", job, selection, detail, message:"Your Lesson Map is complete. You can inspect it here without leaving Extraction." };
   if (LAB_ACTIVE_JOB_STATES.has(job.status)) return { state:"working", job, selection, detail, message:"Worldview is still generating and validating this run's Lesson Map." };
   if (!detail && ["completed", "partial"].includes(job.status)) return { state:"loading", job, selection:null, detail:null, message:"The Lesson Map job finished. Worldview is loading and validating its saved result." };
@@ -5465,7 +5489,11 @@ function pipelineExtractionMapScope(artifact = selectedPipelineArtifact()) {
     return { selection:null, mapPending:true, sourceMapJobId:"", sourceMapRecordId:"", sourceMapFingerprint:"", key:`clarification-${fingerprint(pipelineExtractionPacket(artifact))}` };
   }
   const selection = selectedPipelineMapRecord(artifact);
-  if (!selection || selection.meta?.incomplete || selection.meta?.needsReview) return null;
+  return pipelineMapSelectionScope(selection);
+}
+
+function pipelineMapSelectionScope(selection) {
+  if (!pipelineMapSelectionIsUsable(selection)) return null;
   return {
     selection,
     sourceMapJobId: selection.job.id,
@@ -5674,8 +5702,12 @@ function pipelineLessonEvaluatorJobs(selection = selectedPipelineMapRecord()) {
 
 function pipelineLessonDetailSample(detail, role = "talker") {
   const samples = Array.isArray(detail?.samples) ? detail.samples : [];
-  return samples.find((sample) => sample?.metadata?.lessonRole === role)
-    || (role === "talker" ? samples[0] : null);
+  const exact = samples.find((sample) => sample?.metadata?.lessonRole === role);
+  if (exact) return exact;
+  const first = samples[0];
+  // Older one-sample Talker jobs had no role metadata. Never reinterpret a
+  // labelled Brain-only sample as learner-facing Talker output.
+  return role === "talker" && !first?.metadata?.lessonRole ? first : null;
 }
 
 function durableSampleCompleted(sample) {
@@ -5712,6 +5744,14 @@ function parsePipelineLessonOutput(detail) {
     if (sample?.status === "completed") {
       const assistantMessage = "What do you already understand about this part, and where would you begin explaining it?";
       const advanceMessage = detail?.job?.scenario?.hasNextOutcome ? "What do you already understand about the next part, and how would you begin explaining it?" : "";
+      return { raw:"", output:{ assistantMessage, advanceMessage, format:"local-complete-recovery" }, sample };
+    }
+    if (detail?.job && !LAB_ACTIVE_JOB_STATES.has(detail.job.status)) {
+      const action = String(detail.job.scenario?.lessonAction || "");
+      const assistantMessage = action === "reply"
+        ? "Which part of your last answer should we examine more carefully, and why?"
+        : "What do you already understand about this part, and where would you begin explaining it?";
+      const advanceMessage = detail.job.scenario?.hasNextOutcome ? "What do you already understand about the next part, and how would you begin explaining it?" : "";
       return { raw:"", output:{ assistantMessage, advanceMessage, format:"local-complete-recovery" }, sample };
     }
     return { raw:"", output:null, sample };
@@ -5904,7 +5944,7 @@ function previewPipelineLessonTurn(selection, outcomeIndex, action, answer) {
 async function createPipelineLessonTurn(action, answer = "", targetOutcomeIndex = null, options = {}) {
   const timingId = options.timingId || "";
   const selection = selectedPipelineMapRecord();
-  if (!selection || selection.meta.incomplete || selection.meta.needsReview) {
+  if (!pipelineMapSelectionIsUsable(selection)) {
     setMessage("pipeline-lesson-output", "Choose a completed structured roadmap before starting the guided Lesson.", "error");
     failMockTurnAudio(timingId, "lesson-not-ready");
     return;
@@ -5997,7 +6037,7 @@ async function createPipelineLessonTurn(action, answer = "", targetOutcomeIndex 
 
 function startPipelineLesson() {
   const selection = selectedPipelineMapRecord();
-  if (!selection) { setPipelineStage("map"); return; }
+  if (!pipelineMapSelectionIsUsable(selection)) { setPipelineStage("map"); return; }
   setPipelineStage("lesson");
   if (!pipelineLessonJobs(selection).length) void createPipelineLessonTurn("opening");
   else renderPipelineLesson();
@@ -6164,9 +6204,9 @@ function renderPipelineLesson() {
   q("pipeline-lesson-raw").textContent = "";
   q("pipeline-lesson-packet").textContent = "";
   const selection = selectedPipelineMapRecord();
-  if (!selection || selection.meta.incomplete || selection.meta.needsReview || !selection.map.chapters.length) {
+  if (!pipelineMapSelectionIsUsable(selection)) {
     start.disabled = true; input.disabled = true; send.hidden = true;
-    setStatus(!selection ? "Choose a completed saved roadmap in Lesson Map first." : selection.meta.incomplete ? "This selected roadmap is incomplete, so it cannot start a guided Lesson." : "Review this older roadmap before using it for a guided Lesson.");
+    setStatus(!selection ? "Choose a completed saved roadmap in Lesson Map first." : selection.job?.status !== "completed" ? "This Lesson Map job did not complete, so it cannot start a guided Lesson." : selection.meta.incomplete ? "This selected roadmap is incomplete, so it cannot start a guided Lesson." : "Review this older roadmap before using it for a guided Lesson.");
     return;
   }
   const outcomes = pipelineLessonOutcomes(selection);
@@ -6992,26 +7032,21 @@ async function startMapAwareExtraction({ answer = "", inputMode = "text", trigge
   }
   if (extractionPass(artifact) === "map-aware") return false;
   if (labState.extractionBusy || labState.extraction.saveBusy) return false;
+  const scope = pipelineMapSelectionScope(selection);
+  if (!scope) return false;
   labState.extraction.broadComplete = true;
-  labState.extraction.pass = "map-aware";
-  labState.extraction.preMapRunId = "";
   labState.extraction.nextReplyInstruction = "";
   labState.extraction.mapReadyCueKey = "";
   labState.extraction.lessonRequested = false;
   labState.extraction.completionMethod = "";
   labState.extraction.personalizationExhausted = false;
   labState.extraction.lastTranscriptRenderKey = "";
-  persistClarificationSettings();
-  const scope = pipelineExtractionMapScope(artifact);
   const jobs = pipelineExtractionJobs(artifact);
   const latest = jobs.at(-1);
   const latestDetail = latest && labState.jobDetails.get(latest.id);
   const latestOutput = pipelineExtractionOutput(latestDetail).output;
   if (!latest || !latestOutput) {
     setMessage("pipeline-extraction-output", "Wait for Worldview's current Broad Pass reply before continuing.", "error");
-    labState.extraction.pass = "broad";
-    labState.extraction.preMapRunId = artifact.runId;
-    persistClarificationSettings();
     return false;
   }
   const nextTurn = Number(latest.scenario?.extractionTurn || 0) + 1;
@@ -7100,6 +7135,11 @@ async function startMapAwareExtraction({ answer = "", inputMode = "text", trigge
     const firstOutcome = firstChapter?.outcomes?.[0];
     const sample = { id:`${job.id}:sample`, status:"completed", provider:"browser", model:"preview", request:request.samples[0], result:{ text:JSON.stringify({ assistant_message:"We now have a useful broad overview, and your Lesson is ready whenever you want to begin. If you keep going here, I can make it more personal by checking a few areas from the route. Looking at the first area, how would you explain what you already understand in your own words?", route_chapter_id:firstChapter?.id || "chapter_1", route_outcome_id:firstOutcome?.id || "1-1", lesson_transition:"none", transition_reason:"" }) } };
     upsertJob(job); labState.jobDetails.set(job.id, { job, samples:[sample], attempts:[] });
+    labState.extraction.pass = "map-aware";
+    labState.extraction.preMapRunId = "";
+    labState.extraction.mapStartFailureRunId = "";
+    labState.extraction.mapStartFailureMessage = "";
+    persistClarificationSettings();
     renderPipelineExtraction();
     return true;
   }
@@ -7111,13 +7151,17 @@ async function startMapAwareExtraction({ answer = "", inputMode = "text", trigge
     const created = await labJobsFetch(request);
     if (!created?.job?.id) throw new Error("The server did not return a saved Map-Aware extraction job id.");
     upsertJob(created.job);
+    labState.extraction.pass = "map-aware";
+    labState.extraction.preMapRunId = "";
+    labState.extraction.mapStartFailureRunId = "";
+    labState.extraction.mapStartFailureMessage = "";
+    persistClarificationSettings();
     q("pipeline-extraction-reply").value = "";
     scheduleJobPoll();
     return true;
   } catch (error) {
     if (labState.extractionTurnToken === turnToken && pipelineConversationLineageIsCurrent(lineage)) {
       labState.extraction.pass = "broad";
-      labState.extraction.preMapRunId = artifact.runId;
       labState.extraction.mapAwareFailureKey = failureKey;
       labState.extraction.mapAwareFailureMessage = `The Map-Aware Pass did not start: ${clip(error.message, 150)}`;
       persistClarificationSettings();
@@ -7597,15 +7641,23 @@ function finalizeLabRecorderPcmFallback(recorder, keepAudio = true) {
   if (!recorder?.wvPcmCapture) return recorder?.wvPcmBlob || null;
   const capture = recorder.wvPcmCapture;
   recorder.wvPcmCapture = null;
+  recorder.wvPcmTruncated = Boolean(capture.frames >= capture.sampleRate * LAB_PCM_FALLBACK_MAX_SECONDS);
   recorder.wvPcmBlob = finishLabPcmFallbackCapture(capture, keepAudio);
   return recorder.wvPcmBlob;
 }
 
 function labRecorderBlob(recorder, chunks = []) {
   const primary = chunks.length ? new Blob(chunks, { type:recorder?.mimeType || chunks[0]?.type || "audio/webm" }) : null;
-  if (primary?.size >= 128) return primary;
   const fallback = recorder?.wvPcmBlob;
-  return fallback?.size >= 128 ? fallback : primary;
+  // The PCM copy is signal-gated. Prefer it whenever it exists: WebKit can
+  // return a non-empty container/header that still contains no microphone
+  // samples, which size alone cannot distinguish from useful encoded audio.
+  // A hold longer than the bounded PCM window must keep its full encoded
+  // container when one exists; otherwise a valid long answer would be cut to
+  // the fallback's first 60 seconds. A missing/tiny container can still use
+  // the bounded PCM rather than lose the turn completely.
+  if (fallback?.size >= 128 && (!recorder?.wvPcmTruncated || !primary || primary.size < 128)) return fallback;
+  return primary;
 }
 
 function requestLabRecorderData(recorder) {
@@ -7619,14 +7671,23 @@ function startLabMediaRecorder(stream, handlers = {}) {
     let recorder = null;
     try {
       recorder = requestedMime ? new MediaRecorder(stream, { mimeType:requestedMime }) : new MediaRecorder(stream);
+      let delivered = false;
       recorder.ondataavailable = handlers.ondataavailable || null;
       recorder.onstop = (event) => {
         finalizeLabRecorderPcmFallback(recorder, true);
+        if (delivered) return;
+        delivered = true;
         handlers.onstop?.(event);
       };
       recorder.onerror = (event) => {
-        finalizeLabRecorderPcmFallback(recorder, false);
-        handlers.onerror?.(event);
+        finalizeLabRecorderPcmFallback(recorder, true);
+        if (delivered) return;
+        delivered = true;
+        try { if (recorder.state !== "inactive") recorder.stop(); } catch (_) { /* The recorder already failed closed. */ }
+        // A MediaRecorder encoder failure does not invalidate the independent
+        // signal-gated PCM graph from the same hold.
+        if (recorder.wvPcmBlob?.size >= 128) handlers.onstop?.(event);
+        else handlers.onerror?.(event);
       };
       recorder.onstart = handlers.onstart || null;
       // Periodic chunks mirror the phone-tested main lesson recorder. Safari
@@ -7645,6 +7706,14 @@ function startLabMediaRecorder(stream, handlers = {}) {
     }
   }
   throw lastError || new Error("This phone did not expose a usable audio recording format.");
+}
+
+function releaseLabRecordingCueContext() {
+  const context = labState.recordingCueContext;
+  labState.recordingCueContext = null;
+  if (!context || context.state === "closed") return;
+  try { Promise.resolve(context.close?.()).catch(() => {}); }
+  catch (_) { /* The browser already owns or closed this audio context. */ }
 }
 
 function invalidateLabCapture(state, expectedStream = null) {
@@ -8561,6 +8630,25 @@ function stopPipelineExtractionRecording(event) {
   }
 }
 
+function cancelPipelineExtractionRecording(event) {
+  const state = labState.extraction;
+  const expectedPointer = state.recordingPointerId;
+  if (!state.recordingPointerActive || expectedPointer === "keyboard") return;
+  if (expectedPointer !== null && event?.pointerId !== expectedPointer) return;
+  state.recordingPointerActive = false;
+  state.recordingPointerId = null;
+  const captureStream = state.activeCaptureStream || state.micStream;
+  invalidateLabCapture(state, captureStream);
+  releaseLabMicrophoneStream(state, captureStream);
+  pipelineVoicePtt()?.classList.remove("is-listening");
+  q("mock-car-ptt")?.classList.remove("is-listening");
+  setPipelineExtractionAudioSession("playback");
+  setMessage(pipelineVoiceStatusId(), "Recording cancelled. Hold again when you are ready.");
+  setMockCarStatus("idle", "Recording cancelled. Hold again.");
+  renderPipelineExtractionModeControls();
+  event?.preventDefault?.();
+}
+
 function maybeSpeakPipelineExtractionReply(job, output) {
   const state = labState.extraction;
   if (labState.pipelineMode === "mock" && labState.pipelineStage === "extraction" && !q("panel-pipeline")?.hidden && job?.id && output?.assistantMessage) {
@@ -8740,13 +8828,23 @@ function renderPipelineExtraction() {
   maybeSpeakPipelineExtractionReply(latest, record.output);
 }
 
-function mockCarConversationAvailable() {
+function mockCarConversationReady() {
   if (labState.pipelineMode !== "mock") return false;
   if (labState.pipelineStage === "clarification") return Boolean(q("clarification-conversation") && !q("clarification-conversation").hidden && q("clarification-complete")?.hidden);
   if (labState.pipelineStage === "extraction") return Boolean(q("pipeline-extraction-conversation") && !q("pipeline-extraction-conversation").hidden);
   if (labState.pipelineStage === "lesson") return Boolean(q("pipeline-lesson-conversation") && !q("pipeline-lesson-conversation").hidden);
   if (labState.pipelineStage === "quiz") return Boolean(q("pipeline-quiz-conversation") && !q("pipeline-quiz-conversation").hidden);
   return false;
+}
+
+function mockCarConversationAvailable() {
+  if (mockCarConversationReady()) return true;
+  // Once entered, Car mode is a continuous safety surface. Automatic phase
+  // openings may temporarily hide their ordinary transcript/composer while a
+  // job starts, but must not reveal that text or eject focus back into it.
+  return Boolean(labState.pipelineMode === "mock"
+    && labState.mockCar.active
+    && ["clarification", "extraction", "lesson", "quiz"].includes(labState.pipelineStage));
 }
 
 function setMockCarStatus(status = "idle", message = "", errorKey = "") {
@@ -8758,6 +8856,9 @@ function setMockCarStatus(status = "idle", message = "", errorKey = "") {
 }
 
 function mockCarDerivedStatus() {
+  if (labState.mockCar.active && !mockCarConversationReady()) {
+    return { status:"thinking", message:"Preparing the next question" };
+  }
   if (labState.pipelineStage === "clarification") {
     const state = labState.clarification;
     if (state.micAcquirePromise) return { status:"thinking", message:"Opening microphone" };
@@ -8867,6 +8968,7 @@ function mockCarReturnFocusTarget(preferred = null) {
 
 function renderMockCarMode() {
   const available = mockCarConversationAvailable();
+  const ready = mockCarConversationReady();
   const active = available && labState.mockCar.active;
   document.body.classList.toggle("mock-car-active", active);
   const surface = q("mock-car-surface");
@@ -8881,7 +8983,7 @@ function renderMockCarMode() {
   for (const [stage, id] of Object.entries(ids)) {
     const button = q(id);
     if (!button) continue;
-    const stageAvailable = available && labState.pipelineStage === stage;
+    const stageAvailable = ready && labState.pipelineStage === stage;
     button.hidden = !stageAvailable;
     button.setAttribute("aria-pressed", String(active && stageAvailable));
   }
@@ -8890,10 +8992,16 @@ function renderMockCarMode() {
   if (status) status.textContent = derived.message;
   const ptt = q("mock-car-ptt");
   if (ptt) {
-    const blocked = derived.status === "thinking" || derived.status === "transcribing" || (derived.status === "paused" && labState.mockCar.errorKey === "microphone-permission");
+    const wasDisabled = ptt.disabled;
+    const blocked = !ready || derived.status === "thinking" || derived.status === "transcribing" || (derived.status === "paused" && labState.mockCar.errorKey === "microphone-permission");
     ptt.disabled = !active || blocked;
     ptt.setAttribute("aria-label", derived.status === "listening" ? "Release to send" : "Hold and wait for the ready tone to talk");
     ptt.classList.toggle("is-listening", derived.status === "listening");
+    if (active && ready && wasDisabled && !ptt.disabled) {
+      queueMicrotask(() => {
+        if (labState.mockCar.active && mockCarConversationReady() && !ptt.disabled) ptt.focus({ preventScroll:true });
+      });
+    }
   }
   const replay = q("mock-car-replay");
   if (replay) replay.hidden = !active || !mockCarLastSpeechText() || derived.status === "listening" || derived.status === "transcribing" || derived.status === "thinking";
@@ -8974,7 +9082,7 @@ function exitMockCarMode({ switchToText = false } = {}) {
 }
 
 function startMockCarRecording(event) {
-  if (!labState.mockCar.active || !mockCarConversationAvailable()) return;
+  if (!labState.mockCar.active || !mockCarConversationReady()) return;
   try { event?.currentTarget?.setPointerCapture?.(event.pointerId); } catch (_) { /* Pointer capture is optional. */ }
   if (labState.pipelineStage === "clarification") armClarificationRecording(event);
   else if (["extraction", "lesson", "quiz"].includes(labState.pipelineStage)) void startPipelineExtractionRecording(event);
@@ -8982,8 +9090,14 @@ function startMockCarRecording(event) {
 
 function stopMockCarRecording(event) {
   if (!labState.mockCar.active) return;
-  if (labState.pipelineStage === "clarification") stopClarificationRecording(event);
-  else if (["extraction", "lesson", "quiz"].includes(labState.pipelineStage)) stopPipelineExtractionRecording(event);
+  const cancelled = ["pointercancel", "lostpointercapture"].includes(event?.type);
+  if (labState.pipelineStage === "clarification") {
+    if (cancelled) cancelClarificationRecording(event);
+    else stopClarificationRecording(event);
+  } else if (["extraction", "lesson", "quiz"].includes(labState.pipelineStage)) {
+    if (cancelled) cancelPipelineExtractionRecording(event);
+    else stopPipelineExtractionRecording(event);
+  }
 }
 
 async function replayMockCarReply() {
@@ -9125,6 +9239,8 @@ async function startMapThenExtraction() {
   if (!artifact) return;
   labState.autoOpenExtractionAfterMap = false;
   labState.extraction.preMapRunId = artifact.runId;
+  labState.extraction.mapStartFailureRunId = "";
+  labState.extraction.mapStartFailureMessage = "";
   labState.extraction.pass = "broad";
   labState.extraction.broadComplete = false;
   labState.extraction.nextReplyInstruction = "";
@@ -9155,7 +9271,9 @@ async function startMapThenExtraction() {
   if (selectedPipelineArtifact()?.runId !== artifact.runId) return;
   const exactMapPending = pendingCreateForComponent("lesson", artifact.runId);
   if (!pipelineMapJobs(artifact).length && !exactMapPending) {
-    labState.extraction.preMapRunId = "";
+    labState.extraction.mapStartFailureRunId = artifact.runId;
+    labState.extraction.mapStartFailureMessage = "This run’s Lesson Map did not start.";
+    persistClarificationSettings();
     setMessage("pipeline-extraction-output", "The broad overview can continue, but this run’s Lesson Map did not start. Open View status and retry the Map before beginning the Lesson.", "error");
   }
   if (labState.pipelineStage === "extraction") renderPipelineExtraction();
@@ -9309,6 +9427,8 @@ function persistClarificationSettings({ deviceDraft = null, globalDefault = null
       completionMethod: clip(labState.extraction.completionMethod, 80),
       personalizationExhausted: Boolean(labState.extraction.personalizationExhausted),
       preMapRunId: clip(labState.extraction.preMapRunId, 120),
+      mapStartFailureRunId: clip(labState.extraction.mapStartFailureRunId, 120),
+      mapStartFailureMessage: clip(labState.extraction.mapStartFailureMessage, 240),
     },
   };
   if (deviceDraft) payload.deviceDraft = clarificationConfig(deviceDraft);
@@ -9403,6 +9523,7 @@ function setClarificationConversationMode(mode) {
   q("clarification-text-controls").hidden = state.mode !== "text";
   q("clarification-ptt-hint").hidden = state.mode !== "voice";
   q("clarification-surface").setAttribute("aria-label", state.mode === "voice" ? "Hold anywhere in the lesson area and begin talking after the ready tone" : "Clarification conversation");
+  q("clarification-surface")?.classList?.toggle("is-voice", state.mode === "voice");
   renderClarificationModeToggle();
 }
 
@@ -9561,6 +9682,8 @@ function armClarificationRecording(event) {
   const state = labState.clarification;
   if (state.mode !== "voice" || state.busy || state.recorder?.state === "recording") return;
   if (event?.pointerType === "mouse" && event.button !== 0) return;
+  try { event?.currentTarget?.setPointerCapture?.(event.pointerId); } catch (_) { /* Pointer capture is optional. */ }
+  event?.preventDefault?.();
   clearClarificationRecordingArm();
   state.recordingPointerId = event?.pointerId ?? null;
   state.recordingPointerStartedAt = performance.now();
@@ -9688,6 +9811,7 @@ function releaseClarificationTopicCapture({ invalidate = true } = {}) {
   state.recordingStopTimer = 0;
   const recorder = state.recorder;
   if (recorder) {
+    finalizeLabRecorderPcmFallback(recorder, false);
     recorder.ondataavailable = recorder.onstop = recorder.onerror = recorder.onstart = null;
     try { if (recorder.state !== "inactive") recorder.stop(); } catch (_) { /* The topic recorder already stopped. */ }
   }
@@ -10161,6 +10285,8 @@ function startNewPipelineRun(seed = "") {
   labState.extraction.activeAttempt = 0;
   labState.extraction.mapRetryBusy = false;
   labState.extraction.mapRetryToken = "";
+  labState.extraction.mapStartFailureRunId = "";
+  labState.extraction.mapStartFailureMessage = "";
   labState.extraction.modeInheritedFromClarification = false;
   labState.extraction.pass = "broad";
   labState.extraction.broadComplete = false;
@@ -10266,6 +10392,8 @@ function initializeClarification() {
     labState.extraction.completionMethod = clip(extractionResume.completionMethod, 80);
     labState.extraction.personalizationExhausted = Boolean(extractionResume.personalizationExhausted);
     labState.extraction.preMapRunId = clip(extractionResume.preMapRunId, 120);
+    labState.extraction.mapStartFailureRunId = clip(extractionResume.mapStartFailureRunId, 120);
+    labState.extraction.mapStartFailureMessage = clip(extractionResume.mapStartFailureMessage, 240);
   }
   renderPipelineArtifactSelect();
   setClarificationView("learner");
@@ -10813,6 +10941,7 @@ async function startClarification(mode) {
   state.runId = makeId();
   state.topic = topic;
   state.mode = mode;
+  q("clarification-surface")?.classList?.toggle("is-voice", mode === "voice");
   state.turns = [{ role: "user", content: `The learner entered this topic: ${topic}\nThis is the first clarification turn.` }];
   state.learnerReplyCount = 0;
   state.latest = null;
@@ -11144,6 +11273,23 @@ function stopClarificationRecording(event) {
   }
 }
 
+function cancelClarificationRecording(event) {
+  const state = labState.clarification;
+  const expectedPointer = state.recordingPointerId;
+  if (!state.recordingPointerStartedAt || expectedPointer === "keyboard") return;
+  if (expectedPointer !== null && event?.pointerId !== expectedPointer) return;
+  clearClarificationRecordingArm(false);
+  const captureStream = state.activeCaptureStream || state.micStream;
+  invalidateLabCapture(state, captureStream);
+  releaseLabMicrophoneStream(state, captureStream);
+  q("clarification-surface")?.classList.remove("is-listening");
+  q("mock-car-ptt")?.classList.remove("is-listening");
+  setClarificationAudioSession("playback");
+  setMessage("clarification-message", "Recording cancelled. Hold again when you are ready.");
+  setMockCarStatus("idle", "Recording cancelled. Hold again.");
+  event?.preventDefault?.();
+}
+
 async function finishClarification(completionMethod = "done_control") {
   const state = labState.clarification;
   if (state.busy || !state.latest?.ready_to_finish || state.learnerReplyCount < 1) return false;
@@ -11275,7 +11421,8 @@ function bindClarificationEvents() {
   q("clarification-surface").addEventListener("pointerdown", armClarificationRecording);
   q("clarification-surface").addEventListener("pointermove", cancelClarificationRecordingArmOnMove);
   window.addEventListener("pointerup", stopClarificationRecording);
-  window.addEventListener("pointercancel", stopClarificationRecording);
+  window.addEventListener("pointercancel", cancelClarificationRecording);
+  q("clarification-surface").addEventListener("lostpointercapture", cancelClarificationRecording);
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && labState.clarification.focusMode) { setClarificationFocus(false); return; }
     if (event.code !== "Space" || event.repeat || labState.pipelineStage !== "clarification" || labState.clarification.mode !== "voice" || q("panel-pipeline").hidden) return;
@@ -11577,9 +11724,8 @@ function bindEvents() {
     try { event.currentTarget.setPointerCapture(event.pointerId); } catch (_) { /* capture is optional */ }
     startPipelineExtractionRecording(event);
   });
-  for (const eventName of ["pointerup", "pointercancel", "lostpointercapture"]) {
-    q("pipeline-extraction-ptt").addEventListener(eventName, stopPipelineExtractionRecording);
-  }
+  q("pipeline-extraction-ptt").addEventListener("pointerup", stopPipelineExtractionRecording);
+  for (const eventName of ["pointercancel", "lostpointercapture"]) q("pipeline-extraction-ptt").addEventListener(eventName, cancelPipelineExtractionRecording);
   q("pipeline-lesson-mode-toggle").addEventListener("click", switchPipelineExtractionConversationMode);
   q("pipeline-lesson-hear").addEventListener("click", async () => {
     const state = labState.extraction;
@@ -11593,7 +11739,8 @@ function bindEvents() {
     try { event.currentTarget.setPointerCapture(event.pointerId); } catch (_) { /* capture is optional */ }
     startPipelineExtractionRecording(event);
   });
-  for (const eventName of ["pointerup", "pointercancel", "lostpointercapture"]) q("pipeline-lesson-ptt").addEventListener(eventName, stopPipelineExtractionRecording);
+  q("pipeline-lesson-ptt").addEventListener("pointerup", stopPipelineExtractionRecording);
+  for (const eventName of ["pointercancel", "lostpointercapture"]) q("pipeline-lesson-ptt").addEventListener(eventName, cancelPipelineExtractionRecording);
   q("pipeline-quiz-mode-toggle").addEventListener("click", switchPipelineExtractionConversationMode);
   q("pipeline-quiz-hear").addEventListener("click", async () => {
     const state = labState.extraction;
@@ -11607,7 +11754,8 @@ function bindEvents() {
     try { event.currentTarget.setPointerCapture(event.pointerId); } catch (_) { /* capture is optional */ }
     startPipelineExtractionRecording(event);
   });
-  for (const eventName of ["pointerup", "pointercancel", "lostpointercapture"]) q("pipeline-quiz-ptt").addEventListener(eventName, stopPipelineExtractionRecording);
+  q("pipeline-quiz-ptt").addEventListener("pointerup", stopPipelineExtractionRecording);
+  for (const eventName of ["pointercancel", "lostpointercapture"]) q("pipeline-quiz-ptt").addEventListener(eventName, cancelPipelineExtractionRecording);
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && labState.extraction.mapDialogOpen) {
       event.preventDefault();
