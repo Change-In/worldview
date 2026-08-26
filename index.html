@@ -2051,11 +2051,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v152 · Aug 26";
+const BUILD = "v153 · Aug 26";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v153", date: "Aug 26", changes: [
+    "Kept known malformed Clarification fragments from reaching the learner, while preserving the existing short, single-question fallback and automatic lesson handoff.",
+    "Added realistic multi-turn conversation and protected Home/Lab boundary checks so repetition, list-like replies, readiness, and unrelated entry surfaces stay regression-tested."
+  ]},
   { tag: "v152", date: "Aug 26", changes: [
     "Made iPhone voice turns wait for a real recorder-start cue, tolerate brief microphone route mutes, and recover explicitly from persistent route or speech failures.",
     "Kept one unlocked voice player across automatic Mock phases, added bounded speech fallback, and fully isolated Car controls from background focus without changing the lesson flow."
