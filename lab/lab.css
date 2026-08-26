@@ -639,10 +639,11 @@ button.preferred-button.is-on { border-color: rgba(255, 211, 111, .4); color: va
 .pipeline-mode-option { min-height:32px; padding:6px 10px; border:0; border-radius:999px; color:var(--lab-muted); background:transparent; font:700 11px/1.1 inherit; cursor:pointer; }
 .pipeline-mode-option.is-active { color:#07120f; background:var(--lab-mint); }
 .pipeline-mode-note { max-width:260px; margin:0; color:var(--lab-muted); font-size:11px; line-height:1.35; text-align:right; }
-.pipeline-mock-progress { display:flex; align-items:center; gap:9px; margin:0 0 12px; padding:10px 12px; border:1px solid rgba(120,229,192,.38); border-radius:14px; color:var(--lab-muted); background:rgba(120,229,192,.07); font-size:11px; }
+.pipeline-mock-progress { display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin:0 0 12px; padding:10px 12px; border:1px solid rgba(120,229,192,.38); border-radius:14px; color:var(--lab-muted); background:rgba(120,229,192,.07); font-size:11px; }
 .pipeline-mock-progress > span { color:var(--lab-mint); font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
 .pipeline-mock-progress > strong { color:var(--lab-ink); }
-.pipeline-mock-progress .text-button { margin-left:auto; }
+.pipeline-mock-progress .text-button { margin-left:0; }
+.pipeline-mock-progress #pipeline-mock-new { margin-left:auto; }
 .pipeline-learner-exit[hidden] { display:none; }
 .pipeline-learner-exit { display:none; }
 .mock-run-config { display:none; }
@@ -1272,7 +1273,7 @@ body.mock-run.lesson-learner-active .lesson-voice-controls { margin:0; padding:1
 body.mock-run.lesson-learner-active #pipeline-lesson-routing { margin:0; padding:7px 14px; flex:0 0 auto; text-align:center; background:#171715; }
 body.mock-run.lesson-learner-active .lesson-conversation-actions { display:flex; padding:8px 14px max(10px,env(safe-area-inset-bottom)); justify-content:flex-end; flex:0 0 auto; background:#171715; }
 
-/* Quiz is a truthful reachable frame until its conversation engine is built. */
+/* Quiz shares the same focused learner shell as the guided conversation. */
 body.mock-run.quiz-learner-active .pipeline-source-card,
 body.mock-run.quiz-learner-active #pipeline-map-stage,
 body.mock-run.quiz-learner-active #pipeline-extraction-stage,
@@ -1302,7 +1303,7 @@ body.mock-run.lesson-learner-active .lesson-checkpoint::before { width:9px; heig
 body.mock-run.lesson-learner-active .lesson-checkpoint.is-complete { color:var(--lab-mint); }
 body.mock-run.lesson-learner-active .lesson-checkpoint.is-complete::before { border-color:var(--lab-mint); background:var(--lab-mint); box-shadow:0 0 0 3px rgba(120,229,192,.12); }
 body.mock-run.lesson-learner-active .lesson-checkpoint.is-current { color:var(--lab-ink); }
-body.mock-run.lesson-learner-active .lesson-checkpoint.is-current::before { border-color:#c8b7ff; box-shadow:0 0 0 3px rgba(169,143,255,.12); }
+body.mock-run.lesson-learner-active .lesson-checkpoint.is-current::before { border-color:#c8b7ff; background:#c8b7ff; box-shadow:0 0 0 3px rgba(169,143,255,.16); }
 body.mock-run.lesson-learner-active .lesson-outcome-marker strong { display:none; }
 body.mock-run.quiz-learner-active .pipeline-lesson-intro { display:none; }
 body.mock-run.quiz-learner-active #pipeline-quiz-output { margin:8px 14px 0; flex:0 0 auto; }
