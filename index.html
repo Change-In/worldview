@@ -2051,11 +2051,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v155 · Aug 26";
+const BUILD = "v156 · Aug 26";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v156", date: "Aug 26", changes: [
+    "An unfinished Clarification conversation now reopens after a reload and reconnects to its exact saved model turn without repeating the learner reply or paying for a second provider call.",
+    "Live voice transcription now has a 20-second limit, cancels cleanly when the lesson moves on, and stays bound to the signed-in account that made the recording.",
+    "Kept the automatic Mock Run path intact from a spoken topic through Clarification, concurrent Map and Extraction, guided Lesson, and final Quiz."
+  ]},
   { tag: "v155", date: "Aug 26", changes: [
     "Made iPhone holds fail safer: signal-verified PCM now wins over header-only recorder output, survives encoder errors, and cancelled touch gestures are discarded instead of submitted.",
     "Kept Car mode text-free and focused through automatic phase openings, with the push-to-talk control returning as soon as the next question is ready.",
