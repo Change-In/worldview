@@ -2051,11 +2051,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v153 · Aug 26";
+const BUILD = "v154 · Aug 26";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v154", date: "Aug 26", changes: [
+    "When WebKit opens a recorder but returns no encoded chunks, the same hold now has an in-memory PCM-to-WAV fallback; release also requests an immediate recorder flush before the existing send tail.",
+    "Bounded silent voice startup: Mock Run now gives cloud speech three seconds to begin, then falls back to the phone’s built-in voice with its own five-second start limit instead of waiting indefinitely.",
+    "Added content-free timing from Send or microphone release to the selected reply and first sound across Clarification, Extraction, Lesson, and Quiz. Lesson Map support now stays fail-closed unless backend research evidence and citation links agree, while no-research Maps remain usable."
+  ]},
   { tag: "v153", date: "Aug 26", changes: [
     "Kept known malformed Clarification fragments from reaching the learner, while preserving the existing short, single-question fallback and automatic lesson handoff.",
     "Added realistic multi-turn conversation and protected Home/Lab boundary checks so repetition, list-like replies, readiness, and unrelated entry surfaces stay regression-tested."
