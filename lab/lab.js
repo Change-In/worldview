@@ -9964,6 +9964,13 @@ function clarificationTurnContract(source, normalized) {
     && !normalized?.hadList
     && !normalized?.hadInlineList
     && !normalized?.hadMultipleLines
+    // The editable v13 prompt contains a few legacy sentence fragments. A
+    // provider can occasionally echo one while still satisfying the purely
+    // structural one-question contract, so reject only those known fragments
+    // and let the existing complete local fallback reach the learner instead.
+    && !/(?:^|[.!?]\s+)Would be worth exploring(?:[.!?]|$)/i.test(text)
+    && !/(?:^|[.!?]\s+)Should not take away from the lesson\b/i.test(text)
+    && !/\bUser Discover\b/.test(text)
     && !/(?:^|\s)(?:#{1,6}|[-*•]|\d+[.)])\s/.test(text));
 }
 
