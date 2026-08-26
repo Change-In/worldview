@@ -386,7 +386,7 @@ const labState = {
   mockCar: { active:false, status:"idle", message:"Hold, wait for the tone, then talk", errorKey:"", returnFocus:null },
   topicVoice: {
     busy:false, recorder:null, stream:null, chunks:[], captureToken:"", acquireToken:"",
-    recordingStartedAt:0, recordingStopTimer:0, operationId:"", sourceValue:"",
+    recordingStartedAt:0, recordingStopTimer:0, operationId:"", sourceValue:"", transcriptionAbortController:null,
   },
   extraction: {
     mode: "text",
@@ -436,6 +436,7 @@ const labState = {
     mapAwareFailureKey: "",
     mapAwareFailureMessage: "",
     voiceTranscriptionToken: "",
+    transcriptionAbortController: null,
     retainedCaptureContext: null,
     completionMethod: "",
     personalizationExhausted: false,
@@ -448,6 +449,7 @@ const labState = {
   pipelineStage: "clarification",
   pipelineMode: "controls",
   pendingMockResume: null,
+  pendingClarificationResume: null,
   resumeRestoring: false,
   mockRunConfig: {
     clarification: { ...MOCK_STAGE_DEFAULTS.clarification },
@@ -485,6 +487,9 @@ const labState = {
     latestRaw: "",
     latestPacket: null,
     latestJobId: "",
+    pendingJobId: "",
+    pendingRequestKey: "",
+    pendingRequestTurn: -1,
     runError: "",
     finalized: null,
     finalizedStorage: "",
@@ -512,6 +517,7 @@ const labState = {
     retainedOperationId: "",
     retainedCaptureContext: null,
     transcriptionToken: "",
+    transcriptionAbortController: null,
     audioPrimed: false,
     voiceAudio: null,
     voiceSpeechCancel: null,
@@ -886,6 +892,8 @@ function sanitizePendingCreate(value) {
 }
 
 function resetWorkspaceContents() {
+  if (typeof q === "function" && typeof stopPipelineExtractionVoice === "function" && q("pipeline-extraction-ptt")) stopPipelineExtractionVoice();
+  if (typeof q === "function" && typeof resetClarificationRun === "function" && q("clarification-topic")) resetClarificationRun();
   labState.promptVersions = { lesson: [], tutor: [], brain: [] };
   labState.comparisons = [];
   labState.benchmarkScenarios = [];
@@ -914,11 +922,12 @@ function resetWorkspaceContents() {
     mode: "text", micStream: null, recorder: null, recorderChunks: [], recordingStartedAt: 0,
     recordingStopTimer: 0, recordingPointerActive: false, recordingPointerId: null, micAcquirePromise: null, micAcquireGeneration: 0,
     retainedRecording: null, retainedOperationId: "", audioPrimed: false, voiceAudio: null,
-    voiceSpeechCancel: null, speechPlaybackGeneration: 0, captureGeneration: 0, lastSpeechText: "", lastSpokenJobId: "", speaking: false, saveBusy: false, modeSwitching: false, demoMapReady: false, nextReplyInstruction: "", mapReadyCueKey: "", preMapRunId: "", activeAttempt: 0, handoffMode: "full", modeInheritedFromClarification: false, pass: "broad", broadComplete: false, lessonRequested: false, lessonHandoffBusy: false, lessonHandoffToken: "", mapRetryBusy: false, mapRetryToken: "", mapStartFailureRunId: "", mapStartFailureMessage: "", openingFailureKey: "", openingFailureMessage: "", openingToken: "", mapAwareFailureKey: "", mapAwareFailureMessage: "", voiceTranscriptionToken: "", retainedCaptureContext: null, completionMethod: "", personalizationExhausted: false, lastTranscriptRenderKey: "", mapDialogOpen: false, mapDialogReturnFocus: null,
+    voiceSpeechCancel: null, speechPlaybackGeneration: 0, captureGeneration: 0, lastSpeechText: "", lastSpokenJobId: "", speaking: false, saveBusy: false, modeSwitching: false, demoMapReady: false, nextReplyInstruction: "", mapReadyCueKey: "", preMapRunId: "", activeAttempt: 0, handoffMode: "full", modeInheritedFromClarification: false, pass: "broad", broadComplete: false, lessonRequested: false, lessonHandoffBusy: false, lessonHandoffToken: "", mapRetryBusy: false, mapRetryToken: "", mapStartFailureRunId: "", mapStartFailureMessage: "", openingFailureKey: "", openingFailureMessage: "", openingToken: "", mapAwareFailureKey: "", mapAwareFailureMessage: "", voiceTranscriptionToken: "", transcriptionAbortController: null, retainedCaptureContext: null, completionMethod: "", personalizationExhausted: false, lastTranscriptRenderKey: "", mapDialogOpen: false, mapDialogReturnFocus: null,
   });
   labState.clarificationArtifacts = [];
   labState.pipelineStage = "clarification";
   labState.pendingMockResume = null;
+  labState.pendingClarificationResume = null;
   labState.resumeRestoring = false;
   labState.pipelineSelectedRunId = "";
   labState.pipelineSelectedMapJobId = "";
@@ -2573,10 +2582,38 @@ async function labFetch(body) {
   return responseJson(response);
 }
 
-async function transcribeFetch(file, model, language, operationId) {
+const LAB_TRANSCRIPTION_DEADLINE_MS = 20000;
+
+function abortLabTranscription(state) {
+  const controller = state?.transcriptionAbortController;
+  if (!controller) return false;
+  state.transcriptionAbortController = null;
+  try { controller.abort(); } catch (_) { /* The request was already settled. */ }
+  return true;
+}
+
+function beginLabTranscription(state) {
+  abortLabTranscription(state);
+  const controller = new AbortController();
+  state.transcriptionAbortController = controller;
+  return controller;
+}
+
+function finishLabTranscription(state, controller) {
+  if (state?.transcriptionAbortController === controller) state.transcriptionAbortController = null;
+}
+
+async function transcribeFetch(file, model, language, operationId, { signal, expectedUserId = "" } = {}) {
   const url = `${SUPABASE_URL}/functions/v1/transcribe?model=${encodeURIComponent(model)}&language=${encodeURIComponent(language)}`;
-  const response = await requestWithToken((token) => fetch(url, {
+  const response = await requestWithToken((token) => {
+    if (expectedUserId && labState.verifiedUserId !== expectedUserId) {
+      const error = new Error("The signed-in account changed before this recording could be sent.");
+      error.type = "identity_changed";
+      throw error;
+    }
+    return fetch(url, {
     method: "POST",
+    signal,
     headers: {
       apikey: SUPABASE_PUBLISHABLE_KEY,
       Authorization: `Bearer ${token}`,
@@ -2584,9 +2621,48 @@ async function transcribeFetch(file, model, language, operationId) {
       "x-worldview-access": labState.code,
       "x-worldview-operation-id": operationId,
     },
-    body: file,
-  }));
+      body: file,
+    });
+  });
   return responseJson(response);
+}
+
+async function boundedLabTranscriptionFetch(file, model, language, operationId, { signal, expectedUserId = "", deadlineAt = 0, deadlineMs = LAB_TRANSCRIPTION_DEADLINE_MS } = {}) {
+  const controller = new AbortController();
+  const deadline = Number.isFinite(Number(deadlineAt)) && Number(deadlineAt) > 0
+    ? Number(deadlineAt)
+    : performance.now() + Math.max(1, Number(deadlineMs) || LAB_TRANSCRIPTION_DEADLINE_MS);
+  let settled = false;
+  let timeoutId = 0;
+  let removeExternalAbort = () => {};
+  const cancelled = new Promise((_, reject) => {
+    const stop = (type) => {
+      if (settled) return;
+      try { controller.abort(); } catch (_) { /* The browser already cancelled the request. */ }
+      const error = new Error(type === "transcription_timeout"
+        ? "Transcription took too long."
+        : "Transcription was cancelled because the lesson moved on.");
+      error.name = type === "transcription_timeout" ? "TimeoutError" : "AbortError";
+      error.type = type;
+      reject(error);
+    };
+    timeoutId = setTimeout(() => stop("transcription_timeout"), Math.max(0, deadline - performance.now()));
+    if (signal) {
+      const onAbort = () => stop("transcription_cancelled");
+      if (signal.aborted) onAbort();
+      else {
+        signal.addEventListener("abort", onAbort, { once:true });
+        removeExternalAbort = () => signal.removeEventListener("abort", onAbort);
+      }
+    }
+  });
+  const request = transcribeFetch(file, model, language, operationId, { signal:controller.signal, expectedUserId });
+  try { return await Promise.race([request, cancelled]); }
+  finally {
+    settled = true;
+    clearTimeout(timeoutId);
+    removeExternalAbort();
+  }
 }
 
 async function labJobsFetch(body, expectedUserId = "") {
@@ -3279,6 +3355,7 @@ async function runTranscription() {
   if (!file) { setMessage(messageId, "Choose one audio file first.", "error"); return; }
   if (!selected.length) { setMessage(messageId, "Choose at least one existing STT route.", "error"); return; }
   const runId = makeId();
+  const requestOwnerUserId = labState.verifiedUserId;
   const inputFingerprint = fingerprint(`${file.name}:${file.size}:${file.lastModified}`);
   setBusy(true);
   logFlow(`Started transcription run ${runId.slice(0, 8)} with ${selected.length} route${selected.length === 1 ? "" : "s"}`, "selected audio file (not retained by Lab)");
@@ -3291,7 +3368,8 @@ async function runTranscription() {
       const started = performance.now();
       logFlow(`Sent audio to ${model.label}`, "browser → transcribe (tester-gated)");
       try {
-        const result = await transcribeFetch(file, model.id, q("stt-language").value, operationId);
+        const result = await transcribeFetch(file, model.id, q("stt-language").value, operationId, { expectedUserId:requestOwnerUserId });
+        if (labState.verifiedUserId !== requestOwnerUserId) return;
         const elapsed = Math.round(performance.now() - started);
         pushOutput({
           id: makeId(), at: now(), kind: "transcription", provider: result.provider || model.provider, providerLabel: model.provider,
@@ -3304,6 +3382,7 @@ async function runTranscription() {
         });
         logFlow(`Received ${model.label} transcript`, "transcribe → browser; audio not retained in Lab result cache");
       } catch (error) {
+        if (labState.verifiedUserId !== requestOwnerUserId || error?.type === "identity_changed") return;
         const elapsed = Math.round(performance.now() - started);
         pushOutput({
           id: makeId(), at: now(), kind: "transcription", provider: model.provider, providerLabel: model.provider, model: model.id,
@@ -3894,7 +3973,8 @@ function clearResults() {
 }
 
 function clarificationStorageKey() {
-  return `${CLARIFICATION_LOCAL_KEY}:${labState.workspaceOwnerId || labState.verifiedUserId || "preview"}`;
+  const ownerId = labState.workspaceOwnerId || labState.verifiedUserId || (labState.preview ? LAB_PREVIEW_WORKSPACE_OWNER : "");
+  return ownerId ? `${CLARIFICATION_LOCAL_KEY}:${ownerId}` : "";
 }
 
 function sanitizeClarificationArtifact(value, storage = "device") {
@@ -8256,6 +8336,7 @@ function stopPipelineExtractionSpeech() {
 function stopPipelineExtractionVoice() {
   const state = labState.extraction;
   const cancelledTranscriptionStage = state.voiceTranscriptionToken ? state.retainedCaptureContext?.stage : "";
+  abortLabTranscription(state);
   state.captureGeneration = (Number(state.captureGeneration) || 0) + 1;
   state.recordingPointerActive = false;
   state.recordingPointerId = null;
@@ -8274,6 +8355,21 @@ function stopPipelineExtractionVoice() {
   q("mock-car-ptt")?.classList.remove("is-listening");
   stopPipelineExtractionSpeech();
   setPipelineExtractionAudioSession("playback");
+}
+
+function abortPipelineTranscriptionForStageChange() {
+  const state = labState.extraction;
+  if (!state.voiceTranscriptionToken && !state.transcriptionAbortController) return false;
+  const cancelledStage = state.retainedCaptureContext?.stage;
+  abortLabTranscription(state);
+  state.voiceTranscriptionToken = "";
+  state.retainedCaptureContext = null;
+  state.retainedRecording = null;
+  state.retainedOperationId = "";
+  if (cancelledStage === "extraction") labState.extractionBusy = false;
+  if (cancelledStage === "lesson") labState.lessonBusy = false;
+  if (cancelledStage === "quiz") labState.quiz.busy = false;
+  return true;
 }
 
 async function switchPipelineExtractionConversationMode() {
@@ -8300,12 +8396,14 @@ function pipelineConversationLineage(stage = labState.pipelineStage, captureGene
     mapJobId:selection?.job?.id || "",
     mapRecordId:selection?.recordKey || "",
     mapFingerprint:selection?.fingerprint || "",
+    ownerUserId:labState.verifiedUserId,
     captureGeneration:captureGeneration === null ? Number(labState.extraction.captureGeneration || 0) : Number(captureGeneration || 0),
   };
 }
 
 function pipelineConversationLineageIsCurrent(lineage, token = "") {
   if (!lineage || labState.pipelineMode !== lineage.pipelineMode || labState.pipelineStage !== lineage.stage) return false;
+  if (lineage.ownerUserId !== labState.verifiedUserId) return false;
   const state = labState.extraction;
   if (Number(state.captureGeneration || 0) !== Number(lineage.captureGeneration || 0)) return false;
   if (token && state.voiceTranscriptionToken !== token) return false;
@@ -8328,6 +8426,8 @@ async function transcribePipelineExtractionRecording(blob, operationId = "", cap
   const transcriptionToken = makeId();
   if (!pipelineConversationLineageIsCurrent(lineage)) return false;
   state.voiceTranscriptionToken = transcriptionToken;
+  const transcriptionController = beginLabTranscription(state);
+  const transcriptionDeadlineAt = performance.now() + LAB_TRANSCRIPTION_DEADLINE_MS;
   state.retainedRecording = blob;
   state.retainedOperationId = stableOperationId;
   state.retainedCaptureContext = lineage;
@@ -8337,9 +8437,10 @@ async function transcribePipelineExtractionRecording(blob, operationId = "", cap
   syncPipelineExtractionSaveControl();
   try {
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
       try {
         setMessage("pipeline-extraction-output", attempt ? "Transcribing again…" : "Transcribing your voice message…");
-        const result = await transcribeFetch(blob, "deepgram-nova-3", "en", stableOperationId);
+        const result = await boundedLabTranscriptionFetch(blob, "deepgram-nova-3", "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId, deadlineAt:transcriptionDeadlineAt });
         if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
         const transcript = clip(result.text, 1200);
         if (!transcript) {
@@ -8349,6 +8450,7 @@ async function transcribePipelineExtractionRecording(blob, operationId = "", cap
         }
         state.retainedRecording = null;
         state.retainedOperationId = "";
+        state.retainedCaptureContext = null;
         labState.extractionBusy = false;
         await submitPipelineExtractionReply(transcript, "voice", { originPerf:lineage.turnStartedAt });
         return true;
@@ -8358,15 +8460,16 @@ async function transcribePipelineExtractionRecording(blob, operationId = "", cap
         const retryable = error?.status === 429 || error?.status >= 500;
         if (!retryable || attempt === 1) break;
         await new Promise((resolve) => setTimeout(resolve, 650));
+        if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
       }
     }
     q("pipeline-extraction-retry-transcription").hidden = false;
     throw lastError || new Error("The recording could not be transcribed.");
   } finally {
+    finishLabTranscription(state, transcriptionController);
     if (state.voiceTranscriptionToken === transcriptionToken) {
       const shouldRender = pipelineConversationLineageIsCurrent(lineage, transcriptionToken);
       state.voiceTranscriptionToken = "";
-      state.retainedCaptureContext = null;
       labState.extractionBusy = false;
       if (shouldRender) {
         syncPipelineExtractionSaveControl();
@@ -8379,7 +8482,7 @@ async function transcribePipelineExtractionRecording(blob, operationId = "", cap
 async function retryPipelineExtractionTranscription() {
   const state = labState.extraction;
   if (!state.retainedRecording || labState.extractionBusy) return;
-  try { await transcribePipelineExtractionRecording(state.retainedRecording, state.retainedOperationId); }
+  try { await transcribePipelineExtractionRecording(state.retainedRecording, state.retainedOperationId, state.retainedCaptureContext); }
   catch (error) { setMessage("pipeline-extraction-output", `The recording remains available to retry: ${clip(error.message, 150)}`, "error"); }
 }
 
@@ -8391,19 +8494,24 @@ async function transcribePipelineLessonRecording(blob, operationId = "", capture
   const transcriptionToken = makeId();
   if (!pipelineConversationLineageIsCurrent(lineage)) return false;
   state.voiceTranscriptionToken = transcriptionToken;
+  const transcriptionController = beginLabTranscription(state);
   state.retainedCaptureContext = lineage;
   labState.lessonBusy = true;
   renderPipelineExtractionModeControls();
   setMessage("pipeline-lesson-output", "Transcribing your voice message…");
   try {
-    const result = await transcribeFetch(blob, "deepgram-nova-3", "en", stableOperationId);
+    const result = await boundedLabTranscriptionFetch(blob, "deepgram-nova-3", "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId });
     if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
     const transcript = clip(result.text, 1200);
     if (!transcript) throw new Error("No speech was found in that recording.");
     labState.lessonBusy = false;
     const timingId = beginMockTurnTiming({ stage:"lesson", inputMode:"voice", originKind:"ptt-release", originPerf:lineage.turnStartedAt });
     await submitPipelineLessonReply(transcript, { inputMode:"voice", timingId });
+  } catch (error) {
+    if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
+    throw error;
   } finally {
+    finishLabTranscription(state, transcriptionController);
     if (state.voiceTranscriptionToken === transcriptionToken) {
       const shouldRender = pipelineConversationLineageIsCurrent(lineage, transcriptionToken);
       labState.lessonBusy = false;
@@ -8422,19 +8530,24 @@ async function transcribePipelineQuizRecording(blob, operationId = "", captureCo
   const transcriptionToken = makeId();
   if (!pipelineConversationLineageIsCurrent(lineage)) return false;
   state.voiceTranscriptionToken = transcriptionToken;
+  const transcriptionController = beginLabTranscription(state);
   state.retainedCaptureContext = lineage;
   labState.quiz.busy = true;
   renderPipelineExtractionModeControls();
   setMessage("pipeline-quiz-output", "Transcribing your final explanation…");
   try {
-    const result = await transcribeFetch(blob, "deepgram-nova-3", "en", stableOperationId);
+    const result = await boundedLabTranscriptionFetch(blob, "deepgram-nova-3", "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId });
     if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
     const transcript = clip(result.text, 2400);
     if (!transcript) throw new Error("No speech was found in that recording.");
     labState.quiz.busy = false;
     const timingId = beginMockTurnTiming({ stage:"quiz", inputMode:"voice", originKind:"ptt-release", originPerf:lineage.turnStartedAt });
     await submitPipelineQuizReply(transcript, { inputMode:"voice", timingId });
+  } catch (error) {
+    if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
+    throw error;
   } finally {
+    finishLabTranscription(state, transcriptionController);
     if (state.voiceTranscriptionToken === transcriptionToken) {
       const shouldRender = pipelineConversationLineageIsCurrent(lineage, transcriptionToken);
       labState.quiz.busy = false;
@@ -8558,8 +8671,15 @@ async function startPipelineExtractionRecording(event, options = {}) {
         else if (captureStage === "lesson") await transcribePipelineLessonRecording(blob, makeId(), captureContext);
         else await transcribePipelineExtractionRecording(blob, makeId(), captureContext);
       } catch (error) {
-        setMessage(captureStatusId, `The recording could not be transcribed: ${clip(error.message, 150)}`, "error");
-        setMockCarStatus("paused", "Transcription unavailable", "transcription");
+        const timeoutCopy = captureStage === "extraction"
+          ? "Transcription took too long. Your recording is still here—tap Retry transcription."
+          : captureStage === "quiz"
+            ? "Transcription took too long. Hold again to resend your final explanation."
+            : "Transcription took too long. Hold again to resend your answer.";
+        setMessage(captureStatusId, error?.type === "transcription_timeout"
+          ? timeoutCopy
+          : `The recording could not be transcribed: ${clip(error.message, 150)}`, "error");
+        setMockCarStatus("paused", error?.type === "transcription_timeout" ? "Transcription took too long. Hold again." : "Transcription unavailable", "transcription");
       }
     };
     const handleError = (item) => {
@@ -9193,8 +9313,14 @@ function setPipelineStage(stage = "clarification") {
   if (previous !== next) {
     labState.mockCar.entryToken = makeId();
     cancelMockCarCapture();
-    if (previous === "clarification") stopClarificationSpeech();
-    if (["extraction", "lesson", "quiz"].includes(previous)) stopPipelineExtractionSpeech();
+    if (previous === "clarification") {
+      if (labState.clarification.transcriptionToken || labState.clarification.transcriptionAbortController) stopClarificationCaptureForModeChange();
+      stopClarificationSpeech();
+    }
+    if (["extraction", "lesson", "quiz"].includes(previous)) {
+      abortPipelineTranscriptionForStageChange();
+      stopPipelineExtractionSpeech();
+    }
   }
   if (next !== "extraction" && labState.extraction.mapDialogOpen) closePipelineExtractionMapDialog({ restoreFocus:false });
   if (next !== "clarification" && labState.clarification.focusMode) setClarificationFocus(false);
@@ -9299,9 +9425,104 @@ function renderClarificationModels() {
 
 function savedClarificationSettings() {
   try {
-    const value = JSON.parse(localStorage.getItem(clarificationStorageKey()) || "null");
+    const key = clarificationStorageKey();
+    if (!key) return {};
+    const value = JSON.parse(localStorage.getItem(key) || "null");
+    const ownerId = labState.workspaceOwnerId || labState.verifiedUserId || (labState.preview ? LAB_PREVIEW_WORKSPACE_OWNER : "");
+    if (value?.ownerUserId && value.ownerUserId !== ownerId) return {};
     return value && typeof value === "object" ? value : {};
   } catch (_) { return {}; }
+}
+
+function sanitizeActiveClarificationResume(value) {
+  if (!value || typeof value !== "object") return null;
+  const ownerUserId = labState.workspaceOwnerId || labState.verifiedUserId || (labState.preview ? LAB_PREVIEW_WORKSPACE_OWNER : "");
+  if (!ownerUserId || value.ownerUserId !== ownerUserId) return null;
+  const runId = clip(value.runId, 120);
+  const topic = clip(value.topic, 500);
+  const mode = value.mode === "voice" ? "voice" : value.mode === "text" ? "text" : "";
+  const turns = (Array.isArray(value.turns) ? value.turns : [])
+    .slice(0, 80)
+    .map((turn) => ({
+      role:turn?.role === "assistant" ? "assistant" : turn?.role === "user" ? "user" : "",
+      content:clip(turn?.content, 2400),
+    }))
+    .filter((turn) => turn.role && turn.content);
+  if (!runId || !topic || !mode || !turns.length || turns[0].role !== "user") return null;
+  const learnerReplyCount = Math.max(0, turns.filter((turn) => turn.role === "user").length - 1);
+  if (Number(value.learnerReplyCount) !== learnerReplyCount) return null;
+  const latestValue = value.latest && typeof value.latest === "object" ? value.latest : null;
+  const latest = latestValue ? {
+    assistant_message:clip(latestValue.assistant_message, 2000),
+    scope_summary:clip(latestValue.scope_summary, 700),
+    scope_items:(Array.isArray(latestValue.scope_items) ? latestValue.scope_items : []).map((item) => clip(item, 240)).filter(Boolean).slice(0, 12),
+    scope_preferences:normalizeClarificationPreferences(latestValue.scope_preferences),
+    ready_to_finish:Boolean(latestValue.ready_to_finish),
+  } : null;
+  if (latest && (!latest.assistant_message || !latest.scope_summary)) return null;
+  const editor = clarificationConfig(value.editor);
+  if (!editor) return null;
+  const effectiveProvider = LAB_PROVIDER_CATALOG[value.effectiveProvider] ? value.effectiveProvider : editor.provider;
+  const effectiveModel = LAB_PROVIDER_CATALOG[effectiveProvider]?.models?.some((item) => item.id === value.effectiveModel)
+    ? value.effectiveModel
+    : clarificationDefaultModel(effectiveProvider);
+  const effectiveMaxTokens = normalizeOutputTokenCap(value.effectiveMaxTokens, CLARIFICATION_OUTPUT_TOKENS);
+  const pendingRequestTurn = Number(value.pendingRequestTurn);
+  const pendingRequestKey = pendingRequestTurn === learnerReplyCount ? clip(value.pendingRequestKey, 240) : "";
+  return {
+    runId,
+    ownerUserId,
+    topic,
+    mode,
+    pipelineMode:value.pipelineMode === "mock" ? "mock" : "controls",
+    turns,
+    learnerReplyCount,
+    latest,
+    latestJobId:clip(value.latestJobId, 120),
+    pendingJobId:pendingRequestKey ? clip(value.pendingJobId, 120) : "",
+    pendingRequestKey,
+    pendingRequestTurn:pendingRequestKey ? learnerReplyCount : -1,
+    runError:clip(value.runError, 500),
+    scopeProgressKey:clip(value.scopeProgressKey, 700),
+    scopeStagnantTurns:Math.max(0, Math.min(20, Number(value.scopeStagnantTurns) || 0)),
+    stagnationPromptedAt:Math.max(0, Number(value.stagnationPromptedAt) || 0),
+    editor,
+    effectiveProvider,
+    effectiveModel,
+    effectiveMaxTokens,
+    promptSource:["built-in", "global", "device"].includes(value.promptSource) ? value.promptSource : "device",
+  };
+}
+
+function currentActiveClarificationResume() {
+  const state = labState.clarification;
+  if (!state.runId || state.finalized || !["text", "voice"].includes(state.mode) || labState.pipelineStage !== "clarification") return null;
+  const configured = labState.pipelineMode === "mock" ? mockStageConfig("clarification") : null;
+  return sanitizeActiveClarificationResume({
+    ownerUserId:labState.workspaceOwnerId || labState.verifiedUserId || (labState.preview ? LAB_PREVIEW_WORKSPACE_OWNER : ""),
+    runId:state.runId,
+    topic:state.topic,
+    mode:state.mode,
+    pipelineMode:labState.pipelineMode,
+    turns:state.turns,
+    learnerReplyCount:state.learnerReplyCount,
+    latest:state.latest,
+    latestJobId:state.latestJobId,
+    pendingJobId:state.pendingJobId,
+    pendingRequestKey:state.pendingRequestKey,
+    pendingRequestTurn:state.pendingRequestTurn,
+    runError:state.runError,
+    scopeProgressKey:state.scopeProgressKey,
+    scopeStagnantTurns:state.scopeStagnantTurns,
+    stagnationPromptedAt:state.stagnationPromptedAt,
+    editor:clarificationEditorSettings(),
+    effectiveProvider:configured?.provider || clarificationEditorSettings().provider,
+    effectiveModel:configured?.model || clarificationEditorSettings().model,
+    effectiveMaxTokens:labState.pipelineMode === "mock"
+      ? normalizeOutputTokenCap(configured?.outputTokens, MOCK_STAGE_DEFAULTS.clarification.outputTokens)
+      : CLARIFICATION_OUTPUT_TOKENS,
+    promptSource:state.promptSource,
+  });
 }
 
 function clarificationEditorSettings() {
@@ -9406,9 +9627,12 @@ function applyClarificationEditorSettings(value, source = "built-in") {
 
 function persistClarificationSettings({ deviceDraft = null, globalDefault = null } = {}) {
   const state = labState.clarification;
+  const ownerUserId = labState.workspaceOwnerId || labState.verifiedUserId || (labState.preview ? LAB_PREVIEW_WORKSPACE_OWNER : "");
+  const storageKey = clarificationStorageKey();
+  if (!ownerUserId || !storageKey) return false;
   const previous = savedClarificationSettings();
   const payload = {
-    ...previous,
+    ownerUserId,
     deviceDraft: clarificationConfig(previous.deviceDraft),
     globalDefaultCache: clarificationGlobalDefault(previous.globalDefaultCache),
     finalized: state.finalized,
@@ -9417,6 +9641,7 @@ function persistClarificationSettings({ deviceDraft = null, globalDefault = null
     pipelineSelectedRunId: labState.pipelineSelectedRunId,
     pipelineSelectedMapJobId: labState.pipelineSelectedMapJobId,
     pipelineSelectedMapRecordId: labState.pipelineSelectedMapRecordId,
+    activeClarification: currentActiveClarificationResume(),
     mockResume: labState.pendingMockResume || currentMockResume(),
     extractionResume: {
       runId: labState.pipelineSelectedRunId,
@@ -9433,7 +9658,7 @@ function persistClarificationSettings({ deviceDraft = null, globalDefault = null
   };
   if (deviceDraft) payload.deviceDraft = clarificationConfig(deviceDraft);
   if (globalDefault) payload.globalDefaultCache = clarificationGlobalDefault(globalDefault);
-  try { localStorage.setItem(clarificationStorageKey(), JSON.stringify(payload)); return true; }
+  try { localStorage.setItem(storageKey, JSON.stringify(payload)); return true; }
   catch (_) { return false; }
 }
 
@@ -9529,6 +9754,7 @@ function setClarificationConversationMode(mode) {
 
 function stopClarificationCaptureForModeChange() {
   const state = labState.clarification;
+  abortLabTranscription(state);
   state.captureGeneration = (Number(state.captureGeneration) || 0) + 1;
   clearClarificationRecordingArm();
   invalidateLabCapture(state);
@@ -9552,6 +9778,7 @@ async function switchClarificationConversationMode() {
     stopClarificationSpeech();
     setClarificationMicStatus();
     setClarificationConversationMode("text");
+    persistClarificationSettings();
     setMessage("clarification-message", "Text mode is ready. The conversation and its scope stay in place.");
     q("clarification-reply").focus();
     return;
@@ -9561,6 +9788,7 @@ async function switchClarificationConversationMode() {
     return;
   }
   setClarificationConversationMode("voice");
+  persistClarificationSettings();
   setClarificationAudioSession("play-and-record");
   primeClarificationAudio();
   if (labState.preview) {
@@ -9582,6 +9810,7 @@ async function switchClarificationConversationMode() {
     if (state.runId !== activeRunId) return;
     setClarificationMicStatus();
     setClarificationConversationMode("text");
+    persistClarificationSettings();
     setMessage("clarification-message", `Microphone unavailable: ${error.message || "permission was not granted"}. Text mode remains available.`, "error");
   }
 }
@@ -9803,6 +10032,7 @@ function setClarificationTopicMicStatus(message = "", error = false) {
 
 function releaseClarificationTopicCapture({ invalidate = true } = {}) {
   const state = labState.topicVoice;
+  abortLabTranscription(state);
   if (invalidate) {
     state.captureToken = makeId();
     state.acquireToken = makeId();
@@ -9892,6 +10122,7 @@ async function toggleClarificationTopicRecording() {
       return;
     }
     state.stream = stream;
+    const captureOwnerUserId = labState.verifiedUserId;
     const captureToken = makeId();
     state.captureToken = captureToken;
     const chunks = [];
@@ -9919,16 +10150,21 @@ async function toggleClarificationTopicRecording() {
         return;
       }
       setClarificationTopicMicStatus("Turning your topic into text…");
+      const transcriptionController = beginLabTranscription(state);
       try {
-        const result = await transcribeFetch(blob, "deepgram-nova-3", "en", state.operationId);
+        const result = await boundedLabTranscriptionFetch(blob, "deepgram-nova-3", "en", state.operationId, { signal:transcriptionController.signal, expectedUserId:captureOwnerUserId });
         if (state.captureToken !== captureToken || q("clarification-setup")?.hidden) return;
+        if (labState.verifiedUserId !== captureOwnerUserId) return;
         const transcript = clip(result.text, 500);
         if (!transcript) throw new Error("No speech was found in that recording.");
         insertClarificationTopicTranscript(transcript, state.sourceValue, selectionStart, selectionEnd);
         setClarificationTopicMicStatus("Topic captured. You can edit it before starting.");
       } catch (error) {
-        if (state.captureToken === captureToken) setClarificationTopicMicStatus(`The topic could not be transcribed: ${clip(error.message, 140)}`, true);
+        if (state.captureToken === captureToken) setClarificationTopicMicStatus(error?.type === "transcription_timeout"
+          ? "Turning your topic into text took too long. Tap the microphone to try again."
+          : `The topic could not be transcribed: ${clip(error.message, 140)}`, true);
       } finally {
+        finishLabTranscription(state, transcriptionController);
         if (state.captureToken === captureToken) {
           state.busy = false;
           button.disabled = false;
@@ -10195,6 +10431,7 @@ function resetClarificationRun(seed = "") {
   stopSpeechComparison();
   stopClarificationSpeech();
   const state = labState.clarification;
+  abortLabTranscription(state);
   releaseClarificationTopicCapture();
   clearClarificationRecordingArm();
   clearTimeout(state.recordingStopTimer);
@@ -10203,10 +10440,10 @@ function resetClarificationRun(seed = "") {
   clearInterval(state.activityTimer);
   Object.assign(state, {
     runId: "", topic: seed || "", mode: "", turns: [], learnerReplyCount: 0,
-    latest: null, latestRaw: "", latestPacket: null, latestJobId: "", runError: "", finalized: null, finalizedStorage: "", autoHandoffRunId: "",
+    latest: null, latestRaw: "", latestPacket: null, latestJobId: "", pendingJobId: "", pendingRequestKey: "", pendingRequestTurn: -1, runError: "", finalized: null, finalizedStorage: "", autoHandoffRunId: "",
     busy: false, micStream: null, recorder: null, recorderChunks: [], recordingStartedAt: 0, recordingStopTimer: 0,
     recordingArmTimer: 0, recordingArmPrepared: false, recordingPointerId: null, recordingPointerStartedAt: 0, recordingPointerStartX: 0, recordingPointerStartY: 0,
-    micAcquirePromise: null, micAcquireGeneration: 0, captureGeneration: 0, retainedRecording: null, retainedRecordingMime: "", retainedOperationId: "", retainedCaptureContext: null, transcriptionToken: "",
+    micAcquirePromise: null, micAcquireGeneration: 0, captureGeneration: 0, retainedRecording: null, retainedRecordingMime: "", retainedOperationId: "", retainedCaptureContext: null, transcriptionToken: "", transcriptionAbortController: null,
     audioPrimed: false, voiceAudio: null, voiceSpeechCancel: null, lastSpeechText: "", speaking: false,
     scopeProgressKey: "", scopeStagnantTurns: 0, stagnationPromptedAt: 0,
     activityTimer: 0, activityStartedAt: 0, activityLabel: "", backendHistorySelection: "current",
@@ -10343,6 +10580,197 @@ function restoreClarificationArtifact(artifact, storage = "device") {
     : "Saved on this device. Every model turn is still retained in the private server job history.", "ok");
 }
 
+function restoreActiveClarificationResume(value) {
+  const resume = sanitizeActiveClarificationResume(value);
+  if (!resume) return false;
+  resetClarificationRun(resume.topic);
+  const state = labState.clarification;
+  labState.pipelineMode = resume.pipelineMode;
+  labState.pipelineSelectedRunId = "";
+  labState.pipelineSelectedMapJobId = "";
+  labState.pipelineSelectedMapRecordId = "";
+  labState.mockCar.active = false;
+  labState.mockCar.errorKey = "";
+  labState.mockCar.returnFocus = null;
+  applyClarificationEditorSettings(resume.editor, resume.promptSource);
+  if (resume.pipelineMode === "mock") {
+    Object.assign(labState.mockRunConfig.clarification, {
+      provider:resume.effectiveProvider,
+      model:resume.effectiveModel,
+      outputTokens:resume.effectiveMaxTokens,
+    });
+  }
+  Object.assign(state, {
+    runId:resume.runId,
+    topic:resume.topic,
+    mode:resume.mode,
+    turns:resume.turns.map((turn) => ({ ...turn })),
+    learnerReplyCount:resume.learnerReplyCount,
+    latest:resume.latest,
+    latestRaw:"",
+    latestPacket:null,
+    latestJobId:resume.latestJobId,
+    pendingJobId:resume.pendingJobId,
+    pendingRequestKey:resume.pendingRequestKey,
+    pendingRequestTurn:resume.pendingRequestTurn,
+    runError:resume.runError,
+    finalized:null,
+    finalizedStorage:"",
+    autoHandoffRunId:"",
+    busy:false,
+    scopeProgressKey:resume.scopeProgressKey,
+    scopeStagnantTurns:resume.scopeStagnantTurns,
+    stagnationPromptedAt:resume.stagnationPromptedAt,
+  });
+  q("clarification-topic").value = resume.topic;
+  q("clarification-backend-topic").value = resume.topic;
+  q("clarification-setup").hidden = true;
+  q("clarification-mode-step").hidden = true;
+  q("clarification-complete").hidden = true;
+  q("clarification-conversation").hidden = false;
+  setClarificationConversationMode(resume.mode);
+  renderClarificationTranscript(state.turns);
+  q("clarification-latest").textContent = resume.latest?.assistant_message || "Restoring the saved conversation turn…";
+  q("clarification-surface").classList.toggle("has-reply", Boolean(resume.latest));
+  q("clarification-validated").textContent = resume.latest ? JSON.stringify(resume.latest, null, 2) : "The opening turn is still preparing.";
+  q("clarification-raw").textContent = "Raw provider evidence remains in the private durable job; it is not copied into browser resume storage.";
+  q("clarification-packet").textContent = resume.pendingRequestKey
+    ? `Saved request identity ${resume.pendingRequestKey}. Reconnecting to its durable job before any retry.`
+    : "No request is pending. The next learner reply will create the next durable turn.";
+  q("clarification-metrics").replaceChildren(element("span", { text:"Restored session" }), element("span", { text:"No request replayed" }), element("span", { text:"Audio not retained" }));
+  q("clarification-hear").hidden = !resume.latest;
+  q("clarification-retry-transcription").hidden = true;
+  q("clarification-done").hidden = labState.pipelineMode === "mock";
+  q("clarification-done").disabled = !resume.latest?.ready_to_finish || resume.learnerReplyCount < 1;
+  q("clarification-reply").value = "";
+  setClarificationActivity(false);
+  setClarificationBusy(false);
+  setMessage("clarification-message", resume.pendingRequestKey
+    ? "Restored this unfinished Clarification. Checking its saved model turn…"
+    : "Restored this unfinished Clarification. Continue whenever you are ready.", "ok");
+  setMessage("clarification-backend-message", "The learner-facing state was restored without replaying audio or opening the microphone.", "ok");
+  renderClarificationBackendHistory();
+  setClarificationView("learner");
+  setClarificationFocus(labState.pipelineMode === "mock");
+  return true;
+}
+
+function activeClarificationResumeJob() {
+  const state = labState.clarification;
+  const matches = labState.jobs
+    .filter((job) => job?.component === "clarification"
+      && job.scenario?.pipelineRunId === state.runId
+      && Number(job.scenario?.turn) === Number(state.pendingRequestTurn))
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  if (state.pendingJobId) return matches.find((job) => job.id === state.pendingJobId) || { id:state.pendingJobId };
+  return matches[0] || null;
+}
+
+async function applyResumedClarificationJob(job) {
+  const state = labState.clarification;
+  const activeRunId = state.runId;
+  const activeTurn = state.pendingRequestTurn;
+  if (!job?.id || !activeRunId || activeTurn < 0) return false;
+  const packet = clarificationRequestPacket();
+  const firstTurn = state.turns.every((turn) => turn.role !== "assistant");
+  setClarificationBusy(true, "restoring saved turn");
+  setClarificationActivity(true, firstTurn ? "opening" : "following");
+  try {
+    const cached = labState.jobDetails.get(job.id);
+    const detail = cached?.samples?.length ? cached : await waitForClarificationJob(job.id, labState.verifiedUserId);
+    syncJobDetail(detail);
+    if (state.runId !== activeRunId || state.pendingRequestTurn !== activeTurn) return false;
+    if (detail?.job?.component !== "clarification"
+      || detail.job.scenario?.pipelineRunId !== activeRunId
+      || Number(detail.job.scenario?.turn) !== Number(activeTurn)) {
+      const mismatch = new Error("The saved job did not match this Clarification run and turn.");
+      mismatch.type = "clarification_resume_mismatch";
+      throw mismatch;
+    }
+    if (state.turns.at(-1)?.role === "assistant") {
+      state.pendingRequestKey = "";
+      state.pendingRequestTurn = -1;
+      state.pendingJobId = "";
+      persistClarificationSettings();
+      return true;
+    }
+    const sample = detail.samples?.[0];
+    const recoverableProviderFailure = recoverableConversationFailure(sample);
+    if (!sample || (sample.status !== "completed" && !recoverableProviderFailure)) {
+      const terminal = new Error(sample?.error?.message || "The saved clarification model turn did not complete.");
+      terminal.type = "clarification_terminal";
+      throw terminal;
+    }
+    const raw = attemptResultText(null, sample);
+    const parsed = recoverableProviderFailure || !String(raw).trim()
+      ? clarificationEmptyReplyFallback(firstTurn, state.turns, state.topic, state.latest)
+      : parseClarificationOutput(raw, firstTurn, state.topic);
+    const output = boundClarificationConversation(avoidClarificationRepeat(parsed, state.turns, state.topic), state);
+    state.latestJobId = job.id;
+    state.pendingJobId = "";
+    state.turns.push({ role:"assistant", content:output.assistant_message });
+    state.pendingRequestKey = "";
+    state.pendingRequestTurn = -1;
+    state.runError = "";
+    renderClarificationOutput(output, raw, detail, packet, Number(sample.result?.ms || sample.ms || 0));
+    setMessage("clarification-message", "The saved turn finished and was restored without duplicating the learner reply.", "ok");
+    setMessage("clarification-backend-message", "Reconnected to the exact durable job by run and turn. No provider request was duplicated.", "ok");
+    persistClarificationSettings();
+    return true;
+  } finally {
+    if (state.runId === activeRunId && state.pendingRequestTurn === activeTurn) {
+      setClarificationActivity(false);
+      setClarificationBusy(false);
+    } else if (state.runId === activeRunId) {
+      setClarificationActivity(false);
+      setClarificationBusy(false);
+    }
+  }
+}
+
+async function reconcileActiveClarificationResume() {
+  const resume = sanitizeActiveClarificationResume(labState.pendingClarificationResume);
+  if (!resume || labState.clarification.runId !== resume.runId || labState.clarification.finalized) return false;
+  const state = labState.clarification;
+  applyClarificationEditorSettings(resume.editor, resume.promptSource);
+  if (state.turns.at(-1)?.role === "assistant" || !state.pendingRequestKey) {
+    state.pendingRequestKey = "";
+    state.pendingRequestTurn = -1;
+    state.pendingJobId = "";
+    labState.pendingClarificationResume = null;
+    persistClarificationSettings();
+    if (labState.pipelineMode === "mock" && state.latest?.ready_to_finish) {
+      await maybeAutoAdvanceMockClarification("restored_validated_closure");
+    }
+    return true;
+  }
+  const job = activeClarificationResumeJob();
+  try {
+    if (job) await applyResumedClarificationJob(job);
+    else await runClarificationModel();
+  } catch (error) {
+    if (state.runId !== resume.runId) return false;
+    const terminalType = ["clarification_terminal", "clarification_resume_mismatch"].includes(error?.type);
+    const stillPending = !terminalType && (error?.type === "clarification_job_pending" || !error?.status || error.status === 429 || error.status >= 500);
+    if (!stillPending) {
+      state.pendingRequestKey = "";
+      state.pendingRequestTurn = -1;
+      state.pendingJobId = "";
+    }
+    state.runError = clip(error.message || "The saved Clarification turn could not be restored.", 500);
+    setMessage("clarification-message", stillPending
+      ? "The saved turn is still running. Reload or return here to check it again."
+      : `The saved turn needs a new reply: ${state.runError}`, "error");
+    persistClarificationSettings();
+  } finally {
+    labState.pendingClarificationResume = null;
+  }
+  if (labState.pipelineMode === "mock" && state.latest?.ready_to_finish && !state.pendingRequestKey) {
+    await maybeAutoAdvanceMockClarification("restored_validated_closure");
+  }
+  return true;
+}
+
 async function refreshClarificationArtifacts() {
   if (labState.clarification.runId) return;
   if (labState.preview) { renderPipelineArtifactSelect(); return; }
@@ -10366,7 +10794,9 @@ async function refreshClarificationArtifacts() {
 
 function initializeClarification() {
   const saved = savedClarificationSettings();
-  labState.pendingMockResume = sanitizeMockResume(saved.mockResume);
+  const activeResume = sanitizeActiveClarificationResume(saved.activeClarification);
+  labState.pendingClarificationResume = activeResume;
+  labState.pendingMockResume = activeResume ? null : sanitizeMockResume(saved.mockResume);
   const deviceDraft = clarificationDeviceDraft(saved) || (saved.prompt ? clarificationConfig(saved) : null);
   const savedPrompt = clip(deviceDraft?.prompt, 18000);
   const previousBuiltIn = savedPrompt && CLARIFICATION_PREVIOUS_BUILTIN_FINGERPRINTS.has(fingerprint(savedPrompt));
@@ -10382,7 +10812,8 @@ function initializeClarification() {
   labState.pipelineSelectedMapRecordId = clip(saved.pipelineSelectedMapRecordId, 120);
   for (const artifact of Array.isArray(saved.artifacts) ? saved.artifacts : []) rememberClarificationArtifact(artifact, artifact?.storage || "device");
   if (saved.finalized) rememberClarificationArtifact(saved.finalized, saved.finalizedStorage || "device");
-  if (saved.finalized) restoreClarificationArtifact(saved.finalized, saved.finalizedStorage || "device");
+  if (activeResume) restoreActiveClarificationResume(activeResume);
+  else if (saved.finalized) restoreClarificationArtifact(saved.finalized, saved.finalizedStorage || "device");
   const extractionResume = saved.extractionResume && typeof saved.extractionResume === "object" ? saved.extractionResume : null;
   if (extractionResume && clip(extractionResume.runId, 120) === labState.pipelineSelectedRunId) {
     labState.extraction.activeAttempt = Math.max(0, Number(extractionResume.activeAttempt || 0) || 0);
@@ -10777,12 +11208,12 @@ function renderClarificationOutput(output, raw, detail, packet, elapsed) {
   renderMockRunConfig();
 }
 
-async function waitForClarificationJob(jobId) {
+async function waitForClarificationJob(jobId, expectedUserId = labState.verifiedUserId) {
   const started = performance.now();
   let lastPollError = null;
   while (performance.now() - started < 65000) {
     try {
-      const detail = await labJobsFetch({ action: "get", jobId });
+      const detail = await labJobsFetch({ action: "get", jobId }, expectedUserId);
       if (["completed", "partial", "failed", "needs_attention", "cancelled"].includes(detail?.job?.status)) return detail;
       lastPollError = null;
     } catch (error) {
@@ -10793,7 +11224,9 @@ async function waitForClarificationJob(jobId) {
     await new Promise((resolve) => setTimeout(resolve, 700));
   }
   const detail = lastPollError?.message ? ` The latest status check said: ${lastPollError.message}` : "";
-  throw new Error(`The model job is still running. It is safely saved in Timing and can be inspected after a refresh.${detail}`);
+  const pending = new Error(`The model job is still running. It is safely saved in Timing and can be inspected after a refresh.${detail}`);
+  pending.type = "clarification_job_pending";
+  throw pending;
 }
 
 function clarificationRequestPacket() {
@@ -10863,6 +11296,24 @@ async function runClarificationModel(timingId = "") {
       },
     }],
   };
+  if (state.pendingRequestKey && state.pendingRequestTurn === activeTurn && state.pendingRequestKey !== idempotencyKey) {
+    failMockTurnAudio(timingId, "clarification-resume-identity-mismatch");
+    state.runError = "The saved request no longer matches this turn’s exact prompt and conversation.";
+    setMessage("clarification-message", "This restored turn was not replayed because its request identity changed. Send a new reply to continue safely.", "error");
+    persistClarificationSettings();
+    return;
+  }
+  state.pendingRequestKey = idempotencyKey;
+  state.pendingRequestTurn = activeTurn;
+  state.pendingJobId = "";
+  if (persistClarificationSettings() === false) {
+    state.pendingRequestKey = "";
+    state.pendingRequestTurn = -1;
+    state.runError = "This turn could not be saved on the device before sending.";
+    failMockTurnAudio(timingId, "clarification-resume-storage-failed");
+    setMessage("clarification-message", "The model was not called because this turn could not be saved safely. Free device storage, then send again.", "error");
+    return;
+  }
   setClarificationBusy(true, "running");
   setMessage("clarification-message", "The conversation turn is running as a durable Lab job…");
   q("clarification-packet").textContent = JSON.stringify(packet, null, 2);
@@ -10870,19 +11321,26 @@ async function runClarificationModel(timingId = "") {
   try {
     state.runError = "";
     setMessage("clarification-backend-message", "The real model turn is running. You can switch views without interrupting it.");
-    const created = await labJobsFetch(request);
+    const requestOwnerUserId = labState.verifiedUserId;
+    const created = await labJobsFetch(request, requestOwnerUserId);
     if (!created?.job?.id) throw new Error("The server did not return a saved job id.");
     bindMockTurnTimingJob(timingId, created.job);
     upsertJob(created.job);
     if (!runIsCurrent()) return;
     state.latestJobId = created.job.id;
+    state.pendingJobId = created.job.id;
+    persistClarificationSettings();
     setClarificationActivity(true, firstTurn ? "opening" : "following");
-    const detail = await waitForClarificationJob(created.job.id);
+    const detail = await waitForClarificationJob(created.job.id, requestOwnerUserId);
     syncJobDetail(detail);
     if (!runIsCurrent()) return;
     const sample = detail.samples?.[0];
     const recoverableProviderFailure = recoverableConversationFailure(sample);
-    if (!sample || (sample.status !== "completed" && !recoverableProviderFailure)) throw new Error(sample?.error?.message || "The clarification model turn did not complete.");
+    if (!sample || (sample.status !== "completed" && !recoverableProviderFailure)) {
+      const terminal = new Error(sample?.error?.message || "The clarification model turn did not complete.");
+      terminal.type = "clarification_terminal";
+      throw terminal;
+    }
     const raw = attemptResultText(null, sample);
     const providerReturnedUnsafeReply = recoverableProviderFailure || !String(raw).trim();
     const providerFailureType = conversationFailureType(sample);
@@ -10894,10 +11352,14 @@ async function runClarificationModel(timingId = "") {
     // Keep the next model turn as ordinary dialogue rather than replaying the
     // prior turn's structured validation envelope.
     state.turns.push({ role: "assistant", content: output.assistant_message });
+    state.pendingRequestKey = "";
+    state.pendingRequestTurn = -1;
+    state.pendingJobId = "";
     renderClarificationOutput(output, raw, detail, packet, Math.round(performance.now() - started));
     const willSpeak = state.mode === "voice" && !(labState.pipelineMode === "mock" && output.ready_to_finish);
     markMockTurnFirstDisplay(created.job.id, willSpeak ? "voice" : "text");
     state.runError = "";
+    persistClarificationSettings();
     setMessage("clarification-message", "");
     setMessage("clarification-backend-message", providerReturnedUnsafeReply
       ? `The provider result was recorded as recoverable ${providerFailureType || "no-text"}${providerFinishReason ? ` (finish reason: ${providerFinishReason})` : ""}; the unsafe partial was kept only in Backend evidence and a complete local question kept the conversation moving.`
@@ -10920,10 +11382,18 @@ async function runClarificationModel(timingId = "") {
     failMockTurnAudio(timingId, "clarification-job-failed");
     const message = error.message || "This clarification turn failed.";
     state.runError = message;
+    const preservePending = error?.type === "clarification_job_pending"
+      || (!error?.status && !["clarification_terminal", "clarification_resume_mismatch"].includes(error?.type));
+    if (!preservePending) {
+      state.pendingRequestKey = "";
+      state.pendingRequestTurn = -1;
+      state.pendingJobId = "";
+    }
     setMessage("clarification-message", `The clarification model could not answer: ${message}`, "error");
     setMessage("clarification-backend-message", message, "error");
     q("clarification-job-status").textContent = state.latestJobId ? "needs review" : "failed";
     q("clarification-job-status").className = "job-status is-failed";
+    persistClarificationSettings();
   } finally {
     if (!runIsCurrent()) return;
     setClarificationBusy(false);
@@ -10950,6 +11420,9 @@ async function startClarification(mode) {
   state.scopeProgressKey = "";
   state.scopeStagnantTurns = 0;
   state.stagnationPromptedAt = 0;
+  state.pendingRequestKey = "";
+  state.pendingRequestTurn = -1;
+  state.pendingJobId = "";
   if (mode === "voice" && !labState.preview) {
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       setClarificationLaunchError("This browser does not expose microphone recording. Use Text on this device.");
@@ -10973,6 +11446,7 @@ async function startClarification(mode) {
   syncClarificationSendControl();
   setClarificationActivity(true, "starting");
   setClarificationFocus(true);
+  if (typeof persistClarificationSettings === "function") persistClarificationSettings();
 
   if (labState.preview) {
     setClarificationActivity(false);
@@ -10985,6 +11459,7 @@ async function startClarification(mode) {
     renderClarificationOutput(previewOutput, "Safe local layout preview; no provider response.", { samples: [] }, {
       provider: "preview", model: "no network call", maxTokens: 240, research: false,
     }, 0);
+    if (typeof persistClarificationSettings === "function") persistClarificationSettings();
     return;
   }
 
@@ -11029,6 +11504,10 @@ async function submitClarificationReply(text, { timingId = "", inputMode = "", o
   stopClarificationSpeech();
   state.learnerReplyCount += 1;
   state.turns.push({ role: "user", content: reply });
+  state.pendingRequestKey = "";
+  state.pendingRequestTurn = -1;
+  state.pendingJobId = "";
+  persistClarificationSettings();
   q("clarification-reply").value = "";
   syncClarificationSendControl();
   q("clarification-latest").textContent = reply;
@@ -11048,6 +11527,7 @@ async function submitClarificationReply(text, { timingId = "", inputMode = "", o
       maxTokens: CLARIFICATION_OUTPUT_TOKENS,
       research: false,
     }, 0);
+    persistClarificationSettings();
     setMessage("clarification-message", labState.pipelineMode === "mock" ? "Your direction is set. Opening the broad overview while the Lesson Map builds…" : "Your direction is set. Press Done when you want to continue.", "ok");
     if (state.mode === "voice" && labState.pipelineMode !== "mock") {
       const speakingToken = beginMockSpeaking(state);
@@ -11077,13 +11557,16 @@ async function transcribeClarificationRecording(blob, operationId = "", captureC
   const state = labState.clarification;
   if (!blob?.size) throw new Error("The phone returned an empty recording.");
   const stableOperationId = operationId || makeId();
-  const lineage = captureContext || state.retainedCaptureContext || { runId:state.runId, captureGeneration:Number(state.captureGeneration || 0) };
+  const lineage = captureContext || state.retainedCaptureContext || { runId:state.runId, ownerUserId:labState.verifiedUserId, captureGeneration:Number(state.captureGeneration || 0) };
   const transcriptionToken = makeId();
   const lineageIsCurrent = () => state.transcriptionToken === transcriptionToken
     && state.runId === lineage.runId
+    && labState.verifiedUserId === lineage.ownerUserId
     && Number(state.captureGeneration || 0) === Number(lineage.captureGeneration || 0);
-  if (state.runId !== lineage.runId || Number(state.captureGeneration || 0) !== Number(lineage.captureGeneration || 0)) return false;
+  if (state.runId !== lineage.runId || labState.verifiedUserId !== lineage.ownerUserId || Number(state.captureGeneration || 0) !== Number(lineage.captureGeneration || 0)) return false;
   state.transcriptionToken = transcriptionToken;
+  const transcriptionController = beginLabTranscription(state);
+  const transcriptionDeadlineAt = performance.now() + LAB_TRANSCRIPTION_DEADLINE_MS;
   state.retainedRecording = blob;
   state.retainedRecordingMime = blob.type || "audio/webm";
   state.retainedOperationId = stableOperationId;
@@ -11092,9 +11575,10 @@ async function transcribeClarificationRecording(blob, operationId = "", captureC
   let lastError = null;
   try {
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (!lineageIsCurrent()) return false;
       setClarificationBusy(true, attempt ? "transcribing again" : "transcribing");
       try {
-        const result = await transcribeFetch(blob, "deepgram-nova-3", "en", stableOperationId);
+        const result = await boundedLabTranscriptionFetch(blob, "deepgram-nova-3", "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId, deadlineAt:transcriptionDeadlineAt });
         if (!lineageIsCurrent()) return false;
         const transcript = clip(result.text, 1200);
         if (!transcript) {
@@ -11116,14 +11600,15 @@ async function transcribeClarificationRecording(blob, operationId = "", captureC
         const retryable = error?.status === 429 || error?.status >= 500;
         if (!retryable || attempt === 1) break;
         await new Promise((resolve) => setTimeout(resolve, 650));
+        if (!lineageIsCurrent()) return false;
       }
     }
     q("clarification-retry-transcription").hidden = false;
     throw lastError || new Error("The recording could not be transcribed.");
   } finally {
+    finishLabTranscription(state, transcriptionController);
     if (state.transcriptionToken === transcriptionToken) {
       state.transcriptionToken = "";
-      state.retainedCaptureContext = null;
       setClarificationBusy(false);
     }
   }
@@ -11171,7 +11656,7 @@ function startClarificationRecording(event, options = {}) {
     const captureToken = makeId();
     state.captureToken = captureToken;
     state.activeCaptureStream = captureStream;
-    const captureContext = { runId:state.runId, captureGeneration };
+    const captureContext = { runId:state.runId, ownerUserId:labState.verifiedUserId, captureGeneration };
     const capturePointerId = state.recordingPointerId;
     const capturePointerStartedAt = Number(options.pointerStartedAt || state.recordingPointerStartedAt || 0);
     const recordingStartedAt = performance.now();
@@ -11593,6 +12078,7 @@ async function openLab() {
     await probeProviders();
     await loadGlobalClarificationDefault();
     await refreshJobs();
+    await reconcileActiveClarificationResume();
     await refreshClarificationArtifacts();
     await resumeSavedMockRun();
     setMessage("lab-gate-message", "");
