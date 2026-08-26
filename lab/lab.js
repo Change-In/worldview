@@ -137,6 +137,8 @@ const LAB_MAX_TOPICS_PER_RUN = 4;
 const LAB_MAX_COMPARISON_NOTE = 1200;
 const LAB_MAX_BENCHMARK_SCENARIOS = 8;
 const LAB_MAX_LATENCY_METRICS = 240;
+const MOCK_SPEECH_FIRST_AUDIO_BUDGET_MS = 3000;
+const MOCK_DEVICE_SPEECH_FIRST_AUDIO_BUDGET_MS = 5000;
 const LAB_MAX_PENDING_CREATES = 4;
 const LAB_LESSON_HANDOFF_KEY = "worldview-lab-lesson-handoff-v1";
 const LAB_ACTIVE_JOB_STATES = new Set(["queued", "running", "cancelling"]);
@@ -364,6 +366,7 @@ const labState = {
   benchmarkScenarios: [],
   currentScenarioId: LAB_DEFAULT_SCENARIO.id,
   latencyMetrics: [],
+  mockTurnTimings: new Map(),
   pendingCreates: [],
   jobs: [],
   jobDetails: new Map(),
@@ -815,7 +818,7 @@ function sanitizeNetworkContext(value) {
 function sanitizeLatencyMetric(value) {
   if (!value || typeof value !== "object") return null;
   const id = clip(value.id, 180);
-  const component = ["lesson", "tutor", "brain", "transcription", "speech"].includes(value.component) ? value.component : "";
+  const component = ["lesson", "tutor", "brain", "transcription", "speech", "mock-clarification", "mock-extraction", "mock-guided-lesson", "mock-quiz"].includes(value.component) ? value.component : "";
   const totalMs = numeric(value.totalMs ?? value.latencyMs);
   if (!id || !component || totalMs === null || totalMs < 0 || totalMs > 3_600_000) return null;
   return {
@@ -886,6 +889,7 @@ function resetWorkspaceContents() {
   labState.benchmarkScenarios = [];
   labState.currentScenarioId = LAB_DEFAULT_SCENARIO.id;
   labState.latencyMetrics = [];
+  labState.mockTurnTimings = new Map();
   labState.pendingCreates = [];
   labState.outputs = [];
   labState.flow = [];
@@ -1146,6 +1150,10 @@ const LATENCY_COMPONENT_LABELS = {
   tutor: "Tutor",
   speech: "Speech",
   brain: "Brain",
+  "mock-clarification": "Mock · Clarification",
+  "mock-extraction": "Mock · Extraction",
+  "mock-guided-lesson": "Mock · Guided Lesson",
+  "mock-quiz": "Mock · Final Quiz",
 };
 
 const CLARIFICATION_PROMPT_VERSION = "clarification-conversation-v13";
@@ -1335,6 +1343,145 @@ function recordLatencyMetric(value) {
   if (labState.latencyMetrics.length > LAB_MAX_LATENCY_METRICS) labState.latencyMetrics.length = LAB_MAX_LATENCY_METRICS;
   persistWorkspace();
   renderLatencyDashboard();
+}
+
+const MOCK_TURN_COMPONENTS = Object.freeze({
+  clarification:"mock-clarification",
+  extraction:"mock-extraction",
+  lesson:"mock-guided-lesson",
+  quiz:"mock-quiz",
+});
+
+function beginMockTurnTiming({ stage, inputMode = "text", originKind = "send", originPerf = performance.now() } = {}) {
+  if (labState.pipelineMode !== "mock" || !MOCK_TURN_COMPONENTS[stage]) return "";
+  if (!(labState.mockTurnTimings instanceof Map)) labState.mockTurnTimings = new Map();
+  const current = performance.now();
+  const supplied = Number(originPerf);
+  const startedPerf = Number.isFinite(supplied) && supplied >= 0 && supplied <= current ? supplied : current;
+  const id = makeId();
+  labState.mockTurnTimings.set(id, {
+    id,
+    stage,
+    inputMode:inputMode === "voice" ? "voice" : "text",
+    originKind:clip(originKind, 40) || "send",
+    startedPerf,
+    jobId:"",
+    firstDisplayMs:null,
+    firstAudioMs:null,
+    speechRoute:"",
+    terminal:false,
+  });
+  return id;
+}
+
+function bindMockTurnTimingJob(timingId, job) {
+  const timing = labState.mockTurnTimings?.get(timingId);
+  if (!timing || timing.terminal || !job?.id) return "";
+  timing.jobId = String(job.id);
+  labState.mockTurnTimings.set(timing.jobId, timing);
+  return timing.jobId;
+}
+
+function mockTurnTimingFor(value) {
+  if (!value) return null;
+  const key = typeof value === "string" ? value : value.id;
+  return labState.mockTurnTimings?.get(String(key || "")) || null;
+}
+
+function mockTurnTimingJobContext(timing) {
+  const detail = timing?.jobId ? labState.jobDetails.get(timing.jobId) : null;
+  const job = detail?.job || labState.jobs.find((item) => item.id === timing?.jobId) || null;
+  const samples = Array.isArray(detail?.samples) ? detail.samples : [];
+  const routes = samples.map((sample) => ({
+    provider:clip(sample?.provider || sample?.result?.provider, 80),
+    model:clip(sample?.model || sample?.result?.model, 100),
+    providerMs:numeric(sample?.providerMs ?? sample?.provider_ms ?? sample?.result?.ms ?? sample?.latencyMs ?? sample?.totalMs),
+    startedAt:sample?.startedAt || sample?.started_at || sample?.claimedAt || sample?.claimed_at || "",
+  }));
+  const critical = routes.slice().sort((a, b) => Number(b.providerMs ?? -1) - Number(a.providerMs ?? -1))[0] || {};
+  const route = [...new Set(routes.map((item) => [item.provider, item.model].filter(Boolean).join("/")).filter(Boolean))].join(" + ");
+  const startedTimes = routes.map((item) => Date.parse(item.startedAt)).filter(Number.isFinite);
+  const createdAt = Date.parse(job?.createdAt || job?.created_at || "");
+  const queueMs = startedTimes.length && Number.isFinite(createdAt) ? Math.max(0, Math.min(...startedTimes) - createdAt) : null;
+  return {
+    provider:critical.provider || clip(job?.component || "browser", 80),
+    model:critical.model || "",
+    providerMs:critical.providerMs,
+    queueMs,
+    route,
+    network:job?.scenario?.network || currentNetworkContext(),
+    promptFingerprint:fingerprint(routes.map((item) => item.model).join("|")),
+  };
+}
+
+function commitMockTurnTiming(value, { failed = false } = {}) {
+  const timing = mockTurnTimingFor(value);
+  if (!timing || timing.terminal) return false;
+  const finished = performance.now();
+  const voiceExpected = timing.inputMode === "voice";
+  if (!failed && timing.firstDisplayMs === null) return false;
+  if (!failed && voiceExpected && timing.firstAudioMs === null) return false;
+  timing.terminal = true;
+  const context = mockTurnTimingJobContext(timing);
+  const totalMs = voiceExpected && timing.firstAudioMs !== null
+    ? timing.firstAudioMs
+    : timing.firstDisplayMs !== null ? timing.firstDisplayMs : Math.max(0, finished - timing.startedPerf);
+  recordLatencyMetric({
+    id:`mock-turn:${timing.jobId || timing.id}`,
+    at:now(),
+    component:MOCK_TURN_COMPONENTS[timing.stage],
+    source:"foreground",
+    provider:context.provider,
+    model:context.model,
+    route:`mock/${timing.stage}/${timing.inputMode}/${context.route || "unknown"}${timing.speechRoute ? `/tts:${timing.speechRoute}` : ""}`,
+    scenarioFingerprint:fingerprint(`mock-turn|${timing.stage}|${timing.inputMode}`),
+    promptFingerprint:context.promptFingerprint,
+    inputFingerprint:"",
+    queueMs:context.queueMs,
+    providerMs:context.providerMs,
+    firstDisplayMs:timing.firstDisplayMs,
+    firstAudioMs:timing.firstAudioMs,
+    totalMs,
+    failed,
+    network:context.network,
+  });
+  labState.mockTurnTimings.delete(timing.id);
+  if (timing.jobId) labState.mockTurnTimings.delete(timing.jobId);
+  return true;
+}
+
+function markMockTurnFirstDisplay(value, actualMode = "") {
+  const timing = mockTurnTimingFor(value);
+  if (!timing || timing.terminal) return false;
+  if (actualMode === "voice" || actualMode === "text") timing.inputMode = actualMode;
+  if (timing.firstDisplayMs === null) timing.firstDisplayMs = Math.max(0, performance.now() - timing.startedPerf);
+  if (timing.inputMode !== "voice") commitMockTurnTiming(timing.id);
+  return true;
+}
+
+function markMockTurnFirstAudio(value, speechRoute = "") {
+  const timing = mockTurnTimingFor(value);
+  if (!timing || timing.terminal) return false;
+  if (timing.firstAudioMs === null) timing.firstAudioMs = Math.max(0, performance.now() - timing.startedPerf);
+  if (speechRoute) timing.speechRoute = clip(speechRoute, 80);
+  commitMockTurnTiming(timing.id);
+  return true;
+}
+
+function failMockTurnAudio(value, speechRoute = "") {
+  const timing = mockTurnTimingFor(value);
+  if (!timing || timing.terminal) return false;
+  if (speechRoute) timing.speechRoute = clip(speechRoute, 80);
+  return commitMockTurnTiming(timing.id, { failed:true });
+}
+
+function abandonMockTurnTiming(value) {
+  const timing = mockTurnTimingFor(value);
+  if (!timing) return false;
+  timing.terminal = true;
+  labState.mockTurnTimings.delete(timing.id);
+  if (timing.jobId) labState.mockTurnTimings.delete(timing.jobId);
+  return true;
 }
 
 function clearLatencyMetrics() {
@@ -1532,13 +1679,20 @@ function validMockModel(provider, model) {
   return Boolean(LAB_PROVIDER_CATALOG[provider]?.models?.some((item) => item.id === model));
 }
 
+function mockStageProviderAllowed(stage, provider) {
+  // Mock Map jobs always request protected web research. The current OpenAI
+  // adapter deliberately rejects that request instead of pretending research
+  // happened, so do not offer a configuration that can never start.
+  return Boolean(LAB_PROVIDER_CATALOG[provider] && !(stage === "map" && provider === "openai"));
+}
+
 function loadMockRunConfig() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(MOCK_RUN_CONFIG_KEY) || "null"); } catch (_) { saved = null; }
   for (const stage of MOCK_RUN_STAGES) {
     const fallback = MOCK_STAGE_DEFAULTS[stage];
     const value = saved?.[stage] && typeof saved[stage] === "object" ? saved[stage] : {};
-    const provider = LAB_PROVIDER_CATALOG[value.provider] ? value.provider : fallback.provider;
+    const provider = mockStageProviderAllowed(stage, value.provider) ? value.provider : fallback.provider;
     const fallbackModel = provider === fallback.provider && validMockModel(fallback.provider, fallback.model) ? fallback.model : defaultModel(provider);
     const model = validMockModel(provider, value.model) ? value.model : fallbackModel;
     const outputTokens = normalizeOutputTokenCap(value.outputTokens, fallback.outputTokens);
@@ -1713,7 +1867,10 @@ function renderMockRunConfig() {
     head.append(heading, useDefault);
     const label = element("label", { text: "Provider and model" });
     const provider = element("select", { attrs: { "aria-label": `${MOCK_RUN_STAGE_LABELS[stage]} provider`, "data-mock-stage-provider": stage } });
-    for (const [id, info] of Object.entries(LAB_PROVIDER_CATALOG)) provider.append(element("option", { value: id, text: info.label }));
+    for (const [id, info] of Object.entries(LAB_PROVIDER_CATALOG)) {
+      const unavailableForMap = stage === "map" && id === "openai";
+      provider.append(element("option", { value: id, text: unavailableForMap ? `${info.label} · protected research unavailable` : info.label, disabled:unavailableForMap }));
+    }
     provider.value = config.provider;
     const model = element("select", { attrs: { "aria-label": `${MOCK_RUN_STAGE_LABELS[stage]} model`, "data-mock-stage-model": stage } });
     for (const item of LAB_PROVIDER_CATALOG[config.provider]?.models || []) model.append(element("option", { value: item.id, text: item.label }));
@@ -1752,7 +1909,7 @@ function renderMockRunConfig() {
     card.append(head, label, outputLabel, meta);
     const diagnostic = mockStageDiagnostic(stage, artifact);
     if (diagnostic) card.append(element("small", { className:`mock-run-stage-diagnostic ${diagnostic.kind === "error" ? "is-error" : "is-working"}`, text:diagnostic.text, attrs:{ role:diagnostic.kind === "error" ? "alert" : "status" } }));
-    if (stage === "map") card.append(element("small", { className: "mock-run-stage-research", text: "Research automatic" }));
+    if (stage === "map") card.append(element("small", { className: "mock-run-stage-research", text: "Research automatic · OpenAI is unavailable here because its protected route cannot run web research." }));
     const outputSummary = mockStageOutputSummary(stage, artifact);
     if (outputSummary) card.append(element("small", { className: "mock-run-stage-output", text: `Latest output · ${outputSummary}` }));
     if (!["brain"].includes(stage)) {
@@ -1784,6 +1941,7 @@ function stopMockRunLearnerMedia() {
   labState.clarification.micStream = null;
   stopPipelineExtractionVoice();
   setPipelineExtractionConversationMode("text");
+  labState.mockTurnTimings = new Map();
 }
 
 function selectedLesson(selectId) {
@@ -2456,10 +2614,11 @@ async function labJobsFetch(body, expectedUserId = "") {
   return responseJson(response);
 }
 
-async function speechFetch(text) {
+async function speechFetch(text, { signal } = {}) {
   const url = `${SUPABASE_URL}/functions/v1/voice-stream`;
   const response = await requestWithToken((token) => fetch(url, {
     method: "POST",
+    signal,
     headers: {
       apikey: SUPABASE_PUBLISHABLE_KEY,
       Authorization: `Bearer ${token}`,
@@ -4541,6 +4700,73 @@ function pipelineMapRecordMeta(record, map = null) {
   };
 }
 
+function canonicalPipelineSupportUrl(value) {
+  const raw = cleanMapText(typeof value === "string" ? value : value?.url, 600);
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "https:") return "";
+    parsed.hash = "";
+    parsed.hostname = parsed.hostname.toLowerCase();
+    if (parsed.port === "443") parsed.port = "";
+    parsed.pathname = parsed.pathname.replace(/\/+$/, "") || "/";
+    return parsed.href;
+  } catch (_) {
+    return "";
+  }
+}
+
+function unavailablePipelineVerifiedSupport() {
+  return {
+    status:"unavailable",
+    summary:"Provider research did not verify this support record.",
+    claims:[],
+    sources:[],
+    boundaries:[],
+    examples:[],
+  };
+}
+
+function bindPipelineVerifiedSupport(support, meta) {
+  if (!support || typeof support !== "object") return null;
+  if (!["verified", "conflicting"].includes(support.status) || meta?.researchApplied !== true) {
+    return unavailablePipelineVerifiedSupport();
+  }
+  const providerUrls = new Set((Array.isArray(meta?.citations) ? meta.citations : [])
+    .map(canonicalPipelineSupportUrl).filter(Boolean));
+  const sources = Array.isArray(support.sources) ? support.sources : [];
+  const claims = Array.isArray(support.claims) ? support.claims : [];
+  const examples = Array.isArray(support.examples) ? support.examples : [];
+  if (!providerUrls.size || !sources.length || !claims.length) return unavailablePipelineVerifiedSupport();
+  const sourceById = new Map();
+  for (const source of sources) {
+    const id = cleanMapText(source?.id, 80);
+    const url = canonicalPipelineSupportUrl(source);
+    if (!id || sourceById.has(id) || !url || !providerUrls.has(url)) return unavailablePipelineVerifiedSupport();
+    sourceById.set(id, source);
+  }
+  const linked = (item) => {
+    const ids = Array.isArray(item?.sourceIds) ? item.sourceIds.map((id) => cleanMapText(id, 80)).filter(Boolean) : [];
+    return Boolean(ids.length && ids.every((id) => sourceById.has(id)));
+  };
+  if (!claims.every(linked) || !examples.every(linked)) return unavailablePipelineVerifiedSupport();
+  return support;
+}
+
+function bindPipelineMapVerifiedSupport(map, meta) {
+  if (!map || typeof map !== "object" || !Array.isArray(map.chapters)) return map;
+  return {
+    ...map,
+    chapters:map.chapters.map((chapter) => ({
+      ...chapter,
+      outcomes:(Array.isArray(chapter.outcomes) ? chapter.outcomes : []).map((outcome) => ({
+        ...outcome,
+        verifiedSupport:bindPipelineVerifiedSupport(outcome.verifiedSupport, meta),
+      })),
+    })),
+  };
+}
+
 function pipelineMapResearchLabel(meta) {
   if (!meta.researchRequested) return { text:"No research", className:"is-off" };
   if (!meta.researchApplied) return { text:"Research requested · none used", className:"is-missing" };
@@ -4573,8 +4799,9 @@ function ensurePipelineMapDetail(job) {
 }
 
 function renderPipelineRoadmap(record, artifact, { includeStart = true } = {}) {
-  const map = parsePipelineMapOutput(record.text, artifact);
-  const meta = pipelineMapRecordMeta(record, map);
+  const parsedMap = parsePipelineMapOutput(record.text, artifact);
+  const meta = pipelineMapRecordMeta(record, parsedMap);
+  const map = bindPipelineMapVerifiedSupport(parsedMap, meta);
   const card = element("article", { className:"map-roadmap map-lesson-path" });
   const head = element("header", { className:"map-roadmap-head" });
   head.append(element("small", { text:"Lesson path" }));
@@ -4647,7 +4874,7 @@ function renderPipelineRoadmap(record, artifact, { includeStart = true } = {}) {
       const verified = outcome.verifiedSupport;
       if (verified) {
         const grounded = element("div", { className:`map-verified-support is-${verified.status}` });
-        grounded.append(element("strong", { text:`Verified support · ${verified.status}` }));
+        grounded.append(element("strong", { text:verified.status === "verified" ? "Verified support" : `Support status · ${verified.status}` }));
         if (verified.summary) grounded.append(element("p", { text:verified.summary }));
         if (verified.claims.length) {
           const claims = element("ul", { className:"map-verified-claims" });
@@ -5190,12 +5417,14 @@ function selectedPipelineMapRecord(artifact = selectedPipelineArtifact()) {
   if (!records.length) return null;
   const fallback = records[0];
   const record = records.find((item) => cleanMapText(item.id, 120) === labState.pipelineSelectedMapRecordId) || fallback;
-  const map = parsePipelineMapOutput(record.text, artifact);
+  const parsedMap = parsePipelineMapOutput(record.text, artifact);
+  const meta = pipelineMapRecordMeta(record, parsedMap);
+  const map = bindPipelineMapVerifiedSupport(parsedMap, meta);
   return {
     artifact, job, record, map,
     recordKey:cleanMapText(record.id, 120),
     fingerprint:fingerprint(record.text),
-    meta:pipelineMapRecordMeta(record, map),
+    meta,
   };
 }
 
@@ -5673,8 +5902,13 @@ function previewPipelineLessonTurn(selection, outcomeIndex, action, answer) {
 }
 
 async function createPipelineLessonTurn(action, answer = "", targetOutcomeIndex = null, options = {}) {
+  const timingId = options.timingId || "";
   const selection = selectedPipelineMapRecord();
-  if (!selection || selection.meta.incomplete || selection.meta.needsReview) { setMessage("pipeline-lesson-output", "Choose a completed structured roadmap before starting the guided Lesson.", "error"); return; }
+  if (!selection || selection.meta.incomplete || selection.meta.needsReview) {
+    setMessage("pipeline-lesson-output", "Choose a completed structured roadmap before starting the guided Lesson.", "error");
+    failMockTurnAudio(timingId, "lesson-not-ready");
+    return;
+  }
   const outcomes = pipelineLessonOutcomes(selection);
   const jobs = pipelineLessonJobs(selection);
   const latest = jobs.at(-1);
@@ -5682,8 +5916,8 @@ async function createPipelineLessonTurn(action, answer = "", targetOutcomeIndex 
   const latestRecord = latestDetail ? pipelineLessonTurnRecord(latestDetail, outcomes) : null;
   const outcomeIndex = targetOutcomeIndex === null ? (action === "opening" ? 0 : Number(latestRecord?.outcomeIndex ?? latest?.scenario?.outcomeIndex ?? 0)) : targetOutcomeIndex;
   const outcome = outcomes[outcomeIndex];
-  if (!outcome || labState.lessonBusy) return;
-  if (labState.preview) { previewPipelineLessonTurn(selection, outcomeIndex, action, answer); setPipelineStage("lesson"); renderPipelineLesson(); return true; }
+  if (!outcome || labState.lessonBusy) { abandonMockTurnTiming(timingId); return; }
+  if (labState.preview) { previewPipelineLessonTurn(selection, outcomeIndex, action, answer); abandonMockTurnTiming(timingId); setPipelineStage("lesson"); renderPipelineLesson(); return true; }
   const lineage = pipelineConversationLineage("lesson");
   const turnToken = makeId();
   const openingKey = `${selection.artifact.runId}:${selection.job.id}:${selection.recordKey}:${selection.fingerprint}`;
@@ -5735,10 +5969,12 @@ async function createPipelineLessonTurn(action, answer = "", targetOutcomeIndex 
   try {
     const created = await labJobsFetch(request);
     if (!created?.job?.id) throw new Error("The server did not return a saved Lesson job.");
+    bindMockTurnTimingJob(timingId, created.job);
     upsertJob(created.job);
     scheduleJobPoll();
     return true;
   } catch (error) {
+    failMockTurnAudio(timingId, "lesson-job-failed");
     failureMessage = `The Lesson message was not sent: ${clip(error.message, 150)}`;
     if (action === "opening" && labState.lessonTurnToken === turnToken && pipelineConversationLineageIsCurrent(lineage)) {
       labState.lessonOpeningFailureKey = openingKey;
@@ -5812,8 +6048,8 @@ async function routePipelineLessonEvaluation(job) {
   renderPipelineLesson();
 }
 
-async function submitPipelineLessonReply() {
-  const answer = clip(q("pipeline-lesson-reply")?.value, 1200);
+async function submitPipelineLessonReply(value = q("pipeline-lesson-reply")?.value, { timingId = "", inputMode = "" } = {}) {
+  const answer = clip(value, 1200);
   const selection = selectedPipelineMapRecord();
   const lineage = pipelineConversationLineage("lesson");
   const latest = pipelineLessonJobs(selection).at(-1);
@@ -5822,9 +6058,14 @@ async function submitPipelineLessonReply() {
   const latestRecord = latestDetail && pipelineLessonTurnRecord(latestDetail, outcomes);
   if (!answer) { setMessage("pipeline-lesson-output", "Write a message before sending it.", "error"); return; }
   if (!latest || !latestRecord?.output) { setMessage("pipeline-lesson-output", "Wait for Worldview’s current question and Brain check before replying.", "error"); return; }
+  const activeTimingId = timingId || beginMockTurnTiming({
+    stage:"lesson",
+    inputMode:inputMode || labState.extraction.mode,
+    originKind:inputMode === "voice" ? "ptt-release" : "send",
+  });
   const currentOutcomeIndex = Number(latestRecord.outcomeIndex || 0);
   q("pipeline-lesson-reply").value = "";
-  const created = await createPipelineLessonTurn("reply", answer, currentOutcomeIndex, { sourceTutorJobId:latest.id });
+  const created = await createPipelineLessonTurn("reply", answer, currentOutcomeIndex, { sourceTutorJobId:latest.id, timingId:activeTimingId });
   if (!created && pipelineConversationLineageIsCurrent(lineage)) {
     const input = q("pipeline-lesson-reply");
     const send = q("pipeline-lesson-send");
@@ -5858,11 +6099,14 @@ async function continuePipelineLesson() {
 
 function maybeSpeakPipelineLessonReply(job, output) {
   const state = labState.extraction;
+  if (labState.pipelineMode === "mock" && labState.pipelineStage === "lesson" && !q("panel-pipeline")?.hidden && job?.id && output?.assistantMessage) {
+    markMockTurnFirstDisplay(job.id, state.mode);
+  }
   if (labState.pipelineMode !== "mock" || labState.pipelineStage !== "lesson" || q("panel-pipeline")?.hidden || state.mode !== "voice" || !job?.id || !output?.assistantMessage || state.lastSpokenJobId === job.id || state.speaking) return;
   state.lastSpokenJobId = job.id;
   const speakingToken = beginMockSpeaking(state);
   renderMockCarMode();
-  void playPipelineExtractionSpeech(output.assistantMessage)
+  void playPipelineExtractionSpeech(output.assistantMessage, { timingId:job.id })
     .catch((error) => reportMockSpeechFailure("pipeline-lesson-output", error))
     .finally(() => { if (finishMockSpeaking(state, speakingToken)) renderPipelineExtractionModeControls(); });
 }
@@ -6250,9 +6494,9 @@ function latestPipelineQuizRecord(selection = selectedPipelineMapRecord()) {
   return latest && labState.jobDetails.has(latest.id) ? pipelineQuizTurnRecord(labState.jobDetails.get(latest.id), selection) : null;
 }
 
-async function createPipelineQuizTurn(answer) {
+async function createPipelineQuizTurn(answer, { timingId = "" } = {}) {
   const selection = selectedPipelineMapRecord();
-  if (!selection || labState.quiz.busy) return false;
+  if (!selection || labState.quiz.busy) { abandonMockTurnTiming(timingId); return false; }
   syncPipelineQuizIdentity(selection);
   const lineage = pipelineConversationLineage("quiz");
   const turnToken = makeId();
@@ -6293,10 +6537,12 @@ async function createPipelineQuizTurn(answer) {
   try {
     const created = await labJobsFetch(request);
     if (!created?.job?.id) throw new Error("The server did not return a saved Quiz job.");
+    bindMockTurnTimingJob(timingId, created.job);
     upsertJob(created.job);
     scheduleJobPoll();
     return true;
   } catch (error) {
+    failMockTurnAudio(timingId, "quiz-job-failed");
     failureMessage = `The Quiz turn was not sent: ${clip(error.message, 160)}`;
     return false;
   } finally {
@@ -6320,7 +6566,7 @@ function quizFinishIntent(value) {
   return /^(?:finish|done|end|stop|that['’]s all)[.!?\s]*$/i.test(String(value || "").trim());
 }
 
-async function submitPipelineQuizReply(value = q("pipeline-quiz-reply")?.value) {
+async function submitPipelineQuizReply(value = q("pipeline-quiz-reply")?.value, { timingId = "", inputMode = "" } = {}) {
   const answer = clip(value, 2400);
   const selection = selectedPipelineMapRecord();
   const lineage = pipelineConversationLineage("quiz");
@@ -6369,7 +6615,12 @@ async function submitPipelineQuizReply(value = q("pipeline-quiz-reply")?.value) 
     return;
   }
   if (latest?.status === "complete" || labState.quiz.completionMessage) return;
-  const created = await createPipelineQuizTurn(answer);
+  const activeTimingId = timingId || beginMockTurnTiming({
+    stage:"quiz",
+    inputMode:inputMode || labState.extraction.mode,
+    originKind:inputMode === "voice" ? "ptt-release" : "send",
+  });
+  const created = await createPipelineQuizTurn(answer, { timingId:activeTimingId });
   if (!created && pipelineConversationLineageIsCurrent(lineage)) {
     const input = q("pipeline-quiz-reply");
     const send = q("pipeline-quiz-send");
@@ -6391,12 +6642,15 @@ function syncPipelineQuizSendControl() {
 
 function maybeSpeakPipelineQuizReply(job, record) {
   const state = labState.extraction;
+  if (labState.pipelineMode === "mock" && labState.pipelineStage === "quiz" && !q("panel-pipeline")?.hidden && job?.id && record?.assistantMessage) {
+    markMockTurnFirstDisplay(job.id, state.mode);
+  }
   if (labState.pipelineMode !== "mock" || labState.pipelineStage !== "quiz" || q("panel-pipeline")?.hidden || state.mode !== "voice" || !job?.id || !record?.assistantMessage || labState.quiz.lastSpokenJobId === job.id || state.speaking) return;
   labState.quiz.lastSpokenJobId = job.id;
   const speakingToken = beginMockSpeaking(state);
   state.lastSpeechText = record.assistantMessage;
   renderMockCarMode();
-  void playPipelineExtractionSpeech(record.assistantMessage)
+  void playPipelineExtractionSpeech(record.assistantMessage, { timingId:job.id })
     .catch((error) => reportMockSpeechFailure("pipeline-quiz-output", error))
     .finally(() => { if (finishMockSpeaking(state, speakingToken)) renderPipelineExtractionModeControls(); });
 }
@@ -6880,7 +7134,7 @@ async function startMapAwareExtraction({ answer = "", inputMode = "text", trigge
   }
 }
 
-async function submitPipelineExtractionReply(value = q("pipeline-extraction-reply")?.value, inputMode = "text") {
+async function submitPipelineExtractionReply(value = q("pipeline-extraction-reply")?.value, inputMode = "text", { timingId = "", originPerf = null } = {}) {
   const artifact = selectedPipelineArtifact();
   const scope = pipelineExtractionMapScope(artifact);
   const lineage = pipelineConversationLineage("extraction");
@@ -6915,6 +7169,12 @@ async function submitPipelineExtractionReply(value = q("pipeline-extraction-repl
     requestLessonFromExtraction(inputMode === "voice" ? "spoken_readiness" : "typed_readiness");
     return;
   }
+  const activeTimingId = timingId || beginMockTurnTiming({
+    stage:"extraction",
+    inputMode,
+    originKind:inputMode === "voice" ? "ptt-release" : "send",
+    originPerf:originPerf ?? performance.now(),
+  });
   const { provider, model } = pipelineExtractionProvider(artifact);
   const mapAware = pass === "map-aware";
   const selection = mapAware ? selectedPipelineMapRecord(artifact) : null;
@@ -6987,6 +7247,7 @@ async function submitPipelineExtractionReply(value = q("pipeline-extraction-repl
   try {
     const created = await labJobsFetch(request);
     if (!created?.job?.id) throw new Error("The server did not return a saved extraction job id.");
+    bindMockTurnTimingJob(activeTimingId, created.job);
     upsertJob(created.job);
     scheduleJobPoll();
     if (labState.extractionTurnToken === turnToken && pipelineConversationLineageIsCurrent(lineage)) {
@@ -6994,6 +7255,7 @@ async function submitPipelineExtractionReply(value = q("pipeline-extraction-repl
       q("pipeline-extraction-reply").value = "";
     }
   } catch (error) {
+    failMockTurnAudio(activeTimingId, "extraction-job-failed");
     if (labState.extractionTurnToken === turnToken && pipelineConversationLineageIsCurrent(lineage)) setMessage("pipeline-extraction-output", `Your message was not sent: ${clip(error.message, 150)}`, "error");
   } finally {
     if (labState.extractionTurnToken === turnToken) {
@@ -7253,6 +7515,104 @@ function supportedLabRecordingMimes() {
   }), ""];
 }
 
+const LAB_PCM_FALLBACK_MAX_SECONDS = 60;
+const LAB_PCM_FALLBACK_MIN_PEAK = 0.0005;
+
+function labPcmFallbackWavBlob(chunks, sampleRate) {
+  const frames = (chunks || []).reduce((total, chunk) => total + Number(chunk?.length || 0), 0);
+  if (!frames || !Number.isFinite(sampleRate) || sampleRate < 8000) return null;
+  const buffer = new ArrayBuffer(44 + frames * 2);
+  const view = new DataView(buffer);
+  const write = (offset, value) => { for (let index = 0; index < value.length; index += 1) view.setUint8(offset + index, value.charCodeAt(index)); };
+  write(0, "RIFF");
+  view.setUint32(4, 36 + frames * 2, true);
+  write(8, "WAVE");
+  write(12, "fmt " );
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  write(36, "data");
+  view.setUint32(40, frames * 2, true);
+  let offset = 44;
+  for (const chunk of chunks) {
+    for (let index = 0; index < chunk.length; index += 1) {
+      view.setInt16(offset, chunk[index], true);
+      offset += 2;
+    }
+  }
+  return new Blob([buffer], { type:"audio/wav" });
+}
+
+function startLabPcmFallbackCapture(stream) {
+  const context = labState.recordingCueContext;
+  if (!context || context.state === "closed" || !context.createMediaStreamSource || !context.createScriptProcessor) return null;
+  try {
+    const source = context.createMediaStreamSource(stream);
+    const processor = context.createScriptProcessor(4096, 1, 1);
+    const sink = context.createGain();
+    sink.gain.value = 0;
+    const capture = { active:true, chunks:[], frames:0, peak:0, sampleRate:Number(context.sampleRate || 48000), source, processor, sink };
+    const maxFrames = capture.sampleRate * LAB_PCM_FALLBACK_MAX_SECONDS;
+    processor.onaudioprocess = (event) => {
+      if (!capture.active || capture.frames >= maxFrames) return;
+      const input = event.inputBuffer?.getChannelData?.(0);
+      if (!input?.length) return;
+      const length = Math.min(input.length, maxFrames - capture.frames);
+      const pcm = new Int16Array(length);
+      for (let index = 0; index < length; index += 1) {
+        const sample = Math.max(-1, Math.min(1, Number(input[index]) || 0));
+        capture.peak = Math.max(capture.peak, Math.abs(sample));
+        pcm[index] = sample < 0 ? Math.round(sample * 32768) : Math.round(sample * 32767);
+      }
+      capture.chunks.push(pcm);
+      capture.frames += length;
+    };
+    source.connect(processor);
+    processor.connect(sink);
+    sink.connect(context.destination);
+    if (context.state === "suspended") Promise.resolve(context.resume()).catch(() => {});
+    return capture;
+  } catch (_) {
+    return null;
+  }
+}
+
+function finishLabPcmFallbackCapture(capture, keepAudio = true) {
+  if (!capture) return null;
+  capture.active = false;
+  if (capture.processor) capture.processor.onaudioprocess = null;
+  try { capture.source?.disconnect(); } catch (_) { /* Already disconnected. */ }
+  try { capture.processor?.disconnect(); } catch (_) { /* Already disconnected. */ }
+  try { capture.sink?.disconnect(); } catch (_) { /* Already disconnected. */ }
+  const enoughFrames = capture.frames >= capture.sampleRate * 0.15;
+  if (!keepAudio || !enoughFrames || capture.peak < LAB_PCM_FALLBACK_MIN_PEAK) return null;
+  return labPcmFallbackWavBlob(capture.chunks, capture.sampleRate);
+}
+
+function finalizeLabRecorderPcmFallback(recorder, keepAudio = true) {
+  if (!recorder?.wvPcmCapture) return recorder?.wvPcmBlob || null;
+  const capture = recorder.wvPcmCapture;
+  recorder.wvPcmCapture = null;
+  recorder.wvPcmBlob = finishLabPcmFallbackCapture(capture, keepAudio);
+  return recorder.wvPcmBlob;
+}
+
+function labRecorderBlob(recorder, chunks = []) {
+  const primary = chunks.length ? new Blob(chunks, { type:recorder?.mimeType || chunks[0]?.type || "audio/webm" }) : null;
+  if (primary?.size >= 128) return primary;
+  const fallback = recorder?.wvPcmBlob;
+  return fallback?.size >= 128 ? fallback : primary;
+}
+
+function requestLabRecorderData(recorder) {
+  try { if (recorder?.state === "recording" && typeof recorder.requestData === "function") recorder.requestData(); }
+  catch (_) { /* stop() still requests the final recorder payload. */ }
+}
+
 function startLabMediaRecorder(stream, handlers = {}) {
   let lastError = null;
   for (const requestedMime of supportedLabRecordingMimes()) {
@@ -7260,12 +7620,21 @@ function startLabMediaRecorder(stream, handlers = {}) {
     try {
       recorder = requestedMime ? new MediaRecorder(stream, { mimeType:requestedMime }) : new MediaRecorder(stream);
       recorder.ondataavailable = handlers.ondataavailable || null;
-      recorder.onstop = handlers.onstop || null;
-      recorder.onerror = handlers.onerror || null;
+      recorder.onstop = (event) => {
+        finalizeLabRecorderPcmFallback(recorder, true);
+        handlers.onstop?.(event);
+      };
+      recorder.onerror = (event) => {
+        finalizeLabRecorderPcmFallback(recorder, false);
+        handlers.onerror?.(event);
+      };
       recorder.onstart = handlers.onstart || null;
       // Periodic chunks mirror the phone-tested main lesson recorder. Safari
       // can omit its final flush; earlier chunks must still survive release.
       recorder.start(250);
+      // WebKit can report a live MediaRecorder yet deliver no encoded chunk.
+      // A bounded in-memory PCM copy gives that same hold one local WAV fallback.
+      recorder.wvPcmCapture = startLabPcmFallbackCapture(stream);
       return recorder;
     } catch (error) {
       lastError = error;
@@ -7285,6 +7654,7 @@ function invalidateLabCapture(state, expectedStream = null) {
   state.recordingStopTimer = 0;
   const recorder = state.recorder;
   if (recorder) {
+    finalizeLabRecorderPcmFallback(recorder, false);
     recorder.ondataavailable = recorder.onstop = recorder.onerror = recorder.onstart = null;
     try { if (recorder.state !== "inactive") recorder.stop(); } catch (_) { /* The recorder already ended. */ }
   }
@@ -7497,6 +7867,7 @@ function clearMockVoiceAudioSource(token) {
   if (!mockVoicePlaybackIsCurrent(token) || audio?.wvPlaybackToken !== token) return false;
   audio.onended = null;
   audio.onerror = null;
+  audio.onplaying = null;
   try { audio.removeAttribute("src"); audio.load(); } catch (_) { /* The owned source is already released. */ }
   return true;
 }
@@ -7528,6 +7899,7 @@ function stopMockVoicePlayback(owner = "") {
     if (audio) {
       audio.onended = null;
       audio.onerror = null;
+      audio.onplaying = null;
       try { audio.removeAttribute("src"); audio.load(); } catch (_) { /* The owned source is already released. */ }
       audio.wvPlaybackToken = "";
     }
@@ -7600,13 +7972,113 @@ function mockSpeechPlaybackTimeout(spoken) {
   return Math.max(30000, Math.min(240000, String(spoken || "").length * 110));
 }
 
+function mockSpeechStartError(type) {
+  const timeout = type === "timeout";
+  const error = new Error(timeout ? "Cloud speech did not begin in time." : "Cloud speech was cancelled.");
+  error.name = timeout ? "TimeoutError" : "AbortError";
+  error.type = timeout ? "speech_start_timeout" : "speech_cancelled";
+  return error;
+}
+
+function createMockSpeechStartGate(voiceToken, budgetMs = MOCK_SPEECH_FIRST_AUDIO_BUDGET_MS) {
+  const controller = new AbortController();
+  let settled = false;
+  let rejectFailure = null;
+  const failure = new Promise((_, reject) => { rejectFailure = reject; });
+  failure.catch(() => {});
+  let timer = 0;
+  const reject = (type) => {
+    if (settled) return false;
+    settled = true;
+    clearTimeout(timer);
+    try { controller.abort(); } catch (_) { /* The request may already be aborted. */ }
+    rejectFailure(mockSpeechStartError(type));
+    return true;
+  };
+  const cancel = () => reject("cancelled");
+  timer = setTimeout(() => reject("timeout"), Math.max(1, Number(budgetMs) || MOCK_SPEECH_FIRST_AUDIO_BUDGET_MS));
+  if (!setMockVoicePlaybackCancel(voiceToken, cancel)) cancel();
+  return {
+    signal:controller.signal,
+    failure,
+    wait:(promise) => Promise.race([Promise.resolve(promise), failure]),
+    started:() => {
+      if (settled) return false;
+      settled = true;
+      clearTimeout(timer);
+      return true;
+    },
+    cancel,
+    dismiss:() => {
+      if (settled) return false;
+      settled = true;
+      clearTimeout(timer);
+      return true;
+    },
+  };
+}
+
+async function playMockCloudSpeech(spoken, { state, playbackGeneration, owner, voiceToken, audio, timingId = "", errorMessage = "The generated voice could not play on this device." } = {}) {
+  const startGate = createMockSpeechStartGate(voiceToken);
+  let url = "";
+  let ownedCancel = null;
+  try {
+    const response = await startGate.wait(speechFetch(spoken, { signal:startGate.signal }));
+    const blob = await startGate.wait(response.blob());
+    if (state.speechPlaybackGeneration !== playbackGeneration || !mockVoicePlaybackIsCurrent(voiceToken)) throw mockSpeechStartError("cancelled");
+    url = URL.createObjectURL(blob);
+    audio.playsInline = true;
+    audio.muted = false;
+    audio.volume = 1;
+    audio.src = url;
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      let watchdog = 0;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(watchdog);
+        resolve();
+      };
+      const fail = (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(watchdog);
+        reject(error);
+      };
+      const noteFirstAudio = () => {
+        if (!mockVoicePlaybackIsCurrent(voiceToken) || labState.mockVoicePlaybackOwner !== owner) return;
+        startGate.started();
+        markMockTurnFirstAudio(timingId, "deepgram-aura-cloud");
+      };
+      ownedCancel = () => {
+        startGate.cancel();
+        finish();
+      };
+      state.voiceSpeechCancel = ownedCancel;
+      setMockVoicePlaybackCancel(voiceToken, ownedCancel);
+      audio.onplaying = noteFirstAudio;
+      audio.onended = () => { noteFirstAudio(); finish(); };
+      audio.onerror = () => fail(new Error(errorMessage));
+      startGate.failure.catch(fail);
+      watchdog = setTimeout(() => fail(new Error("Speech playback stalled on this device.")), mockSpeechPlaybackTimeout(spoken));
+      Promise.resolve().then(() => startGate.wait(audio.play())).catch(fail);
+    });
+    if (mockVoicePlaybackIsCurrent(voiceToken)) finishMockVoicePlayback(voiceToken);
+  } finally {
+    startGate.dismiss();
+    if (state.speechPlaybackGeneration === playbackGeneration && state.voiceSpeechCancel === ownedCancel) state.voiceSpeechCancel = null;
+    if (url) URL.revokeObjectURL(url);
+  }
+}
+
 function primePipelineExtractionAudio() {
   const state = labState.extraction;
   try { return primeMockVoiceAudio(); }
   catch (_) { state.audioPrimed = false; return Promise.resolve(false); }
 }
 
-function playLabSpeechSynthesisFallback(spoken, state, playbackGeneration, cloudError, owner, voiceToken) {
+function playLabSpeechSynthesisFallback(spoken, state, playbackGeneration, cloudError, owner, voiceToken, { timingId = "" } = {}) {
   if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") {
     return Promise.reject(cloudError || new Error("This device has no available speech playback route."));
   }
@@ -7615,23 +8087,34 @@ function playLabSpeechSynthesisFallback(spoken, state, playbackGeneration, cloud
   return new Promise((resolve, reject) => {
     let settled = false;
     let watchdog = 0;
+    let startWatchdog = 0;
+    let started = false;
+    const noteFirstAudio = () => {
+      if (started || !mockVoicePlaybackIsCurrent(voiceToken) || labState.mockVoicePlaybackOwner !== owner) return;
+      started = true;
+      clearTimeout(startWatchdog);
+      markMockTurnFirstAudio(timingId, "browser-device-fallback");
+    };
     const finish = () => {
       if (settled) return;
       settled = true;
       clearTimeout(watchdog);
+      clearTimeout(startWatchdog);
       resolve();
     };
     const fail = (error) => {
       if (settled) return;
       settled = true;
       clearTimeout(watchdog);
+      clearTimeout(startWatchdog);
       reject(error);
     };
     try {
       speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(spoken);
       utterance.lang = "en-US";
-      utterance.onend = finish;
+      utterance.onstart = noteFirstAudio;
+      utterance.onend = () => { noteFirstAudio(); finish(); };
       utterance.onerror = () => fail(cloudError || new Error("The spoken reply could not play on this device."));
       ownedCancel = () => {
         try { speechSynthesis.cancel(); } catch (_) { /* already stopped */ }
@@ -7643,6 +8126,10 @@ function playLabSpeechSynthesisFallback(spoken, state, playbackGeneration, cloud
         try { speechSynthesis.cancel(); } catch (_) { /* already stopped */ }
         fail(new Error("Speech playback stalled on this device."));
       }, mockSpeechPlaybackTimeout(spoken));
+      startWatchdog = setTimeout(() => {
+        try { speechSynthesis.cancel(); } catch (_) { /* already stopped */ }
+        fail(new Error("Device speech did not begin in time."));
+      }, MOCK_DEVICE_SPEECH_FIRST_AUDIO_BUDGET_MS);
       if (!mockVoicePlaybackIsCurrent(voiceToken)) { finish(); return; }
       speechSynthesis.speak(utterance);
     } catch (_) {
@@ -7654,7 +8141,7 @@ function playLabSpeechSynthesisFallback(spoken, state, playbackGeneration, cloud
   });
 }
 
-async function playPipelineExtractionSpeech(text) {
+async function playPipelineExtractionSpeech(text, { timingId = "" } = {}) {
   const state = labState.extraction;
   const spoken = clip(text, 2000);
   if (!spoken) return;
@@ -7666,41 +8153,26 @@ async function playPipelineExtractionSpeech(text) {
   setPipelineExtractionMicTracksEnabled(false);
   setPipelineExtractionAudioSession("playback");
   let cloudError = null;
-  let url = "";
-  let ownedCancel = null;
   try {
-    const response = await speechFetch(spoken);
-    const blob = await response.blob();
-    if (state.speechPlaybackGeneration !== playbackGeneration || !mockVoicePlaybackIsCurrent(voiceToken)) return;
-    url = URL.createObjectURL(blob);
-    audio.playsInline = true;
-    audio.muted = false;
-    audio.volume = 1;
-    audio.src = url;
-    await new Promise(async (resolve, reject) => {
-      let settled = false;
-      let watchdog = 0;
-      const finish = () => { if (settled) return; settled = true; clearTimeout(watchdog); resolve(); };
-      const fail = (error) => { if (settled) return; settled = true; clearTimeout(watchdog); reject(error); };
-      ownedCancel = finish;
-      state.voiceSpeechCancel = ownedCancel;
-      setMockVoicePlaybackCancel(voiceToken, ownedCancel);
-      audio.onended = finish;
-      audio.onerror = () => fail(new Error("The generated Extraction voice could not play on this device."));
-      watchdog = setTimeout(() => fail(new Error("Speech playback stalled on this device.")), mockSpeechPlaybackTimeout(spoken));
-      try { await audio.play(); } catch (error) { fail(error); }
+    await playMockCloudSpeech(spoken, {
+      state, playbackGeneration, owner, voiceToken, audio, timingId,
+      errorMessage:"The generated Worldview voice could not play on this device.",
     });
-    if (mockVoicePlaybackIsCurrent(voiceToken)) finishMockVoicePlayback(voiceToken);
     return;
   } catch (error) {
     cloudError = error;
     clearMockVoiceAudioSource(voiceToken);
-  } finally {
-    if (state.speechPlaybackGeneration === playbackGeneration && state.voiceSpeechCancel === ownedCancel) state.voiceSpeechCancel = null;
-    if (url) URL.revokeObjectURL(url);
   }
-  if (state.speechPlaybackGeneration !== playbackGeneration || !mockVoicePlaybackIsCurrent(voiceToken)) return;
-  await playLabSpeechSynthesisFallback(spoken, state, playbackGeneration, cloudError, owner, voiceToken);
+  if (state.speechPlaybackGeneration !== playbackGeneration || !mockVoicePlaybackIsCurrent(voiceToken)) {
+    abandonMockTurnTiming(timingId);
+    return;
+  }
+  try {
+    await playLabSpeechSynthesisFallback(spoken, state, playbackGeneration, cloudError, owner, voiceToken, { timingId });
+  } catch (error) {
+    failMockTurnAudio(timingId, "speech-failed");
+    throw error;
+  }
 }
 
 function stopPipelineExtractionSpeech() {
@@ -7809,7 +8281,7 @@ async function transcribePipelineExtractionRecording(blob, operationId = "", cap
         state.retainedRecording = null;
         state.retainedOperationId = "";
         labState.extractionBusy = false;
-        await submitPipelineExtractionReply(transcript, "voice");
+        await submitPipelineExtractionReply(transcript, "voice", { originPerf:lineage.turnStartedAt });
         return true;
       } catch (error) {
         if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
@@ -7859,9 +8331,9 @@ async function transcribePipelineLessonRecording(blob, operationId = "", capture
     if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
     const transcript = clip(result.text, 1200);
     if (!transcript) throw new Error("No speech was found in that recording.");
-    q("pipeline-lesson-reply").value = transcript;
     labState.lessonBusy = false;
-    await submitPipelineLessonReply();
+    const timingId = beginMockTurnTiming({ stage:"lesson", inputMode:"voice", originKind:"ptt-release", originPerf:lineage.turnStartedAt });
+    await submitPipelineLessonReply(transcript, { inputMode:"voice", timingId });
   } finally {
     if (state.voiceTranscriptionToken === transcriptionToken) {
       const shouldRender = pipelineConversationLineageIsCurrent(lineage, transcriptionToken);
@@ -7890,9 +8362,9 @@ async function transcribePipelineQuizRecording(blob, operationId = "", captureCo
     if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
     const transcript = clip(result.text, 2400);
     if (!transcript) throw new Error("No speech was found in that recording.");
-    q("pipeline-quiz-reply").value = transcript;
     labState.quiz.busy = false;
-    await submitPipelineQuizReply(transcript);
+    const timingId = beginMockTurnTiming({ stage:"quiz", inputMode:"voice", originKind:"ptt-release", originPerf:lineage.turnStartedAt });
+    await submitPipelineQuizReply(transcript, { inputMode:"voice", timingId });
   } finally {
     if (state.voiceTranscriptionToken === transcriptionToken) {
       const shouldRender = pipelineConversationLineageIsCurrent(lineage, transcriptionToken);
@@ -7908,7 +8380,10 @@ const LAB_RECORDING_RELEASE_TAIL_MS = 300;
 
 function scheduleLabRecorderStop(state, recorder, captureToken) {
   if (!recorder || state.recordingStopTimer) return;
-  recorder.wvHeldMs = Math.max(0, performance.now() - Number(state.recordingStartedAt || performance.now()));
+  const releasedAt = performance.now();
+  if (!Number.isFinite(Number(recorder.wvReleasedAt))) recorder.wvReleasedAt = releasedAt;
+  recorder.wvHeldMs = Math.max(0, releasedAt - Number(state.recordingStartedAt || releasedAt));
+  requestLabRecorderData(recorder);
   state.recordingStopTimer = setTimeout(() => {
     state.recordingStopTimer = 0;
     if (state.recorder !== recorder || state.captureToken !== captureToken) return;
@@ -8000,19 +8475,14 @@ async function startPipelineExtractionRecording(event, options = {}) {
         setMockCarStatus("idle", "Hold a little longer");
         return;
       }
-      if (!chunks.length) {
+      const blob = labRecorderBlob(recorder, chunks);
+      if (!blob || blob.size < 128) {
         setMessage(captureStatusId, "The phone returned no microphone audio, so its route was reset. Hold again to reconnect.", "error");
         setMockCarStatus("paused", "I didn’t hear that. Hold again.", "empty-audio");
         renderPipelineExtractionModeControls();
         return;
       }
-      const blob = new Blob(chunks, { type:recorder.mimeType || chunks[0]?.type || "audio/webm" });
-      if (blob.size < 128) {
-        setMessage(captureStatusId, "The phone returned no microphone audio, so its route was reset. Hold again to reconnect.", "error");
-        setMockCarStatus("paused", "I didn’t hear that. Hold again.", "tiny-audio");
-        renderPipelineExtractionModeControls();
-        return;
-      }
+      captureContext.turnStartedAt = Number(recorder.wvReleasedAt) || performance.now();
       setMockCarStatus("transcribing", "Transcribing");
       try {
         if (captureStage === "quiz") await transcribePipelineQuizRecording(blob, makeId(), captureContext);
@@ -8093,11 +8563,14 @@ function stopPipelineExtractionRecording(event) {
 
 function maybeSpeakPipelineExtractionReply(job, output) {
   const state = labState.extraction;
+  if (labState.pipelineMode === "mock" && labState.pipelineStage === "extraction" && !q("panel-pipeline")?.hidden && job?.id && output?.assistantMessage) {
+    markMockTurnFirstDisplay(job.id, state.mode);
+  }
   if (labState.pipelineMode !== "mock" || labState.pipelineStage !== "extraction" || q("panel-pipeline")?.hidden || state.mode !== "voice" || !job?.id || !output?.assistantMessage || state.lastSpokenJobId === job.id || state.speaking) return;
   state.lastSpokenJobId = job.id;
   const speakingToken = beginMockSpeaking(state);
   renderMockCarMode();
-  void playPipelineExtractionSpeech(output.assistantMessage)
+  void playPipelineExtractionSpeech(output.assistantMessage, { timingId:job.id })
     .catch((error) => reportMockSpeechFailure("pipeline-extraction-output", error))
     .finally(() => { if (finishMockSpeaking(state, speakingToken)) renderPipelineExtractionModeControls(); });
 }
@@ -9262,6 +9735,7 @@ async function toggleClarificationTopicRecording() {
     button.disabled = true;
     setClarificationTopicMicStatus("Finishing your topic…");
     const recorder = state.recorder;
+    requestLabRecorderData(recorder);
     state.recordingStopTimer = setTimeout(() => {
       state.recordingStopTimer = 0;
       try { if (state.recorder === recorder && recorder.state === "recording") recorder.stop(); }
@@ -9305,8 +9779,7 @@ async function toggleClarificationTopicRecording() {
       clearTimeout(state.recordingStopTimer);
       state.recordingStopTimer = 0;
       const heldMs = performance.now() - state.recordingStartedAt;
-      const mime = recorder?.mimeType || chunks[0]?.type || "audio/webm";
-      const blob = new Blob(chunks, { type:mime });
+      const blob = labRecorderBlob(recorder, chunks);
       const captureStream = state.stream;
       state.recorder = null;
       state.stream = null;
@@ -9315,7 +9788,7 @@ async function toggleClarificationTopicRecording() {
       button.setAttribute("aria-pressed", "false");
       button.setAttribute("aria-label", "Record lesson topic");
       setClarificationAudioSession("playback");
-      if (heldMs < 350 || blob.size < 128) {
+      if (heldMs < 350 || !blob || blob.size < 128) {
         state.busy = false;
         button.disabled = false;
         setClarificationTopicMicStatus(heldMs < 350 ? "Tap, speak your topic, then tap again." : "I didn’t hear a topic. Tap to try again.", true);
@@ -9672,6 +10145,7 @@ function startNewPipelineRun(seed = "") {
   labState.mockCar.active = false;
   labState.mockCar.errorKey = "";
   labState.mockCar.returnFocus = null;
+  labState.mockTurnTimings = new Map();
   releaseClarificationTopicCapture();
   stopPipelineExtractionVoice();
   setPipelineExtractionConversationMode("text");
@@ -9846,7 +10320,7 @@ function primeClarificationAudio() {
   catch (_) { state.audioPrimed = false; return Promise.resolve(false); }
 }
 
-async function playClarificationSpeech(text) {
+async function playClarificationSpeech(text, { timingId = "" } = {}) {
   const state = labState.clarification;
   const spoken = clip(text, 2000);
   if (!spoken) return;
@@ -9858,41 +10332,26 @@ async function playClarificationSpeech(text) {
   setClarificationMicTracksEnabled(false);
   setClarificationAudioSession("playback");
   let cloudError = null;
-  let url = "";
-  let ownedCancel = null;
   try {
-    const response = await speechFetch(spoken);
-    const blob = await response.blob();
-    if (state.speechPlaybackGeneration !== playbackGeneration || !mockVoicePlaybackIsCurrent(voiceToken)) return;
-    url = URL.createObjectURL(blob);
-    audio.playsInline = true;
-    audio.muted = false;
-    audio.volume = 1;
-    audio.src = url;
-    await new Promise(async (resolve, reject) => {
-      let settled = false;
-      let watchdog = 0;
-      const finish = () => { if (settled) return; settled = true; clearTimeout(watchdog); resolve(); };
-      const fail = (error) => { if (settled) return; settled = true; clearTimeout(watchdog); reject(error); };
-      ownedCancel = finish;
-      state.voiceSpeechCancel = ownedCancel;
-      setMockVoicePlaybackCancel(voiceToken, ownedCancel);
-      audio.onended = finish;
-      audio.onerror = () => fail(new Error("The generated clarification voice could not play on this device."));
-      watchdog = setTimeout(() => fail(new Error("Speech playback stalled on this device.")), mockSpeechPlaybackTimeout(spoken));
-      try { await audio.play(); } catch (error) { fail(error); }
+    await playMockCloudSpeech(spoken, {
+      state, playbackGeneration, owner, voiceToken, audio, timingId,
+      errorMessage:"The generated clarification voice could not play on this device.",
     });
-    if (mockVoicePlaybackIsCurrent(voiceToken)) finishMockVoicePlayback(voiceToken);
     return;
   } catch (error) {
     cloudError = error;
     clearMockVoiceAudioSource(voiceToken);
-  } finally {
-    if (state.speechPlaybackGeneration === playbackGeneration && state.voiceSpeechCancel === ownedCancel) state.voiceSpeechCancel = null;
-    if (url) URL.revokeObjectURL(url);
   }
-  if (state.speechPlaybackGeneration !== playbackGeneration || !mockVoicePlaybackIsCurrent(voiceToken)) return;
-  await playLabSpeechSynthesisFallback(spoken, state, playbackGeneration, cloudError, owner, voiceToken);
+  if (state.speechPlaybackGeneration !== playbackGeneration || !mockVoicePlaybackIsCurrent(voiceToken)) {
+    abandonMockTurnTiming(timingId);
+    return;
+  }
+  try {
+    await playLabSpeechSynthesisFallback(spoken, state, playbackGeneration, cloudError, owner, voiceToken, { timingId });
+  } catch (error) {
+    failMockTurnAudio(timingId, "speech-failed");
+    throw error;
+  }
 }
 
 function stopClarificationSpeech() {
@@ -10229,15 +10688,16 @@ function clarificationPromptProvenance(packet) {
   return { source, fingerprint: fingerprint(packet.system) };
 }
 
-async function runClarificationModel() {
+async function runClarificationModel(timingId = "") {
   const state = labState.clarification;
-  if (state.busy) return;
+  if (state.busy) { abandonMockTurnTiming(timingId); return; }
   const activeRunId = state.runId;
   const activeTurn = state.learnerReplyCount;
   const runIsCurrent = () => state.runId === activeRunId && state.learnerReplyCount === activeTurn;
   let packet;
   try { packet = clarificationRequestPacket(); }
   catch (error) {
+    failMockTurnAudio(timingId, "clarification-request-invalid");
     const message = error.message || "The clarification request could not be prepared.";
     setMessage("clarification-message", message, "error");
     setMessage("clarification-backend-message", message, "error");
@@ -10284,6 +10744,7 @@ async function runClarificationModel() {
     setMessage("clarification-backend-message", "The real model turn is running. You can switch views without interrupting it.");
     const created = await labJobsFetch(request);
     if (!created?.job?.id) throw new Error("The server did not return a saved job id.");
+    bindMockTurnTimingJob(timingId, created.job);
     upsertJob(created.job);
     if (!runIsCurrent()) return;
     state.latestJobId = created.job.id;
@@ -10306,16 +10767,18 @@ async function runClarificationModel() {
     // prior turn's structured validation envelope.
     state.turns.push({ role: "assistant", content: output.assistant_message });
     renderClarificationOutput(output, raw, detail, packet, Math.round(performance.now() - started));
+    const willSpeak = state.mode === "voice" && !(labState.pipelineMode === "mock" && output.ready_to_finish);
+    markMockTurnFirstDisplay(created.job.id, willSpeak ? "voice" : "text");
     state.runError = "";
     setMessage("clarification-message", "");
     setMessage("clarification-backend-message", providerReturnedUnsafeReply
       ? `The provider result was recorded as recoverable ${providerFailureType || "no-text"}${providerFinishReason ? ` (finish reason: ${providerFinishReason})` : ""}; the unsafe partial was kept only in Backend evidence and a complete local question kept the conversation moving.`
       : "Run completed. The prompt, exact request, raw reply, and validated output below all belong to this learner turn.", "ok");
-    if (state.mode === "voice" && !(labState.pipelineMode === "mock" && output.ready_to_finish)) {
+    if (willSpeak) {
       setClarificationBusy(false);
       const speakingToken = beginMockSpeaking(state);
       renderMockCarMode();
-      try { await playClarificationSpeech(clarificationSpeechText(output)); }
+      try { await playClarificationSpeech(clarificationSpeechText(output), { timingId:created.job.id }); }
       catch (error) { reportMockSpeechFailure("clarification-message", error); }
       finally {
         if (finishMockSpeaking(state, speakingToken)) {
@@ -10326,6 +10789,7 @@ async function runClarificationModel() {
     }
   } catch (error) {
     if (!runIsCurrent()) return;
+    failMockTurnAudio(timingId, "clarification-job-failed");
     const message = error.message || "This clarification turn failed.";
     state.runError = message;
     setMessage("clarification-message", `The clarification model could not answer: ${message}`, "error");
@@ -10343,6 +10807,7 @@ async function runClarificationModel() {
 async function startClarification(mode) {
   const topic = clip(q("clarification-topic").value, 500);
   if (!topic) { setClarificationLaunchError("Add the thing you want to learn first."); return; }
+  const topicStartedPerf = performance.now();
   if (typeof releaseClarificationTopicCapture === "function") releaseClarificationTopicCapture();
   const state = labState.clarification;
   state.runId = makeId();
@@ -10421,11 +10886,12 @@ async function startClarification(mode) {
     setClarificationMicStatus();
   }
 
-  const modelPromise = runClarificationModel();
+  const modelTimingId = beginMockTurnTiming({ stage:"clarification", inputMode:mode, originKind:"topic-start", originPerf:topicStartedPerf });
+  const modelPromise = runClarificationModel(modelTimingId);
   await Promise.allSettled([modelPromise, microphonePromise]);
 }
 
-async function submitClarificationReply(text) {
+async function submitClarificationReply(text, { timingId = "", inputMode = "", originPerf = null } = {}) {
   const state = labState.clarification;
   releaseClarificationTopicCapture();
   const reply = clip(text, 1200);
@@ -10469,7 +10935,13 @@ async function submitClarificationReply(text) {
     if (labState.pipelineMode === "mock") await maybeAutoAdvanceMockClarification("explicit_learner_readiness");
     return;
   }
-  await runClarificationModel();
+  const activeTimingId = timingId || beginMockTurnTiming({
+    stage:"clarification",
+    inputMode:inputMode || state.mode,
+    originKind:inputMode === "voice" ? "ptt-release" : "send",
+    originPerf:originPerf ?? performance.now(),
+  });
+  await runClarificationModel(activeTimingId);
 }
 
 async function transcribeClarificationRecording(blob, operationId = "", captureContext = null) {
@@ -10507,7 +10979,7 @@ async function transcribeClarificationRecording(blob, operationId = "", captureC
         state.retainedCaptureContext = null;
         state.transcriptionToken = "";
         setClarificationBusy(false);
-        await submitClarificationReply(transcript);
+        await submitClarificationReply(transcript, { inputMode:"voice", originPerf:lineage.turnStartedAt });
         return true;
       } catch (error) {
         if (!lineageIsCurrent()) return false;
@@ -10592,17 +11064,13 @@ function startClarificationRecording(event, options = {}) {
         setMockCarStatus("idle", "Hold a little longer");
         return;
       }
-      if (!chunks.length) {
+      const blob = labRecorderBlob(recorder, chunks);
+      if (!blob || blob.size < 128) {
         setMessage("clarification-message", "The phone returned no microphone audio, so its route was reset. Hold again to reconnect.", "error");
         setMockCarStatus("paused", "I didn’t hear that. Hold again.", "empty-audio");
         return;
       }
-      const blob = new Blob(chunks, { type: recorder.mimeType || chunks[0]?.type || "audio/webm" });
-      if (blob.size < 128) {
-        setMessage("clarification-message", "The phone returned no microphone audio, so its route was reset. Hold again to reconnect.", "error");
-        setMockCarStatus("paused", "I didn’t hear that. Hold again.", "tiny-audio");
-        return;
-      }
+      captureContext.turnStartedAt = Number(recorder.wvReleasedAt) || performance.now();
       setMockCarStatus("transcribing", "Transcribing");
       try {
         await transcribeClarificationRecording(blob, makeId(), captureContext);
