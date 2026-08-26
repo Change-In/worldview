@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=150">
+<link rel="stylesheet" href="./lab.css?v=151">
 </head>
 <body>
 
@@ -44,6 +44,20 @@
     </div>
     <div id="pipeline-mock-progress" class="pipeline-mock-progress" hidden aria-label="Mock run progress"><span>Mock run</span><strong id="pipeline-mock-stage">1 · Clarification</strong><button id="pipeline-mock-new" class="text-button" type="button">New mock run</button><button id="pipeline-mock-exit" class="text-button" type="button">Back to controls</button></div>
     <button id="pipeline-learner-exit" class="pipeline-learner-exit" type="button" hidden aria-label="Exit Mock Run and return to Lab controls" title="Return to Lab controls. Your durable run stays saved.">Exit Mock Run</button>
+    <section id="mock-car-surface" class="mock-car-surface" hidden role="dialog" aria-modal="true" aria-label="Low-distraction voice controls">
+      <div class="mock-car-toolbar" role="group" aria-label="Conversation display">
+        <button id="mock-car-text" class="mock-car-toolbar-button" type="button" aria-label="Leave Car mode and switch to Text"><span aria-hidden="true">Aa</span></button>
+        <button id="mock-car-exit" class="mock-car-toolbar-button is-active" type="button" aria-label="Leave Car mode and keep Voice" aria-pressed="true">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16h14l-1.2-5.1a2 2 0 0 0-1.9-1.5H8.1a2 2 0 0 0-1.9 1.5L5 16Z"/><path d="M7.5 16v2M16.5 16v2M3.8 13.5h2.1M18.1 13.5h2.1"/><circle cx="8" cy="14.2" r=".7"/><circle cx="16" cy="14.2" r=".7"/></svg>
+        </button>
+      </div>
+      <p id="mock-car-status" class="mock-car-status" role="status" aria-live="polite">Hold to talk</p>
+      <button id="mock-car-ptt" class="mock-car-ptt" type="button" aria-label="Hold to talk">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M8.5 21h7"/></svg>
+      </button>
+      <button id="mock-car-replay" class="button button-quiet mock-car-replay" type="button" hidden>Hear reply</button>
+      <p class="mock-car-safety">Set this mode before driving. Keep your attention on the road and follow local hands-free laws.</p>
+    </section>
     <aside id="mock-run-config" class="mock-run-config" hidden aria-label="Mock run setup and live work">
       <div class="mock-run-config-head"><div><p class="eyebrow">This mock run</p><h3>Models &amp; spend</h3></div><div class="mock-run-config-actions"><span id="mock-run-total-cost">Estimate unavailable</span><button id="mock-run-config-toggle" class="text-button" type="button" aria-expanded="true">Minimize</button></div></div>
       <div id="mock-run-config-body" class="mock-run-config-body">
@@ -81,6 +95,9 @@
             <button id="clarification-mode-toggle" class="clarification-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3.5 19c.9-3.3 3-5 5.5-5s4.6 1.7 5.5 5M16 8.5c1.8.5 3 2.1 3 4s-1.2 3.5-3 4"/><path d="M18.5 6c2.4 1.4 3.8 3.8 3.8 6.5S20.9 17.6 18.5 19"/></svg>
             </button>
+            <button id="clarification-car-mode" class="mock-car-entry" type="button" hidden aria-label="Enter Car mode" aria-pressed="false" title="Low-distraction Voice">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16h14l-1.2-5.1a2 2 0 0 0-1.9-1.5H8.1a2 2 0 0 0-1.9 1.5L5 16Z"/><path d="M7.5 16v2M16.5 16v2M3.8 13.5h2.1M18.1 13.5h2.1"/><circle cx="8" cy="14.2" r=".7"/><circle cx="16" cy="14.2" r=".7"/></svg>
+            </button>
             <button id="clarification-focus-toggle" class="clarification-focus-toggle" type="button" aria-pressed="false">Full screen</button>
           </div>
         </div>
@@ -89,7 +106,13 @@
           <div class="clarification-home-copy"><p class="eyebrow">Start a lesson</p><h3>What do you want to understand?</h3><p>Enter a topic, then follow the same clarification path a learner will see.</p></div>
           <div id="clarification-note-row" class="clarification-note-row" hidden><label for="clarification-note">Start from one of your Notes</label><select id="clarification-note"><option value="">Type a topic instead</option></select></div>
           <label for="clarification-topic">What do you want to learn?</label>
-          <textarea id="clarification-topic" rows="3" maxlength="500" placeholder="Ramen&#10;How vaccines train the immune system&#10;Why cities develop where they do"></textarea>
+          <div class="clarification-topic-field">
+            <textarea id="clarification-topic" rows="3" maxlength="500" placeholder="Ramen&#10;How vaccines train the immune system&#10;Why cities develop where they do"></textarea>
+            <button id="clarification-topic-mic" class="clarification-topic-mic" type="button" aria-label="Record lesson topic" aria-pressed="false" title="Tap to record your topic">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M8.5 21h7"/></svg>
+            </button>
+          </div>
+          <p id="clarification-topic-mic-status" class="clarification-topic-mic-status" role="status" aria-live="polite"></p>
           <button id="clarification-start" class="clarification-start" type="button">Start lesson</button>
           <p class="privacy-note">Use a synthetic topic while testing. The model conversation and its exact packet are retained in the owner-only Lab job history.</p>
           <div id="clarification-mode-step" class="clarification-mode-step" hidden>
@@ -266,7 +289,7 @@
       </div>
       <section id="pipeline-extraction-stage" class="lab-card pipeline-extraction-stage" hidden>
         <div class="extraction-stage-head">
-          <div class="extraction-stage-title"><button id="pipeline-extraction-mode-toggle" class="extraction-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">Voice</button><div><p class="eyebrow">Feynman overview · Extraction phase</p><h3>Worldview</h3></div></div>
+          <div class="extraction-stage-title"><div class="conversation-mode-actions"><button id="pipeline-extraction-mode-toggle" class="extraction-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">Voice</button><button id="pipeline-extraction-car-mode" class="mock-car-entry" type="button" hidden aria-label="Enter Car mode" aria-pressed="false" title="Low-distraction Voice"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16h14l-1.2-5.1a2 2 0 0 0-1.9-1.5H8.1a2 2 0 0 0-1.9 1.5L5 16Z"/><path d="M7.5 16v2M16.5 16v2M3.8 13.5h2.1M18.1 13.5h2.1"/><circle cx="8" cy="14.2" r=".7"/><circle cx="16" cy="14.2" r=".7"/></svg></button></div><div><p class="eyebrow">Feynman overview · Extraction phase</p><h3>Worldview</h3></div></div>
           <div class="extraction-stage-actions"><button id="pipeline-extraction-retry" class="button button-quiet" type="button" title="Start a fresh test conversation. Save an attempt later if you want Lesson to use it.">Retry Extraction</button><button id="pipeline-extraction-demo-map-ready" class="extraction-demo-toggle" type="button" aria-pressed="false">Demo: map ready</button><span class="extraction-authority">not progress</span></div>
         </div>
         <button id="pipeline-extraction-progress" class="extraction-progress" type="button" aria-controls="pipeline-extraction-map-dialog" aria-expanded="false" aria-haspopup="dialog"><span class="extraction-progress-dot" aria-hidden="true"></span><span class="extraction-progress-copy" aria-live="polite"><strong id="pipeline-extraction-progress-title">Preparing your Lesson Map</strong><small id="pipeline-extraction-progress-detail">The route will keep generating in the background while you explain what you know.</small></span><span id="pipeline-extraction-progress-action" class="extraction-progress-action">View status</span></button>
@@ -300,7 +323,7 @@
         </section>
       </section>
       <section id="pipeline-lesson-stage" class="lab-card pipeline-extraction-stage pipeline-lesson-stage" hidden>
-        <div class="pipeline-card-head lesson-stage-head"><div class="lesson-stage-title"><button id="pipeline-lesson-mode-toggle" class="extraction-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">Voice</button><div><p class="eyebrow">Guided conversation · Lesson phase</p><h3>Worldview</h3></div></div><span class="extraction-authority">Lab only</span></div>
+        <div class="pipeline-card-head lesson-stage-head"><div class="lesson-stage-title"><div class="conversation-mode-actions"><button id="pipeline-lesson-mode-toggle" class="extraction-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">Voice</button><button id="pipeline-lesson-car-mode" class="mock-car-entry" type="button" hidden aria-label="Enter Car mode" aria-pressed="false" title="Low-distraction Voice"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16h14l-1.2-5.1a2 2 0 0 0-1.9-1.5H8.1a2 2 0 0 0-1.9 1.5L5 16Z"/><path d="M7.5 16v2M16.5 16v2M3.8 13.5h2.1M18.1 13.5h2.1"/><circle cx="8" cy="14.2" r=".7"/><circle cx="16" cy="14.2" r=".7"/></svg></button></div><div><p class="eyebrow">Guided conversation · Lesson phase</p><h3>Worldview</h3></div></div><span class="extraction-authority">Lab only</span></div>
         <p class="pipeline-lesson-intro">Choose a completed saved roadmap, then reason through one learning outcome at a time. This text experiment is question-led; it does not create progress or mastery.</p>
         <p id="pipeline-lesson-output" class="form-message" role="status"></p>
         <section id="pipeline-lesson-conversation" class="lesson-conversation" hidden>
@@ -317,7 +340,7 @@
         <div class="inline-actions"><button id="pipeline-lesson-start" class="button button-primary" type="button">To Start</button><button id="pipeline-lesson-open-map" class="button button-quiet" type="button">Choose roadmap</button><button id="pipeline-lesson-open-extraction" class="button button-quiet" type="button">Review Extraction input</button></div>
       </section>
       <section id="pipeline-quiz-stage" class="lab-card pipeline-extraction-stage pipeline-quiz-stage" hidden>
-        <div class="pipeline-card-head quiz-stage-head"><div class="quiz-stage-title lesson-stage-title"><button id="pipeline-quiz-mode-toggle" class="extraction-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">Voice</button><div><p class="eyebrow">Final understanding · Quiz phase</p><h3>Worldview</h3></div></div><span class="extraction-authority">teach-back</span></div>
+        <div class="pipeline-card-head quiz-stage-head"><div class="quiz-stage-title lesson-stage-title"><div class="conversation-mode-actions"><button id="pipeline-quiz-mode-toggle" class="extraction-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">Voice</button><button id="pipeline-quiz-car-mode" class="mock-car-entry" type="button" hidden aria-label="Enter Car mode" aria-pressed="false" title="Low-distraction Voice"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16h14l-1.2-5.1a2 2 0 0 0-1.9-1.5H8.1a2 2 0 0 0-1.9 1.5L5 16Z"/><path d="M7.5 16v2M16.5 16v2M3.8 13.5h2.1M18.1 13.5h2.1"/><circle cx="8" cy="14.2" r=".7"/><circle cx="16" cy="14.2" r=".7"/></svg></button></div><div><p class="eyebrow">Final understanding · Quiz phase</p><h3>Worldview</h3></div></div><span class="extraction-authority">teach-back</span></div>
         <p class="pipeline-lesson-intro">Explain the lesson in your own words. Worldview may ask up to two neutral follow-ups, using the frozen Lesson Map as the checklist.</p>
         <p id="pipeline-quiz-output" class="form-message" role="status"></p>
         <section id="pipeline-quiz-conversation" class="lesson-conversation quiz-conversation">
@@ -576,8 +599,7 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=150" defer></script>
+<script src="./lab.js?v=151" defer></script>
 </body>
 </html>
-
 
