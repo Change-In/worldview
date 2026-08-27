@@ -2051,11 +2051,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v158 · Aug 26";
+const BUILD = "v159 · Aug 26";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v159", date: "Aug 26", changes: [
+    "Extraction now recognizes spoken move-on requests, avoids repeating a topic the learner just covered, and never invites the Lesson before its Map is ready.",
+    "Lesson Maps now plan first, research each chapter in bounded durable jobs, assemble through fixed validation, and recover slow or expired work instead of remaining stuck on Building."
+  ]},
   { tag: "v158", date: "Aug 26", changes: [
     "Reworked the Mock Run top bar: the exit control is now a compact top-left arrow, while the Voice and Car controls stay aligned on the right across every learner phase."
   ]},
