@@ -1358,3 +1358,89 @@ body.mock-run.quiz-learner-active #panel-pipeline {
   body.clarification-focus .clarification-surface { min-height:0; }
 }
 
+
+
+/* v158 Mock Run learner header: one consistent, quiet top bar across the rehearsal. */
+body.mock-run .pipeline-learner-exit,
+body.mock-run.clarification-focus .pipeline-learner-exit,
+body.mock-run.extraction-learner-active .pipeline-learner-exit,
+body.mock-run.lesson-learner-active .pipeline-learner-exit,
+body.mock-run.quiz-learner-active .pipeline-learner-exit {
+  top:max(12px,env(safe-area-inset-top));
+  right:auto;
+  left:12px;
+  display:grid;
+  width:40px;
+  height:40px;
+  min-height:40px;
+  padding:0;
+  place-items:center;
+  border:0;
+  border-radius:50%;
+  color:#f2e6d0;
+  background:transparent;
+  box-shadow:none;
+  font:500 25px/1 system-ui,sans-serif;
+}
+body.mock-run .pipeline-learner-exit:hover,
+body.mock-run .pipeline-learner-exit:focus-visible,
+body.mock-run.clarification-focus .pipeline-learner-exit:hover,
+body.mock-run.clarification-focus .pipeline-learner-exit:focus-visible,
+body.mock-run.extraction-learner-active .pipeline-learner-exit:hover,
+body.mock-run.extraction-learner-active .pipeline-learner-exit:focus-visible,
+body.mock-run.lesson-learner-active .pipeline-learner-exit:hover,
+body.mock-run.lesson-learner-active .pipeline-learner-exit:focus-visible,
+body.mock-run.quiz-learner-active .pipeline-learner-exit:hover,
+body.mock-run.quiz-learner-active .pipeline-learner-exit:focus-visible {
+  border-color:transparent;
+  outline:2px solid rgba(255,209,155,.28);
+  outline-offset:2px;
+}
+/* Clarification already has its own full-screen arrow. Keep one arrow in the
+   header while the voice and Car controls move to the opposite side. */
+body.mock-run.clarification-focus .pipeline-learner-exit { display:none!important; }
+body.mock-run.clarification-focus .clarification-card-actions {
+  right:12px;
+  left:12px;
+  justify-content:flex-end;
+}
+body.mock-run.clarification-focus .clarification-card-actions .clarification-focus-toggle {
+  position:absolute;
+  top:50%;
+  left:0;
+  display:grid;
+  width:40px;
+  height:40px;
+  min-height:40px;
+  padding:0;
+  place-items:center;
+  border:0;
+  border-radius:50%;
+  color:#f2e6d0;
+  background:transparent;
+  font:500 25px/1 system-ui,sans-serif;
+  transform:translateY(-50%);
+}
+/* Extraction, Lesson, and Quiz use the same right-aligned mode controls. */
+body.mock-run.extraction-learner-active .extraction-stage-title .conversation-mode-actions,
+body.mock-run.lesson-learner-active .lesson-stage-title .conversation-mode-actions,
+body.mock-run.quiz-learner-active .quiz-stage-title .conversation-mode-actions {
+  position:absolute;
+  top:50%;
+  right:12px;
+  left:auto;
+  display:flex;
+  align-items:center;
+  gap:5px;
+  transform:translateY(-50%);
+}
+body.mock-run.extraction-learner-active .extraction-stage-title .conversation-mode-actions > button,
+body.mock-run.lesson-learner-active .lesson-stage-title .conversation-mode-actions > button,
+body.mock-run.quiz-learner-active .quiz-stage-title .conversation-mode-actions > button {
+  position:static!important;
+  top:auto!important;
+  right:auto!important;
+  bottom:auto!important;
+  left:auto!important;
+  transform:none!important;
+}
