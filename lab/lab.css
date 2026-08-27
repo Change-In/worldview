@@ -1378,7 +1378,7 @@ body.mock-run.quiz-learner-active .pipeline-learner-exit {
   border:0;
   border-radius:50%;
   color:#f2e6d0;
-  background:transparent;
+  background:rgba(255,255,255,.035);
   box-shadow:none;
   font:500 25px/1 system-ui,sans-serif;
 }
@@ -1417,7 +1417,7 @@ body.mock-run.clarification-focus .clarification-card-actions .clarification-foc
   border:0;
   border-radius:50%;
   color:#f2e6d0;
-  background:transparent;
+  background:rgba(255,255,255,.035);
   font:500 25px/1 system-ui,sans-serif;
   transform:translateY(-50%);
 }
