@@ -1241,7 +1241,7 @@ const LATENCY_COMPONENT_LABELS = {
   "mock-quiz": "Mock · Final Quiz",
 };
 
-const CLARIFICATION_PROMPT_VERSION = "clarification-conversation-v16";
+const CLARIFICATION_PROMPT_VERSION = "clarification-conversation-v17";
 const CLARIFICATION_CONTINUITY_GUARD = `Worldview runtime continuity rule (fixed): respond to the latest User message and use the whole conversation as working memory. Never repeat, paraphrase, or recycle an earlier Worldview question. Do not ask for a preference the User has already stated, and never solicit a missing time preference. If the latest message is a repair bid such as “what,” “wym,” “huh,” or “I don’t understand,” briefly explain what your previous question meant in ordinary language, then ask one simpler concrete question. If the User says the direction is settled, set ready_to_finish to true; do not reopen the scope or ask what else they want to explore. Preserve the editable prompt\'s role and response style.`;
 const CLARIFICATION_PROMPT = `You guide Phase One of Worldview, a voice-first learning tool. Help the User turn a general topic into a clear Lesson direction. This phase discovers what the User wants to understand; it does not teach the topic.
 
@@ -1252,6 +1252,8 @@ On later turns, respond to the latest answer and ask one new question that makes
 Notice only planning preferences the User states explicitly: available time, breadth, depth, or emphasis. A statement such as “about thirty minutes,” “make this very short,” “keep it introductory,” “go deeper,” or “focus on the engineering” is a soft planning preference for the lesson map, not an exact duration promise or evidence of mastery. Never ask for a missing planning preference. If the User already said short, brief, quick, or gave a duration, retain it and do not ask about time again.
 
 Treat short conversational repair bids naturally. “What,” “wym,” “huh,” “what do you mean,” and similar replies mean the User did not understand your previous wording; they are not answers to the scope question and not permission to switch to a scripted readiness check. Briefly restate what you meant in simpler language, using the specific topic and context already shared, then ask one easier question.
+
+The first learner reply to your opening question is context, not completion. After that first ordinary reply, always ask at least one substantive question that clarifies what the User wants to understand and set ready_to_finish to false. The only exception is when that latest reply itself explicitly asks to begin, continue, or move on to the lesson.
 
 Set ready_to_finish to false while an important scope choice remains unresolved. Set it to true when the User explicitly says the direction is settled or broad, or when the conversation has gathered enough specific scope to build a useful map without another open-ended question. Once ready, do not ask what else they want to explore; use one short confirmation question and let fixed application code own the transition.
 
@@ -1274,7 +1276,7 @@ Return only valid JSON with this shape:
 }
 
 JSON only; no markdown fences or commentary.`;
-const CLARIFICATION_PREVIOUS_BUILTIN_FINGERPRINTS = new Set(["fnv1a-19120e07", "fnv1a-d5d8b508", "fnv1a-192c3133", "fnv1a-acc1c5ef", "fnv1a-d420c1c2", "fnv1a-7cdb0b4d", "fnv1a-54d4cbbc", "fnv1a-7ccd5bd2"]);
+const CLARIFICATION_PREVIOUS_BUILTIN_FINGERPRINTS = new Set(["fnv1a-19120e07", "fnv1a-d5d8b508", "fnv1a-192c3133", "fnv1a-acc1c5ef", "fnv1a-d420c1c2", "fnv1a-7cdb0b4d", "fnv1a-54d4cbbc", "fnv1a-7ccd5bd2", "fnv1a-ffbb342e"]);
 const CLARIFICATION_LOCAL_KEY = "worldview-lab-clarification-v1";
 
 function normalizeClarificationPreferences(value) {
@@ -1356,6 +1358,12 @@ function clarificationRepairQuestion(topic = "") {
   return `I meant: what about ${label} matters most to you right now?`;
 }
 
+function clarificationGroundedFollowup(topic = "", learnerReply = "") {
+  const detail = clip(String(learnerReply || "").replace(/\s+/g, " ").trim().replace(/[.!?]+$/, ""), 120);
+  if (detail) return `You mentioned ${detail}. What about that would you most like to understand?`;
+  return `What about ${clarificationTopicLabel(topic, 86)} would you most like to understand?`;
+}
+
 function clarificationLearnerFinishIntent(value, turns = []) {
   const text = String(value || "").toLowerCase().replace(/[’]/g, "'").trim();
   if (!text || /\b(?:not ready|don't continue|do not continue|keep clarifying|more to add)\b/.test(text)) return false;
@@ -1378,8 +1386,18 @@ function clarificationApplyTurnPolicy(output, state = labState.clarification) {
       : clarificationRepairQuestion(state?.topic);
     return { ...output, assistant_message:assistantMessage, scope_preferences:scopePreferences, ready_to_finish:false };
   }
-  const usableScope = Number(state?.learnerReplyCount || 0) >= 1 && Boolean(output?.scope_summary || output?.scope_items?.length);
-  const wantsToFinish = Boolean(output?.ready_to_finish || clarificationLearnerFinishIntent(latestLearner, state?.turns || []));
+  const learnerExplicitlyFinished = clarificationLearnerFinishIntent(latestLearner, state?.turns || []);
+  const learnerReplyCount = Number(state?.learnerReplyCount || 0);
+  if (learnerReplyCount === 1 && output?.ready_to_finish === true && !learnerExplicitlyFinished) {
+    return {
+      ...output,
+      assistant_message:clarificationGroundedFollowup(state?.topic, latestLearner),
+      scope_preferences:scopePreferences,
+      ready_to_finish:false,
+    };
+  }
+  const usableScope = learnerReplyCount >= 1 && Boolean(output?.scope_summary || output?.scope_items?.length);
+  const wantsToFinish = learnerExplicitlyFinished || (learnerReplyCount >= 2 && output?.ready_to_finish === true);
   if (usableScope && wantsToFinish) {
     return {
       ...output,
@@ -12061,7 +12079,7 @@ async function runClarificationModel(timingId = "") {
       metadata: {
         promptFingerprint: provenance.fingerprint, promptCoreFingerprint: fingerprint(CLARIFICATION_PROMPT),
         inputFingerprint: fingerprint(JSON.stringify(packet.messages)), promptVersionId: CLARIFICATION_PROMPT_VERSION,
-        promptVersionName: "Clarification conversation v15", promptSource: provenance.source, responseContract: CONVERSATION_RESPONSE_CONTRACT, replicate: 1, inputLabel: `Clarification turn ${state.learnerReplyCount + 1}`,
+        promptVersionName: "Clarification conversation v17", promptSource: provenance.source, responseContract: CONVERSATION_RESPONSE_CONTRACT, replicate: 1, inputLabel: `Clarification turn ${state.learnerReplyCount + 1}`,
         source: `lesson pipeline ${state.runId}`, promptEdited: packet.editableSystem !== CLARIFICATION_PROMPT, checks: [],
       },
     }],

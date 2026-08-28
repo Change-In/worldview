@@ -2051,11 +2051,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v160 · Aug 27";
+const BUILD = "v161 · Aug 27";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v161", date: "Aug 27", changes: [
+    "Kept the first ordinary Clarification answer in the conversation, even when the model prematurely marks the direction ready; only your explicit move-on request can skip the next scope question."
+  ]},
   { tag: "v160", date: "Aug 27", changes: [
     "Made the Model Lab homepage scroll smoothly and kept each Mock Run selected in Lab controls with its durable prompt, packet, output, and job evidence ready for review.",
     "Removed scripted Clarification repair and time-question loops: short lessons stay short, confused replies are rephrased naturally, and repeated model questions end the phase without another paid repair turn."
