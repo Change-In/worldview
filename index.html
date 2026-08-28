@@ -2051,11 +2051,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v165 · Aug 28";
+const BUILD = "v166 · Aug 28";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v166", date: "Aug 28", changes: [
+    "Clarification now treats the agreed 80-word reply length as guidance across the whole phase, so a complete model response is shown instead of being mislabeled as a provider failure when its natural wording misses a style target."
+  ]},
   { tag: "v165", date: "Aug 28", changes: [
     "Fixed blank Clarification turns caused by the backend rejecting natural 46–80-word model questions, and added a top-right Play button to Mock Run setup."
   ]},
