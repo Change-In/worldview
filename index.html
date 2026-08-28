@@ -2051,11 +2051,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v164 · Aug 28";
+const BUILD = "v165 · Aug 28";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v165", date: "Aug 28", changes: [
+    "Fixed blank Clarification turns caused by the backend rejecting natural 46–80-word model questions, and added a top-right Play button to Mock Run setup."
+  ]},
   { tag: "v164", date: "Aug 28", changes: [
     "Added a no-spend Mock Run setup screen with the exact Phase One prompt, remembered optional opening/final scripts, model controls, and saved-run continuation before entering the learner view.",
     "Clarification now gathers lesson length naturally when it is still missing, retains qualitative answers such as very short or short, and records every Mock Run’s frozen prompt and experiment settings."

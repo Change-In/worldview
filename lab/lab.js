@@ -1273,6 +1273,8 @@ There is no question quota or fixed interview length. Ask only questions that ma
 
 Every assistant_message is one natural, concise paragraph ending in one clear question. Avoid lists, headings, markdown, greetings, praise, filler, and canned recaps.
 
+Before returning the JSON, verify that assistant_message contains exactly one question mark and literally ends with that question mark. This is an internal delivery requirement, not a visible writing template.
+
 Return only valid JSON with this shape:
 {
   "assistant_message": "the short question spoken and shown to the User",
@@ -2255,7 +2257,6 @@ function openMockSetup() {
   renderPipelineMode();
   renderMockSetup();
   persistClarificationSettings();
-  q("mock-setup-title")?.scrollIntoView?.({ block:"start", behavior:"smooth" });
 }
 
 function launchNewMockRun() {
@@ -13308,7 +13309,7 @@ function bindEvents() {
   for (const eventName of ["pointerup", "pointercancel", "lostpointercapture"]) q("mock-car-ptt")?.addEventListener(eventName, stopMockCarRecording);
   q("mock-run-config-toggle")?.addEventListener("click", () => setMockRunConfigCollapsed(!labState.mockRunConfigCollapsed));
   q("mock-run-reset-all")?.addEventListener("click", () => resetMockRunConfig("all"));
-  q("mock-setup-launch")?.addEventListener("click", launchNewMockRun);
+  for (const id of ["mock-setup-launch", "mock-setup-launch-top"]) q(id)?.addEventListener("click", launchNewMockRun);
   q("mock-boundary-reset")?.addEventListener("click", resetMockBoundaryConfig);
   for (const id of ["mock-script-opening", "mock-script-final", "mock-script-opening-copy", "mock-script-final-copy"]) {
     q(id)?.addEventListener("change", () => {

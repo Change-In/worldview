@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=164">
+<link rel="stylesheet" href="./lab.css?v=165">
 </head>
 <body>
 
@@ -46,7 +46,12 @@
     <section id="mock-setup-screen" class="mock-setup-screen" hidden aria-labelledby="mock-setup-title">
       <div class="mock-setup-heading">
         <div><p class="eyebrow">Mock Run setup</p><h2 id="mock-setup-title">Choose what this rehearsal will use</h2></div>
-        <p>No model is called until you open the learner view and begin a conversation.</p>
+        <div class="mock-setup-heading-actions">
+          <p>No model is called until you open the learner view and begin a conversation.</p>
+          <button id="mock-setup-launch-top" class="mock-setup-play" type="button" aria-label="Open new Mock Run" title="Open new Mock Run">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5 18 12 8 18.5Z"/></svg>
+          </button>
+        </div>
       </div>
       <div class="mock-setup-grid">
         <article class="mock-setup-card mock-setup-prompt-card">
@@ -635,7 +640,7 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=164" defer></script>
+<script src="./lab.js?v=165" defer></script>
 </body>
 </html>
 
