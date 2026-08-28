@@ -126,7 +126,7 @@ const LAB_WORKSPACE_SCHEMA = 4;
 const LAB_OUTPUT_TOKEN_MIN = 64;
 const LAB_OUTPUT_TOKEN_SERVER_MAX = 65536;
 const CONVERSATION_RESPONSE_CONTRACT = "digestible_complete_question_v2";
-const CLARIFICATION_RESPONSE_CONTRACT = "clarification_structured_reply_v3";
+const CLARIFICATION_RESPONSE_CONTRACT = "clarification_reply_v4";
 const CLARIFICATION_REPLY_WORD_TARGET = 80;
 const DIGESTIBLE_VOICE_TURN_RULE = `A learner-facing turn must be digestible for someone driving or walking: no more than 45 words, one short paragraph, and exactly one clear question. Do not use bullets, numbered choices, headings, markdown, greetings, praise, filler, repeated recap, internal labels, or more than one question.`;
 const RECOVERABLE_CONVERSATION_FAILURES = new Set(["provider_empty", "provider_truncated", "provider_incomplete", "provider_unusable"]);
@@ -526,6 +526,7 @@ const labState = {
   mockResumeHistory: [],
   mockClarificationHistory: [],
   pendingClarificationResume: null,
+  newRunDraftActive: false,
   mockResumeToken: "",
   artifactRefreshToken: "",
   resumeRestoring: false,
@@ -1020,6 +1021,7 @@ function resetWorkspaceContents() {
   labState.pipelineStage = "clarification";
   labState.pendingMockResume = null;
   labState.pendingClarificationResume = null;
+  labState.newRunDraftActive = false;
   labState.resumeRestoring = false;
   labState.pipelineSelectedRunId = "";
   labState.pipelineSelectedMapJobId = "";
@@ -3330,6 +3332,12 @@ function conversationFailureType(sample) {
 
 function recoverableConversationFailure(sample) {
   return sample?.status === "failed" && RECOVERABLE_CONVERSATION_FAILURES.has(conversationFailureType(sample));
+}
+
+function clarificationFormatOnlyProviderFailure(sample, raw) {
+  return sample?.status === "failed"
+    && conversationFailureType(sample) === "provider_unusable"
+    && Boolean(String(raw || "").trim());
 }
 
 function completeConversationQuestion(value) {
@@ -10666,6 +10674,7 @@ function persistClarificationSettings({ deviceDraft = null, globalDefault = null
     pipelineSelectedRunId: labState.pipelineSelectedRunId,
     pipelineSelectedMapJobId: labState.pipelineSelectedMapJobId,
     pipelineSelectedMapRecordId: labState.pipelineSelectedMapRecordId,
+    newRunDraftActive: labState.newRunDraftActive,
     activeClarification: liveClarificationResume,
     mockClarificationHistory:labState.mockClarificationHistory,
     mockResume: labState.pendingMockResume || liveMockResume,
@@ -11536,6 +11545,8 @@ function clearPipelineConversationComposers() {
 function startNewPipelineRun(seed = "") {
   labState.resumeRestoring = false;
   labState.pendingMockResume = null;
+  labState.pendingClarificationResume = null;
+  labState.newRunDraftActive = true;
   labState.mockResumeToken = makeId();
   labState.artifactRefreshToken = makeId();
   labState.mockCar.active = false;
@@ -11593,6 +11604,7 @@ function startNewPipelineRun(seed = "") {
 
 function restoreClarificationArtifact(artifact, storage = "device") {
   if (!artifact || typeof artifact !== "object" || !artifact.scopeSummary) return;
+  labState.newRunDraftActive = false;
   labState.clarification.finalized = artifact;
   labState.clarification.finalizedStorage = storage;
   labState.clarification.topic = artifact.topic || "";
@@ -11618,6 +11630,7 @@ function restoreClarificationArtifact(artifact, storage = "device") {
 function restoreActiveClarificationResume(value) {
   const resume = sanitizeActiveClarificationResume(value);
   if (!resume) return false;
+  labState.newRunDraftActive = false;
   resetClarificationRun(resume.topic);
   const state = labState.clarification;
   labState.pipelineMode = resume.pipelineMode;
@@ -11737,24 +11750,23 @@ async function applyResumedClarificationJob(job) {
       return true;
     }
     const sample = detail.samples?.[0];
+    const raw = attemptResultText(null, sample);
     const recoverableProviderFailure = recoverableConversationFailure(sample);
-    if (!sample || (sample.status !== "completed" && !recoverableProviderFailure)) {
+    const formatOnlyProviderFailure = clarificationFormatOnlyProviderFailure(sample, raw);
+    if (!sample || (sample.status !== "completed" && !formatOnlyProviderFailure)) {
       const terminal = new Error(sample?.error?.message || "The saved clarification model turn did not complete.");
       terminal.type = "clarification_terminal";
       throw terminal;
     }
-    const raw = attemptResultText(null, sample);
-    if (recoverableProviderFailure || !String(raw).trim()) {
+    if ((recoverableProviderFailure && !formatOnlyProviderFailure) || !String(raw).trim()) {
       const unusable = new Error("The model returned no usable Clarification reply. Retry when you are ready.");
       unusable.type = "clarification_unusable_output";
       throw unusable;
     }
-    const parsed = parseClarificationOutput(raw, firstTurn, state.topic);
-    if (clarificationOutputIsRepeated(parsed, state.turns)) {
-      const repeated = new Error("The model repeated an earlier Clarification question. Retry when you are ready.");
-      repeated.type = "clarification_unusable_output";
-      throw repeated;
-    }
+    const parsed = clarificationAnnotateRepeat(
+      parseClarificationOutput(raw, firstTurn, state.topic, state.latest, state.turns),
+      state.turns,
+    );
     const output = clarificationApplyTurnPolicy(parsed, state);
     state.latestJobId = job.id;
     state.pendingJobId = "";
@@ -11767,7 +11779,9 @@ async function applyResumedClarificationJob(job) {
     state.runError = "";
     renderClarificationOutput(output, raw, detail, packet, Number(sample.result?.ms || sample.ms || 0));
     setMessage("clarification-message", "The saved turn finished and was restored without duplicating the learner reply.", "ok");
-    setMessage("clarification-backend-message", "Reconnected to the exact durable job by run and turn. No provider request was duplicated.", "ok");
+    setMessage("clarification-backend-message", formatOnlyProviderFailure
+      ? "Recovered the model's complete dialogue from a format-only failure. No provider request was duplicated and plain text supplied no phase-transition authority."
+      : "Reconnected to the exact durable job by run and turn. No provider request was duplicated.", "ok");
     persistClarificationSettings();
     return true;
   } finally {
@@ -11829,11 +11843,11 @@ async function reconcileActiveClarificationResume() {
 }
 
 async function refreshClarificationArtifacts() {
-  if (labState.clarification.runId) return;
+  if (labState.clarification.runId || labState.newRunDraftActive) return;
   if (labState.preview) { renderPipelineArtifactSelect(); return; }
   const refreshToken = makeId();
   labState.artifactRefreshToken = refreshToken;
-  const refreshIsCurrent = () => labState.artifactRefreshToken === refreshToken && !labState.clarification.runId;
+  const refreshIsCurrent = () => labState.artifactRefreshToken === refreshToken && !labState.clarification.runId && !labState.newRunDraftActive;
   try {
     const payload = await labJobsFetch({ action:"list_artifacts" });
     if (!refreshIsCurrent()) return;
@@ -11857,11 +11871,14 @@ async function refreshClarificationArtifacts() {
 
 function initializeClarification() {
   const saved = savedClarificationSettings();
-  const activeResume = sanitizeActiveClarificationResume(saved.activeClarification);
+  labState.newRunDraftActive = saved.newRunDraftActive === true;
+  const savedActiveResume = sanitizeActiveClarificationResume(saved.activeClarification);
+  const activeResume = labState.newRunDraftActive ? null : savedActiveResume;
   labState.pendingClarificationResume = activeResume;
   labState.pendingMockResume = activeResume ? null : sanitizeMockResume(saved.mockResume);
+  if (labState.newRunDraftActive) labState.pendingMockResume = null;
   labState.mockResumeHistory = mergeMockResumeHistory(saved.mockResumeHistory, labState.pendingMockResume);
-  labState.mockClarificationHistory = mergeMockClarificationHistory(saved.mockClarificationHistory, activeResume?.pipelineMode === "mock" ? activeResume : null);
+  labState.mockClarificationHistory = mergeMockClarificationHistory(saved.mockClarificationHistory, savedActiveResume?.pipelineMode === "mock" ? savedActiveResume : null);
   const deviceDraft = clarificationDeviceDraft(saved) || (saved.prompt ? clarificationConfig(saved) : null);
   const savedPrompt = clip(deviceDraft?.prompt, 18000);
   const previousBuiltIn = savedPrompt && CLARIFICATION_PREVIOUS_BUILTIN_FINGERPRINTS.has(fingerprint(savedPrompt));
@@ -11884,7 +11901,7 @@ function initializeClarification() {
       if (labState.clarification.focusMode) setClarificationFocus(false);
     }
   }
-  else if (saved.finalized) restoreClarificationArtifact(saved.finalized, saved.finalizedStorage || "device");
+  else if (saved.finalized && !labState.newRunDraftActive) restoreClarificationArtifact(saved.finalized, saved.finalizedStorage || "device");
   const extractionResume = saved.extractionResume && typeof saved.extractionResume === "object" ? saved.extractionResume : null;
   if (extractionResume && clip(extractionResume.runId, 120) === labState.pipelineSelectedRunId) {
     labState.extraction.activeAttempt = Math.max(0, Number(extractionResume.activeAttempt || 0) || 0);
@@ -12108,9 +12125,18 @@ function clarificationUnusableOutput(message) {
   return error;
 }
 
-function parseClarificationOutput(raw, firstTurn, topic = "") {
+function clarificationFallbackScopeItems(previous, turns = []) {
+  const items = (Array.isArray(previous?.scope_items) ? previous.scope_items : [])
+    .map((item) => clip(item, 180)).filter(Boolean).slice(0, 11);
+  const latestLearner = [...(Array.isArray(turns) ? turns : [])].reverse()
+    .find((turn) => turn?.role === "user" && !/^The learner entered this topic:/i.test(String(turn.content || "")))?.content || "";
+  const latestItem = clip(latestLearner, 180);
+  if (latestItem && !items.some((item) => clarificationReplyKey(item) === clarificationReplyKey(latestItem))) items.push(latestItem);
+  return items.slice(0, 12);
+}
+
+function parseClarificationOutput(raw, firstTurn, topic = "", previous = null, turns = []) {
   void firstTurn;
-  void topic;
   const clean = String(raw || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   if (!clean) throw clarificationUnusableOutput("The model returned an empty reply. Retry when you are ready.");
 
@@ -12121,26 +12147,29 @@ function parseClarificationOutput(raw, firstTurn, topic = "") {
     if (!candidate || value) continue;
     try { value = JSON.parse(candidate); } catch (_) { /* validated below */ }
   }
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw clarificationUnusableOutput("The model returned malformed Clarification data. Retry when you are ready.");
+  const plainTextRecovery = !value && objectStart < 0 && objectEnd < 0;
+  if (!plainTextRecovery && (!value || typeof value !== "object" || Array.isArray(value))) throw clarificationUnusableOutput("The model returned malformed Clarification data. Retry when you are ready.");
 
-  const sourceMessage = String(value.assistant_message || "").trim();
+  const sourceMessage = String(plainTextRecovery ? clean : value.assistant_message || "").trim();
   const normalizedMessage = normalizeLearnerFacingMessage(sourceMessage);
   const assistantMessage = normalizedMessage.text;
   if (!assistantMessage) throw clarificationUnusableOutput("The model returned no readable Clarification message. Retry when you are ready.");
   const deliveryReview = clarificationDeliveryReview(sourceMessage, { ...normalizedMessage, text:assistantMessage });
-  const scopeSummary = clip(value.scope_summary, 700)
+  const scopeSummary = clip(value?.scope_summary, 700)
+    || clip(previous?.scope_summary, 700)
     || `The learner is clarifying the lesson they want about ${clarificationTopicLabel(topic, 160)}.`;
-  const scopeItems = Array.isArray(value.scope_items)
+  const scopeItems = Array.isArray(value?.scope_items)
     ? value.scope_items.map((item) => clip(item, 180)).filter(Boolean).slice(0, 12)
-    : [];
-  const scopePreferences = normalizeClarificationPreferences(value.scope_preferences);
+    : clarificationFallbackScopeItems(previous, turns);
+  const scopePreferences = normalizeClarificationPreferences(value?.scope_preferences || previous?.scope_preferences);
   if (!scopeSummary) throw clarificationUnusableOutput("The model returned no usable Clarification scope. Retry when you are ready.");
   return {
     assistant_message: assistantMessage,
     scope_summary: scopeSummary,
     scope_items: scopeItems,
     scope_preferences: scopePreferences,
-    ready_to_finish:value.ready_to_finish === true,
+    ready_to_finish:!plainTextRecovery && value.ready_to_finish === true,
+    response_format:plainTextRecovery ? "plain_text_recovery" : "structured_json",
     delivery_review:deliveryReview,
   };
 }
@@ -12159,22 +12188,14 @@ function clarificationRepliesRepeat(left, right) {
   const rightKey = clarificationReplyKey(right);
   if (!leftKey || !rightKey) return false;
   if (leftKey === rightKey) return true;
-  const scopeIntent = (value) => {
-    const asksChoice = /\b(?:which|what)\b[\s\S]{0,75}\b(?:aspect|area|angle|direction|part|piece|side|topic|thread|focus|emphasis)\b/i.test(value)
-      || /\b(?:draws|pulls|catches|interests)\b[\s\S]{0,45}\b(?:attention|interest|you)\b/i.test(value);
-    return asksChoice ? "choose-scope" : "";
-  };
-  const leftIntent = scopeIntent(left);
-  const rightIntent = scopeIntent(right);
-  if (leftIntent && leftIntent === rightIntent) return true;
   const leftTokens = clarificationReplyMeaningTokens(leftKey);
   const rightTokens = clarificationReplyMeaningTokens(rightKey);
   const smaller = Math.min(leftTokens.size, rightTokens.size);
-  if (smaller < 3) return false;
+  if (smaller < 5) return false;
   let shared = 0;
   for (const token of leftTokens) if (rightTokens.has(token)) shared += 1;
   const union = leftTokens.size + rightTokens.size - shared;
-  return shared / smaller >= 0.8 && shared / Math.max(1, union) >= 0.55;
+  return shared / smaller >= 0.92 && shared / Math.max(1, union) >= 0.82;
 }
 
 function clarificationOutputIsRepeated(output, turns) {
@@ -12185,6 +12206,16 @@ function clarificationOutputIsRepeated(output, turns) {
     .map((turn) => turn.content)
     .filter(Boolean);
   return previous.some((reply) => clarificationRepliesRepeat(current, reply));
+}
+
+function clarificationAnnotateRepeat(output, turns) {
+  return {
+    ...output,
+    delivery_review: {
+      ...(output?.delivery_review || {}),
+      repeated_prior_question: clarificationOutputIsRepeated(output, turns),
+    },
+  };
 }
 
 function clarificationLearnerSettled(value) {
@@ -12417,31 +12448,27 @@ async function runClarificationModel(timingId = "") {
     syncJobDetail(detail);
     if (!runIsCurrent()) return;
     const sample = detail.samples?.[0];
+    const raw = attemptResultText(null, sample);
     const recoverableProviderFailure = recoverableConversationFailure(sample);
-    if (!sample || (sample.status !== "completed" && !recoverableProviderFailure)) {
+    const formatOnlyProviderFailure = clarificationFormatOnlyProviderFailure(sample, raw);
+    if (!sample || (sample.status !== "completed" && !formatOnlyProviderFailure)) {
       const terminal = new Error(sample?.error?.message || "The clarification model turn did not complete.");
       terminal.type = "clarification_terminal";
       throw terminal;
     }
-    const raw = attemptResultText(null, sample);
-    const providerReturnedUnsafeReply = recoverableProviderFailure || !String(raw).trim();
+    const providerReturnedUnsafeReply = (recoverableProviderFailure && !formatOnlyProviderFailure) || !String(raw).trim();
     const providerFailureType = conversationFailureType(sample);
     if (providerReturnedUnsafeReply) {
       const unusable = new Error(`The model returned no usable Clarification reply${providerFailureType ? ` (${providerFailureType})` : ""}. Retry when you are ready.`);
       unusable.type = "clarification_unusable_output";
       throw unusable;
     }
-    const providerOutput = parseClarificationOutput(raw, firstTurn, state.topic);
+    const providerOutput = parseClarificationOutput(raw, firstTurn, state.topic, state.latest, state.turns);
     const scriptedFinal = labState.pipelineMode === "mock" && labState.mockBoundaryActive?.scriptFinal && providerOutput.ready_to_finish;
     const parsed = scriptedFinal
       ? { ...providerOutput, assistant_message:mockScriptedCopy("final", state.topic), scripted_boundary:"final" }
       : providerOutput;
-    if (clarificationOutputIsRepeated(parsed, state.turns)) {
-      const repeated = new Error("The model repeated an earlier Clarification question. Retry when you are ready.");
-      repeated.type = "clarification_unusable_output";
-      throw repeated;
-    }
-    const output = clarificationApplyTurnPolicy(parsed, state);
+    const output = clarificationApplyTurnPolicy(clarificationAnnotateRepeat(parsed, state.turns), state);
     // Keep the next model turn as ordinary dialogue rather than replaying the
     // prior turn's structured validation envelope.
     state.turns.push({ role: "assistant", content: output.assistant_message });
@@ -12463,7 +12490,9 @@ async function runClarificationModel(timingId = "") {
     state.runError = "";
     persistClarificationSettings();
     setMessage("clarification-message", "");
-    setMessage("clarification-backend-message", scriptedFinal
+    setMessage("clarification-backend-message", formatOnlyProviderFailure
+      ? "The model returned complete dialogue without its JSON wrapper. Worldview preserved the exact wording, carried prior scope forward, and granted it no phase-transition authority."
+      : scriptedFinal
       ? "The model marked the direction ready; the enabled Mock Run script supplied only the final confirmation question. The raw model reply remains saved below."
       : "Run completed. The prompt, exact request, raw reply, and validated model output below all belong to this learner turn.", "ok");
     if (willSpeak) {
@@ -12537,6 +12566,7 @@ async function startClarification(mode) {
       return;
     }
   }
+  labState.newRunDraftActive = false;
   setMessage("clarification-backend-message", "");
   q("clarification-backend-topic").value = topic;
   q("clarification-setup").hidden = true;

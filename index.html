@@ -2051,11 +2051,20 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v166 · Aug 28";
+const BUILD = "v169 · Aug 28";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v169", date: "Aug 28", changes: [
+    "Clarification now shows every complete model reply instead of discarding it when the app's repetition detector objects; suspected repetition remains visible only in developer diagnostics."
+  ]},
+  { tag: "v168", date: "Aug 28", changes: [
+    "Clarification now preserves a model's complete plain-text reply when a provider omits the requested JSON wrapper, while carrying prior scope forward and keeping phase transitions under explicit learner control."
+  ]},
+  { tag: "v167", date: "Aug 28", changes: [
+    "A new Mock Run now permanently owns its blank topic screen until you start it or deliberately choose a saved run, so delayed server sync and reloads cannot replace it with an earlier lesson."
+  ]},
   { tag: "v166", date: "Aug 28", changes: [
     "Clarification now treats the agreed 80-word reply length as guidance across the whole phase, so a complete model response is shown instead of being mislabeled as a provider failure when its natural wording misses a style target."
   ]},
