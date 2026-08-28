@@ -2051,11 +2051,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v162 · Aug 27";
+const BUILD = "v163 · Aug 27";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v163", date: "Aug 27", changes: [
+    "Returned Clarification dialogue entirely to the selected model: openings are flexible style-guided questions, follow-ups infer what you already meant, and the final add-or-change invitation is model-written. The webpage now only validates, remembers, and obeys your explicit move-on confirmation."
+  ]},
   { tag: "v162", date: "Aug 27", changes: [
     "Restored the stronger topic-aware Clarification opening, added an explicit anything-else confirmation before Extraction, fixed Lesson Maps that failed before starting, and stopped Extraction from repeating questions or exposing internal planning labels."
   ]},
