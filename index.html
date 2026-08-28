@@ -2051,11 +2051,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v163 · Aug 27";
+const BUILD = "v164 · Aug 28";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v164", date: "Aug 28", changes: [
+    "Added a no-spend Mock Run setup screen with the exact Phase One prompt, remembered optional opening/final scripts, model controls, and saved-run continuation before entering the learner view.",
+    "Clarification now gathers lesson length naturally when it is still missing, retains qualitative answers such as very short or short, and records every Mock Run’s frozen prompt and experiment settings."
+  ]},
   { tag: "v163", date: "Aug 27", changes: [
     "Returned Clarification dialogue entirely to the selected model: openings are flexible style-guided questions, follow-ups infer what you already meant, and the final add-or-change invitation is model-written. The webpage now only validates, remembers, and obeys your explicit move-on confirmation."
   ]},

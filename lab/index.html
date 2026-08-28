@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=163">
+<link rel="stylesheet" href="./lab.css?v=164">
 </head>
 <body>
 
@@ -43,6 +43,41 @@
       <p id="pipeline-mode-note" class="pipeline-mode-note">Inspect or run one phase at a time.</p>
     </div>
     <div id="pipeline-mock-progress" class="pipeline-mock-progress" hidden aria-label="Mock run progress"><span>Mock run</span><strong id="pipeline-mock-stage">1 · Clarification</strong><button id="pipeline-mock-new" class="text-button" type="button">New mock run</button><button id="pipeline-mock-history" class="text-button" type="button">Past mock runs</button><button id="pipeline-mock-exit" class="text-button" type="button">Back to controls</button></div>
+    <section id="mock-setup-screen" class="mock-setup-screen" hidden aria-labelledby="mock-setup-title">
+      <div class="mock-setup-heading">
+        <div><p class="eyebrow">Mock Run setup</p><h2 id="mock-setup-title">Choose what this rehearsal will use</h2></div>
+        <p>No model is called until you open the learner view and begin a conversation.</p>
+      </div>
+      <div class="mock-setup-grid">
+        <article class="mock-setup-card mock-setup-prompt-card">
+          <div class="mock-setup-card-head"><div><p class="eyebrow">Phase One</p><h3>Clarification prompt</h3></div><span id="mock-setup-prompt-source" class="mock-setup-source">Built in</span></div>
+          <p>This is the exact editable prompt shared with the Clarification controls. Edits below apply only to the next run unless you deliberately make them the shared default.</p>
+          <label for="mock-setup-prompt">Prompt used by this run</label>
+          <textarea id="mock-setup-prompt" class="packet-editor" rows="18" maxlength="18000" spellcheck="false"></textarea>
+          <div class="inline-actions"><button id="mock-setup-prompt-reset" class="button button-quiet" type="button">Restore active default</button><button id="mock-setup-prompt-shared" class="button button-quiet" type="button">Set as Phase One default</button></div>
+          <p id="mock-setup-prompt-message" class="form-message" role="status"></p>
+        </article>
+        <div class="mock-setup-side">
+          <article class="mock-setup-card">
+            <div class="mock-setup-card-head"><div><p class="eyebrow">Experiment controls</p><h3>Optional scripted checkpoints</h3></div><button id="mock-boundary-reset" class="text-button" type="button">Reset</button></div>
+            <p>Both are off by default, so the selected LLM writes the full conversation. Turn either one on only when you want to compare a fixed boundary against the model-led version.</p>
+            <label class="mock-boundary-toggle" for="mock-script-opening"><input id="mock-script-opening" type="checkbox"><span><strong>Script the opening</strong><small>Skip the first model call and show this exact first question.</small></span></label>
+            <label for="mock-script-opening-copy">Opening copy</label>
+            <textarea id="mock-script-opening-copy" rows="3" maxlength="500" spellcheck="true"></textarea>
+            <label class="mock-boundary-toggle" for="mock-script-final"><input id="mock-script-final" type="checkbox"><span><strong>Script the final confirmation</strong><small>When the model says it has enough direction, replace only that final question.</small></span></label>
+            <label for="mock-script-final-copy">Final copy</label>
+            <textarea id="mock-script-final-copy" rows="2" maxlength="500" spellcheck="true"></textarea>
+            <p id="mock-boundary-message" class="form-message" role="status"></p>
+          </article>
+          <article class="mock-setup-card">
+            <p class="eyebrow">Saved work</p><h3>Previous mock runs</h3>
+            <p>Continue an unfinished run from its last durable phase, or reopen a completed Clarification scope and continue toward its Lesson Map.</p>
+            <div id="mock-previous-runs" class="mock-previous-runs"><p class="mock-empty">No saved Mock Runs yet.</p></div>
+          </article>
+          <button id="mock-setup-launch" class="button button-primary mock-setup-launch" type="button">Open new Mock Run</button>
+        </div>
+      </div>
+    </section>
     <button id="pipeline-learner-exit" class="pipeline-learner-exit" type="button" hidden aria-label="Exit Mock Run and return to Lab controls" title="Return to Lab controls. Your durable run stays saved.">←</button>
     <section id="mock-car-surface" class="mock-car-surface" hidden role="dialog" aria-modal="true" aria-label="Low-distraction voice controls">
       <div class="mock-car-toolbar" role="group" aria-label="Conversation display">
@@ -600,7 +635,7 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=163" defer></script>
+<script src="./lab.js?v=164" defer></script>
 </body>
 </html>
 
