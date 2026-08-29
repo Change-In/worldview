@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=171">
+<link rel="stylesheet" href="./lab.css?v=172">
 </head>
 <body>
 
@@ -84,6 +84,37 @@
       </div>
     </section>
     <button id="pipeline-learner-exit" class="pipeline-learner-exit" type="button" hidden aria-label="Exit Mock Run and return to Lab controls" title="Return to Lab controls. Your durable run stays saved.">←</button>
+    <section id="mock-learner-shell" class="mock-learner-shell" hidden aria-label="Worldview lesson conversation">
+      <header id="mock-learner-header" class="mock-learner-header">
+        <button id="mock-learner-back" class="mock-learner-back" type="button" aria-label="Leave this mock run" title="Return to Lab controls">←</button>
+        <h2>Worldview</h2>
+        <div class="mock-learner-header-actions">
+          <button id="mock-learner-mode" class="mock-learner-tool" type="button" aria-label="Switch to Voice" title="Switch conversation mode">Voice</button>
+          <button id="mock-learner-car" class="mock-learner-tool mock-car-entry" type="button" aria-label="Enter Car mode" title="Low-distraction Voice">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16h14l-1.2-5.1a2 2 0 0 0-1.9-1.5H8.1a2 2 0 0 0-1.9 1.5L5 16Z"/><path d="M7.5 16v2M16.5 16v2M3.8 13.5h2.1M18.1 13.5h2.1"/><circle cx="8" cy="14.2" r=".7"/><circle cx="16" cy="14.2" r=".7"/></svg>
+          </button>
+        </div>
+      </header>
+      <div id="mock-learner-progress" class="mock-learner-progress" hidden aria-label="Lesson chapters"></div>
+      <main class="mock-learner-conversation">
+        <ol id="mock-learner-transcript" class="mock-learner-transcript" aria-live="polite"></ol>
+        <div id="mock-learner-waiting" class="mock-learner-waiting" hidden aria-hidden="true"><span></span><span></span><span></span></div>
+      </main>
+      <p id="mock-learner-status" class="mock-learner-status" role="status" aria-live="polite"></p>
+      <footer id="mock-learner-composer" class="mock-learner-composer">
+        <div id="mock-learner-text-controls" class="mock-learner-text-controls">
+          <label class="sr-only" for="mock-learner-reply">Your message</label>
+          <textarea id="mock-learner-reply" rows="2" maxlength="2400" placeholder="What do you think?"></textarea>
+          <button id="mock-learner-send" class="mock-learner-send" type="button" aria-label="Send message">Send</button>
+        </div>
+        <div id="mock-learner-voice-controls" class="mock-learner-voice-controls" hidden>
+          <p>Hold, wait for the tone, then talk.</p>
+          <button id="mock-learner-ptt" class="mock-learner-ptt" type="button">Hold to talk</button>
+          <button id="mock-learner-hear" class="text-button" type="button" hidden>Hear reply</button>
+        </div>
+        <button id="mock-learner-retry" class="text-button mock-learner-retry" type="button" hidden>Try again</button>
+      </footer>
+    </section>
     <section id="mock-car-surface" class="mock-car-surface" hidden role="dialog" aria-modal="true" aria-label="Low-distraction voice controls">
       <div class="mock-car-toolbar" role="group" aria-label="Conversation display">
         <button id="mock-car-text" class="mock-car-toolbar-button" type="button" aria-label="Leave Car mode and switch to Text"><span aria-hidden="true">Aa</span></button>
@@ -120,14 +151,14 @@
       <li><button type="button" data-pipeline-stage="quiz" aria-pressed="false"><span>5</span><b>Quiz</b><small>final understanding</small></button></li>
     </ol>
 
-    <div class="clarification-workspace-bar" data-pipeline-stage-panel="clarification">
+    <div class="clarification-workspace-bar" data-pipeline-stage-panel="clarification" data-mock-legacy-phase>
       <div class="clarification-view-switch" role="tablist" aria-label="Clarification Lab view">
         <button id="clarification-view-learner" class="clarification-view-option is-active" type="button" role="tab" aria-selected="true" aria-controls="clarification-learner-panel">Learner view</button>
         <button id="clarification-view-backend" class="clarification-view-option" type="button" role="tab" aria-selected="false" aria-controls="clarification-backend-panel">Backend view</button>
       </div>
     </div>
 
-    <div class="pipeline-stage-grid clarification-workspace" data-pipeline-stage-panel="clarification">
+    <div class="pipeline-stage-grid clarification-workspace" data-pipeline-stage-panel="clarification" data-mock-legacy-phase>
       <section id="clarification-learner-panel" class="lab-card pipeline-experience" role="tabpanel" aria-labelledby="clarification-view-learner">
         <div class="pipeline-card-head">
           <div class="clarification-screen-title"><p class="eyebrow">Clarification phase</p><h3 id="clarification-experience-title">Worldview</h3></div>
@@ -260,7 +291,7 @@
       </section>
     </div>
 
-    <section id="pipeline-connected-stage" class="pipeline-connected-stage" data-pipeline-stage-panel="connected" hidden>
+    <section id="pipeline-connected-stage" class="pipeline-connected-stage" data-pipeline-stage-panel="connected" data-mock-legacy-phase hidden>
       <section class="lab-card pipeline-source-card" aria-label="Selected lesson run">
         <p id="pipeline-source-message" class="form-message" role="status"></p>
         <div id="pipeline-source-preview" class="pipeline-source-preview" hidden>
@@ -640,7 +671,7 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=171" defer></script>
+<script src="./lab.js?v=172" defer></script>
 </body>
 </html>
 

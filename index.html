@@ -2051,11 +2051,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v171 · Aug 29";
+const BUILD = "v172 · Aug 29";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v172", date: "Aug 29", changes: [
+    "Mock Run now stays inside one continuous Worldview conversation while the Lesson Map appears progressively: a valid route is no longer rejected for a small duration mismatch, the first researched chapter can start the Lesson while later chapters finish, and only model-written Extraction dialogue can offer the handoff."
+  ]},
   { tag: "v171", date: "Aug 29", changes: [
     "Clarification now lets the model own every conversational turn and the decision to offer or commit the handoff, while the app only validates that sequence; unusable replies automatically try up to two different backup models before showing a retry message."
   ]},
