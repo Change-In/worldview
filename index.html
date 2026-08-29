@@ -2051,11 +2051,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v169 · Aug 28";
+const BUILD = "v170 · Aug 28";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v170", date: "Aug 28", changes: [
+    "Clarification now asks the next short question without repeating the learner's accumulated choices; recap is reserved for the final confirmation, whose visible wording can now complete the handoff to Extraction while the Lesson Map starts in the background."
+  ]},
   { tag: "v169", date: "Aug 28", changes: [
     "Clarification now shows every complete model reply instead of discarding it when the app's repetition detector objects; suspected repetition remains visible only in developer diagnostics."
   ]},
