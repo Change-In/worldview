@@ -2051,11 +2051,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v172 · Aug 29";
+const BUILD = "v173 · Aug 29";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v173", date: "Aug 29", changes: [
+    "Lesson Map generation now uses provider-enforced structured output, failed Maps expose progress with Retry inside that view, and Extraction keeps every learner message while spacing lesson offers and supporting researched additions to the existing route."
+  ]},
   { tag: "v172", date: "Aug 29", changes: [
     "Mock Run now stays inside one continuous Worldview conversation while the Lesson Map appears progressively: a valid route is no longer rejected for a small duration mismatch, the first researched chapter can start the Lesson while later chapters finish, and only model-written Extraction dialogue can offer the handoff."
   ]},

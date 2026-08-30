@@ -1553,6 +1553,8 @@ body.mock-learner-shell-active #mock-learner-shell { display:flex!important; }
 .mock-learner-ptt { width:100%; min-height:54px; border:1px solid rgba(120,229,192,.28); border-radius:14px; color:#f5eee2; background:#20201e; font-weight:800; }
 .mock-learner-ptt.is-listening { color:#15241f; background:#78e5c0; }
 .mock-learner-retry { display:block; margin:8px auto 0; color:#f2a8ad; }
+.mock-learner-map-progress { display:block; margin:8px auto 0; color:#78e5c0; }
+.mock-learner-map-progress.is-error { color:#f2a8ad; }
 
 @media (max-width:560px) {
   .mock-learner-header { min-height:62px; padding-inline:62px; }
