@@ -2051,11 +2051,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v174 · Aug 30";
+const BUILD = "v175 · Aug 30";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v175", date: "Aug 30", changes: [
+    "A complete Lesson Map can now open the Tutor even when source research needs attention, Extraction retries only the failed reply instead of restarting, follow-ups stay with your reasoning before returning to breadth, and Voice and Car controls remain available in the continuous conversation."
+  ]},
   { tag: "v174", date: "Aug 30", changes: [
     "Mock Run now carries the model's validated handoff action into the next turn, starts Lesson Map work with a valid protected prompt, preserves Extraction while research completes, and enforces structured replies through Clarification, Extraction, Tutor, and Quiz."
   ]},
