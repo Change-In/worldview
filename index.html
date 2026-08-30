@@ -2051,11 +2051,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v175 · Aug 30";
+const BUILD = "v176 · Aug 30";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v176", date: "Aug 30", changes: [
+    "Extraction now hands off to the Tutor without a page-freezing render storm, Lesson Map failures get one exact-scope automatic fallback, and the model can mention or commit the Lesson only when that run's route and broad overview are actually ready."
+  ]},
   { tag: "v175", date: "Aug 30", changes: [
     "A complete Lesson Map can now open the Tutor even when source research needs attention, Extraction retries only the failed reply instead of restarting, follow-ups stay with your reasoning before returning to breadth, and Voice and Car controls remain available in the continuous conversation."
   ]},
