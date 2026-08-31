@@ -2051,11 +2051,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v177 · Aug 30";
+const BUILD = "v179 · Aug 30";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v179", date: "Aug 30", changes: [
+    "Lesson Map research now covers outcomes in smaller requests; retry fills missing support without rebuilding the route or losing completed research.",
+    "Extraction recovers the existing reply with its saved context, including older stuck retries. Inspector errors no longer hide delivered conversation updates.",
+    "Voice and Car add a tap-to-record switch beside Hold to talk. A small Sources panel lets you inspect lesson references without interrupting the conversation."
+  ]},
   { tag: "v177", date: "Aug 30", changes: [
     "Mock Run: failed Tutor replies now show a working retry in the conversation instead of a hidden error or an invented fallback question.",
     "Retry keeps the exact lesson request and prior conversation. Sending cannot silently discard your message while the next question is unavailable."
