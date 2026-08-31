@@ -3258,6 +3258,7 @@ function conversationCreateSlot(request) {
     scenario.extractionAttempt, scenario.extractionTurn, scenario.extractionPass,
     scenario.retryOfExtractionJobId, scenario.extractionRecoveryAttempt,
     scenario.lessonTurn, scenario.lessonAction, scenario.outcomeId, scenario.sourceTutorJobId,
+    scenario.retryOfLessonJobId, scenario.lessonRecoveryAttempt,
   ]));
 }
 
@@ -7659,8 +7660,10 @@ function pipelineLessonJobs(selection = selectedPipelineMapRecord()) {
     && job.scenario?.pipelineStage === "lesson"
     && job.scenario?.pipelineRunId === selection.artifact.runId
     && job.scenario?.sourceMapJobId === selection.job.id
+    && job.scenario?.sourceMapRecordId === selection.recordKey
     && job.scenario?.sourceMapFingerprint === selection.fingerprint)
     .sort((a, b) => Number(a.scenario?.lessonTurn || 0) - Number(b.scenario?.lessonTurn || 0)
+      || Number(a.scenario?.lessonRecoveryAttempt || 0) - Number(b.scenario?.lessonRecoveryAttempt || 0)
       || (Date.parse(a.createdAt) || 0) - (Date.parse(b.createdAt) || 0));
 }
 
@@ -7706,33 +7709,17 @@ function durablePairedTurnCompleted(job, samples = []) {
 function parsePipelineLessonOutput(detail) {
   const sample = pipelineLessonDetailSample(detail, "talker");
   const raw = attemptResultText(null, sample).trim();
-  const action = String(detail?.job?.scenario?.lessonAction || "");
-  const stayFallback = action === "reply"
-    ? "What makes you think that, and what example would test it?"
-    : "How would you explain this idea in your own words?";
-  const advanceFallback = detail?.job?.scenario?.hasNextOutcome
-    ? "How would you begin explaining the next idea in your own words?"
-    : "";
-  const localRecovery = () => ({
-    raw,
-    output:{ assistantMessage:stayFallback, advanceMessage:advanceFallback, format:"local-complete-recovery" },
-    sample,
-  });
-  if (recoverableConversationFailure(sample)) return localRecovery();
-  if (!raw) {
-    if (sample?.status === "completed" || (detail?.job && !LAB_ACTIVE_JOB_STATES.has(detail.job.status))) return localRecovery();
-    return { raw:"", output:null, sample };
-  }
+  // Missing or unusable provider output is a recoverable failed turn, not
+  // permission for the webpage to manufacture a Tutor question.
+  if (!raw || !durableSampleCompleted(sample)) return { raw, output:null, sample };
   const unfenced = raw.replace(/^\`\`\`(?:json)?\s*/i, "").replace(/\s*\`\`\`$/i, "");
   const first = unfenced.indexOf("{");
   const last = unfenced.lastIndexOf("}");
   for (const candidate of [unfenced, first >= 0 && last > first ? unfenced.slice(first, last + 1) : ""]) {
     try {
       const value = JSON.parse(candidate);
-      const assistantMessage = digestibleLearnerQuestion(
-        value?.assistant_message ?? value?.assistantMessage,
-        stayFallback,
-      );
+      const assistantMessage = digestibleLearnerQuestionOrEmpty(value?.assistant_message ?? value?.assistantMessage);
+      if (!assistantMessage) continue;
       const rawAdvance = String(value?.advance_message ?? value?.advanceMessage ?? "").trim();
       const advanceMessage = rawAdvance ? digestibleLearnerQuestionOrEmpty(rawAdvance) : "";
       return { raw, output:{ assistantMessage, advanceMessage, format:"structured" }, sample };
@@ -7741,7 +7728,7 @@ function parsePipelineLessonOutput(detail) {
   const plainText = unfenced.replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim();
   const assistantMessage = /^\{/.test(plainText) ? "" : digestibleLearnerQuestionOrEmpty(plainText);
   if (assistantMessage) return { raw, output:{ assistantMessage, advanceMessage:"", format:"plain-text-fallback" }, sample };
-  return localRecovery();
+  return { raw, output:null, sample };
 }
 
 function parsePipelineLessonEvaluation(detail) {
@@ -7799,6 +7786,7 @@ function lessonEvaluatorPrompt() { return clip(q("pipeline-lesson-evaluator-prom
 function pipelineLessonTranscript(selection = selectedPipelineMapRecord()) {
   const outcomes = pipelineLessonOutcomes(selection);
   const transcript = [];
+  const learnerTurns = new Set();
   for (const job of pipelineLessonJobs(selection)) {
     const detail = labState.jobDetails.get(job.id);
     const sample = pipelineLessonDetailSample(detail, "talker");
@@ -7807,7 +7795,11 @@ function pipelineLessonTranscript(selection = selectedPipelineMapRecord()) {
       const messages = Array.isArray(sample?.request?.messages) ? sample.request.messages : [];
       const message = [...messages].reverse().find((item) => item?.role === "user" && /^The learner's message:\s*/i.test(String(item.content || "")));
       const content = lessonLearnerReplyText(message?.content || "");
-      if (content) transcript.push({ role:"user", content, outcomeIndex:learnerOutcomeIndex });
+      const learnerTurnKey = job.scenario?.lessonRetryRootJobId || job.id;
+      if (content && !learnerTurns.has(learnerTurnKey)) {
+        transcript.push({ role:"user", content, outcomeIndex:learnerOutcomeIndex });
+        learnerTurns.add(learnerTurnKey);
+      }
     }
     const record = pipelineLessonTurnRecord(detail, outcomes);
     if (record.output?.assistantMessage) transcript.push({ role:"assistant", content:record.output.assistantMessage, outcomeIndex:record.outcomeIndex });
@@ -7979,6 +7971,7 @@ async function createPipelineLessonTurn(action, answer = "", targetOutcomeIndex 
   setMessage("pipeline-lesson-output", "Saving your message and waiting for Worldview’s question…");
   let failureMessage = "";
   try {
+    renderMockLearnerShell();
     const created = await boundedLabConversationCreate(request);
     if (!created?.job?.id) throw new Error("The server did not return a saved Lesson job.");
     bindMockTurnTimingJob(timingId, created.job);
@@ -8013,6 +8006,92 @@ function startPipelineLesson() {
   setPipelineStage("lesson");
   if (!pipelineLessonJobs(selection).length) void createPipelineLessonTurn("opening");
   else renderPipelineLesson();
+}
+
+function pipelineLessonConversationState(selection = selectedPipelineMapRecord()) {
+  if (!pipelineMapSelectionIsUsable(selection)) return { state:"unavailable" };
+  const latest = pipelineLessonJobs(selection).at(-1);
+  if (!latest) return { state:"opening" };
+  const detail = labState.jobDetails.get(latest.id);
+  if (LAB_ACTIVE_JOB_STATES.has(latest.status)) return { state:"working", latest, detail };
+  if (!detail) return { state:"loading", latest };
+  const record = pipelineLessonTurnRecord(detail, pipelineLessonOutcomes(selection));
+  return { state:record.output ? "ready" : "failed", latest, detail, record };
+}
+
+function retryablePipelineLessonTurn(selection = selectedPipelineMapRecord()) {
+  const state = pipelineLessonConversationState(selection);
+  const scenario = state.latest?.scenario || {};
+  if (state.state !== "failed" || scenario.pipelineRunId !== selection?.artifact?.runId
+    || scenario.sourceMapJobId !== selection?.job?.id || scenario.sourceMapRecordId !== selection?.recordKey
+    || scenario.sourceMapFingerprint !== selection?.fingerprint) return null;
+  const samples = state.detail?.samples;
+  if (!Array.isArray(samples) || !samples.length || samples.length > 2 || samples.some((sample) => {
+    const request = sample?.request;
+    return !sample?.provider || !sample?.model || !request || typeof request.system !== "string"
+      || !request.system.trim() || !Array.isArray(request.messages) || !request.messages.length
+      || request.messages.some((message) => !["user", "assistant"].includes(message?.role) || typeof message.content !== "string")
+      || !Number.isFinite(request.maxTokens) || request.maxTokens <= 0;
+  })) return null;
+  return { ...state, samples };
+}
+
+async function retryLatestPipelineLessonTurn() {
+  const selection = selectedPipelineMapRecord();
+  const failed = retryablePipelineLessonTurn(selection);
+  if (!failed || labState.pipelineStage !== "lesson" || labState.lessonBusy || labState.preview
+    || !labState.verifiedUserId || labState.workspaceOwnerId !== labState.verifiedUserId
+    || pendingPipelineConversationCreate("lesson", selection.artifact, selection)) return false;
+  const { latest, samples } = failed;
+  const lineage = pipelineConversationLineage("lesson");
+  const retryNumber = Number(latest.scenario.lessonRecoveryAttempt || 0) + 1;
+  const rootJobId = latest.scenario.lessonRetryRootJobId || latest.id;
+  // Only explicit Retry creates another provider attempt. Replay every saved
+  // sample exactly, including the first Tutor packet / paired Brain contract;
+  // never regenerate a smaller opening or restart Extraction.
+  const request = {
+    action:"create",
+    idempotencyKey:conversationRequestKey("lesson-turn-retry", {
+      runId:selection.artifact.runId, mapJobId:selection.job.id, mapRecordId:selection.recordKey,
+      mapFingerprint:selection.fingerprint, failedJobId:latest.id, retryNumber,
+    }),
+    component:"lesson",
+    name:`Retry guided Lesson reply · ${clip(selection.map.lessonTitle || selection.artifact.topic, 100)}`,
+    scenario:{ ...latest.scenario, retryOfLessonJobId:latest.id, lessonRetryRootJobId:rootJobId, lessonRecoveryAttempt:retryNumber },
+    samples:samples.map((sample, index) => ({
+      ...JSON.parse(JSON.stringify(sample.request)),
+      clientSampleId:`${latest.id}:lesson-retry:${retryNumber}:${index}`,
+      provider:sample.provider,
+      model:sample.model,
+      metadata:{ ...JSON.parse(JSON.stringify(sample.metadata || {})), retryOfLessonJobId:latest.id, lessonRecoveryAttempt:retryNumber },
+    })),
+  };
+  const retryToken = makeId();
+  labState.lessonTurnToken = retryToken;
+  labState.lessonBusy = true;
+  renderMockLearnerShell();
+  try {
+    const created = await boundedLabConversationCreate(request);
+    if (!created?.job?.id) throw new Error("The server did not return a saved Lesson retry job.");
+    if (labState.lessonTurnToken !== retryToken || !pipelineConversationLineageIsCurrent(lineage)) return false;
+    upsertJob(created.job);
+    labState.lessonOpeningFailureKey = "";
+    labState.lessonOpeningFailureMessage = "";
+    scheduleJobPoll();
+    return true;
+  } catch (error) {
+    if (labState.lessonTurnToken === retryToken && pipelineConversationLineageIsCurrent(lineage)) {
+      setMessage("pipeline-lesson-output", `The saved Lesson reply could not be retried: ${clip(error.message, 150)}`, "error");
+    }
+    return false;
+  } finally {
+    if (labState.lessonTurnToken === retryToken) {
+      const current = pipelineConversationLineageIsCurrent(lineage);
+      labState.lessonTurnToken = "";
+      labState.lessonBusy = false;
+      if (current) { renderPipelineLesson(); renderMockLearnerShell(); }
+    }
+  }
 }
 
 function openPipelineExtractionForSelectedMap() {
@@ -8068,8 +8147,8 @@ async function submitPipelineLessonReply(value = q("pipeline-lesson-reply")?.val
   const outcomes = pipelineLessonOutcomes(selection);
   const latestDetail = latest && labState.jobDetails.get(latest.id);
   const latestRecord = latestDetail && pipelineLessonTurnRecord(latestDetail, outcomes);
-  if (!answer) { setMessage("pipeline-lesson-output", "Write a message before sending it.", "error"); return; }
-  if (!latest || !latestRecord?.output) { setMessage("pipeline-lesson-output", "Wait for Worldview’s current question and Brain check before replying.", "error"); return; }
+  if (!answer) { setMessage("pipeline-lesson-output", "Write a message before sending it.", "error"); return false; }
+  if (labState.lessonBusy || !latest || LAB_ACTIVE_JOB_STATES.has(latest.status) || !latestRecord?.output) { setMessage("pipeline-lesson-output", "Wait for Worldview’s current question and Brain check before replying.", "error"); return false; }
   const activeTimingId = timingId || beginMockTurnTiming({
     stage:"lesson",
     inputMode:inputMode || labState.extraction.mode,
@@ -8086,6 +8165,7 @@ async function submitPipelineLessonReply(value = q("pipeline-lesson-reply")?.val
     send.hidden = false;
     send.disabled = false;
   }
+  return Boolean(created);
 }
 
 async function advancePipelineLessonOutcome() {
@@ -11542,6 +11622,15 @@ function mockLearnerStatus(stage, artifact, selection) {
   if (stage === "lesson" && labState.lessonOpeningFailureMessage) {
     return { text:"Sorry—we’re having trouble opening the next question. Your lesson is still here.", error:true, retry:"lesson" };
   }
+  if (stage === "lesson") {
+    const lessonState = pipelineLessonConversationState(selection);
+    if (lessonState.state === "failed") {
+      return { text:"Sorry—we didn’t receive a usable lesson reply. Your conversation is still here; retry this reply without starting over.", error:true, retry:retryablePipelineLessonTurn(selection) ? "lesson-turn" : "" };
+    }
+    if (["opening", "working", "loading"].includes(lessonState.state)) {
+      return { text:"Worldview is preparing the next question…", error:false, retry:"" };
+    }
+  }
   if (stage === "extraction" && artifact) {
     const mapState = pipelineExtractionMapViewState(artifact);
     if (["starting", "working", "loading", "route-ready"].includes(mapState.state)) {
@@ -11597,8 +11686,11 @@ function renderMockLearnerShell() {
   };
   input.placeholder = placeholders[stage];
   input.maxLength = stage === "quiz" ? 2400 : 1200;
-  input.disabled = stageBusy;
-  send.disabled = stageBusy || !input.value.trim();
+  const lessonReplyUnavailable = stage === "lesson" && (pipelineLessonConversationState(selection).state !== "ready"
+    || Boolean(pendingPipelineConversationCreate("lesson", artifact, selection)));
+  const inputBlocked = stageBusy || lessonReplyUnavailable;
+  input.disabled = inputBlocked;
+  send.disabled = inputBlocked || !input.value.trim();
   textControls.hidden = mode === "voice";
   voiceControls.hidden = mode !== "voice";
   const waiting = q("mock-learner-waiting");
@@ -11624,7 +11716,7 @@ function renderMockLearnerShell() {
   mapProgress.textContent = mapState?.state === "ready" ? "View Lesson Map" : "View Lesson Map progress";
   mapProgress.classList.toggle("is-error", mapState?.state === "needs-attention");
   mapProgress.setAttribute("aria-expanded", String(Boolean(labState.extraction.mapDialogOpen)));
-  q("mock-learner-ptt").disabled = stageBusy;
+  q("mock-learner-ptt").disabled = inputBlocked;
   q("mock-learner-hear").hidden = !(stage === "clarification"
     ? (labState.clarification.latest?.assistant_message || labState.clarification.lastSpeechText)
     : labState.extraction.lastSpeechText);
@@ -11642,9 +11734,19 @@ async function submitMockLearnerReply() {
     renderMockLearnerShell();
     return;
   }
+  if (labState.pipelineStage === "lesson") {
+    const lineage = pipelineConversationLineage("lesson");
+    const submittedValue = input.value;
+    q("pipeline-lesson-reply").value = reply;
+    const accepted = await submitPipelineLessonReply(reply, { inputMode:"text" });
+    if (pipelineConversationLineageIsCurrent(lineage)) {
+      if (accepted && input.value === submittedValue) input.value = "";
+      renderMockLearnerShell();
+    }
+    return;
+  }
   input.value = "";
   if (labState.pipelineStage === "clarification") { q("clarification-reply").value = reply; await submitClarificationReply(reply); return; }
-  if (labState.pipelineStage === "lesson") { q("pipeline-lesson-reply").value = reply; await submitPipelineLessonReply(reply, { inputMode:"text" }); return; }
   if (labState.pipelineStage === "quiz") { q("pipeline-quiz-reply").value = reply; await submitPipelineQuizReply(reply, { inputMode:"text" }); }
 }
 
@@ -11672,6 +11774,7 @@ async function retryMockLearnerAction() {
   if (action === "clarification") { q("clarification-retry-model")?.click(); return; }
   if (action === "handoff") { requestLessonFromExtraction("handoff_retry"); return; }
   if (action === "pending-conversation") { await retryPendingPipelineConversationCreate(); return; }
+  if (action === "lesson-turn") { await retryLatestPipelineLessonTurn(); return; }
   if (action === "conversation") {
     const artifact = selectedPipelineArtifact();
     if (retryablePipelineExtractionTurn(artifact)) await retryLatestPipelineExtractionTurn();

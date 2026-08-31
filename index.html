@@ -2051,11 +2051,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v176 · Aug 30";
+const BUILD = "v177 · Aug 30";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v177", date: "Aug 30", changes: [
+    "Mock Run: failed Tutor replies now show a working retry in the conversation instead of a hidden error or an invented fallback question.",
+    "Retry keeps the exact lesson request and prior conversation. Sending cannot silently discard your message while the next question is unavailable."
+  ]},
   { tag: "v176", date: "Aug 30", changes: [
     "Extraction now hands off to the Tutor without a page-freezing render storm, Lesson Map failures get one exact-scope automatic fallback, and the model can mention or commit the Lesson only when that run's route and broad overview are actually ready."
   ]},
