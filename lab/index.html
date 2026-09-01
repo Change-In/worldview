@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=182">
+<link rel="stylesheet" href="./lab.css?v=183">
 </head>
 <body>
 
@@ -25,10 +25,10 @@
   <div class="gate-orbit" aria-hidden="true"></div>
   <div class="gate-card">
     <h2 id="lab-gate-title">Model Lab</h2>
-    <label for="lab-code">Alpha code</label>
-    <input id="lab-code" type="password" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Alpha code">
-    <button id="lab-enter" class="button button-primary" type="button">Open</button>
-    <p id="lab-gate-message" class="form-message" role="status"></p>
+    <p>Developer tools are available to the signed-in administrator account.</p>
+    <a id="lab-account-signin" class="lab-account-link" href="../index.html?account=signin&amp;returnTo=lab">Sign in to Worldview</a>
+    <button id="lab-enter" class="button button-primary" type="button" disabled>Check account</button>
+    <p id="lab-gate-message" class="form-message" role="status" aria-live="polite">Checking your saved account…</p>
   </div>
 </section>
 
@@ -686,7 +686,7 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=182" defer></script>
+<script src="./lab.js?v=183" defer></script>
 </body>
 </html>
 

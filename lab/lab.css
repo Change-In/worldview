@@ -150,6 +150,18 @@ body {
   color: var(--lab-muted);
 }
 
+.lab-account-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  margin: 0 12px 8px 0;
+  color: var(--lab-mint);
+  font-size: 14px;
+  font-weight: 700;
+  text-underline-offset: 3px;
+}
+.lab-account-link:focus-visible { outline: 2px solid var(--lab-mint); outline-offset: 4px; }
+
 .lab-shell {
   width: min(1180px, calc(100% - 28px));
   margin: 0 auto;

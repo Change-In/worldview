@@ -122,6 +122,7 @@ const LAB_CHARS_PER_TOKEN = 4;
 
 const LAB_PROMPT_LIMITS = { lesson: 12000, tutor: 40000, brain: 12000 };
 const LAB_WORKSPACE_KEY = "worldview-owner-lab-workspace-v1";
+const LAB_LEGACY_CODE_STORAGE_KEY = "wv-lab-code";
 const LAB_WORKSPACE_SCHEMA = 4;
 const LAB_OUTPUT_TOKEN_MIN = 64;
 const LAB_OUTPUT_TOKEN_SERVER_MAX = 65536;
@@ -427,7 +428,6 @@ Start with step 1.`;
 }
 
 const labState = {
-  code: localStorage.getItem("wv-lab-code") || "",
   client: null,
   preview: LAB_PREVIEW,
   verifiedUserId: "",
@@ -435,6 +435,15 @@ const labState = {
   workspaceOwnerId: "",
   workspaceLoaded: false,
   accessVerified: false,
+  authEpoch: 0,
+  authSessionUserId: "",
+  authVerification: null,
+  verifiedAdmin: false,
+  verifiedRoleUserId: "",
+  verifiedRole: null,
+  verifiedRoleCheckedAt: 0,
+  passwordRecoveryPending: false,
+  requestControllers: new Set(),
   configured: {},
   providerDefaultModels: {},
   lessons: [],
@@ -1058,8 +1067,28 @@ function resetWorkspaceContents() {
   labState.jobLatencyDirty = false;
   labState.mapDetailRequests = new Set();
   labState.mapDetailRefreshed = new Set();
+  labState.mapResearchStarting = new Set();
+  // Replace these registries rather than clearing them in place: callbacks
+  // from the outgoing workspace retain only their old generation's maps.
+  labState.mapResearchCreateFlights = new Map();
+  labState.mapResearchCreateFailures = new Map();
+  clearTimeout(labState.sourcePanelTimer);
+  labState.sourcePanelTimer = null;
+  labState.sourcePanelKey = "";
+  const sourcePanel = typeof q === "function" ? q("mock-learner-source-panel") : null;
+  if (sourcePanel) {
+    sourcePanel.hidden = true;
+    if (sourcePanel.dataset) delete sourcePanel.dataset.signature;
+  }
+  if (typeof q === "function") {
+    q("mock-learner-sources")?.setAttribute("aria-expanded", "false");
+    for (const id of ["mock-learner-source-links", "mock-learner-source-title", "mock-learner-source-note"]) q(id)?.replaceChildren();
+  }
+  labState.mapRevisionStarting = new Set();
+  labState.mapRevisionHandled = new Set();
   labState.mapAutoRetryStarting = new Set();
   labState.mapAutoRetryHandled = new Set();
+  labState.extractionDetailRequests = new Set();
   labState.lessonDetailRequests = new Set();
   labState.lessonEvaluatorHandled = new Set();
   labState.openMapOutcomeKeys = new Set();
@@ -1071,12 +1100,13 @@ function resetWorkspaceContents() {
   labState.extractionBusy = false;
   labState.extractionTurnToken = "";
   labState.extractionArtifacts = [];
+  labState.extraction.stagedLearnerTurns = [];
   labState.extraction.lessonHandoffFailureKey = "";
   labState.extraction.lessonHandoffFailureMessage = "";
   labState.extraction.saveToken = "";
   Object.assign(labState.extraction, {
     mode: "text", micStream: null, recorder: null, recorderChunks: [], recordingStartedAt: 0,
-    recordingStopTimer: 0, recordingPointerActive: false, recordingPointerId: null, micAcquirePromise: null, micAcquireGeneration: 0,
+    recordingStopTimer: 0, recordingPointerActive: false, recordingPointerId: null, recordingLatched: false, recordingReadyForSpeech: false, micAcquirePromise: null, micAcquireGeneration: 0,
     retainedRecording: null, retainedOperationId: "", audioPrimed: false, voiceAudio: null,
     voiceSpeechCancel: null, speechPlaybackGeneration: 0, captureGeneration: 0, lastSpeechText: "", lastSpokenJobId: "", speaking: false, saveBusy: false, modeSwitching: false, demoMapReady: false, nextReplyInstruction: "", mapReadyCueKey: "", preMapRunId: "", mapDeferredRunId: "", activeAttempt: 0, handoffMode: "full", modeInheritedFromClarification: false, pass: "broad", broadComplete: false, lessonRequested: false, lessonHandoffBusy: false, lessonHandoffToken: "", mapRetryBusy: false, mapRetryToken: "", mapStartFailureRunId: "", mapStartFailureJobId: "", mapStartFailureMessage: "", openingFailureKey: "", openingFailureMessage: "", openingToken: "", mapAwareFailureKey: "", mapAwareFailureMessage: "", voiceTranscriptionToken: "", transcriptionAbortController: null, retainedCaptureContext: null, completionMethod: "", personalizationExhausted: false, lastTranscriptRenderKey: "", mapDialogOpen: false, mapDialogReturnFocus: null,
   });
@@ -1086,6 +1116,13 @@ function resetWorkspaceContents() {
   labState.mockResumeToken = makeId();
   labState.pendingMockResume = null;
   labState.pendingClarificationResume = null;
+  labState.mockResumeHistory = [];
+  labState.mockClarificationHistory = [];
+  labState.artifactRefreshToken = makeId();
+  labState.mockBoundaryActive = null;
+  labState.mockRunActiveConfig = null;
+  Object.assign(labState.mockCar, { active:false, entryToken:"", status:"idle", message:"Hold, wait for the tone, then talk", errorKey:"", returnFocus:null });
+  Object.assign(labState.quiz, { busy:false, attempt:0, probeCount:0, status:"idle", startedRunId:"", startedMapKey:"", mapKey:"", lastSpokenJobId:"", reviewOutcomeId:"", completionMessage:"", completionChoice:"", completionSpeechId:"", reviewReprompt:"", reviewRepromptChoice:"", reviewRepromptSpeechId:"", turnToken:"", reviewToken:"" });
   labState.newRunDraftActive = false;
   labState.resumeRestoring = false;
   labState.pipelineSelectedRunId = "";
@@ -3154,6 +3191,7 @@ function rerenderWorkspaceAfterIdentitySwitch() {
 function switchToVerifiedLabUser(userId) {
   const nextUserId = String(userId || "");
   if (!/^[A-Za-z0-9-]{8,128}$/.test(nextUserId)) return false;
+  if (!labState.preview && (!labState.verifiedAdmin || labState.verifiedRoleUserId !== nextUserId)) return false;
   if (labState.workspaceOwnerId === nextUserId && labState.verifiedUserId === nextUserId) return false;
   stopSpeechComparison();
   clearTimeout(workspaceSaveTimer);
@@ -3172,11 +3210,52 @@ function clearVerifiedLabUser() {
   if (labState.workspaceLoaded && labState.workspaceOwnerId) persistWorkspace();
   labState.verifiedUserId = "";
   labState.verifiedAccessToken = "";
+  labState.verifiedAdmin = false;
+  labState.verifiedRoleUserId = "";
+  labState.verifiedRole = null;
+  labState.verifiedRoleCheckedAt = 0;
+  labState.accessVerified = false;
   labState.workspaceOwnerId = "";
   labState.workspaceLoaded = false;
   resetWorkspaceContents();
   loadLocalLibrary();
   rerenderWorkspaceAfterIdentitySwitch();
+}
+
+function lockLabAccount(message = "Sign in to your administrator account to open the Model Lab.", status = "signed-out") {
+  // Invalidate before touching the DOM or awaiting anything. A late response
+  // from the outgoing account must not load a workspace or reopen this shell.
+  labState.authEpoch += 1;
+  labState.authVerification = null;
+  labState.accessVerified = false;
+  labState.busy = false;
+  labState.createStarting = false;
+  const shell = q("lab-shell"), gate = q("lab-gate");
+  if (shell) { shell.hidden = true; shell.inert = true; }
+  if (gate) gate.hidden = false;
+  if (q("lab-open-timing")) q("lab-open-timing").disabled = true;
+  if (q("lab-health")) { q("lab-health").textContent = "Locked"; q("lab-health").className = "lab-health"; }
+  if (q("lab-provider-count")) q("lab-provider-count").textContent = "—";
+  for (const controller of labState.requestControllers) {
+    try { controller.abort(labAccountError("identity_changed")); } catch (_) { /* Already complete. */ }
+  }
+  labState.requestControllers.clear();
+  stopMockCarMedia();
+  clearVerifiedLabUser();
+  labState.configured = {};
+  labState.artifactRefreshToken = makeId();
+  labState.pipelineMode = "controls";
+  labState.mockSetupActive = false;
+  document.body.classList.remove("mock-run", "mock-setup", "mock-car-active", "mock-learner-shell-active", "clarification-focus", "clarification-learner-active", "extraction-learner-active", "lesson-learner-active", "quiz-learner-active");
+  document.documentElement.classList.remove("lab-viewport-locked");
+  for (const node of document.querySelectorAll("#lab-shell input:not([type=checkbox]):not([type=radio]), #lab-shell textarea")) node.value = "";
+  for (const id of ["results-list", "comparison-list", "jobs-list", "flow-list", "mock-learner-transcript", "pipeline-extraction-map-dialog-content"]) q(id)?.replaceChildren();
+  if (q("lab-account-signin")) {
+    q("lab-account-signin").hidden = false;
+    q("lab-account-signin").textContent = status === "admin-required" ? "Switch account in Worldview" : status === "recovery" ? "Finish password reset in Worldview" : "Sign in to Worldview";
+  }
+  if (q("lab-enter")) { q("lab-enter").disabled = !labState.client; q("lab-enter").textContent = "Check account"; }
+  setMessage("lab-gate-message", message, status === "checking" ? "" : "error");
 }
 
 function loadLocalLibrary() {
@@ -3467,45 +3546,228 @@ function setBusy(isBusy) {
   ["lesson", "tutor", "brain"].forEach(syncPromptControls);
 }
 
-async function accessToken(forceRefresh = false) {
-  if (!labState.client) throw new Error("The protected lab client did not load.");
-  let { data, error } = await labState.client.auth.getSession();
-  if (error) throw error;
-  if (!data.session) {
-    const signIn = await labState.client.auth.signInAnonymously();
-    if (signIn.error) throw signIn.error;
-    data = signIn.data;
-  }
-  if (forceRefresh && data.session) {
-    const refreshed = await labState.client.auth.refreshSession();
-    if (refreshed.error) throw refreshed.error;
-    data = refreshed.data;
-  }
-  const token = data?.session?.access_token;
-  if (!token) throw new Error("Could not establish the temporary lab session.");
-  /* A session-shaped object from browser storage is not identity proof. The
-     account id used for Notes, lessons, and Lab workspaces comes only from
-     Supabase getUser(), which validates this token with the Auth server. */
-  if (forceRefresh || token !== labState.verifiedAccessToken || !labState.verifiedUserId) {
-    const verified = await labState.client.auth.getUser(token);
-    if (verified.error) throw verified.error;
-    const verifiedUserId = String(verified.data?.user?.id || "");
-    if (!verifiedUserId) throw new Error("Could not verify the Lab account identity.");
-    switchToVerifiedLabUser(verifiedUserId);
-    labState.verifiedAccessToken = token;
-  }
-  return token;
+const LAB_ACCOUNT_CHECK_DEADLINE_MS = 12000;
+const LAB_ROLE_RECHECK_MS = 60000;
+const LAB_PASSWORD_RECOVERY_KEY = "worldview-password-recovery-v1";
+const LAB_SIGNOUT_PENDING_KEY = "worldview-signout-pending-v1";
+const labResponseOwners = new WeakMap();
+
+function labAccountError(type) {
+  const messages = {
+    signed_out: "Sign in to Worldview with your email and password, then return to the Model Lab.",
+    signout_pending: "Sign-out is still pending. Finish signing out or sign in again in Worldview before opening the Model Lab.",
+    permanent_account_required: "Finish confirming your email and setting up your password in Worldview first. Your earlier saved work stays with its original account.",
+    admin_required: "This account does not have administrator access. Switch to the administrator account in Worldview.",
+    password_recovery_required: "Finish resetting your password in Worldview before opening developer tools.",
+    identity_changed: "The signed-in account changed. The earlier request cannot open or update this workspace.",
+    account_check_timeout: "Checking the account took too long. Your saved work is unchanged; check again when the connection is ready.",
+  };
+  return Object.assign(new Error(messages[type] || "The administrator account could not be verified. Check your connection and try again."), { type });
 }
 
-async function requestWithToken(makeRequest) {
-  let response = await makeRequest(await accessToken());
-  if (response.status === 401) response = await makeRequest(await accessToken(true));
-  return response;
+function labSignoutPending(userId = "") {
+  try {
+    const pending = JSON.parse(localStorage.getItem(LAB_SIGNOUT_PENDING_KEY) || "null");
+    return !!(pending?.userId && (!userId || pending.userId === userId));
+  } catch (_) { return true; }
+}
+
+function labPasswordRecoveryRequired(userId) {
+  try {
+    const pending = JSON.parse(localStorage.getItem(LAB_PASSWORD_RECOVERY_KEY) || "null");
+    return !!(pending?.userId === userId || (labState.passwordRecoveryPending && labState.authSessionUserId === userId));
+  } catch (_) {
+    // A broken recovery marker cannot be treated as a completed reset.
+    return true;
+  }
+}
+
+function labAccountCanOpen() {
+  if (labState.preview) return true;
+  const role = labState.verifiedRole;
+  const expiresAt = role?.expires_at ? Date.parse(role.expires_at) : null;
+  return !!(labState.verifiedAdmin && labState.verifiedUserId
+    && labState.verifiedRoleUserId === labState.verifiedUserId
+    && labState.workspaceOwnerId === labState.verifiedUserId
+    && role?.active === true && role.access_tier === "admin" && !role.revoked_at
+    && (expiresAt === null || (Number.isFinite(expiresAt) && expiresAt > Date.now()))
+    && !labPasswordRecoveryRequired(labState.verifiedUserId)
+    && !labSignoutPending(labState.verifiedUserId));
+}
+
+function assertLabRequestOwner(epoch, userId) {
+  if (epoch !== labState.authEpoch || !userId || labState.verifiedUserId !== userId || !labAccountCanOpen()) {
+    throw labAccountError("identity_changed");
+  }
+}
+
+async function verifyLabAdminSession(forceRefresh = false) {
+  if (!labState.client) throw new Error("The protected lab client did not load.");
+  const epoch = labState.authEpoch;
+  if (labState.authVerification?.epoch === epoch) return labState.authVerification.promise;
+  const controller = new AbortController();
+  labState.requestControllers.add(controller);
+  let current = true, timer = 0;
+  const assertCurrent = () => {
+    if (!current || epoch !== labState.authEpoch || controller.signal.aborted) throw labAccountError("identity_changed");
+  };
+  const check = (async () => {
+    const sessionResult = forceRefresh
+      ? await labState.client.auth.refreshSession()
+      : await labState.client.auth.getSession();
+    assertCurrent();
+    if (sessionResult.error) throw sessionResult.error;
+    const session = sessionResult.data?.session;
+    if (!session?.access_token) throw labAccountError("signed_out");
+    const token = session.access_token;
+    // Session user data is only a change hint. getUser and account_access are
+    // the two server checks; local email, metadata, flags and codes grant nothing.
+    labState.authSessionUserId = String(session.user?.id || "");
+    if (!forceRefresh && token === labState.verifiedAccessToken && labAccountCanOpen()
+      && Date.now() - labState.verifiedRoleCheckedAt < LAB_ROLE_RECHECK_MS) return token;
+    const verified = await labState.client.auth.getUser(token);
+    assertCurrent();
+    if (verified.error) throw verified.error;
+    const user = verified.data?.user;
+    const verifiedUserId = String(user?.id || "");
+    if (!verifiedUserId) throw labAccountError("signed_out");
+    if (user.is_anonymous === true || !user.email || !user.email_confirmed_at) throw labAccountError("permanent_account_required");
+    if (labSignoutPending(verifiedUserId)) throw labAccountError("signout_pending");
+    if (labPasswordRecoveryRequired(verifiedUserId)) throw labAccountError("password_recovery_required");
+    if (labState.verifiedUserId && labState.verifiedUserId !== verifiedUserId) throw labAccountError("identity_changed");
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/lab-jobs`, {
+      method: "POST", signal: controller.signal,
+      headers: { apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "account_access" }),
+    });
+    const role = await responseJson(response);
+    assertCurrent();
+    const expiresAt = role?.expires_at ? Date.parse(role.expires_at) : null;
+    if (role?.active !== true || role.access_tier !== "admin" || role.revoked_at
+      || (expiresAt !== null && (!Number.isFinite(expiresAt) || expiresAt <= Date.now()))) throw labAccountError("admin_required");
+    labState.verifiedAdmin = true;
+    labState.verifiedRoleUserId = verifiedUserId;
+    labState.verifiedRole = role;
+    labState.verifiedRoleCheckedAt = Date.now();
+    switchToVerifiedLabUser(verifiedUserId);
+    labState.verifiedAccessToken = token;
+    labState.authSessionUserId = verifiedUserId;
+    return token;
+  })();
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      current = false;
+      controller.abort();
+      reject(labAccountError("account_check_timeout"));
+    }, LAB_ACCOUNT_CHECK_DEADLINE_MS);
+  });
+  const verification = { epoch, promise: Promise.race([check, timeout]) };
+  labState.authVerification = verification;
+  try { return await verification.promise; }
+  catch (error) {
+    if (epoch === labState.authEpoch) {
+      const status = error?.type === "admin_required" ? "admin-required" : error?.type === "password_recovery_required" ? "recovery" : "signed-out";
+      lockLabAccount(error.message || "The account could not be verified. Try again.", status);
+    }
+    throw error;
+  } finally {
+    current = false;
+    clearTimeout(timer);
+    labState.requestControllers.delete(controller);
+    if (labState.authVerification === verification) labState.authVerification = null;
+  }
+}
+
+async function accessToken(forceRefresh = false) {
+  return verifyLabAdminSession(forceRefresh);
+}
+
+async function requestWithToken(makeRequest, { signal } = {}) {
+  const epoch = labState.authEpoch;
+  const controller = new AbortController();
+  const abort = () => controller.abort(signal?.reason);
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    signal?.removeEventListener("abort", abort);
+    controller.signal.removeEventListener("abort", cleanup);
+    labState.requestControllers.delete(controller);
+  };
+  labState.requestControllers.add(controller);
+  controller.signal.addEventListener("abort", cleanup, { once: true });
+  if (signal?.aborted) abort();
+  else signal?.addEventListener("abort", abort, { once: true });
+  let response = null;
+  let bodyOwned = false;
+  try {
+    const token = await accessToken();
+    const userId = labState.verifiedUserId;
+    assertLabRequestOwner(epoch, userId);
+    if (controller.signal.aborted) throw controller.signal.reason || labAccountError("identity_changed");
+    response = await makeRequest(token, controller.signal);
+    assertLabRequestOwner(epoch, userId);
+    if (controller.signal.aborted) throw controller.signal.reason || labAccountError("identity_changed");
+    if (response.status === 401) {
+      cancelLabResponseBody(response);
+      const refreshed = await accessToken(true);
+      assertLabRequestOwner(epoch, userId);
+      if (controller.signal.aborted) throw controller.signal.reason || labAccountError("identity_changed");
+      response = await makeRequest(refreshed, controller.signal);
+      assertLabRequestOwner(epoch, userId);
+      if (controller.signal.aborted) throw controller.signal.reason || labAccountError("identity_changed");
+    }
+    // Headers are not completion: keep deadline/signout cancellation attached
+    // until the JSON or audio body is consumed (or the transport is aborted).
+    labResponseOwners.set(response, { epoch, userId, controller, cleanup });
+    bodyOwned = true;
+    return response;
+  } catch (error) {
+    controller.abort(error);
+    cancelLabResponseBody(response);
+    throw error;
+  } finally {
+    if (!bodyOwned) cleanup();
+  }
+}
+
+function cancelLabResponseBody(response) {
+  try { Promise.resolve(response?.body?.cancel()).catch(() => {}); }
+  catch (_) { /* A consumed, locked, or already-cancelled body needs no discard. */ }
+}
+
+function assertLabResponseOwner(response) {
+  const owner = labResponseOwners.get(response);
+  if (!owner) return;
+  assertLabRequestOwner(owner.epoch, owner.userId);
+  if (owner.controller.signal.aborted) throw owner.controller.signal.reason || labAccountError("identity_changed");
+}
+
+async function consumeLabResponseBody(response, format) {
+  const owner = labResponseOwners.get(response);
+  try {
+    assertLabResponseOwner(response);
+    const body = await response[format]();
+    assertLabResponseOwner(response);
+    return body;
+  } catch (error) {
+    // Discard even a late error body when its account no longer owns the page.
+    assertLabResponseOwner(response);
+    throw error;
+  } finally {
+    owner?.cleanup();
+  }
 }
 
 async function responseJson(response) {
   let payload = {};
-  try { payload = await response.json(); } catch (_) { /* A useful status still follows. */ }
+  try { payload = await consumeLabResponseBody(response, "json"); }
+  catch (error) {
+    assertLabResponseOwner(response);
+    if (error?.name === "AbortError") throw error;
+    // A malformed JSON body can still carry a useful HTTP status.
+  }
+  assertLabResponseOwner(response);
   if (!response.ok) {
     const gatewayError = payload?.error && typeof payload.error === "object" ? payload.error : null;
     const message = gatewayError?.message || payload?.message || (typeof payload?.error === "string" ? payload.error : "") || `Request failed (${response.status}).`;
@@ -3519,13 +3781,13 @@ async function responseJson(response) {
 
 async function labFetch(body) {
   const url = `${SUPABASE_URL}/functions/v1/lab-tutor`;
-  const response = await requestWithToken((token) => fetch(url, {
+  const response = await requestWithToken((token, signal) => fetch(url, {
     method: "POST",
+    signal,
     headers: {
       apikey: SUPABASE_PUBLISHABLE_KEY,
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-      "x-worldview-access": labState.code,
     },
     body: JSON.stringify(body),
   }));
@@ -3555,7 +3817,7 @@ function finishLabTranscription(state, controller) {
 
 async function transcribeFetch(file, model, language, operationId, { signal, expectedUserId = "" } = {}) {
   const url = `${SUPABASE_URL}/functions/v1/transcribe?model=${encodeURIComponent(model)}&language=${encodeURIComponent(language)}`;
-  const response = await requestWithToken((token) => {
+  const response = await requestWithToken((token, requestSignal) => {
     if (expectedUserId && labState.verifiedUserId !== expectedUserId) {
       const error = new Error("The signed-in account changed before this recording could be sent.");
       error.type = "identity_changed";
@@ -3563,17 +3825,16 @@ async function transcribeFetch(file, model, language, operationId, { signal, exp
     }
     return fetch(url, {
     method: "POST",
-    signal,
+    signal: requestSignal,
     headers: {
       apikey: SUPABASE_PUBLISHABLE_KEY,
       Authorization: `Bearer ${token}`,
       "Content-Type": file.type || "application/octet-stream",
-      "x-worldview-access": labState.code,
       "x-worldview-operation-id": operationId,
     },
       body: file,
     });
-  });
+  }, { signal });
   return responseJson(response);
 }
 
@@ -3617,7 +3878,7 @@ async function boundedLabTranscriptionFetch(file, model, language, operationId, 
 
 async function labJobsFetch(body, expectedUserId = "", { signal } = {}) {
   const url = `${SUPABASE_URL}/functions/v1/lab-jobs`;
-  const response = await requestWithToken((token) => {
+  const response = await requestWithToken((token, requestSignal) => {
     if (signal?.aborted) throw signal.reason || new Error("This Lab request was cancelled before it could be sent.");
     if (expectedUserId && labState.verifiedUserId !== expectedUserId) {
       const error = new Error("The signed-in account changed before this saved request could be sent.");
@@ -3626,16 +3887,15 @@ async function labJobsFetch(body, expectedUserId = "", { signal } = {}) {
     }
     return fetch(url, {
       method: "POST",
-      signal,
+      signal: requestSignal,
       headers: {
         apikey: SUPABASE_PUBLISHABLE_KEY,
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
-        "x-worldview-access": labState.code,
       },
       body: JSON.stringify(body),
     });
-  });
+  }, { signal });
   const payload = await responseJson(response);
   if (expectedUserId && labState.verifiedUserId !== expectedUserId) {
     const error = new Error("The signed-in account changed while this Lab request was running.");
@@ -3858,22 +4118,22 @@ async function boundedLabArtifactSave(body, { expectedUserId = "", deadlineMs = 
 
 async function speechFetch(text, { signal } = {}) {
   const url = `${SUPABASE_URL}/functions/v1/voice-stream`;
-  const response = await requestWithToken((token) => fetch(url, {
+  const response = await requestWithToken((token, requestSignal) => fetch(url, {
     method: "POST",
-    signal,
+    signal: requestSignal,
     headers: {
       apikey: SUPABASE_PUBLISHABLE_KEY,
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-      "x-worldview-access": labState.code,
     },
     body: JSON.stringify({ text, model: "aura-2-arcas-en" }),
-  }));
+  }), { signal });
   if (!response.ok) await responseJson(response);
   return response;
 }
 
 async function probeProviders() {
+  const epoch = labState.authEpoch, userId = labState.verifiedUserId;
   const health = q("lab-health");
   health.textContent = "Checking routes…";
   health.className = "lab-health";
@@ -3881,6 +4141,7 @@ async function probeProviders() {
   for (const [provider, info] of Object.entries(LAB_PROVIDER_CATALOG)) {
     try {
       const status = await labFetch({ provider, probe: true });
+      assertLabRequestOwner(epoch, userId);
       labState.configured[provider] = Boolean(status?.configured);
       labState.providerDefaultModels[provider] = clip(status?.defaultModel, 80);
       if (status?.defaultModel && !info.models.some((model) => model.id === status.defaultModel)) {
@@ -3889,10 +4150,12 @@ async function probeProviders() {
       if (labState.configured[provider]) count += 1;
       logFlow(`${info.label} route ${labState.configured[provider] ? "is configured" : "is not configured"}`, "lab-tutor protected provider probe");
     } catch (error) {
+      if (epoch !== labState.authEpoch || labState.verifiedUserId !== userId) return;
       labState.configured[provider] = false;
       logFlow(`${info.label} route probe failed: ${clip(error.message, 120)}`, "lab-tutor protected provider probe");
     }
   }
+  assertLabRequestOwner(epoch, userId);
   if (q("lab-provider-count")) q("lab-provider-count").textContent = String(count);
   health.textContent = `${count} route${count === 1 ? "" : "s"} ready`;
   health.className = `lab-health ${count ? "is-ready" : "is-failed"}`;
@@ -4813,6 +5076,7 @@ async function runTranscription() {
   if (!file) { setMessage(messageId, "Choose one audio file first.", "error"); return; }
   if (!selected.length) { setMessage(messageId, "Choose at least one existing STT route.", "error"); return; }
   const runId = makeId();
+  const requestEpoch = labState.authEpoch;
   const requestOwnerUserId = labState.verifiedUserId;
   const inputFingerprint = fingerprint(`${file.name}:${file.size}:${file.lastModified}`);
   setBusy(true);
@@ -4827,7 +5091,7 @@ async function runTranscription() {
       logFlow(`Sent audio to ${model.label}`, "browser → transcribe (tester-gated)");
       try {
         const result = await transcribeFetch(file, model.id, q("stt-language").value, operationId, { expectedUserId:requestOwnerUserId });
-        if (labState.verifiedUserId !== requestOwnerUserId) return;
+        if (labState.authEpoch !== requestEpoch || labState.verifiedUserId !== requestOwnerUserId) return;
         const elapsed = Math.round(performance.now() - started);
         pushOutput({
           id: makeId(), at: now(), kind: "transcription", provider: result.provider || model.provider, providerLabel: model.provider,
@@ -4840,7 +5104,7 @@ async function runTranscription() {
         });
         logFlow(`Received ${model.label} transcript`, "transcribe → browser; audio not retained in Lab result cache");
       } catch (error) {
-        if (labState.verifiedUserId !== requestOwnerUserId || error?.type === "identity_changed") return;
+        if (labState.authEpoch !== requestEpoch || labState.verifiedUserId !== requestOwnerUserId || error?.type === "identity_changed") return;
         const elapsed = Math.round(performance.now() - started);
         pushOutput({
           id: makeId(), at: now(), kind: "transcription", provider: model.provider, providerLabel: model.provider, model: model.id,
@@ -4855,9 +5119,11 @@ async function runTranscription() {
     }
     setMessage(messageId, "Transcription comparison finished. Results are captured below.", "ok");
   } finally {
-    setBusy(false);
-    renderResults();
-    renderComparisonLibrary();
+    if (labState.authEpoch === requestEpoch && labState.verifiedUserId === requestOwnerUserId) {
+      setBusy(false);
+      renderResults();
+      renderComparisonLibrary();
+    }
   }
 }
 
@@ -4917,10 +5183,12 @@ function deviceSpeechSample(text, runId) {
 }
 
 async function worldviewSpeechSample(text, runId) {
+  const requestEpoch = labState.authEpoch, userId = labState.verifiedUserId;
   const started = performance.now();
   const response = await speechFetch(text);
   const responseMs = Math.round(performance.now() - started);
-  const blob = await response.blob();
+  const blob = await consumeLabResponseBody(response, "blob");
+  assertLabRequestOwner(requestEpoch, userId);
   const url = URL.createObjectURL(blob);
   const audio = new Audio(url);
   labState.speechAudio = { audio, url };
@@ -4974,6 +5242,8 @@ async function worldviewSpeechSample(text, runId) {
 async function runSpeechComparison() {
   const messageId = "speech-run-message";
   if (labState.busy) return;
+  if (!labState.preview && !labAccountCanOpen()) return;
+  const requestEpoch = labState.authEpoch;
   const text = clip(q("speech-text").value, 2000);
   const useDevice = q("speech-device").checked;
   const useWorldview = q("speech-worldview").checked;
@@ -4992,8 +5262,10 @@ async function runSpeechComparison() {
       setMessage(messageId, `Playing ${label} (${completed + 1} of ${routes.length})…`);
       try {
         await runner(text, runId);
+        if (labState.authEpoch !== requestEpoch) return;
         completed += 1;
       } catch (error) {
+        if (labState.authEpoch !== requestEpoch) return;
         if (labState.speechCancelled) break;
         const latencyMs = 0;
         pushOutput({
@@ -5012,10 +5284,12 @@ async function runSpeechComparison() {
       : `${completed} of ${routes.length} speech route${routes.length === 1 ? "" : "s"} played. First-sound timing is in Results & timing.`,
     labState.speechCancelled || completed ? "ok" : "error");
   } finally {
-    labState.speechCancel = null;
-    setBusy(false);
-    renderResults();
-    renderComparisonLibrary();
+    if (labState.authEpoch === requestEpoch) {
+      labState.speechCancel = null;
+      setBusy(false);
+      renderResults();
+      renderComparisonLibrary();
+    }
   }
 }
 
@@ -7099,6 +7373,8 @@ async function submitPendingMapResearchCreate(pending, { deadlineMs = LAB_CONVER
   const flights = labState.mapResearchCreateFlights ||= new Map();
   if (flights.has(key)) return flights.get(key);
   const failures = labState.mapResearchCreateFailures ||= new Map();
+  const isCurrent = () => ownerUserId === labState.verifiedUserId && ownerUserId === labState.workspaceOwnerId
+    && flights === labState.mapResearchCreateFlights && failures === labState.mapResearchCreateFailures;
   const controller = new AbortController();
   let timeoutId;
   const timedOut = new Promise((_, reject) => {
@@ -7112,7 +7388,7 @@ async function submitPendingMapResearchCreate(pending, { deadlineMs = LAB_CONVER
   const operation = (async () => {
     try {
       const payload = await Promise.race([labJobsFetch(immutable.request, ownerUserId, { signal:controller.signal }), timedOut]);
-      if (ownerUserId !== labState.verifiedUserId || ownerUserId !== labState.workspaceOwnerId) {
+      if (!isCurrent()) {
         throw new Error("The Lab account changed before this research request was confirmed.");
       }
       if (!payload?.job?.id) throw new Error("The server has not confirmed this research job. Retry the same saved request.");
@@ -7123,7 +7399,7 @@ async function submitPendingMapResearchCreate(pending, { deadlineMs = LAB_CONVER
       return { job, ambiguous:false };
     } catch (error) {
       const definitive = definitiveCreateRejection(error);
-      if (ownerUserId === labState.verifiedUserId && ownerUserId === labState.workspaceOwnerId) {
+      if (isCurrent()) {
         if (definitive) forgetPendingCreate(immutable.id);
         failures.set(key, definitive ? `Research request was rejected: ${clip(error.message, 180)}` : error.message);
         while (failures.size > 80) failures.delete(failures.keys().next().value);
@@ -7133,7 +7409,7 @@ async function submitPendingMapResearchCreate(pending, { deadlineMs = LAB_CONVER
     } finally {
       clearTimeout(timeoutId);
       flights.delete(key);
-      if (ownerUserId === labState.verifiedUserId && ownerUserId === labState.workspaceOwnerId) renderPipelineMapOutput();
+      if (isCurrent()) renderPipelineMapOutput();
     }
   })();
   flights.set(key, operation);
@@ -7145,9 +7421,10 @@ async function retryPipelineMapChapterResearch(plannerJob, artifact = selectedPi
 }
 
 async function ensurePipelineMapChapterResearch(plannerJob, artifact = selectedPipelineArtifact(), { retryMissing = false } = {}) {
+  const starting = labState.mapResearchStarting;
   if (!plannerJob || plannerJob.scenario?.pipelineStage !== "map_planner" || plannerJob.status !== "completed"
       || !artifact || plannerJob.scenario?.pipelineRunId !== artifact.runId || labState.preview
-      || labState.mapResearchStarting.has(plannerJob.id)) return false;
+      || starting.has(plannerJob.id)) return false;
   const ownerUserId = labState.verifiedUserId;
   if (!ownerUserId || labState.workspaceOwnerId !== ownerUserId) return false;
   const records = pipelineMapOutputRecords(labState.jobDetails.get(plannerJob.id), plannerJob);
@@ -7264,10 +7541,10 @@ async function ensurePipelineMapChapterResearch(plannerJob, artifact = selectedP
     }
   }
   if (!requests.length) return true;
-  labState.mapResearchStarting.add(plannerJob.id);
+  starting.add(plannerJob.id);
   try {
     for (let index = 0; index < requests.length; index += 3) {
-      if (ownerUserId !== labState.verifiedUserId || ownerUserId !== labState.workspaceOwnerId
+      if (starting !== labState.mapResearchStarting || ownerUserId !== labState.verifiedUserId || ownerUserId !== labState.workspaceOwnerId
         || selectedPipelineArtifact()?.runId !== artifact.runId) return false;
       const batch = requests.slice(index, index + 3);
       await Promise.all(batch.map(async ({ request, pending:existingPending }) => {
@@ -7280,11 +7557,12 @@ async function ensurePipelineMapChapterResearch(plannerJob, artifact = selectedP
         await submitPendingMapResearchCreate(pending);
       }));
     }
+    if (starting !== labState.mapResearchStarting || ownerUserId !== labState.verifiedUserId || ownerUserId !== labState.workspaceOwnerId) return false;
     scheduleJobPoll();
     return true;
   } finally {
-    labState.mapResearchStarting.delete(plannerJob.id);
-    if (ownerUserId === labState.verifiedUserId && ownerUserId === labState.workspaceOwnerId) renderPipelineMapOutput();
+    starting.delete(plannerJob.id);
+    if (starting === labState.mapResearchStarting && ownerUserId === labState.verifiedUserId && ownerUserId === labState.workspaceOwnerId) renderPipelineMapOutput();
   }
 }
 
@@ -11373,7 +11651,7 @@ async function playMockCloudSpeech(spoken, { state, playbackGeneration, owner, v
   let ownedCancel = null;
   try {
     const response = await responseGate.wait(speechFetch(spoken, { signal:responseGate.signal }));
-    const blob = await responseGate.wait(response.blob());
+    const blob = await responseGate.wait(consumeLabResponseBody(response, "blob"));
     responseGate.dismiss();
     if (state.speechPlaybackGeneration !== playbackGeneration || !mockVoicePlaybackIsCurrent(voiceToken)) throw mockSpeechStartError("cancelled");
     url = URL.createObjectURL(blob);
@@ -16100,8 +16378,10 @@ function activateTab(tab) {
 }
 
 function initializeWorkspace() {
+  if (!labState.preview && (!labState.accessVerified || !labAccountCanOpen())) return false;
   q("lab-gate").hidden = true;
   q("lab-shell").hidden = false;
+  q("lab-shell").inert = false;
   q("lab-open-timing").disabled = false;
   loadMockRunConfig();
   loadMockBoundaryConfig();
@@ -16121,6 +16401,7 @@ function initializeWorkspace() {
   renderLatencyDashboard();
   initializeClarification();
   setPipelineStage("clarification");
+  return true;
 }
 
 function openMapPreviewFixture() {
@@ -16229,34 +16510,40 @@ function openPreview() {
 async function openLab() {
   if (labState.preview) { openPreview(); return; }
   if (labState.busy) return;
-  const input = q("lab-code");
-  labState.code = input.value.trim();
-  if (!labState.code) { setMessage("lab-gate-message", "Enter the tester access code first.", "error"); return; }
+  const epoch = labState.authEpoch;
   setBusy(true);
-  setMessage("lab-gate-message", "Checking protected access…");
+  setMessage("lab-gate-message", "Checking your administrator account…");
   try {
-    // The first existing probe claims/validates tester access without paying for a model response.
+    await verifyLabAdminSession();
+    const userId = labState.verifiedUserId;
+    assertLabRequestOwner(epoch, userId);
+    // Account/role proof and the gateway's existing access/spend checks remain
+    // separate. This capability probe never calls a paid provider.
     await labFetch({ provider: "anthropic", probe: true });
+    assertLabRequestOwner(epoch, userId);
     labState.accessVerified = true;
-    localStorage.setItem("wv-lab-code", labState.code);
-    initializeWorkspace();
+    if (!initializeWorkspace()) throw labAccountError("admin_required");
     await probeProviders();
+    assertLabRequestOwner(epoch, userId);
     await loadGlobalClarificationDefault();
+    assertLabRequestOwner(epoch, userId);
     await refreshJobs();
+    assertLabRequestOwner(epoch, userId);
     if (!labState.mockSetupActive) await reconcileActiveClarificationResume();
+    assertLabRequestOwner(epoch, userId);
     await refreshClarificationArtifacts();
+    assertLabRequestOwner(epoch, userId);
     renderMockSetupPreviousRuns();
     setMessage("lab-gate-message", "");
   } catch (error) {
-    setMessage("lab-gate-message", error.type === "access_denied" ? "That tester code was not accepted." : `Could not open the protected lab: ${error.message || "unknown error"}`, "error");
+    if (epoch === labState.authEpoch) lockLabAccount(`Could not open the Model Lab: ${error.message || "check the account and try again"}`);
   } finally {
-    setBusy(false);
+    if (epoch === labState.authEpoch) setBusy(false);
   }
 }
 
 function bindEvents() {
   q("lab-enter").addEventListener("click", openLab);
-  q("lab-code").addEventListener("keydown", (event) => { if (event.key === "Enter") openLab(); });
   bindClarificationEvents();
   document.querySelectorAll("[data-load-prompt]").forEach((button) => button.addEventListener("click", () => resetPreset(button.dataset.loadPrompt)));
   document.querySelectorAll("[data-save-prompt]").forEach((button) => button.addEventListener("click", () => savePromptVersion(button.dataset.savePrompt)));
@@ -16570,12 +16857,89 @@ function loadSupabaseSdk() {
   });
 }
 
+function queueLabAccountRecheck() {
+  const epoch = labState.authEpoch;
+  setTimeout(async () => {
+    if (epoch !== labState.authEpoch || !labState.client) return;
+    try {
+      if (labState.accessVerified) await accessToken(false);
+      else await openLab();
+    } catch (_) { /* Verification already returned the locked recovery surface. */ }
+  }, 0);
+}
+
+function handleLabAuthChange(event, session) {
+  const sessionUserId = String(session?.user?.id || "");
+  if (event === "SIGNED_OUT" || (event === "INITIAL_SESSION" && !session)) {
+    labState.authSessionUserId = "";
+    labState.passwordRecoveryPending = false;
+    lockLabAccount();
+    return;
+  }
+  if (event === "PASSWORD_RECOVERY") {
+    labState.authSessionUserId = sessionUserId;
+    labState.passwordRecoveryPending = true;
+    if (sessionUserId) {
+      try { localStorage.setItem(LAB_PASSWORD_RECOVERY_KEY, JSON.stringify({ userId: sessionUserId, startedAt: Date.now() })); }
+      catch (_) { /* The in-memory recovery gate remains locked. */ }
+    }
+    lockLabAccount(labAccountError("password_recovery_required").message, "recovery");
+    return;
+  }
+  if (!["INITIAL_SESSION", "SIGNED_IN", "TOKEN_REFRESHED", "USER_UPDATED"].includes(event) || !sessionUserId) return;
+  const priorUserId = labState.authSessionUserId || labState.verifiedUserId;
+  if ((priorUserId && priorUserId !== sessionUserId)
+    || (!priorUserId && labState.authVerification && event !== "INITIAL_SESSION")) {
+    lockLabAccount("The account changed. Checking its administrator access…", "checking");
+    labState.passwordRecoveryPending = false;
+  }
+  labState.authSessionUserId = sessionUserId;
+  if (event === "USER_UPDATED") labState.verifiedRoleCheckedAt = 0;
+  // Never await another Supabase auth operation inside its event callback:
+  // its session lock must be released before the recheck starts.
+  if (event !== "INITIAL_SESSION") queueLabAccountRecheck();
+}
+
+function handleLabAccountStorage(event) {
+  if (event.key === LAB_SIGNOUT_PENDING_KEY) {
+    if (event.newValue && labSignoutPending(labState.verifiedUserId || labState.authSessionUserId)) {
+      lockLabAccount(labAccountError("signout_pending").message);
+      return;
+    }
+    queueLabAccountRecheck();
+    return;
+  }
+  if (event.key === LAB_PASSWORD_RECOVERY_KEY) {
+    if (!event.newValue) labState.passwordRecoveryPending = false;
+    else if (labPasswordRecoveryRequired(labState.verifiedUserId || labState.authSessionUserId)) {
+      lockLabAccount(labAccountError("password_recovery_required").message, "recovery");
+      return;
+    }
+    queueLabAccountRecheck();
+    return;
+  }
+  if (event.key !== "worldview-alpha-auth") return;
+  if (!event.newValue) { handleLabAuthChange("SIGNED_OUT", null); return; }
+  try {
+    const stored = JSON.parse(event.newValue);
+    // This is an invalidation hint only, never trusted identity/role data.
+    const nextUserId = String(stored?.user?.id || stored?.currentSession?.user?.id || "");
+    if (!nextUserId || (labState.authSessionUserId && nextUserId !== labState.authSessionUserId)
+      || (!labState.authSessionUserId && labState.authVerification)) {
+      lockLabAccount("The saved account changed. Checking its administrator access…", "checking");
+    }
+  } catch (_) { lockLabAccount("The saved account needs to be checked again.", "checking"); }
+  queueLabAccountRecheck();
+}
+
 async function boot() {
+  // Older Lab builds stored the shared Alpha code on this device. V183 uses
+  // only the verified Home account, so erase the retired credential once.
+  try { localStorage.removeItem(LAB_LEGACY_CODE_STORAGE_KEY); } catch (_) { /* Storage may be unavailable. */ }
   fillPresetSelect("lesson");
   fillPresetSelect("tutor");
   fillPresetSelect("brain");
   bindEvents();
-  q("lab-code").value = labState.code;
   renderFlow();
   renderResults();
   renderComparisonLibrary();
@@ -16590,18 +16954,10 @@ async function boot() {
     labState.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: "worldview-alpha-auth" },
     });
-    labState.client.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT") {
-        clearVerifiedLabUser();
-        return;
-      }
-      if (!labState.accessVerified || !["SIGNED_IN", "TOKEN_REFRESHED", "USER_UPDATED"].includes(event)) return;
-      setTimeout(async () => {
-        try { await accessToken(false); await refreshJobs(); }
-        catch (_) { clearVerifiedLabUser(); }
-      }, 0);
-    });
+    labState.client.auth.onAuthStateChange(handleLabAuthChange);
+    window.addEventListener("storage", handleLabAccountStorage);
     q("lab-enter").disabled = false;
+    await openLab();
   } catch (error) {
     setMessage("lab-gate-message", `${error.message || "The protected lab client did not load."} Check your connection and reload.`, "error");
   }

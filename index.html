@@ -189,6 +189,25 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #intro-account-connected { min-height:45px;display:flex;align-items:center;justify-content:center;padding:0 13px;border:1px solid var(--line);border-radius:12px;background:var(--paper);color:var(--ink);font-size:13px;font-weight:650; }
   #intro-account-status { min-height:0;margin:7px 2px 0!important;color:var(--ink-soft);font-size:11px!important;line-height:1.35!important; }
   #intro-account-status:empty { display:none; }
+  #account-dialog { width:min(460px,calc(100% - 28px)); max-height:calc(100dvh - 28px); margin:auto; padding:0; border:1px solid var(--line); border-radius:22px; background:var(--card); color:var(--ink); box-shadow:var(--shadow-lg); overflow:auto; overscroll-behavior:contain; }
+  #account-dialog::backdrop { background:var(--paper); }
+  .account-dialog-card { padding:clamp(22px,5vw,36px); }
+  .account-dialog-card h2 { font:700 32px/1.1 var(--font-display,Georgia,serif); margin:13px 0; }
+  #account-dialog-copy { color:var(--ink-soft); line-height:1.5; margin:0 0 22px; }
+  #password-account-fields { border:0; margin:0; padding:0; min-width:0; }
+  #password-account-fields label:not(.account-switch-confirm) { display:block; font-size:13px; font-weight:650; margin:14px 0 7px; }
+  #password-account-fields input:not([type=checkbox]) { width:100%; min-width:0; box-sizing:border-box; height:48px; padding:0 13px; border:1px solid var(--line); border-radius:11px; background:var(--paper); color:var(--ink); font:inherit; font-size:16px; }
+  #password-account-fields input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .account-primary { width:100%; min-height:48px; margin-top:22px; border:0; border-radius:11px; background:var(--accent); color:white; font:inherit; font-weight:700; cursor:pointer; }
+  #account-dialog button:disabled { opacity:.55; cursor:wait; }
+  .account-dialog-actions { display:flex; justify-content:center; flex-wrap:wrap; gap:6px 16px; margin-top:12px; }
+  .account-dialog-actions button { min-height:44px; padding:5px 0; border:0; background:transparent; color:var(--accent-700); font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+  #password-account-status { font-size:14px; line-height:1.5; margin:14px 0 0; overflow-wrap:anywhere; }
+  #password-account-status:empty { display:none; }
+  #password-account-status[data-error=true] { color:var(--danger,#b3473e); }
+  #password-account-remember { font-size:12px; line-height:1.5; color:var(--ink-soft); margin:16px 0 0; text-align:center; }
+  .account-switch-confirm { display:flex; align-items:flex-start; gap:9px; margin-top:14px; font-size:13px; line-height:1.5; }
+  #account-dialog [hidden] { display:none!important; }
   .intro-question { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin:0; }
   #intro-topic { min-width:0;height:48px;border:1.5px solid var(--line);border-radius:12px;background:var(--paper);color:var(--ink);padding:0 13px;font-size:15px;outline:none; }
   #intro-topic:focus { border-color:var(--accent);box-shadow:0 0 0 3px rgba(23,77,91,.1); }
@@ -1538,23 +1557,46 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   </div>
 </div>
 
+<dialog id="account-dialog" aria-labelledby="account-dialog-title" aria-describedby="account-dialog-copy">
+  <section class="account-dialog-card">
+    <div class="intro-wordmark">Worldview</div>
+    <h2 id="account-dialog-title">Sign in</h2>
+    <p id="account-dialog-copy">Your lessons, wherever you return.</p>
+    <form id="password-account-form" novalidate>
+      <fieldset id="password-account-fields">
+        <label id="password-account-email-label" for="password-account-email">Email</label>
+        <input id="password-account-email" name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" required disabled>
+        <div id="password-account-secret-group">
+          <label for="password-account-secret">Password</label>
+          <input id="password-account-secret" name="password" type="password" autocomplete="current-password" required disabled>
+        </div>
+        <div id="password-account-confirm-group" hidden>
+          <label for="password-account-confirm">Confirm password</label>
+          <input id="password-account-confirm" name="confirm-password" type="password" autocomplete="new-password" disabled>
+        </div>
+        <label id="account-switch-confirm-label" class="account-switch-confirm" hidden><input id="account-switch-confirm" type="checkbox" disabled> Keep this device's earlier library separate and sign in to the other account.</label>
+        <button id="password-account-submit" class="account-primary" type="submit">Sign in</button>
+      </fieldset>
+    </form>
+    <p id="password-account-status" role="status" aria-live="polite"></p>
+    <p id="password-account-remember">You stay signed in on this device until you sign out.</p>
+    <div class="account-dialog-actions">
+      <button id="password-account-signup" type="button">Create account</button>
+      <button id="password-account-forgot" type="button">Forgot password?</button>
+      <button id="password-account-signin" type="button" hidden>Back to sign in</button>
+      <button id="password-account-resend" type="button" hidden>Resend email</button>
+      <button id="password-account-close" type="button" hidden>Return to Worldview</button>
+      <button id="password-account-signout" type="button" hidden>Sign out</button>
+    </div>
+  </section>
+</dialog>
+
 <div id="intro-demo" role="dialog" aria-modal="true" aria-labelledby="intro-title" aria-hidden="true" inert>
   <section class="intro-card">
     <div class="intro-wordmark">Worldview</div>
     <h2 id="intro-title">Learn everything.</h2>
     <p>Type anything you&rsquo;re curious about.</p>
-    <form id="intro-account-form" class="intro-account-setup">
-      <div id="intro-email-step" class="intro-account-row">
-        <input id="intro-account-email" type="email" autocomplete="email" inputmode="email" placeholder="Recovery email" aria-label="Recovery email" disabled>
-        <button id="intro-account" type="submit">Add recovery email</button>
-      </div>
-      <div id="intro-code-step" class="intro-code-row" hidden>
-        <input id="intro-account-code" type="text" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Email code" aria-label="Email verification code" disabled>
-        <button id="intro-account-verify" type="button">Confirm</button>
-      </div>
-      <div id="intro-account-connected" hidden></div>
-      <p id="intro-account-status" role="status" aria-live="polite"></p>
-    </form>
+    <p id="intro-account-connected" hidden></p>
     <form id="intro-question" class="intro-question">
       <input id="intro-topic" type="text" placeholder="What are you curious about?" autocomplete="off" enterkeyhint="go" aria-label="What are you curious about?">
       <button id="intro-start" type="submit" disabled>Begin</button>
@@ -1662,7 +1704,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   </nav>
   <button id="mobile-category-button" type="button" aria-haspopup="dialog">Most recent</button>
   <button id="models-button" type="button" aria-haspopup="dialog" hidden>Models</button>
-  <a id="developer-lab-launcher" href="lab/" aria-label="Open the protected developer Lab">Developer lab</a>
+  <a id="developer-lab-launcher" href="lab/" aria-label="Open the protected developer Lab" hidden>Developer lab</a>
   <div id="home-header">
     <button id="home-menu" class="menu-button" type="button" aria-label="Open menu">&#9776;</button>
     <div class="home-brand">
@@ -2051,11 +2093,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v182 · Aug 31";
+const BUILD = "v183 · Sep 1";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v183", date: "Sep 1", changes: [
+    "Worldview now asks for an email and password when no saved account is signed in, then remembers that verified session on this device.",
+    "Developer Lab uses the same server-verified administrator session. Its separate Alpha-code password prompt is gone.",
+    "Account switching protects saved work and clears the previous account's active research, recordings, and source panel."
+  ]},
   { tag: "v182", date: "Aug 31", changes: [
     "Previous Mock Runs is now a real practice launcher: continue exactly where you stopped, or choose Clarification, Lesson Map, Extraction, Lesson, or Quiz.",
     "Starting at Extraction never creates or retries a Lesson Map behind your back. Map generation and failed-Map retry remain deliberate, confirmed choices that preserve every older attempt.",
@@ -2851,6 +2898,32 @@ let legacyLibraryAtBoot = null, pendingLegacyRecovery = null;
 let cloudRemoteBaseline = "unknown", cloudRemoteRevision = 0, cloudSyncedFingerprint = "";
 let pilotCloudMutationActive = false, pilotCloudMutationQueue = Promise.resolve();
 let identityMutationReady = false, accountOwnershipResolved = false, identityGatePromise = null;
+let accountAuthEpoch = 0, entitlementAccountId = "", authEventUserId = "";
+const PASSWORD_RECOVERY_KEY = "worldview-password-recovery-v1";
+const ACCOUNT_SIGNOUT_KEY = "worldview-signout-pending-v1";
+let passwordRecoveryUserId = "";
+const accountRequestControllers = new Set();
+function accountSignoutPending(userId = "") {
+  try { const marker = JSON.parse(localStorage.getItem(ACCOUNT_SIGNOUT_KEY) || "null");return !!(marker?.userId && (!userId || marker.userId === userId)); }
+  catch (error) { return false; }
+}
+function permanentAccountVerified(user = cloudAccount) {
+  return !!(user?.id && user.is_anonymous === false && user.email && Number.isFinite(Date.parse(user.email_confirmed_at || "")));
+}
+function accountRecoveryRequired(user = cloudAccount) {
+  if (!user?.id) return false;
+  if (passwordRecoveryUserId === user.id) return true;
+  try { return JSON.parse(localStorage.getItem(PASSWORD_RECOVERY_KEY) || "null")?.userId === user.id; }
+  catch (error) { return false; }
+}
+function ownerToolsAvailable() {
+  const row = backendEntitlementRecord;
+  const expires = row?.expires_at ? Date.parse(row.expires_at) : null;
+  return !!(permanentAccountVerified() && !accountRecoveryRequired() && !accountSignoutPending() && identityRestoreStatus === "verified"
+    && entitlementAccountId === cloudAccount.id && backendEntitled && row?.active === true
+    && !row.revoked_at && row.access_tier === "admin"
+    && (expires === null || (Number.isFinite(expires) && expires > Date.now())));
+}
 const DEFAULT_STATE = { apiKey: "", testerInvite: "", monthlyBudget: 5, model: "claude-sonnet-5", tutorThinking: "fast", developerMode: false, developerUnlocked:false, ttsProvider: "auto", sttModel:"deepgram-nova-3", deepgramKey: "", deepgramModel: "aura-2-arcas-en", lessons: [], notes: [], customCategories: [], voiceURI: "", voiceDefault: true, speechLanguage: "en", elKey: "", cartKey: "", cartVoice: "", cardScale: 1, theme:"system", libraryUpdatedAt:0, voiceTimingLog: [], voiceRelayEnabled: false, speakerphone: true, micPrimerVersion:"", micPrimerChoice:"" };
 function freshDefaultState() { return JSON.parse(JSON.stringify(DEFAULT_STATE)); }
 function accountStateStorageKey(accountId) { return ACCOUNT_STATE_STORAGE_PREFIX + String(accountId || ""); }
@@ -2871,7 +2944,8 @@ legacyLibraryAtBoot = readLegacyLibraryQuarantine();
 if (hasLegacyLearnerData(state)) legacyLibraryAtBoot = quarantineLegacyLearnerLibrary(state) || legacyLibraryAtBoot;
 state = Object.assign(freshDefaultState(),deviceStateWithoutLibrary(state));
 function normalizeLoadedState() {
-  if (state.developerMode) state.developerUnlocked = true;
+  state.developerUnlocked = ownerToolsAvailable();
+  state.developerMode = !!(state.developerUnlocked && state.developerMode);
   if (!Array.isArray(state.lessons)) state.lessons = [];
   if (!Array.isArray(state.notes)) state.notes = [];
   if (!Array.isArray(state.customCategories)) state.customCategories = [];
@@ -3089,7 +3163,7 @@ if (!state.speechLanguage) { state.speechLanguage = "en"; save(); }
 (function keyFromLink() {
   const params = new URLSearchParams(location.search);
   const k = params.get("key"), ek = params.get("elkey"), ck = params.get("cartkey"), invite = params.get("invite"), developer = params.get("developer") === "1";
-  if (developer) { state.developerUnlocked = true;state.developerMode = true; }
+  // A URL is never developer authorization. The verified server role owns it.
   if (!k && !ek && !ck && !invite && !developer) return;
   if (k) state.apiKey = k;
   if (ek) state.elKey = ek;
@@ -3103,32 +3177,52 @@ if (!state.speechLanguage) { state.speechLanguage = "en"; save(); }
 /* ================= Tester backend =================
    The project URL and publishable key identify the Supabase project; they are
    intentionally public. Anthropic and Deepgram secrets exist only inside the
-   Edge Functions. Each phone receives its own anonymous Auth identity. */
+   Edge Functions. Existing anonymous identities may be upgraded in place;
+   new account entry uses verified email and password only. */
 const SUPABASE_URL = "https://eqppapoepynjvsfnoodj.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT";
 /* Read-only/no-spend browser QA may use ?preview=1 on localhost. Production
    hosts can never enter this branch. It prevents UI checks from creating an
    anonymous account or uploading the developer's local data.js fixture. */
 const LOCAL_UI_PREVIEW = ["localhost","127.0.0.1"].includes(location.hostname) && new URLSearchParams(location.search).get("preview") === "1";
+async function boundedAuthFetch(input, options = {}) {
+  // The Auth SDK owns session storage. Bound the actual request and body read,
+  // not just the caller's wait, so a late password operation cannot sign in
+  // after a retry has already selected a different account.
+  if (!String(input?.url || input).includes("/auth/v1/")) return fetch(input,options);
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (options.signal?.aborted) controller.abort();
+  else options.signal?.addEventListener("abort",abort,{once:true});
+  const timer = setTimeout(abort,12000);
+  try {
+    const response = await fetch(input,{...options,signal:controller.signal});
+    const body = [204,205,304].includes(response.status) ? null : await response.arrayBuffer();
+    return new Response(body,{status:response.status,statusText:response.statusText,headers:response.headers});
+  } finally { clearTimeout(timer);options.signal?.removeEventListener("abort",abort); }
+}
 const backendClient = !LOCAL_UI_PREVIEW && window.supabase && window.supabase.createClient
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
       auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storageKey:"worldview-alpha-auth" },
+      global:{fetch:boundedAuthFetch},
     })
   : null;
 let backendSessionPromise = null;
 function stableIdentityAllowsMutation() {
-  return !backendClient || !!(identityMutationReady && accountOwnershipResolved && !accountCacheReadOnly
+  return !backendClient || !!(permanentAccountVerified() && !accountRecoveryRequired() && !accountSignoutPending()
+    && identityMutationReady && accountOwnershipResolved && !accountCacheReadOnly
     && cloudAccount && stateAccountId && cloudAccount.id === stateAccountId);
 }
 function backendAccessEnabled() {
   return stableIdentityAllowsMutation() && !!(backendClient
     && (backendEntitled || (!backendAccessRowPresent && state.testerInvite)));
 }
-function aiAvailable() { return stableIdentityAllowsMutation() && (backendAccessEnabled() || !!state.apiKey); }
+function aiAvailable() { return stableIdentityAllowsMutation() && (backendAccessEnabled() || (ownerToolsAvailable() && !!state.apiKey)); }
 async function backendAccessToken(forceRefresh = false) {
   if (!backendClient) throw claudeError("Cloud access is unavailable.", { status:503, type:"not_configured" });
   if (backendSessionPromise && !forceRefresh) return backendSessionPromise;
-  backendSessionPromise = (async () => {
+  const epoch = accountAuthEpoch;
+  const task = (async () => {
     let session = null;
     if (forceRefresh) {
       const refreshed = await backendClient.auth.refreshSession();
@@ -3140,38 +3234,67 @@ async function backendAccessToken(forceRefresh = false) {
       session = current.data.session;
     }
     if (!session) {
-      const signedIn = await backendClient.auth.signInAnonymously({ options:{ data:{ client:"worldview-alpha" } } });
-      if (signedIn.error) throw signedIn.error;
-      session = signedIn.data.session;
+      throw claudeError("Sign in to your Worldview account to continue.", {status:401,type:"sign_in_required"});
     }
-    if (!session?.access_token) throw new Error("Tester sign-in did not return a session.");
+    if (!session?.access_token) throw new Error("Sign-in did not return a session.");
+    if (epoch !== accountAuthEpoch) throw new Error("The account changed while restoring its session.");
     return session.access_token;
   })();
-  try { return await backendSessionPromise; }
-  finally { backendSessionPromise = null; }
+  backendSessionPromise = task;
+  try { return await task; }
+  finally { if (backendSessionPromise === task) backendSessionPromise = null; }
 }
 async function backendFetch(functionName, options = {}, retryAuth = true) {
+  const epoch = accountAuthEpoch;
+  const ownerId = cloudAccount?.id || "";
   if (!await ensureStableIdentityForMutation(`use ${functionName}`)) {
     throw claudeError("Your secure account is not ready for this request yet.", { status:503, type:"identity_not_ready", transient:true });
   }
   const token = await backendAccessToken(false);
+  if (epoch !== accountAuthEpoch || ownerId !== cloudAccount?.id || !stableIdentityAllowsMutation()) {
+    throw claudeError("The account changed before this request.", {status:401,type:"account_changed"});
+  }
   const requestHeaders = new Headers(options.headers || {});
   requestHeaders.set("apikey", SUPABASE_PUBLISHABLE_KEY);
   requestHeaders.set("authorization", "Bearer " + token);
   requestHeaders.set("x-worldview-access", state.testerInvite);
   const lessonId = String(options.lessonId || "").trim().slice(0,160);
   if (lessonId) requestHeaders.set("x-worldview-lesson-id",lessonId);
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/${functionName}${options.query || ""}`, {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  accountRequestControllers.add(controller);
+  if (options.signal?.aborted) controller.abort();
+  else options.signal?.addEventListener("abort",abort,{once:true});
+  const cleanup = () => { accountRequestControllers.delete(controller);options.signal?.removeEventListener("abort",abort); };
+  let response;
+  try { response = await fetch(`${SUPABASE_URL}/functions/v1/${functionName}${options.query || ""}`, {
     method: options.method || "POST",
     headers: requestHeaders,
     body: options.body,
-    signal: options.signal,
-  });
+    signal: controller.signal,
+  }); } catch (error) { cleanup();throw error; }
+  if (epoch !== accountAuthEpoch || ownerId !== cloudAccount?.id) {
+    controller.abort();cleanup();throw claudeError("The account changed during this request.",{status:401,type:"account_changed"});
+  }
   if (response.status === 401 && retryAuth) {
+    controller.abort();cleanup();
     await backendAccessToken(true);
+    if (epoch !== accountAuthEpoch || ownerId !== cloudAccount?.id) throw claudeError("Sign in again.",{status:401,type:"account_changed"});
     return backendFetch(functionName, options, false);
   }
-  return response;
+  if (!response.body) { cleanup();return response; }
+  const reader = response.body.getReader();
+  return new Response(new ReadableStream({
+    async pull(target) {
+      try {
+        const chunk = await reader.read();
+        if (epoch !== accountAuthEpoch || ownerId !== cloudAccount?.id) throw new Error("The account changed during this response.");
+        if (chunk.done) { cleanup();target.close(); }
+        else target.enqueue(chunk.value);
+      } catch (error) { controller.abort();cleanup();target.error(error); }
+    },
+    cancel(reason) { controller.abort();cleanup();return reader.cancel(reason); },
+  }),{status:response.status,statusText:response.statusText,headers:response.headers});
 }
 
 /* ================= Private cloud library =================
@@ -3410,6 +3533,10 @@ function guardAccountMutation(action = "make that change") {
 async function ensureStableIdentityForMutation(action = "save") {
   if (!backendClient) return true;
   if (stableIdentityAllowsMutation()) return true;
+  if (!permanentAccountVerified() && !accountIdentityHeldForRetry() || accountRecoveryRequired()) {
+    openPasswordAccount(accountRecoveryRequired() ? "update" : cloudAccount?.is_anonymous ? "upgrade" : "signin");
+    return false;
+  }
   if (accountMutationBlocked() && identityRestoreStatus !== "signed-out") {
     guardAccountMutation(action);
     return false;
@@ -3455,13 +3582,14 @@ function invalidCloudSessionError(error) {
 }
 async function cloudUser() {
   if (!backendClient) return null;
-  const session = await backendClient.auth.getSession();
+  const session = await accountOperationDeadline(backendClient.auth.getSession());
   if (session.error) {
     if (invalidCloudSessionError(session.error)) return null;
     throw session.error;
   }
   if (!session.data?.session) return null;
-  const current = await backendClient.auth.getUser();
+  if (accountSignoutPending(session.data.session.user?.id)) return null;
+  const current = await accountOperationDeadline(backendClient.auth.getUser());
   if (current.error) {
     if (invalidCloudSessionError(current.error)) return null;
     throw current.error;
@@ -3717,13 +3845,13 @@ function updateCloudAccountUI(status = "") {
   if (label) label.textContent = email
     ? `${email} · ${accountCacheReadOnly ? "read-only, reconnecting" : pendingLegacyRecovery ? "recovery choice needed" : status === "error" ? "save retrying" : "saved"}`
     : held ? heldStatus
-    : status === "error" ? "Cloud save needs another try." : "Add recovery email";
+    : status === "error" ? "Cloud save needs another try." : "Sign in to protect your library";
   const signOut = $("account-signout");
   if (signOut) signOut.hidden = !email;
-  if ($("nav-account-label")) $("nav-account-label").textContent = email ? "Library protected" : held ? "Secure session retrying" : "Protect Notes";
+  if ($("nav-account-label")) $("nav-account-label").textContent = permanentAccountVerified() ? "Account" : held ? "Secure session retrying" : "Sign in";
   if ($("drawer-account-status")) $("drawer-account-status").textContent = email
     ? `${email} · ${accountCacheReadOnly ? "read-only, reconnecting" : pendingLegacyRecovery ? "recovery choice needed" : status === "error" ? "save retrying" : "saved"}`
-    : held ? heldStatus : "Add recovery email";
+    : held ? heldStatus : "Sign in / create account";
   const accessStatus = $("account-access-status");
   if (accessStatus) {
     const access = backendEntitlementRecord;
@@ -3743,31 +3871,54 @@ function updateCloudAccountUI(status = "") {
       : "Tester access is active.";
   }
   renderAccountSetupUI(status);
+  syncDeveloperLauncherVisibility();
+  syncDeveloperSettingsVisibility();
   renderAccountGuardUI();
 }
 async function loadBackendEntitlement(userId) {
+  const epoch = accountAuthEpoch;
+  const generation = cloudInitGeneration;
+  const matches = () => epoch === accountAuthEpoch && generation === cloudInitGeneration && cloudAccount?.id === userId;
   backendEntitled = false;
+  entitlementAccountId = "";
   backendAccessRowPresent = false;
   backendEntitlementRecord = null;
   backendPilotLessonsUsed = null;
   backendPilotLessonsRemaining = null;
   backendPilotRegisteredLessonIds = new Set();
   if (!backendClient || !userId) return false;
-  const result = await backendClient.from("user_access")
+  if (permanentAccountVerified()) {
+    // The server resolves this identity's role. It never accepts a client email
+    // or local developer flag as a grant, and this action makes no model call.
+    try {
+      const token = await backendAccessToken(false);
+      if (!matches()) return false;
+      const accessResponse = await fetch(`${SUPABASE_URL}/functions/v1/lab-jobs`,{
+        method:"POST",headers:{apikey:SUPABASE_PUBLISHABLE_KEY,authorization:`Bearer ${token}`,"content-type":"application/json"},
+        body:JSON.stringify({action:"account_access"}),signal:AbortSignal.timeout(10000),
+      });
+      await accessResponse.body?.cancel();
+    } catch (error) { /* A role lookup may still succeed when bootstrap is unavailable. */ }
+    if (!matches()) return false;
+  }
+  const result = await accountOperationDeadline(backendClient.from("user_access")
     .select("active,access_tier,granted_at,revoked_at,expires_at,offer_code,lesson_limit")
-    .eq("user_id",userId).maybeSingle();
+    .eq("user_id",userId).maybeSingle());
+  if (!matches()) return false;
   if (result.error) {
     console.warn("Access status could not be loaded",result.error.code,result.error.message);
     return false;
   }
   backendAccessRowPresent = !!result.data;
   backendEntitlementRecord = result.data || null;
+  entitlementAccountId = userId;
   const expiresAt = result.data?.expires_at ? Date.parse(result.data.expires_at) : Number.NaN;
-  backendEntitled = !!(result.data?.active
+  backendEntitled = !!(result.data?.active && !result.data.revoked_at
     && !(result.data.access_tier === "paid" && !Number.isFinite(expiresAt))
     && !(Number.isFinite(expiresAt) && expiresAt <= Date.now()));
   if (backendEntitled && result.data?.access_tier === "paid") {
-    const allowance = await backendClient.rpc("get_worldview_lesson_allowance");
+    const allowance = await accountOperationDeadline(backendClient.rpc("get_worldview_lesson_allowance"));
+    if (!matches()) return false;
     if (!allowance.error && allowance.data?.allowed) {
       backendPilotLessonsUsed = Number(allowance.data.used) || 0;
       backendPilotLessonsRemaining = Math.max(0,Number(allowance.data.remaining) || 0);
@@ -3814,6 +3965,7 @@ async function initCloudPersistence() {
       cloudRemoteRevision = 0;
       cloudSyncedFingerprint = "";
       cloudAccount = null;
+      entitlementAccountId = "";
       backendEntitled = false;
       backendAccessRowPresent = false;
       backendEntitlementRecord = null;
@@ -3828,14 +3980,17 @@ async function initCloudPersistence() {
     }
     verifiedUser = user;
     cloudAccount = user;
+    if (permanentAccountVerified(user) && (user.user_metadata?.worldview_password_setup
+      || accountPending?.mode === "email_change" && accountPending.originalUserId === user.id)) markPasswordRecovery(user.id);
     identityVerified = true;
     identityRestoreStatus = "verified";
     clearTimeout(identityRetryTimer);
     identityRetryTimer = 0;
     identityRetryDelay = 0;
     await loadBackendEntitlement(user.id);
+    if (generation !== cloudInitGeneration || cloudAccount?.id !== user.id) return false;
     scoped = storedState(accountStateStorageKey(user.id));
-    const remote = await backendClient.from("user_app_state").select("snapshot,client_updated_at,server_revision").eq("user_id",user.id).maybeSingle();
+    const remote = await accountOperationDeadline(backendClient.from("user_app_state").select("snapshot,client_updated_at,server_revision").eq("user_id",user.id).maybeSingle());
     if (remote.error) throw remote.error;
     if (generation !== cloudInitGeneration || !cloudAccount || cloudAccount.id !== user.id) return false;
     const hasRemote = !!remote.data;
@@ -3875,10 +4030,10 @@ async function initCloudPersistence() {
       ? {accountId:user.id,payload:legacy,ownedBaseline:hasRemote ? "remote" : scoped ? "scoped" : "missing"}
       : null;
     accountOwnershipResolved = !pendingLegacyRecovery;
-    identityMutationReady = accountOwnershipResolved;
+    identityMutationReady = accountOwnershipResolved && permanentAccountVerified(user) && !accountRecoveryRequired(user);
     accountCacheReadOnly = false;
     accountCacheReadOnlyWarningShown = false;
-    cloudSyncReady = accountOwnershipResolved && decision.allowSync;
+    cloudSyncReady = accountOwnershipResolved && decision.allowSync && !accountRecoveryRequired(user);
     if (backendAccessRowPresent && state.testerInvite) {
       // Once the server has an access row, that row is the sole authority.
       // Removing the device copy prevents an old QA code from appearing to be
@@ -5789,9 +5944,10 @@ function syncStartButton() {
 
 function syncDeveloperLauncherVisibility() {
   const launcher = $("developer-lab-launcher");
-  /* The Lab itself retains its owner-code gate. Keep the Home route visible so
-     the owner cannot be locked out merely because device developer mode reset. */
-  if (launcher) launcher.hidden = false;
+  const admin = ownerToolsAvailable();
+  state.developerUnlocked = admin;
+  if (!admin) state.developerMode = false;
+  if (launcher) launcher.hidden = !admin;
   const modelsButton = $("models-button");
   if (modelsButton) modelsButton.hidden = !state.developerMode;
   if (!state.developerMode && $("models-sheet")) {
@@ -10125,6 +10281,7 @@ function renderTextResponseFailure(bubble, lesson, error) {
 }
 async function runTextLessonResponse(lesson, thinkingBubble) {
   if (!lesson || streaming) return;
+  const authEpoch = accountAuthEpoch, ownerId = cloudAccount?.id;
   streaming = true;
   let turnEnvelope = null;
   $("chat-send").disabled = true;
@@ -10151,7 +10308,7 @@ async function runTextLessonResponse(lesson, thinkingBubble) {
         thinkingBubble.innerHTML = md("*temporarily busy — trying again…*");
       }
     );
-    if (!pendingTutorTurnMatches(lesson,turnEnvelope)) throw staleTutorReplyError();
+    if (authEpoch !== accountAuthEpoch || ownerId !== cloudAccount?.id || !pendingTutorTurnMatches(lesson,turnEnvelope)) throw staleTutorReplyError();
     if (!stableIdentityAllowsMutation()) return;
     const cleanFull = finalizeTutorReply(full,lesson,{turnEnvelope});
     if (!cleanFull) throw claudeError("Claude returned an empty response", { transient: true });
@@ -10168,6 +10325,7 @@ async function runTextLessonResponse(lesson, thinkingBubble) {
     updateCostLabel(lesson);
     scheduleLessonCompaction(lesson);
   } catch (rawError) {
+    if (authEpoch !== accountAuthEpoch || ownerId !== cloudAccount?.id) return;
     const error = normalizeClaudeError(rawError);
     abandonPendingTutorTurn(lesson,turnEnvelope);
     if (error.staleTutorReply) {
@@ -14738,7 +14896,7 @@ function organizeSettingsPanel() {
   connection.id = "settings-tester-group";
   const accountCard = document.createElement("div");
   accountCard.className = "settings-account-card";
-  accountCard.innerHTML = `<p id="account-status" class="settings-account-status">Connecting…</p><p id="account-access-status" class="settings-access-status" hidden></p><div id="account-email-step" class="settings-account-row"><input id="account-email" type="email" autocomplete="email" inputmode="email" placeholder="Recovery email" aria-label="Recovery email" disabled><button id="account-link" type="button">Add</button></div><div id="account-code-step" class="settings-account-row" hidden><input id="account-code" type="text" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Email code" aria-label="Email verification code" disabled><button id="account-verify" type="button">Confirm</button></div><button id="account-signout" type="button" hidden>Sign out</button>`;
+  accountCard.innerHTML = `<p id="account-status" class="settings-account-status">Checking account…</p><p id="account-access-status" class="settings-access-status" hidden></p><button id="account-link" type="button">Sign in / create account</button><button id="account-signout" type="button" hidden>Sign out</button>`;
   const account = group("Account",[accountCard],true,true);
   account.id = "settings-account-group";
   const voiceNodes = [];
@@ -14761,32 +14919,22 @@ function credentialFieldIsVisibleWithin(field, root) {
   return true;
 }
 function syncCredentialFieldInteractivity() {
-  const settings = $("settings"), intro = $("intro-demo");
+  const settings = $("settings");
   const settingsOpen = !!(settings && settings.classList.contains("open") && !settings.inert);
   SECRET_SETTING_IDS.forEach(id => {
     const field = $(id);
     if (field) field.disabled = !(settingsOpen && credentialFieldIsVisibleWithin(field,settings));
   });
-  const held = accountIdentityHeldForRetry();
-  const emailConnected = !!(cloudAccount && cloudAccount.email);
-  const pending = !emailConnected && !held && !!accountPending;
-  const installFirst = !emailConnected && !pending && !held && iosNeedsHomeScreenBeforeAccount();
-  const introOpen = !!(intro && intro.classList.contains("open") && !intro.inert);
-  const introEmail = $("intro-account-email"), introCode = $("intro-account-code");
-  if (introEmail) introEmail.disabled = !(introOpen && !emailConnected && !pending && !held && !installFirst
-    && credentialFieldIsVisibleWithin(introEmail,intro));
-  if (introCode) introCode.disabled = !(introOpen && pending && EMAIL_OTP_ENABLED
-    && credentialFieldIsVisibleWithin(introCode,intro));
-  const settingsEmail = $("account-email"), settingsCode = $("account-code");
-  if (settingsEmail) settingsEmail.disabled = !(settingsOpen && !emailConnected && !pending && !held
-    && credentialFieldIsVisibleWithin(settingsEmail,settings));
-  if (settingsCode) settingsCode.disabled = !(settingsOpen && pending && EMAIL_OTP_ENABLED
-    && credentialFieldIsVisibleWithin(settingsCode,settings));
+  const dialog = $("account-dialog");
+  if (dialog) dialog.querySelectorAll("input").forEach(field => {
+    field.disabled = !(dialog.open && !passwordAccountBusy && credentialFieldIsVisibleWithin(field,dialog));
+  });
 }
 function syncDeveloperSettingsVisibility() {
-  const developer = !!state.developerMode;
+  const admin = ownerToolsAvailable();
+  const developer = !!(admin && state.developerMode);
   const developerToggle = $("set-developer") && $("set-developer").closest("label");
-  if (developerToggle) developerToggle.hidden = !(state.developerUnlocked && state.developerMode);
+  if (developerToggle) developerToggle.hidden = !admin;
   const group = $("settings-developer-group");
   if (group) group.hidden = !developer;
   if (developer) renderVoiceTimingReadout();
@@ -14800,18 +14948,18 @@ function syncDeveloperSettingsVisibility() {
   syncCredentialFieldInteractivity();
 }
 const ACCOUNT_PENDING_KEY = "worldview-account-pending-v1";
-/* Supabase's free default mailer does not permit OTP email templates. The
-   installed app therefore uses the confirmation link plus a foreground
-   identity refresh today. Set this true only after production SMTP and the
-   tracked {{ .Token }} templates are live. */
-const EMAIL_OTP_ENABLED = false;
+// A pending confirmation contains only local routing hints, never a password.
+const EMAIL_OTP_ENABLED = false; // Retired: ordinary sign-in now uses a password.
 let accountPending = (() => {
   try {
     const value = JSON.parse(localStorage.getItem(ACCOUNT_PENDING_KEY) || "null");
-    return value && value.email && Date.now() - Number(value.sentAt || 0) < 30 * 60 * 1000 ? value : null;
+    return value?.email && Date.now() - Number(value.sentAt || 0) < 24 * 60 * 60 * 1000 ? value : null;
   } catch (error) { return null; }
 })();
-syncDeveloperSettingsVisibility();
+let passwordAccountMode = "signin", passwordAccountBusy = false;
+let passwordCommandPending = null;
+let passwordAccountMessage = "", passwordAccountError = false;
+let accountReturnToLab = new URLSearchParams(location.search).get("returnTo") === "lab";
 function setAccountPending(value) {
   accountPending = value;
   try {
@@ -14819,165 +14967,405 @@ function setAccountPending(value) {
     else localStorage.removeItem(ACCOUNT_PENDING_KEY);
   } catch (error) {}
 }
-function renderAccountSetupUI(status = "") {
-  const email = cloudAccount && cloudAccount.email;
-  if (email && accountPending) setAccountPending(null);
-  const held = accountIdentityHeldForRetry();
-  const pending = !email && !held && accountPending;
-  const installFirst = !email && !pending && !held && iosNeedsHomeScreenBeforeAccount();
-  const introEmailStep = $("intro-email-step"), introCodeStep = $("intro-code-step"), introConnected = $("intro-account-connected"), introStatus = $("intro-account-status");
-  if (introEmailStep) introEmailStep.hidden = !!(email || pending || held);
-  if (introCodeStep) {
-    introCodeStep.hidden = !pending;
-    introCodeStep.classList.toggle("link-fallback",!!pending && !EMAIL_OTP_ENABLED);
-    if ($("intro-account-verify")) $("intro-account-verify").textContent = EMAIL_OTP_ENABLED ? "Confirm" : "Check account";
+function markPasswordRecovery(userId) {
+  passwordRecoveryUserId = String(userId || "");
+  try {
+    if (userId) localStorage.setItem(PASSWORD_RECOVERY_KEY,JSON.stringify({userId,startedAt:Date.now()}));
+    else localStorage.removeItem(PASSWORD_RECOVERY_KEY);
+  } catch (error) {}
+}
+function clearPasswordFields() {
+  ["password-account-secret","password-account-confirm"].forEach(id => { if ($(id)) $(id).value = ""; });
+}
+function passwordAccountNotice(message = "", isError = false) {
+  passwordAccountMessage = message;
+  passwordAccountError = isError;
+  const status = $("password-account-status");
+  if (status) { status.textContent = message;status.dataset.error = String(isError); }
+}
+function accountEmailRedirect() {
+  // Only the exact current app origin/path; no caller-controlled return URL.
+  return location.origin + location.pathname;
+}
+function accountOperationDeadline(promise, message = "The account service took too long. Please try again.") {
+  let timer;
+  return Promise.race([promise,new Promise((_,reject) => {
+    timer = setTimeout(() => reject(new Error(message)),15000);
+  })]).finally(() => clearTimeout(timer));
+}
+async function accountAuthCommand(operation) {
+  if (passwordCommandPending) throw new Error("An account request is still finishing.");
+  const task = Promise.resolve().then(operation);
+  passwordCommandPending = task;
+  // boundedAuthFetch aborts the underlying Auth HTTP request/body. Do not
+  // Promise.race a write: a timed-out SDK command must not outlive its owner.
+  try { return await task; }
+  finally { if (passwordCommandPending === task) passwordCommandPending = null; }
+}
+async function refreshPasswordAccountIdentity() {
+  const epoch = accountAuthEpoch;
+  try { await accountOperationDeadline(initCloudPersistence()); }
+  catch (error) {
+    if (epoch !== accountAuthEpoch) return;
+    cloudInitGeneration += 1; // invalidate any late read from this refresh
+    identityMutationReady = false;cloudSyncReady = false;entitlementAccountId = "";
+    identityRestoreStatus = "offline";accountCacheReadOnly = true;
+    passwordAccountNotice("Your account request finished, but the library could not reconnect yet. Retry when the connection is ready.",true);
   }
-  if (introConnected) { introConnected.hidden = !email;introConnected.textContent = email ? `Saved with ${email}` : ""; }
-  if ($("intro-account-email")) $("intro-account-email").disabled = installFirst || held;
-  if ($("intro-account")) $("intro-account").disabled = installFirst || held;
-  if (introStatus) introStatus.textContent = email ? "" : held
-    ? accountCacheReadOnly
-      ? "You are offline. Your saved account copy is read-only while Worldview retries the secure session."
-      : "Checking your saved secure session…"
-    : installFirst
-    ? "On iPhone, add Worldview to your Home Screen first. Then open the icon and connect your account there so iPhone keeps the correct secure session."
-    : pending
-    ? EMAIL_OTP_ENABLED ? `Code sent to ${pending.email}` : "Check your email, then return here."
-    : status === "error" ? "Cloud save will retry." : "";
-  const settingsEmailStep = $("account-email-step"), settingsCodeStep = $("account-code-step");
-  if (settingsEmailStep) settingsEmailStep.hidden = !!(email || pending || held);
-  if (settingsCodeStep) {
-    settingsCodeStep.hidden = !pending;
-    settingsCodeStep.classList.toggle("link-fallback",!!pending && !EMAIL_OTP_ENABLED);
-    if ($("account-verify")) $("account-verify").textContent = EMAIL_OTP_ENABLED ? "Confirm" : "Check account";
-  }
-  [$("intro-account-email"),$("account-email")].forEach(input => { if (input && pending && !input.value) input.value = pending.email; });
+}
+function accountEntryNeeded() {
+  return !!(backendClient && (!permanentAccountVerified() || accountRecoveryRequired()));
+}
+function renderPasswordAccount() {
+  const dialog = $("account-dialog");
+  if (!dialog) return;
+  const mode = passwordAccountMode;
+  const upgrade = mode === "upgrade";
+  const update = mode === "update";
+  const verify = mode === "verify";
+  const signup = mode === "signup";
+  const reset = mode === "reset";
+  const manage = mode === "manage";
+  const checking = mode === "checking";
+  const needsPassword = ["signin","signup","update"].includes(mode);
+  $("account-dialog-title").textContent = checking ? "Checking your account…" : update ? "Set your password" : upgrade ? "Keep your existing library" : verify ? "Check your email" : reset ? "Reset your password" : signup ? "Create account" : manage ? "Your account" : "Sign in";
+  $("account-dialog-copy").textContent = checking ? "Restoring your secure session."
+    : upgrade ? "Connect an email to this device's existing account. Verify it first, then choose a password. Your lessons stay with the same account."
+    : update ? "Choose a password of at least 12 characters. A memorable phrase works well."
+    : verify ? "Open the confirmation email, then return here. If you already have an account, sign in instead. We never merge libraries automatically."
+    : reset ? "If an account uses this email, we'll send a password-reset link."
+    : signup ? "Email and password only. Confirm your email before starting."
+    : manage ? "You stay signed in on this device by default. Sign out when using a shared device."
+    : "Your lessons, wherever you return.";
+  $("password-account-email-label").hidden = update || verify || manage || checking;
+  $("password-account-email").hidden = update || verify || manage || checking;
+  $("password-account-secret-group").hidden = !needsPassword;
+  $("password-account-confirm-group").hidden = !(signup || update);
+  $("password-account-secret").autocomplete = mode === "signin" ? "current-password" : "new-password";
+  $("password-account-secret").minLength = mode === "signin" ? 1 : 12;
+  $("account-switch-confirm-label").hidden = !(mode === "signin" && cloudAccount?.is_anonymous === true);
+  $("password-account-submit").hidden = manage || checking;
+  $("password-account-submit").textContent = update ? "Save password" : upgrade ? "Send confirmation" : verify ? "I've confirmed my email" : reset ? "Send reset link" : signup ? "Create account" : "Sign in";
+  $("password-account-signup").hidden = !["signin","upgrade"].includes(mode);
+  $("password-account-signup").textContent = cloudAccount?.is_anonymous ? "Connect this library" : "Create account";
+  $("password-account-forgot").hidden = !["signin","manage"].includes(mode);
+  $("password-account-signin").hidden = !["signup","reset","verify","upgrade"].includes(mode);
+  $("password-account-resend").hidden = !verify || !accountPending;
+  $("password-account-close").hidden = accountEntryNeeded() || checking;
+  $("password-account-signout").hidden = (!cloudAccount && !accountSignoutPending()) || checking;
+  $("password-account-signout").textContent = accountSignoutPending() ? "Retry sign out" : "Sign out";
+  $("password-account-remember").hidden = checking || manage;
+  $("password-account-fields").disabled = passwordAccountBusy || checking;
+  dialog.querySelectorAll(".account-dialog-actions button").forEach(button => { button.disabled = passwordAccountBusy; });
+  $("password-account-form").setAttribute("aria-busy",String(passwordAccountBusy));
+  passwordAccountNotice(passwordAccountMessage,passwordAccountError);
   syncCredentialFieldInteractivity();
 }
-function accountEmailFrom(source) {
-  const input = source === "intro" ? $("intro-account-email") : $("account-email");
-  return String(input && input.value || "").trim().toLowerCase();
+function openPasswordAccount(mode = "", message = "", isError = false) {
+  if (!mode) mode = accountRecoveryRequired() ? "update" : permanentAccountVerified() ? "manage"
+    : accountPending ? "verify" : cloudAccount?.is_anonymous ? "upgrade" : "signin";
+  if (passwordAccountBusy) { renderPasswordAccount();return; }
+  if (passwordAccountMode !== mode) clearPasswordFields();
+  passwordAccountMode = mode;
+  if ($("intro-demo").classList.contains("open")) setIntroOpen(false,false);
+  if ($("settings").classList.contains("open")) closeSettings(false);
+  const dialog = $("account-dialog");
+  if (!dialog.open) dialog.showModal();
+  if (!$("password-account-email").value) $("password-account-email").value = accountPending?.email || cloudAccount?.email || "";
+  passwordAccountNotice(message,isError);
+  renderPasswordAccount();
+  // No automatic input focus/keyboard on phones.
+  if (innerWidth <= 700) { $("account-dialog-title").tabIndex = -1;$("account-dialog-title").focus({preventScroll:true}); }
 }
-async function requestAccountCode(source = "settings") {
-  if (source === "intro" && iosNeedsHomeScreenBeforeAccount()) {
-    updateInstallHelp();
-    toast("Add Worldview to your Home Screen first, then connect the account inside the installed app.",6200);
+function closePasswordAccount() {
+  if (accountEntryNeeded() || passwordAccountBusy) return false;
+  clearPasswordFields();
+  $("account-dialog").close();
+  syncCredentialFieldInteractivity();
+  return true;
+}
+function reconcileAccountEntry() {
+  if (passwordAccountBusy || accountTransitionInProgress) return;
+  if (accountRecoveryRequired()) { openPasswordAccount("update");return; }
+  if (permanentAccountVerified()) {
+    if (accountPending?.mode !== "email_change" || accountPending?.originalUserId === cloudAccount.id) setAccountPending(null);
+    if (["signin","signup","verify","upgrade","checking"].includes(passwordAccountMode)) closePasswordAccount();
+    if (accountReturnToLab) {
+      if (ownerToolsAvailable()) { accountReturnToLab = false;location.assign(new URL("lab/",location.href).href);return; }
+      openPasswordAccount("manage","Signed in. This account does not have developer access.",true);
+      accountReturnToLab = false;
+    }
     return;
   }
-  const email = accountEmailFrom(source);
-  const buttons = [$("intro-account"),$("account-link")].filter(Boolean);
-  if (!email || !/^\S+@\S+\.\S+$/.test(email)) { toast("Enter a valid recovery email.");return; }
-  buttons.forEach(button => { button.disabled = true; });
-  try {
-    await cloudSyncNow();
-    const user = cloudAccount || await cloudUser();
-    const redirect = `${location.origin}${location.pathname}`;
-    if (user && user.email && user.email.toLowerCase() === email) {
-      cloudAccount = user;
-      updateCloudAccountUI("synced");
-      toast("That email is already connected.");
-      return;
-    }
-    let result = null, mode = "email_change";
-    if (user) result = await backendClient.auth.updateUser({ email },{ emailRedirectTo:redirect });
-    if (!user || (result && result.error && /already|registered|exists/i.test(result.error.message || ""))) {
-      mode = "email";
-      result = await backendClient.auth.signInWithOtp({ email,options:{ emailRedirectTo:redirect,shouldCreateUser:false } });
-    }
-    if (result && result.error) throw result.error;
-    setAccountPending({ email,mode,originalUserId:user && user.id || "",sentAt:Date.now() });
-    renderAccountSetupUI();
-    const nextControl = EMAIL_OTP_ENABLED
-      ? source === "intro" ? $("intro-account-code") : $("account-code")
-      : source === "intro" ? $("intro-account-verify") : $("account-verify");
-    if (nextControl) setTimeout(() => nextControl.focus({preventScroll:true}),50);
-    toast(EMAIL_OTP_ENABLED ? "Enter the code from your email here." : "Open the email link, then return to Worldview.",5500);
-  } catch (error) {
-    toast("Could not send the email: " + (error.message || "try again"),6500);
-  } finally { buttons.forEach(button => { button.disabled = false; }); }
+  if (accountIdentityHeldForRetry() || accountCacheReadOnly || pendingLegacyRecovery) {
+    if ($("account-dialog").open && passwordAccountMode === "checking") { $("account-dialog").close();syncCredentialFieldInteractivity(); }
+    return;
+  }
+  openPasswordAccount(accountPending ? "verify" : cloudAccount?.is_anonymous ? "upgrade" : "signin");
 }
-async function verifyAccountCode(source = "settings") {
-  const input = source === "intro" ? $("intro-account-code") : $("account-code");
-  const token = String(input && input.value || "").replace(/\s/g,"");
-  if (!EMAIL_OTP_ENABLED) {
-    if (!accountPending) { toast("Add your recovery email first.");return; }
-    const pendingEmail = accountPending.email;
-    const buttons = [$("intro-account-verify"),$("account-verify")].filter(Boolean);
-    buttons.forEach(button => { button.disabled = true; });
-    try {
-      await initCloudPersistence();
-      if (cloudAccount?.email?.toLowerCase() === pendingEmail.toLowerCase()) {
-        setAccountPending(null);
-        updateCloudAccountUI("synced");
-        toast("Account ready. Your library saves automatically.",5000);
-      } else {
-        toast("Not connected yet. Open the email link, then return here.",5500);
+function renderAccountSetupUI() {
+  const connected = $("intro-account-connected");
+  if (connected) { connected.hidden = !permanentAccountVerified();connected.textContent = permanentAccountVerified() ? "Your library saves to your account." : ""; }
+  if ($("account-link")) $("account-link").textContent = permanentAccountVerified() ? "Manage account" : "Sign in / create account";
+  renderPasswordAccount();
+}
+function suspendAccountIdentity() {
+  accountAuthEpoch += 1;
+  cloudInitGeneration += 1;
+  entitlementAccountId = "";
+  backendSessionPromise = null;
+  clearTimeout(cloudSyncTimer);cloudSyncTimer = 0;
+  clearTimeout(identityRetryTimer);identityRetryTimer = 0;identityRetryDelay = 0;
+  accountRequestControllers.forEach(controller => { try { controller.abort(); } catch (error) {} });
+  accountRequestControllers.clear();
+  if (typeof voice !== "undefined" && voice.active) exitVoice();
+  if (typeof activeLessonIntake !== "undefined" && activeLessonIntake?.requestAbort) activeLessonIntake.requestAbort.abort();
+  if (typeof currentLessonId !== "undefined") currentLessonId = null;
+  cloudSyncReady = false;identityMutationReady = false;accountOwnershipResolved = false;
+  cloudHydrating = false;cloudRemoteBaseline = "unknown";cloudRemoteRevision = 0;cloudSyncedFingerprint = "";
+  backendEntitled = false;backendAccessRowPresent = false;backendEntitlementRecord = null;
+  backendPilotLessonsUsed = null;backendPilotLessonsRemaining = null;backendPilotRegisteredLessonIds = new Set();
+  cloudAccount = null;pendingLegacyRecovery = null;
+  state.developerMode = false;state.developerUnlocked = false;
+  clearLocalAccountView();
+  syncDeveloperLauncherVisibility();
+  syncDeveloperSettingsVisibility();
+}
+async function preserveCurrentAccountBeforeSwitch() {
+  // A failed local save must not destroy the only recoverable old-account copy.
+  if (stateAccountId && cloudAccount?.id === stateAccountId) writeLocalState();
+  if (cloudSyncReady) {
+    try { await accountOperationDeadline(cloudSyncNow()); }
+    catch (error) { /* The protected old-account device snapshot remains. */ }
+  }
+}
+function anonymousLibraryNeedsProtection(user = cloudAccount) {
+  // Anonymous credentials cannot be recovered by email yet. Retaining a UUID
+  // cache alone is not a usable backup once its sole login session is replaced.
+  if (!user?.is_anonymous) return false;
+  if (hasLearnerLibrary(state) || hasLegacyLearnerData(state)) return true;
+  try {
+    // Lab saves share this origin/session but do not necessarily populate Home.
+    return ["worldview-owner-lab-workspace-v1:","worldview-lab-clarification-v1:","worldview-account-state-v1:"]
+      .some(prefix => !!localStorage.getItem(prefix + user.id));
+  } catch (_) { return true; }
+}
+async function submitPasswordAccount() {
+  if (passwordAccountBusy || !backendClient) return;
+  const mode = passwordAccountMode;
+  if (mode === "verify") { await checkAccountConfirmation();return; }
+  if (!["signin","signup","upgrade","reset","update"].includes(mode)) return;
+  const email = $("password-account-email").value.trim().toLowerCase();
+  let password = $("password-account-secret").value;
+  const confirmation = $("password-account-confirm").value;
+  if (mode !== "update" && (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+    passwordAccountNotice("Enter a valid email address.",true);return;
+  }
+  if (["signin","signup","update"].includes(mode) && !password) { passwordAccountNotice("Enter your password.",true);return; }
+  if (["signup","update"].includes(mode) && password.length < 12) { passwordAccountNotice("Use at least 12 characters for a new password.",true);return; }
+  if (["signup","update"].includes(mode) && password !== confirmation) { passwordAccountNotice("The passwords do not match.",true);return; }
+  let original = cloudAccount;
+  if (mode === "signup" && original?.is_anonymous) { password = "";openPasswordAccount("upgrade");return; }
+  if (mode === "signin" && original?.is_anonymous && !$("account-switch-confirm").checked) {
+    passwordAccountNotice("Confirm that the current device library should stay separate before signing in to another account.",true);return;
+  }
+  passwordAccountBusy = true;
+  accountTransitionInProgress = true;
+  passwordAccountNotice("Working…");
+  renderPasswordAccount();
+  try {
+    original = await cloudUser();
+    if (mode === "signup" && original?.is_anonymous) {
+      passwordAccountMode = "upgrade";passwordAccountNotice("Confirm your email first to keep this device's existing library.");return;
+    }
+    if (mode === "signin" && original?.is_anonymous && !$("account-switch-confirm").checked) throw new Error("account_switch_not_confirmed");
+    if (["signin","reset"].includes(mode) && anonymousLibraryNeedsProtection(original)) throw new Error("anonymous_library_unprotected");
+    if (["signin","upgrade","signup"].includes(mode)) await preserveCurrentAccountBeforeSwitch();
+    if (mode === "reset") {
+      const result = await accountAuthCommand(() => backendClient.auth.resetPasswordForEmail(email,{redirectTo:accountEmailRedirect()}));
+      if (result.error) throw result.error;
+      passwordAccountNotice("If an account uses that email, a reset link is on its way. Check spam too.");
+    } else if (mode === "upgrade") {
+      if (!original?.is_anonymous || original.id !== cloudAccount?.id) throw new Error("The current account changed. Please check it and try again.");
+      const result = await accountAuthCommand(() => backendClient.auth.updateUser({email,data:{worldview_password_setup:true}},{emailRedirectTo:accountEmailRedirect()}));
+      if (result.error) throw result.error;
+      if (result.data?.user?.id !== original.id) throw new Error("The original account could not be preserved. Please contact support before continuing.");
+      setAccountPending({email,mode:"email_change",originalUserId:original.id,sentAt:Date.now()});
+      passwordAccountMode = "verify";
+      passwordAccountNotice("Confirmation sent. This device's library remains attached to its original account.");
+    } else if (mode === "signup") {
+      const result = await accountAuthCommand(() => backendClient.auth.signUp({email,password,options:{emailRedirectTo:accountEmailRedirect()}}));
+      if (result.error) throw result.error;
+      setAccountPending({email,mode:"signup",originalUserId:"",sentAt:Date.now()});
+      passwordAccountMode = "verify";
+      passwordAccountNotice("Check your email to confirm. If you already have an account, use Sign in or Forgot password.");
+    } else if (mode === "update") {
+      const verified = await cloudUser();
+      if (!permanentAccountVerified(verified) || verified.id !== original?.id) throw new Error("That link is no longer valid. Request a new reset link.");
+      const result = await accountAuthCommand(() => backendClient.auth.updateUser({password,data:{worldview_password_setup:false}}));
+      if (result.error) throw result.error;
+      if (result.data?.user?.id !== verified.id) throw new Error("The account changed. Sign in again to continue.");
+      markPasswordRecovery("");
+      setAccountPending(null);
+      passwordAccountMode = "manage";
+      passwordAccountNotice("Password saved. You will stay signed in on this device.");
+    } else {
+      const result = await accountAuthCommand(() => backendClient.auth.signInWithPassword({email,password}));
+      if (result.error) throw result.error;
+      if (!permanentAccountVerified(result.data?.user)) throw new Error("Confirm your email before signing in.");
+      localStorage.removeItem(ACCOUNT_SIGNOUT_KEY);
+      markPasswordRecovery("");
+      setAccountPending(null);
+      passwordAccountMode = "signin";
+      passwordAccountNotice("");
+    }
+  } catch (error) {
+    // Do not display provider errors containing identities or login-existence details.
+    const code = String(error?.code || "");
+    const status = Number(error?.status || 0);
+    const message = error?.message === "anonymous_library_unprotected"
+      ? "Connect and confirm this device's existing library before changing accounts. If that email is already in use, ask for a library migration; nothing has been moved or deleted."
+      : mode === "signin" && ["invalid_credentials","user_not_found"].includes(code)
+      ? "Email or password is incorrect."
+      : code === "email_not_confirmed" ? "Confirm your email before signing in. You can resend the confirmation."
+      : status === 429 || /rate|too many/i.test(error?.message || "") ? "Too many attempts. Wait a little before trying again."
+      : mode === "upgrade" && /already|registered|exists|email_exists/i.test(code+" "+(error?.message || ""))
+        ? "That email could not be linked. If it belongs to an existing account, ask for a library migration before switching. Your current library has not been moved or merged."
+      : code === "weak_password" ? "Use a stronger password with at least 12 characters."
+      : /expired|invalid.*(token|link)|session.*missing/i.test(code+" "+(error?.message || ""))
+        ? "That link has expired or was already used. Request a new reset link."
+      : "The account request could not finish. Check your connection and try again. No libraries were merged.";
+    passwordAccountNotice(message,true);
+  } finally {
+    password = "";
+    clearPasswordFields();
+    accountTransitionInProgress = false;
+    passwordAccountBusy = false;
+    if (!["reset","upgrade"].includes(mode)) {
+      await refreshPasswordAccountIdentity();
+    }
+    renderPasswordAccount();
+    if (!passwordAccountError) {
+      reconcileAccountEntry();
+      if (permanentAccountVerified() && !accountRecoveryRequired() && ["signin","update"].includes(mode)) {
+        closePasswordAccount();
+        finishIdentityBootstrap();
       }
-    } finally { buttons.forEach(button => { button.disabled = false; }); }
-    return;
-  }
-  if (!accountPending || token.length < 6) { toast("Enter the code from your email.");return; }
-  const buttons = [$("intro-account-verify"),$("account-verify")].filter(Boolean);
-  buttons.forEach(button => { button.disabled = true; });
-  const previousAccount = cloudAccount, previousReady = cloudSyncReady;
-  try {
-    await cloudSyncNow();
-    if (cloudSyncInFlight) await cloudSyncInFlight;
-    clearTimeout(cloudSyncTimer);cloudSyncTimer = 0;
-    accountTransitionInProgress = true;
-    cloudSyncReady = false;
-    cloudInitGeneration += 1;
-    const verified = await backendClient.auth.verifyOtp({ email:accountPending.email,token,type:accountPending.mode });
-    if (verified.error) throw verified.error;
-    const user = verified.data && verified.data.user;
-    if (!user) throw new Error("The account could not be confirmed.");
-    if (accountPending.mode === "email_change" && accountPending.originalUserId && user.id !== accountPending.originalUserId) {
-      throw new Error("The account identity changed unexpectedly.");
     }
-    cloudAccount = null;backendEntitled = false;backendAccessRowPresent = false;backendEntitlementRecord = null;backendPilotLessonsUsed = null;backendPilotLessonsRemaining = null;backendPilotRegisteredLessonIds = new Set();
-    setAccountPending(null);
-    accountTransitionInProgress = false;
-    await initCloudPersistence();
-    if (input) input.value = "";
-    updateCloudAccountUI("synced");
-    toast("Account ready. Your library saves automatically.",5000);
+  }
+}
+async function checkAccountConfirmation() {
+  if (passwordAccountBusy) return;
+  passwordAccountBusy = true;renderPasswordAccount();
+  try {
+    await refreshPasswordAccountIdentity();
+    if (accountPending?.mode === "email_change" && cloudAccount?.id !== accountPending.originalUserId) {
+      throw new Error("The confirmation opened a different account. Your earlier library remains separate.");
+    }
+    if (permanentAccountVerified()) {
+      if (cloudAccount.user_metadata?.worldview_password_setup || accountPending?.mode === "email_change") {
+        markPasswordRecovery(cloudAccount.id);passwordAccountMode = "update";
+      } else { setAccountPending(null);passwordAccountMode = "signin"; }
+      passwordAccountNotice("");
+    } else passwordAccountNotice("Not confirmed yet. Open the email link, then return here. You can also sign in after confirming.");
+  } catch (error) { passwordAccountNotice("We could not verify this account yet. Your earlier library is still separate.",true); }
+  finally { passwordAccountBusy = false;renderPasswordAccount();reconcileAccountEntry(); }
+}
+async function resendAccountConfirmation() {
+  if (passwordAccountBusy || !accountPending) return;
+  const pending = {...accountPending};
+  passwordAccountBusy = true;renderPasswordAccount();
+  try {
+    if (Date.now() - Number(pending.sentAt || 0) < 60000) throw new Error("cooldown");
+    let result;
+    if (pending.mode === "email_change") {
+      const current = await cloudUser();
+      if (!current?.is_anonymous || current.id !== pending.originalUserId) throw new Error("identity");
+      result = await accountAuthCommand(() => backendClient.auth.updateUser({email:pending.email},{emailRedirectTo:accountEmailRedirect()}));
+    } else {
+      result = await accountAuthCommand(() => backendClient.auth.resend({type:"signup",email:pending.email,options:{emailRedirectTo:accountEmailRedirect()}}));
+    }
+    if (result.error) throw result.error;
+    setAccountPending({...pending,sentAt:Date.now()});
+    passwordAccountNotice("If confirmation is needed, a new email is on its way.");
   } catch (error) {
-    accountTransitionInProgress = false;
-    cloudAccount = previousAccount;
-    cloudSyncReady = previousReady;
-    renderAccountSetupUI();
-    if (cloudSyncReady) scheduleCloudSync();
-    toast("That code did not work: " + (error.message || "try again"),6500);
-  } finally { buttons.forEach(button => { button.disabled = false; }); }
+    passwordAccountNotice(error?.message === "cooldown" ? "Wait one minute before requesting another email." : "The email could not be sent. Try later or sign in if already confirmed.",true);
+  } finally { passwordAccountBusy = false;renderPasswordAccount(); }
 }
 async function signOutAccount() {
-  if (!backendClient) return;
-  await cloudSyncNow();
-  const result = await backendClient.auth.signOut();
-  if (result.error) { toast("Could not sign out: " + result.error.message);return; }
-  setAccountPending(null);
-  clearTimeout(identityRetryTimer);identityRetryTimer = 0;identityRetryDelay = 0;
-  identityRestoreStatus = "signed-out";
-  accountCacheReadOnly = false;accountCacheReadOnlyWarningShown = false;
-  pendingLegacyRecovery = null;identityMutationReady = false;accountOwnershipResolved = false;
-  cloudSyncReady = false;cloudRemoteBaseline = "unknown";cloudRemoteRevision = 0;cloudSyncedFingerprint = "";
-  cloudAccount = null;backendEntitled = false;backendAccessRowPresent = false;backendEntitlementRecord = null;backendPilotLessonsUsed = null;backendPilotLessonsRemaining = null;backendPilotRegisteredLessonIds = new Set();
-  state.voiceTimingLog = [];
-  clearLocalAccountView();
-  updateCloudAccountUI();
-  renderAccountGuardUI();
-  renderHome();
-  renderProfile();
-  show("home");
-  homeLandOnExplore();
-  setIntroOpen(true,false);
-  toast("Signed out. This screen is now an empty guest library; the account's lessons remain protected.",6200);
+  if (!backendClient || passwordAccountBusy) return;
+  if (anonymousLibraryNeedsProtection()) { openPasswordAccount("upgrade","Confirm an email for this library before signing out, so you can recover your lessons.",true);return; }
+  passwordAccountBusy = true;
+  let identitySuspended = false;
+  try {
+    await preserveCurrentAccountBeforeSwitch();
+    const signoutId = cloudAccount?.id || authEventUserId;
+    if (signoutId) localStorage.setItem(ACCOUNT_SIGNOUT_KEY,JSON.stringify({userId:signoutId,startedAt:Date.now()}));
+    accountTransitionInProgress = true;
+    suspendAccountIdentity();
+    identitySuspended = true;
+    const result = await accountAuthCommand(() => backendClient.auth.signOut({scope:"local"}));
+    if (result.error) throw result.error;
+    localStorage.removeItem(ACCOUNT_SIGNOUT_KEY);
+    setAccountPending(null);
+    markPasswordRecovery("");
+    identityRestoreStatus = "signed-out";accountCacheReadOnly = false;
+    show("home");renderHome();renderProfile();
+    passwordAccountMode = "signin";passwordAccountNotice("Signed out on this device. Your saved lessons were not deleted.");
+  } catch (error) {
+    passwordAccountNotice(identitySuspended
+      ? "Sign-out could not be confirmed. This screen is locked; reconnect and retry."
+      : "You are still signed in. This browser could not safely preserve your saved lessons before sign-out. Free some browser storage, then try again.",true);
+  } finally {
+    accountTransitionInProgress = false;passwordAccountBusy = false;
+    updateCloudAccountUI();openPasswordAccount("signin",passwordAccountMessage,passwordAccountError);
+  }
 }
-$("account-link").onclick = () => requestAccountCode("settings");
-$("account-verify").onclick = () => verifyAccountCode("settings");
+function handleAccountAuthChange(event, session) {
+  const nextId = session?.user?.id || "";
+  const changed = !!((cloudAccount?.id || authEventUserId) && nextId !== (cloudAccount?.id || authEventUserId));
+  if (event === "PASSWORD_RECOVERY" && nextId) markPasswordRecovery(nextId);
+  if (event === "SIGNED_OUT" || changed || event === "PASSWORD_RECOVERY") {
+    suspendAccountIdentity();
+    identityRestoreStatus = event === "SIGNED_OUT" ? "signed-out" : "checking";
+    accountCacheReadOnly = false;
+    if (event === "SIGNED_OUT") { clearPasswordFields();setAccountPending(null); }
+  }
+  authEventUserId = nextId;
+  // Never await Supabase APIs inside this callback: the SDK holds its auth lock.
+  if (["SIGNED_IN","SIGNED_OUT","INITIAL_SESSION","USER_UPDATED","PASSWORD_RECOVERY","TOKEN_REFRESHED"].includes(event)) {
+    setTimeout(async () => {
+      if (accountTransitionInProgress || !initialIdentityRestored) return;
+      await initCloudPersistence();
+      reconcileAccountEntry();
+    },0);
+  }
+}
+$("password-account-form").addEventListener("submit",event => { event.preventDefault();submitPasswordAccount(); });
+$("password-account-signup").onclick = () => openPasswordAccount(cloudAccount?.is_anonymous ? "upgrade" : "signup");
+$("password-account-signin").onclick = () => openPasswordAccount("signin");
+$("password-account-forgot").onclick = () => openPasswordAccount("reset");
+$("password-account-resend").onclick = resendAccountConfirmation;
+$("password-account-close").onclick = closePasswordAccount;
+$("password-account-signout").onclick = signOutAccount;
+$("account-dialog").addEventListener("cancel",event => { if (!closePasswordAccount()) event.preventDefault(); });
+$("account-dialog").addEventListener("close",() => { clearPasswordFields();syncCredentialFieldInteractivity(); });
+$("account-link").onclick = () => openPasswordAccount();
 $("account-signout").onclick = signOutAccount;
-$("account-email").addEventListener("keydown",event => { if (event.key === "Enter") requestAccountCode("settings"); });
-$("account-code").addEventListener("keydown",event => { if (event.key === "Enter") verifyAccountCode("settings"); });
+window.addEventListener("storage",event => {
+  if (event.key === ACCOUNT_SIGNOUT_KEY && accountSignoutPending()) {
+    suspendAccountIdentity();identityRestoreStatus = "signed-out";accountCacheReadOnly = false;
+    show("home");renderHome();renderProfile();
+    openPasswordAccount("signin","Sign-out was requested in another tab. This account stays locked until sign-out succeeds or you sign in again.");
+    return;
+  }
+  if (event.key === PASSWORD_RECOVERY_KEY) {
+    passwordRecoveryUserId = "";
+    if (accountRecoveryRequired()) { identityMutationReady = false;syncDeveloperLauncherVisibility();openPasswordAccount("update"); }
+    else if (!accountTransitionInProgress) initCloudPersistence().then(reconcileAccountEntry);
+  }
+});
+syncDeveloperSettingsVisibility();
 $("set-theme").addEventListener("change",event => { state.theme = event.target.value;applyTheme();save(); });
 $("theme-toggle").addEventListener("click", () => {
   const dark = document.documentElement.dataset.theme === "dark"
@@ -15024,13 +15412,7 @@ function openSettings() {
 function openAccountSettings() {
   if ($("intro-demo").classList.contains("open")) setIntroOpen(false,false);
   closeDrawer();
-  openSettings();
-  const group = $("settings-account-group");
-  if (group) {
-    group.open = true;
-    setTimeout(() => group.scrollIntoView({behavior:"smooth",block:"start"}),80);
-  }
-  setTimeout(() => { if ($("account-email") && !cloudAccount?.email) $("account-email").focus({preventScroll:true}); },260);
+  openPasswordAccount();
 }
 $("gear").onclick = openSettings;
 // dirty = fields changed since the panel was OPENED (comparing against saved
@@ -15109,11 +15491,13 @@ if ($("version-sheet")) {
 }
 if ($("version-sheet")) $("version-sheet").addEventListener("click", event => { if (event.target === $("version-sheet")) closeVersionSheet(); });
 if ($("models-button")) $("models-button").addEventListener("click", () => {
+  if (!ownerToolsAvailable()) return;
   renderModelsSheet();
   $("models-sheet").classList.add("open");
   $("models-sheet").setAttribute("aria-hidden","false");
 });
 if ($("open-models")) $("open-models").addEventListener("click", () => {
+  if (!ownerToolsAvailable()) return;
   renderModelsSheet();
   $("models-sheet").classList.add("open");
   $("models-sheet").setAttribute("aria-hidden","false");
@@ -15127,7 +15511,7 @@ if ($("models-sheet")) $("models-sheet").addEventListener("click", event => { if
 if ($("voice-speaker-button")) $("voice-speaker-button").addEventListener("click", event => { event.stopPropagation(); toggleSpeakerphone(); });
 if ($("voice-timing-clear")) $("voice-timing-clear").addEventListener("click",() => { state.voiceTimingLog = []; save(); renderVoiceTimingReadout(); });
 $("set-developer").addEventListener("change",event => {
-  if (!state.developerUnlocked) return;
+  if (!ownerToolsAvailable()) { event.target.checked = false;return; }
   state.developerMode = !!event.target.checked;
   save();
   syncDeveloperLauncherVisibility();
@@ -15261,6 +15645,7 @@ async function enableMicrophoneFromPrimer() {
 }
 
 function setIntroOpen(open,remember = false) {
+  if (open && backendClient && (!permanentAccountVerified() || accountRecoveryRequired())) { openPasswordAccount();return; }
   const intro = $("intro-demo");
   if (!open && document.activeElement && intro.contains(document.activeElement)) {
     try { document.activeElement.blur(); } catch (error) {}
@@ -15276,7 +15661,7 @@ function setIntroOpen(open,remember = false) {
     requestAnimationFrame(() => {
       /* Do not summon the phone keyboard before the learner chooses a field. */
       if (innerWidth <= 700) return;
-      const target = accountPending ? $("intro-account-code") : cloudAccount?.email ? $("intro-topic") : $("intro-account-email");
+      const target = $("intro-topic");
       if (target) target.focus({preventScroll:true});
     });
   }
@@ -15311,9 +15696,6 @@ async function startIntroLesson() {
 }
 $("intro-question").addEventListener("submit",event => { event.preventDefault();startIntroLesson(); });
 $("intro-topic").addEventListener("input",event => { $("intro-start").disabled = !event.target.value.trim(); });
-$("intro-account-form").addEventListener("submit",event => { event.preventDefault();requestAccountCode("intro"); });
-$("intro-account-verify").onclick = () => verifyAccountCode("intro");
-$("intro-account-code").addEventListener("keydown",event => { if (event.key === "Enter") { event.preventDefault();verifyAccountCode("intro"); } });
 $("intro-install").onclick = async () => {
   if (deferredInstallPrompt) {
     deferredInstallPrompt.prompt();
@@ -15335,6 +15717,8 @@ $("mic-primer").addEventListener("keydown",event => { if (event.key === "Escape"
 let initialIdentityRestored = !backendClient;
 function finishIdentityBootstrap() {
   initialIdentityRestored = true;
+  reconcileAccountEntry();
+  if (accountEntryNeeded()) return;
   /* A remembered account under transient verification failure is not signed in,
      but it is also not a new visitor. Keep its scoped cache read-only and keep
      onboarding/recovery prompts closed while the secure-session retry runs. */
@@ -15401,11 +15785,8 @@ homeLandOnExplore();   // but open on Explore, not Profile
 requestAnimationFrame(homeLandOnExplore); // again after layout settles
 consumeLabLessonHandoff();
 if (backendClient) {
-  backendClient.auth.onAuthStateChange((event,session) => {
-    if (initialIdentityRestored && !accountTransitionInProgress && ["SIGNED_IN","INITIAL_SESSION","USER_UPDATED"].includes(event) && session) {
-      setTimeout(() => initCloudPersistence(),0);
-    }
-  });
+  backendClient.auth.onAuthStateChange(handleAccountAuthChange);
+  if (!rememberedAccountId()) openPasswordAccount("checking");
   Promise.resolve(initCloudPersistence()).finally(finishIdentityBootstrap);
 } else {
   finishIdentityBootstrap();
