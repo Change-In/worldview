@@ -109,7 +109,7 @@ const MOCK_SCRIPTED_OPENING = "What first made [topic] feel worth exploring: som
 const MOCK_SCRIPTED_FINAL = "Before we continue, is there anything you want to add or change?";
 const MOCK_STAGE_DEFAULTS = Object.freeze({
   clarification:{ provider:"anthropic", model:"claude-sonnet-4-6", outputTokens:1800, research:false },
-  map:{ provider:"anthropic", model:"claude-sonnet-5", outputTokens:65536, research:true },
+  map:{ provider:"anthropic", model:"claude-sonnet-5", outputTokens:24000, research:true },
   extraction:{ provider:"anthropic", model:"claude-sonnet-4-6", outputTokens:1200, research:false },
   lesson:{ provider:"anthropic", model:"claude-sonnet-5", outputTokens:900, research:false },
   brain:{ provider:"anthropic", model:"claude-haiku-4-5", outputTokens:420, research:false },
@@ -8568,7 +8568,13 @@ function pipelineExtractionMapViewState(artifact = selectedPipelineArtifact()) {
   }
   if (!job) {
     const failed = labState.extraction.mapStartFailureRunId === artifact.runId;
-    const starting = labState.extraction.preMapRunId === artifact.runId;
+    // A durable create that was accepted but has not yet surfaced as a job row
+    // is still in flight, not a failure. Treating that window as terminal put a
+    // learner-visible route error on screen while the planner was legitimately
+    // still running, so an unconfirmed exact-run create keeps the benign
+    // starting state. Only a recorded start failure reports needs-attention.
+    const pendingCreate = !failed && Boolean(pendingCreateForComponent("lesson", artifact.runId));
+    const starting = !failed && (pendingCreate || labState.extraction.preMapRunId === artifact.runId);
     return {
       state:failed ? "needs-attention" : starting ? "starting" : "needs-attention", job:null, selection:null, detail:null,
       message:failed

@@ -2093,11 +2093,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v183 · Sep 1";
+const BUILD = "v184 · Sep 1";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v184", date: "Sep 1", changes: [
+    "The Lesson Map no longer says it is having trouble while it is still being built — that message now appears only when a Map request has actually failed.",
+    "A fresh Lesson Map starts with a smaller generation allowance, so Retry Lesson Map can genuinely raise it instead of already sitting at the ceiling."
+  ]},
   { tag: "v183", date: "Sep 1", changes: [
     "Worldview now asks for an email and password when no saved account is signed in, then remembers that verified session on this device.",
     "Developer Lab uses the same server-verified administrator session. Its separate Alpha-code password prompt is gone.",
