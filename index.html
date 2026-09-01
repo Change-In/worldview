@@ -2051,11 +2051,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v179 · Aug 30";
+const BUILD = "v181 · Aug 31";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v181", date: "Aug 31", changes: [
+    "Lesson Map generation now honors the full output allowance, keeps up to 18 chapters and outcomes intact, and retries the exact frozen scope on an untried configured model instead of looping on a failed route.",
+    "Lesson Map progress now explains each safe attempt with its route, timing, token use, stop reason, and a clear next step while preserving the private conversation and raw model output.",
+    "Clarification approval now hands off with one assistant response: the first Broad Extraction question. The redundant approval acknowledgement is no longer shown, spoken, saved in learner history, restored, or replayed."
+  ]},
   { tag: "v179", date: "Aug 30", changes: [
     "Lesson Map research now covers outcomes in smaller requests; retry fills missing support without rebuilding the route or losing completed research.",
     "Extraction recovers the existing reply with its saved context, including older stuck retries. Inspector errors no longer hide delivered conversation updates.",

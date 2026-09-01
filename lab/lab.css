@@ -1236,6 +1236,16 @@ body.mock-run.extraction-learner-active #pipeline-extraction-saved { margin:0 14
 .extraction-map-dialog-content { min-height:0; padding:16px; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
 .extraction-map-dialog-content .map-roadmap { margin:0; }
 .extraction-map-dialog-placeholder { display:grid; min-height:220px; padding:28px; place-items:center; border:1px dashed rgba(120,229,192,.28); border-radius:16px; color:var(--lab-muted); text-align:center; line-height:1.55; }
+.extraction-map-attempts { margin-top:16px; padding-top:16px; border-top:1px solid rgba(255,255,255,.09); }
+.extraction-map-attempts h4 { margin:0; color:var(--lab-ink); font:650 1rem/1.25 Georgia,serif; }
+.extraction-map-attempts-note { margin:5px 0 12px; color:var(--lab-muted); font-size:10px; line-height:1.45; }
+.extraction-map-attempt-list { display:grid; gap:9px; }
+.extraction-map-attempt { display:grid; gap:5px; padding:11px 12px; border:1px solid rgba(255,255,255,.1); border-radius:12px; background:rgba(255,255,255,.025); }
+.extraction-map-attempt strong { color:var(--lab-ink); font-size:11px; line-height:1.4; overflow-wrap:anywhere; }
+.extraction-map-attempt small { color:#aaa99f; font-size:9px; line-height:1.45; text-transform:capitalize; overflow-wrap:anywhere; }
+.extraction-map-attempt p { margin:0; color:#d0cec1; font-size:11px; line-height:1.5; }
+.extraction-map-attempt.is-failed,.extraction-map-attempt.is-partial,.extraction-map-attempt.is-needs_attention { border-color:rgba(242,168,173,.26); background:rgba(242,168,173,.035); }
+.extraction-map-attempt.is-completed { border-color:rgba(120,229,192,.22); }
 
 @media (max-width:520px) {
   .extraction-progress-action { display:none; }
