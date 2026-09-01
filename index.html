@@ -2051,11 +2051,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v181 · Aug 31";
+const BUILD = "v182 · Aug 31";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v182", date: "Aug 31", changes: [
+    "Previous Mock Runs is now a real practice launcher: continue exactly where you stopped, or choose Clarification, Lesson Map, Extraction, Lesson, or Quiz.",
+    "Starting at Extraction never creates or retries a Lesson Map behind your back. Map generation and failed-Map retry remain deliberate, confirmed choices that preserve every older attempt.",
+    "Lesson and Quiz open only from an exact completed Map, while skipped phases stay skipped instead of being shown as completed progress."
+  ]},
   { tag: "v181", date: "Aug 31", changes: [
     "Lesson Map generation now honors the full output allowance, keeps up to 18 chapters and outcomes intact, and retries the exact frozen scope on an untried configured model instead of looping on a failed route.",
     "Lesson Map progress now explains each safe attempt with its route, timing, token use, stop reason, and a clear next step while preserving the private conversation and raw model output.",
