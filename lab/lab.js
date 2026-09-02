@@ -2030,7 +2030,10 @@ function mockStageConfig(stage) {
 }
 
 function validMockModel(provider, model) {
-  return Boolean(LAB_PROVIDER_CATALOG[provider]?.models?.some((item) => item.id === model));
+  if (LAB_PROVIDER_CATALOG[provider]?.models?.some((item) => item.id === model)) return true;
+  // A model released after this build ships is still a valid choice, so a
+  // hand-typed id is accepted as long as it looks like a provider model id.
+  return Boolean(provider && LAB_PROVIDER_CATALOG[provider] && /^[a-z0-9][a-z0-9._:-]{2,80}$/i.test(String(model || "")));
 }
 
 function clarificationRecoveryRoutes(provider, model, catalog = LAB_PROVIDER_CATALOG) {
@@ -2343,7 +2346,20 @@ function renderMockRunConfig() {
     provider.value = config.provider;
     const model = element("select", { attrs: { "aria-label": `${MOCK_RUN_STAGE_LABELS[stage]} model`, "data-mock-stage-model": stage } });
     for (const item of LAB_PROVIDER_CATALOG[config.provider]?.models || []) model.append(element("option", { value: item.id, text: item.label }));
+    const known = (LAB_PROVIDER_CATALOG[config.provider]?.models || []).some((item) => item.id === config.model);
+    if (!known) model.append(element("option", { value: config.model, text: `${config.model} · typed` }));
     model.value = config.model;
+    // Newer models can be used the day they ship, without waiting for this
+    // build's catalogue to be updated.
+    const customModel = element("input", { type: "text", value: known ? "" : config.model, attrs: { placeholder: "or type a newer model id", spellcheck: "false", autocapitalize: "none", "aria-label": `${MOCK_RUN_STAGE_LABELS[stage]} custom model id`, "data-mock-stage-custom": stage } });
+    customModel.addEventListener("change", () => {
+      const typed = customModel.value.trim();
+      if (!typed) return;
+      if (!validMockModel(provider.value, typed)) { customModel.value = ""; return; }
+      labState.mockRunConfig[stage] = { ...mockStageConfig(stage), provider: provider.value, model: typed };
+      persistMockRunConfig();
+      renderMockRunConfig();
+    });
     const outputCap = element("input", { type: "number", value: String(normalizeOutputTokenCap(config.outputTokens, LAB_OUTPUT_TOKEN_DEFAULTS.lesson)), attrs: { "aria-label": `${MOCK_RUN_STAGE_LABELS[stage]} output tokens`, min: String(LAB_OUTPUT_TOKEN_MIN), max: String(LAB_OUTPUT_TOKEN_SERVER_MAX), step: "64", inputmode: "numeric", "data-mock-stage-output": stage } });
     provider.addEventListener("change", () => {
       const nextProvider = provider.value;
@@ -2364,7 +2380,7 @@ function renderMockRunConfig() {
       persistMockRunConfig();
       renderMockRunConfig();
     });
-    label.append(provider, model);
+    label.append(provider, model, customModel);
     const outputLabel = element("label", { className: "mock-run-stage-output-cap", text: "Response cap" });
     outputLabel.append(outputCap);
     const actualCost = mockStageActualCost(stage, artifact);
@@ -2691,7 +2707,9 @@ function prepareSavedMockRunLaunch(row) {
     return null;
   }
   const runConfig = row.resume?.runConfig || artifact.mockRunSettings?.runConfig || labState.mockRunConfig;
-  labState.mockRunActiveConfig = sanitizedMockRunConfig(runConfig);
+  // The owner's current selection wins over whatever this run first used.
+  // Reopening saved work is new work, so it follows Models & spend.
+  labState.mockRunActiveConfig = sanitizedMockRunConfig(labState.mockRunConfig || runConfig);
   const clarificationBoundaries = row.resume?.clarificationBoundaries
     || artifact.mockRunSettings?.clarificationBoundaries
     || {
@@ -2929,7 +2947,7 @@ async function continueMockRunFromSetup(row) {
     setMessage("mock-boundary-message", "That saved run could not be restored on this device.", "error");
     return;
   }
-  if (artifact.mockRunSettings?.runConfig) labState.mockRunActiveConfig = sanitizedMockRunConfig(artifact.mockRunSettings.runConfig);
+  if (artifact.mockRunSettings?.runConfig) labState.mockRunActiveConfig = sanitizedMockRunConfig(labState.mockRunConfig || artifact.mockRunSettings.runConfig);
   if (artifact.mockRunSettings?.clarificationBoundaries) {
     labState.mockBoundaryActive = sanitizeMockBoundaryConfig(artifact.mockRunSettings.clarificationBoundaries, { active:true });
     q("clarification-prompt").value = labState.mockBoundaryActive.prompt;

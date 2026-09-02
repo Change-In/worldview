@@ -43,6 +43,14 @@
       <p id="pipeline-mode-note" class="pipeline-mode-note">Inspect or run one phase at a time.</p>
     </div>
     <div id="pipeline-mock-progress" class="pipeline-mock-progress" hidden aria-label="Mock run progress"><span>Mock run</span><strong id="pipeline-mock-stage">1 · Clarification</strong><button id="pipeline-mock-new" class="text-button" type="button">New mock run</button><button id="pipeline-mock-history" class="text-button" type="button">Past mock runs</button><button id="pipeline-mock-exit" class="text-button" type="button">Back to controls</button></div>
+    <aside id="mock-run-config" class="mock-run-config" hidden aria-label="Mock run setup and live work">
+      <div class="mock-run-config-head"><div><p class="eyebrow">This mock run</p><h3>Models &amp; spend</h3></div><div class="mock-run-config-actions"><span id="mock-run-total-cost">Estimate unavailable</span><button id="mock-run-config-toggle" class="text-button" type="button" aria-expanded="true">Minimize</button></div></div>
+      <div id="mock-run-config-body" class="mock-run-config-body">
+        <div class="mock-run-defaults"><p class="mock-run-config-note">Recommended defaults are ready. Model choices stay on this device; each run still uses the protected Lab jobs and fixed prompt core. Change a model only when you are testing it.</p><button id="mock-run-reset-all" class="button button-quiet" type="button">Use all defaults</button></div>
+        <div class="mock-run-stage-config" id="mock-run-stage-config"></div>
+        <div class="mock-run-live" id="mock-run-live" aria-live="polite"><strong>Run status</strong><span id="mock-run-live-status">Waiting for Clarification.</span></div>
+      </div>
+    </aside>
     <section id="mock-setup-screen" class="mock-setup-screen" hidden aria-labelledby="mock-setup-title">
       <div class="mock-setup-heading">
         <div><p class="eyebrow">Mock Run setup</p><h2 id="mock-setup-title">Choose what this rehearsal will use</h2></div>
@@ -54,17 +62,22 @@
         </div>
       </div>
       <div class="mock-setup-grid">
-        <article class="mock-setup-card mock-setup-prompt-card">
-          <div class="mock-setup-card-head"><div><p class="eyebrow">Phase One</p><h3>Clarification prompt</h3></div><span id="mock-setup-prompt-source" class="mock-setup-source">Built in</span></div>
+        <details class="mock-setup-card mock-setup-prompt-card" open>
+          <summary class="mock-setup-card-head"><div><p class="eyebrow">Phase One</p><h3>Clarification prompt</h3></div><span id="mock-setup-prompt-source" class="mock-setup-source">Built in</span></summary>
           <p>This is the exact editable prompt shared with the Clarification controls. Edits below apply only to the next run unless you deliberately make them the shared default.</p>
           <label for="mock-setup-prompt">Prompt used by this run</label>
           <textarea id="mock-setup-prompt" class="packet-editor" rows="18" maxlength="18000" spellcheck="false"></textarea>
           <div class="inline-actions"><button id="mock-setup-prompt-reset" class="button button-quiet" type="button">Restore active default</button><button id="mock-setup-prompt-shared" class="button button-quiet" type="button">Set as Phase One default</button></div>
           <p id="mock-setup-prompt-message" class="form-message" role="status"></p>
-        </article>
+        </details>
         <div class="mock-setup-side">
-          <article class="mock-setup-card">
-            <div class="mock-setup-card-head"><div><p class="eyebrow">Experiment controls</p><h3>Optional scripted checkpoints</h3></div><button id="mock-boundary-reset" class="text-button" type="button">Reset</button></div>
+          <details class="mock-setup-card" open>
+            <summary class="mock-setup-card-head"><div><p class="eyebrow">Saved work</p><h3>Previous mock runs</h3></div></summary>
+            <p>Continue exactly where a run stopped, or choose a phase to test without repeating earlier work. A run you reopen uses the models selected above, not the ones it first ran with.</p>
+            <div id="mock-previous-runs" class="mock-previous-runs"><p class="mock-empty">No saved Mock Runs yet.</p></div>
+          </details>
+          <details class="mock-setup-card">
+            <summary class="mock-setup-card-head"><div><p class="eyebrow">Experiment controls</p><h3>Optional scripted checkpoints</h3></div><button id="mock-boundary-reset" class="text-button" type="button">Reset</button></summary>
             <p>Both are off by default, so the selected LLM writes the full conversation. Turn either one on only when you want to compare a fixed boundary against the model-led version.</p>
             <label class="mock-boundary-toggle" for="mock-script-opening"><input id="mock-script-opening" type="checkbox"><span><strong>Script the opening</strong><small>Skip the first model call and show this exact first question.</small></span></label>
             <label for="mock-script-opening-copy">Opening copy</label>
@@ -73,12 +86,7 @@
             <label for="mock-script-final-copy">Final copy</label>
             <textarea id="mock-script-final-copy" rows="2" maxlength="500" spellcheck="true"></textarea>
             <p id="mock-boundary-message" class="form-message" role="status"></p>
-          </article>
-          <article class="mock-setup-card">
-            <p class="eyebrow">Saved work</p><h3>Previous mock runs</h3>
-            <p>Continue exactly where a run stopped, or choose a phase to test without repeating earlier work.</p>
-            <div id="mock-previous-runs" class="mock-previous-runs"><p class="mock-empty">No saved Mock Runs yet.</p></div>
-          </article>
+          </details>
           <button id="mock-setup-launch" class="button button-primary mock-setup-launch" type="button">Open new Mock Run</button>
         </div>
       </div>
@@ -152,14 +160,6 @@
       <button id="mock-car-replay" class="button button-quiet mock-car-replay" type="button" hidden>Hear reply</button>
       <p class="mock-car-safety">Set this mode before driving. Keep your attention on the road and follow local hands-free laws.</p>
     </section>
-    <aside id="mock-run-config" class="mock-run-config" hidden aria-label="Mock run setup and live work">
-      <div class="mock-run-config-head"><div><p class="eyebrow">This mock run</p><h3>Models &amp; spend</h3></div><div class="mock-run-config-actions"><span id="mock-run-total-cost">Estimate unavailable</span><button id="mock-run-config-toggle" class="text-button" type="button" aria-expanded="true">Minimize</button></div></div>
-      <div id="mock-run-config-body" class="mock-run-config-body">
-        <div class="mock-run-defaults"><p class="mock-run-config-note">Recommended defaults are ready. Model choices stay on this device; each run still uses the protected Lab jobs and fixed prompt core. Change a model only when you are testing it.</p><button id="mock-run-reset-all" class="button button-quiet" type="button">Use all defaults</button></div>
-        <details class="mock-run-advanced"><summary>Advanced · models by phase</summary><div class="mock-run-stage-config" id="mock-run-stage-config"></div></details>
-        <div class="mock-run-live" id="mock-run-live" aria-live="polite"><strong>Run status</strong><span id="mock-run-live-status">Waiting for Clarification.</span></div>
-      </div>
-    </aside>
     <div class="pipeline-run-browser" aria-label="Saved lesson runs">
       <label class="sr-only" for="pipeline-run-select">Selected lesson run</label>
       <select id="pipeline-run-select" aria-label="Selected lesson run"><option value="">New lesson run</option></select>

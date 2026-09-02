@@ -2104,11 +2104,17 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v189 · Sep 2";
+const BUILD = "v190 · Sep 2";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v190", date: "Sep 2", changes: [
+    "Mock Run setup now opens on Models and spend, above the phase prompts, with every phase's model and cost visible instead of hidden behind Advanced.",
+    "Saved work moved above the experiment controls, and every setup box can be collapsed. The experiment controls start closed.",
+    "Reopening a saved run now uses the models currently selected in Models and spend, not the ones the run first used.",
+    "Any phase can take a hand-typed model id, so a model released after this build can be used straight away."
+  ]},
   { tag: "v189", date: "Sep 2", changes: [
     "Opening Developer Lab no longer shows a separate gate page. The account check is now a single status line, and the full card appears only if something needs your attention.",
     "The old-app-address notice now sits at the bottom of the screen instead of across the top."
