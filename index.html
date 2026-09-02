@@ -2093,11 +2093,18 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v184 · Sep 1";
+const BUILD = "v185 · Sep 1";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v185", date: "Sep 1", changes: [
+    "Lesson Maps now follow the shape you agreed to in the conversation. Ask for a topic through history and you get a timeline, not a definitions chapter first.",
+    "The Lesson Map no longer states dates, names or figures of its own. It writes the questions the research pass must answer, so specifics come from real research instead of memory.",
+    "Lesson Maps stream while they are written and now finish in roughly 40 seconds instead of running close to the old cutoff.",
+    "If a Lesson Map fails for a connection reason, Worldview retries it automatically up to three times before asking you to step in. No more pressing Retry yourself.",
+    "On a phone you can now hold anywhere on the conversation to talk, during Extraction, the Lesson, the Quiz and Car mode. The small Hold button is no longer the only target."
+  ]},
   { tag: "v184", date: "Sep 1", changes: [
     "The Lesson Map no longer says it is having trouble while it is still being built — that message now appears only when a Map request has actually failed.",
     "A fresh Lesson Map starts with a smaller generation allowance, so Retry Lesson Map can genuinely raise it instead of already sitting at the ceiling."
