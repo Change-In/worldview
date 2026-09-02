@@ -1686,3 +1686,12 @@ body.mock-run.quiz-learner-active .quiz-stage-title .conversation-mode-actions >
 .mock-setup-card > summary::after { content: "\2212"; margin-left: auto; opacity: .55; font-size: 15px; }
 .mock-setup-card:not([open]) > summary::after { content: "+"; }
 .mock-setup-card > summary > div { min-width: 0; }
+
+/* On the setup screen Models & spend is part of the left column, sitting
+   directly above the Clarification prompt, rather than a floating panel. */
+.mock-setup-main { display: grid; gap: 14px; min-width: 0; align-content: start; }
+body.mock-run .mock-setup-main .mock-run-config {
+  position: static; top: auto; right: auto; width: auto;
+  max-height: none; overflow: visible;
+}
+.mock-setup-main .mock-run-config-body { max-height: none; overflow: visible; padding-right: 0; }
