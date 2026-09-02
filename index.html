@@ -494,6 +494,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     font-weight: 600;
   }
   #home-header p { color: var(--ink-soft); font-size: 13px; margin-top: 4px; font-style: italic; }
+  .home-account { border-radius:50%; margin-left:4px; background:var(--ink); color:var(--card); border:1.5px solid var(--ink); font:700 15px/1 system-ui,-apple-system,sans-serif; letter-spacing:.02em; text-transform:uppercase; }
+  .home-account.signed-out { background:transparent; color:var(--ink); }
   .menu-button {
     width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center;
     background: none; border: none; border-radius: 12px; color: var(--ink);
@@ -1707,6 +1709,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   <a id="developer-lab-launcher" href="lab/" aria-label="Open the protected developer Lab" hidden>Developer lab</a>
   <div id="home-header">
     <button id="home-menu" class="menu-button" type="button" aria-label="Open menu">&#9776;</button>
+    <button id="home-account" class="menu-button home-account" type="button" aria-label="Your account" title="Your account"></button>
     <div class="home-brand">
       <h1 class="serif">Worldview</h1>
       <p>learn everything</p>
@@ -2093,11 +2096,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v185 · Sep 1";
+const BUILD = "v186 · Sep 1";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v186", date: "Sep 1", changes: [
+    "A profile mark now sits top-left on Home. It shows the first letter of the account you are signed in with, and tapping it opens your account, which now names the full address.",
+    "Scrolling left and right on a laptop now spins the lesson ring wherever your pointer is, including over the centred card."
+  ]},
   { tag: "v185", date: "Sep 1", changes: [
     "Lesson Maps now follow the shape you agreed to in the conversation. Ask for a topic through history and you get a timeline, not a definitions chapter first.",
     "The Lesson Map no longer states dates, names or figures of its own. It writes the questions the research pass must answer, so specifics come from real research instead of memory.",
@@ -3615,6 +3622,7 @@ function restoreRememberedAccountOffline() {
   accountCacheReadOnlyWarningShown = false;
   cloudSyncReady = false;
   cloudAccount = null;
+  renderHomeAccount();
   if (!cached) return false;
   state = Object.assign(freshDefaultState(),cached);
   stateAccountId = accountId;
@@ -3976,6 +3984,7 @@ async function initCloudPersistence() {
       cloudRemoteRevision = 0;
       cloudSyncedFingerprint = "";
       cloudAccount = null;
+      renderHomeAccount();
       entitlementAccountId = "";
       backendEntitled = false;
       backendAccessRowPresent = false;
@@ -3991,6 +4000,7 @@ async function initCloudPersistence() {
     }
     verifiedUser = user;
     cloudAccount = user;
+    renderHomeAccount();
     if (permanentAccountVerified(user) && (user.user_metadata?.worldview_password_setup
       || accountPending?.mode === "email_change" && accountPending.originalUserId === user.id)) markPasswordRecovery(user.id);
     identityVerified = true;
@@ -6460,15 +6470,21 @@ function pathControlAtPoint(x, y) {
   };
   // Laptop trackpad: horizontal movement spins the carousel. Vertical wheel
   // movement stays with the page and never changes the organizational layer.
-  area.addEventListener("wheel", e => {
-    // Touch/mouse dragging upward keeps its separate meaning: lesson branches.
-    const vertical = Math.abs(e.deltaY) > Math.abs(e.deltaX);
-    if (vertical) return;
+  // Registered on the document in the capture phase and gated by the
+  // carousel's on-screen box, so a horizontal swipe spins the ring no matter
+  // which card, field, or nested scroller sits under the pointer. On the wrap
+  // itself, a swipe over the centred card never arrived (BUG-291).
+  document.addEventListener("wheel", e => {
+    // Vertical movement stays with the page and never changes the layer.
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) return;
+    if (area.offsetParent === null) return;
+    const box = area.getBoundingClientRect();
+    if (e.clientX < box.left || e.clientX > box.right || e.clientY < box.top || e.clientY > box.bottom) return;
     e.preventDefault();
     // desktop scroll spins the ring continuously — no stepping card to card
     wheel.pos = Math.max(0, Math.min(wheel.cards.length - 1, wheel.pos + e.deltaX / 420));
     scheduleWheelLayout(false);
-  }, { passive: false });
+  }, { passive: false, capture: true });
 })();
 
 const LESSON_INTAKE_PROMPT_VERSION = "lesson-intake-clarifier-v4";
@@ -15046,7 +15062,7 @@ function renderPasswordAccount() {
     : verify ? "Open the confirmation email, then return here. If you already have an account, sign in instead. We never merge libraries automatically."
     : reset ? "If an account uses this email, we'll send a password-reset link."
     : signup ? "Email and password only. Confirm your email before starting."
-    : manage ? "You stay signed in on this device by default. Sign out when using a shared device."
+    : manage ? `${cloudAccount?.email ? `Signed in as ${cloudAccount.email}. ` : ""}You stay signed in on this device by default. Sign out when using a shared device.`
     : "Your lessons, wherever you return.";
   $("password-account-email-label").hidden = update || verify || manage || checking;
   $("password-account-email").hidden = update || verify || manage || checking;
@@ -15420,12 +15436,24 @@ function openSettings() {
   $("settings-panel").scrollTop = 0; // always open showing the top
   settingsSnap = settingsFields();
 }
+// The top-left profile mark shows who is signed in on this device at a
+// glance and opens the account dialog, which names the address in full.
+function renderHomeAccount() {
+  const el = document.getElementById("home-account");
+  if (!el) return;
+  const email = String(cloudAccount?.email || "").trim();
+  el.textContent = email ? email[0] : "\u263A";
+  el.title = email ? `Signed in as ${email}` : "Not signed in \u2014 tap to sign in";
+  el.classList.toggle("signed-out", !email);
+}
 function openAccountSettings() {
   if ($("intro-demo").classList.contains("open")) setIntroOpen(false,false);
   closeDrawer();
   openPasswordAccount();
 }
 $("gear").onclick = openSettings;
+$("home-account").onclick = openAccountSettings;
+renderHomeAccount();
 // dirty = fields changed since the panel was OPENED (comparing against saved
 // state broke on the phone: a laptop-chosen voice doesn't exist in the phone's
 // voice list, which made every close look like an unsaved change)
