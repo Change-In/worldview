@@ -2104,11 +2104,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v194 · Sep 2";
+const BUILD = "v195 · Sep 2";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v195", date: "Sep 2", changes: [
+    "Re-entering a saved Mock Run at Extraction now automatically recovers an unusable first reply and starts with a fresh Extraction question instead of replaying Clarification's last prompt.",
+    "While that first Extraction question is loading, the Mock conversation keeps the earlier context without showing the trailing Clarification offer as if it were current."
+  ]},
   { tag: "v194", date: "Sep 2", changes: [
     "Corrected the ChatGPT 5.6 Luna price used in the spend estimate. It was ten times too high, so Luna runs were being estimated at roughly $2 per million input tokens instead of 20 cents."
   ]},

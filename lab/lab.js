@@ -10319,7 +10319,7 @@ async function retryLatestPipelineExtractionTurn(options) {
   const artifact = selectedPipelineArtifact();
   const failed = retryablePipelineExtractionTurn(artifact);
   if (!artifact || !failed || labState.extractionBusy || labState.extraction.saveBusy || labState.extraction.modeSwitching) return false;
-  if (automatic && !["premature_transition_offer", "premature_transition_commit", "missing_transition_commit"].includes(automaticFailureCode)) return false;
+  if (automatic && !["premature_transition_offer", "premature_transition_commit", "missing_transition_commit", "opening_unusable"].includes(automaticFailureCode)) return false;
   const { latest, sample } = failed;
   const priorAutomaticAttempts = Number(latest.scenario?.automaticExtractionRecoveryAttempt || 0);
   if (automatic && priorAutomaticAttempts >= 1) return false;
@@ -10346,7 +10346,9 @@ async function retryLatestPipelineExtractionTurn(options) {
   });
   const originalSystem = String(originalRequest.system || extractionSystemPrompt(artifact));
   const commitExpected = latest.scenario?.transitionCommitEligible === true && latest.scenario?.learnerExplicitLessonIntent === true;
-  const recoveryAction = commitExpected
+  const recoveryAction = automaticFailureCode === "opening_unusable"
+    ? `The prior first Extraction question was unusable or missing. Re-answer the opening request with exactly one concise Feynman-style question grounded in the immutable Clarification artifact. Do not mention recovery, Clarification, or app state.`
+    : commitExpected
     ? `The newest learner message explicitly requests Lesson entry or approves the immediately preceding validated offer, and the exact route/Broad gates are satisfied. Return phase_action \"commit_transition\" with your own short natural acknowledgement and empty route ids when present. Do not ask another Extraction question, re-offer the same choice, or omit the typed action.`
     : `An offer is ${latest.scenario?.transitionOfferEligible === true ? "eligible" : "not eligible"}. A transition commit is not eligible. Treat those facts as authoritative. If an offer is not eligible, do not mention readiness, beginning, moving on, or route state; continue with one useful current-understanding question.`;
   const recoverySystem = automatic
@@ -10414,8 +10416,14 @@ async function retryLatestPipelineExtractionTurn(options) {
 const extractionAutomaticRecoveryStates = new Map();
 
 function queueAutomaticExtractionProtocolRecovery(artifact, latest, record) {
-  const failureCode = clip(record?.failureCode || "", 80);
-  if (!artifact || !latest || !["premature_transition_offer", "premature_transition_commit", "missing_transition_commit"].includes(failureCode)) return false;
+  const recordedFailureCode = clip(record?.failureCode || "", 80);
+  const openingUnusable = !recordedFailureCode
+    && Number(latest?.scenario?.extractionTurn || 0) === 0
+    && !LAB_ACTIVE_JOB_STATES.has(latest?.status)
+    && !record?.output
+    && Boolean(record?.sample?.request);
+  const failureCode = recordedFailureCode || (openingUnusable ? "opening_unusable" : "");
+  if (!artifact || !latest || !["premature_transition_offer", "premature_transition_commit", "missing_transition_commit", "opening_unusable"].includes(failureCode)) return false;
   if (Number(latest.scenario?.automaticExtractionRecoveryAttempt || 0) >= 1) return false;
   const key = `${latest.id}:${failureCode}`;
   const recoveryState = extractionAutomaticRecoveryStates.get(key) || "";
@@ -13050,7 +13058,14 @@ function mockLearnerTranscript(stage = labState.pipelineStage, artifact = select
   const clarification = mockLearnerClarificationTranscript(artifact);
   if (stage === "clarification") return clarification;
   const extraction = pipelineExtractionTranscript(artifact);
-  if (stage === "extraction") return [...clarification, ...extraction];
+  if (stage === "extraction") {
+    // While the first Extraction question is being recovered/created, do not
+    // present the trailing Clarification offer as if it were the active prompt.
+    // Keep the earlier context visible; once Extraction has a reply, restore
+    // the complete continuous transcript.
+    if (!extraction.length && clarification.at(-1)?.role === "assistant") return clarification.slice(0, -1);
+    return [...clarification, ...extraction];
+  }
   const selection = selectedPipelineMapRecord(artifact);
   const lesson = selection ? pipelineLessonTranscript(selection) : [];
   if (stage === "lesson") return [...clarification, ...extraction, ...lesson];
