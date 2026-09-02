@@ -2104,11 +2104,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v187 · Sep 1";
+const BUILD = "v188 · Sep 1";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v188", date: "Sep 1", changes: [
+    "Signing in on a device that already has saved lessons now opens ordinary sign-in instead of the \u201Ckeep your existing library\u201D screen. Connecting a device library to an email is still available through Create account.",
+    "The sign-in screen now says what happens to lessons saved only on that device."
+  ]},
   { tag: "v187", date: "Sep 1", changes: [
     "The profile mark is now an ordinary silhouette avatar when you are signed out, and your account initial once you are signed in.",
     "Settings moved to the bottom left on Home, clear of the menu and profile controls.",
@@ -3565,7 +3569,7 @@ async function ensureStableIdentityForMutation(action = "save") {
   if (!backendClient) return true;
   if (stableIdentityAllowsMutation()) return true;
   if (!permanentAccountVerified() && !accountIdentityHeldForRetry() || accountRecoveryRequired()) {
-    openPasswordAccount(accountRecoveryRequired() ? "update" : cloudAccount?.is_anonymous ? "upgrade" : "signin");
+    openPasswordAccount(accountRecoveryRequired() ? "update" : "signin");
     return false;
   }
   if (accountMutationBlocked() && identityRestoreStatus !== "signed-out") {
@@ -15076,7 +15080,9 @@ function renderPasswordAccount() {
     : reset ? "If an account uses this email, we'll send a password-reset link."
     : signup ? "Email and password only. Confirm your email before starting."
     : manage ? `${cloudAccount?.email ? `Signed in as ${cloudAccount.email}. ` : ""}You stay signed in on this device by default. Sign out when using a shared device.`
-    : "Your lessons, wherever you return.";
+    : cloudAccount?.is_anonymous
+      ? "Sign in and your account's lessons load here. Anything saved only on this device stays on this device \u2014 use Create account to bring it across instead."
+      : "Your lessons, wherever you return.";
   $("password-account-email-label").hidden = update || verify || manage || checking;
   $("password-account-email").hidden = update || verify || manage || checking;
   $("password-account-secret-group").hidden = !needsPassword;
@@ -15102,8 +15108,11 @@ function renderPasswordAccount() {
   syncCredentialFieldInteractivity();
 }
 function openPasswordAccount(mode = "", message = "", isError = false) {
+  // A device holding an anonymous library still opens on ordinary sign-in.
+  // Connecting that library to an email is reached through Create account,
+  // which keeps the common path to one screen and one decision.
   if (!mode) mode = accountRecoveryRequired() ? "update" : permanentAccountVerified() ? "manage"
-    : accountPending ? "verify" : cloudAccount?.is_anonymous ? "upgrade" : "signin";
+    : accountPending ? "verify" : "signin";
   if (passwordAccountBusy) { renderPasswordAccount();return; }
   if (passwordAccountMode !== mode) clearPasswordFields();
   passwordAccountMode = mode;
