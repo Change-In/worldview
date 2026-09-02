@@ -102,7 +102,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   /* An installed PWA keeps the origin it was installed from. Never move it
      silently: browser storage and the authenticated session do not follow. */
   #origin-warning {
-    position:fixed;z-index:240;top:max(10px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);
+    position:fixed;z-index:240;bottom:max(10px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);
     width:min(680px,calc(100% - 24px));display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;
     padding:13px 14px;border:1.5px solid var(--line);border-radius:15px;background:var(--card);
     color:var(--ink);box-shadow:var(--shadow-lg);font-size:12px;line-height:1.45;
@@ -2104,11 +2104,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v188 · Sep 1";
+const BUILD = "v189 · Sep 2";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v189", date: "Sep 2", changes: [
+    "Opening Developer Lab no longer shows a separate gate page. The account check is now a single status line, and the full card appears only if something needs your attention.",
+    "The old-app-address notice now sits at the bottom of the screen instead of across the top."
+  ]},
   { tag: "v188", date: "Sep 1", changes: [
     "Signing in on a device that already has saved lessons now opens ordinary sign-in instead of the \u201Ckeep your existing library\u201D screen. Connecting a device library to an email is still available through Create account.",
     "The sign-in screen now says what happens to lessons saved only on that device."

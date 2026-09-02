@@ -1669,3 +1669,13 @@ body.mock-run.quiz-learner-active .quiz-stage-title .conversation-mode-actions >
   left:auto!important;
   transform:none!important;
 }
+
+/* While the administrator account is being verified the gate is a single
+   status line rather than a page in front of the Lab. The full card returns
+   whenever the check fails and the owner has something to act on. */
+#lab-gate[data-state="checking"] .gate-orbit,
+#lab-gate[data-state="checking"] .gate-card h2,
+#lab-gate[data-state="checking"] .gate-card > p:not(#lab-gate-message),
+#lab-gate[data-state="checking"] #lab-account-signin,
+#lab-gate[data-state="checking"] #lab-enter { display: none; }
+#lab-gate[data-state="checking"] .gate-card { border: 0; background: none; box-shadow: none; }

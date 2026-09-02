@@ -3254,7 +3254,12 @@ function lockLabAccount(message = "Sign in to your administrator account to open
   labState.createStarting = false;
   const shell = q("lab-shell"), gate = q("lab-gate");
   if (shell) { shell.hidden = true; shell.inert = true; }
-  if (gate) gate.hidden = false;
+  if (gate) {
+    gate.hidden = false;
+    // Checking is a status line, not an interstitial. Only a state that
+    // needs a decision renders the full card.
+    gate.dataset.state = status === "checking" ? "checking" : "locked";
+  }
   if (q("lab-open-timing")) q("lab-open-timing").disabled = true;
   if (q("lab-health")) { q("lab-health").textContent = "Locked"; q("lab-health").className = "lab-health"; }
   if (q("lab-provider-count")) q("lab-provider-count").textContent = "—";
