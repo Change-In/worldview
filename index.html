@@ -2104,11 +2104,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v191 · Sep 2";
+const BUILD = "v192 · Sep 2";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v192", date: "Sep 2", changes: [
+    "Every phase now defaults to ChatGPT 5.6 Luna at low reasoning effort, the cheapest route that still runs the whole lesson. Brain uses GPT-4.1 mini.",
+    "Each phase has a Reasoning menu (low, medium, high) in Models and spend, so cost against quality can be tested per stage.",
+    "The Lesson Map can now be planned on ChatGPT. Chapter research for a ChatGPT-planned Map runs on Gemini 3.5 Flash-Lite, the cheapest model that can search."
+  ]},
   { tag: "v191", date: "Sep 2", changes: [
     "Models and spend now sits directly above the Clarification prompt and shares its width, with Previous mock runs alongside on the right."
   ]},

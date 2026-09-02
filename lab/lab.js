@@ -108,12 +108,12 @@ const MOCK_BOUNDARY_CONFIG_KEY = "worldview-lab-mock-clarification-boundaries-v1
 const MOCK_SCRIPTED_OPENING = "What first made [topic] feel worth exploring: something you heard, a problem you noticed, or a question that keeps returning?";
 const MOCK_SCRIPTED_FINAL = "Before we continue, is there anything you want to add or change?";
 const MOCK_STAGE_DEFAULTS = Object.freeze({
-  clarification:{ provider:"anthropic", model:"claude-sonnet-4-6", outputTokens:1800, research:false },
-  map:{ provider:"anthropic", model:"claude-sonnet-5", outputTokens:24000, research:true },
-  extraction:{ provider:"anthropic", model:"claude-sonnet-4-6", outputTokens:1200, research:false },
-  lesson:{ provider:"anthropic", model:"claude-sonnet-5", outputTokens:900, research:false },
-  brain:{ provider:"anthropic", model:"claude-haiku-4-5", outputTokens:420, research:false },
-  quiz:{ provider:"anthropic", model:"claude-sonnet-4-6", outputTokens:900, research:false },
+  clarification:{ provider:"openai", model:"gpt-5.6-luna", outputTokens:1800, research:false, effort:"low" },
+  map:{ provider:"openai", model:"gpt-5.6-luna", outputTokens:16000, research:true, effort:"low" },
+  extraction:{ provider:"openai", model:"gpt-5.6-luna", outputTokens:1200, research:false, effort:"low" },
+  lesson:{ provider:"openai", model:"gpt-5.6-luna", outputTokens:900, research:false, effort:"low" },
+  brain:{ provider:"openai", model:"gpt-4.1-mini", outputTokens:420, research:false, effort:"low" },
+  quiz:{ provider:"openai", model:"gpt-5.6-luna", outputTokens:900, research:false, effort:"low" },
 });
 
 /* Rough pre-flight sizing. ~4 characters per token is the usual English
@@ -2019,6 +2019,14 @@ function formatCost(value) {
 }
 
 const MOCK_RUN_STAGES = ["clarification", "map", "extraction", "lesson", "brain", "quiz"];
+// ChatGPT has no provable web search on this route, so a Map planned on it
+// hands chapter research to the cheapest Gemini model that can search and
+// return the structured evidence schema. Any other planner keeps its own route.
+const MOCK_RESEARCH_ROUTE = Object.freeze({ provider:"google", model:"gemini-3.5-flash-lite" });
+const MOCK_EFFORT_LEVELS = Object.freeze(["low", "medium", "high"]);
+function mockResearchRoute(plannerProvider, plannerModel) {
+  return plannerProvider === "openai" ? MOCK_RESEARCH_ROUTE : { provider:plannerProvider, model:plannerModel };
+}
 const MOCK_RUN_STAGE_LABELS = Object.freeze({ clarification: "Clarification", map: "Lesson Map", extraction: "Extraction", lesson: "Lesson talker", brain: "Brain", quiz: "Final Quiz" });
 const MOCK_LEARNER_STAGES = Object.freeze(["clarification", "extraction", "lesson", "quiz"]);
 
@@ -2064,7 +2072,7 @@ function mockStageProviderAllowed(stage, provider) {
   // Mock Map jobs always request protected web research. The current OpenAI
   // adapter deliberately rejects that request instead of pretending research
   // happened, so do not offer a configuration that can never start.
-  return Boolean(LAB_PROVIDER_CATALOG[provider] && !(stage === "map" && provider === "openai"));
+  return Boolean(LAB_PROVIDER_CATALOG[provider]);
 }
 
 function normalizeMockStageOutputTokens(stage, value, fallback) {
@@ -2100,7 +2108,8 @@ function sanitizedMockRunConfig(value = labState.mockRunConfig) {
     const candidate = value?.[stage] || fallback;
     const provider = mockStageProviderAllowed(stage, candidate.provider) ? candidate.provider : fallback.provider;
     const model = validMockModel(provider, candidate.model) ? candidate.model : (provider === fallback.provider ? fallback.model : defaultModel(provider));
-    result[stage] = { ...fallback, provider, model, outputTokens:normalizeMockStageOutputTokens(stage, candidate.outputTokens, fallback.outputTokens) };
+    const effort = MOCK_EFFORT_LEVELS.includes(candidate.effort) ? candidate.effort : fallback.effort;
+    result[stage] = { ...fallback, provider, model, effort, outputTokens:normalizeMockStageOutputTokens(stage, candidate.outputTokens, fallback.outputTokens) };
   }
   return result;
 }
@@ -2340,7 +2349,7 @@ function renderMockRunConfig() {
     const label = element("label", { text: "Provider and model" });
     const provider = element("select", { attrs: { "aria-label": `${MOCK_RUN_STAGE_LABELS[stage]} provider`, "data-mock-stage-provider": stage } });
     for (const [id, info] of Object.entries(LAB_PROVIDER_CATALOG)) {
-      const unavailableForMap = stage === "map" && id === "openai";
+      const unavailableForMap = false;
       provider.append(element("option", { value: id, text: unavailableForMap ? `${info.label} · protected research unavailable` : info.label, disabled:unavailableForMap }));
     }
     provider.value = config.provider;
@@ -2381,6 +2390,17 @@ function renderMockRunConfig() {
       renderMockRunConfig();
     });
     label.append(provider, model, customModel);
+    const effortLabel = element("label", { className: "mock-run-stage-effort", text: "Reasoning" });
+    const effortSelect = element("select", { attrs: { "aria-label": `${MOCK_RUN_STAGE_LABELS[stage]} reasoning effort`, "data-mock-stage-effort": stage } });
+    for (const level of MOCK_EFFORT_LEVELS) effortSelect.append(element("option", { value: level, text: level === "low" ? "low · cheapest" : level }));
+    effortSelect.value = MOCK_EFFORT_LEVELS.includes(config.effort) ? config.effort : "low";
+    effortSelect.addEventListener("change", () => {
+      labState.mockRunConfig[stage] = { ...mockStageConfig(stage), effort: effortSelect.value };
+      persistMockRunConfig();
+      renderMockRunConfig();
+    });
+    effortLabel.append(effortSelect);
+    label.append(effortLabel);
     const outputLabel = element("label", { className: "mock-run-stage-output-cap", text: "Response cap" });
     outputLabel.append(outputCap);
     const actualCost = mockStageActualCost(stage, artifact);
@@ -2394,7 +2414,7 @@ function renderMockRunConfig() {
     card.append(head, label, outputLabel, meta);
     const diagnostic = mockStageDiagnostic(stage, artifact);
     if (diagnostic) card.append(element("small", { className:`mock-run-stage-diagnostic ${diagnostic.kind === "error" ? "is-error" : "is-working"}`, text:diagnostic.text, attrs:{ role:diagnostic.kind === "error" ? "alert" : "status" } }));
-    if (stage === "map") card.append(element("small", { className: "mock-run-stage-research", text: "Research automatic · OpenAI is unavailable here because its protected route cannot run web research." }));
+    if (stage === "map") card.append(element("small", { className: "mock-run-stage-research", text: config.provider === "openai" ? `Research automatic on ${MOCK_RESEARCH_ROUTE.model} · ChatGPT cannot run web research on this route.` : "Research automatic on the same model." }));
     const outputSummary = mockStageOutputSummary(stage, artifact);
     if (outputSummary) card.append(element("small", { className: "mock-run-stage-output", text: `Latest output · ${outputSummary}` }));
     root.append(card);
@@ -4001,7 +4021,29 @@ function sanitizePendingConversationCreate(value) {
   } catch (_) { return null; }
 }
 
+// Each sample carries the reasoning effort chosen for its phase. Research
+// samples are left alone: their route sets its own depth.
+function applyMockEffort(request) {
+  if (labState.pipelineMode !== "mock" || !Array.isArray(request?.samples)) return request;
+  const stage = String(request.scenario?.pipelineStage || "");
+  if (stage === "map_research") return request;
+  for (const sample of request.samples) {
+    if (sample.effort) continue;
+    const role = sample.metadata?.lessonRole || sample.metadata?.quizRole || "";
+    const key = stage === "map_planner" ? "map"
+      : ["brain", "assessor"].includes(role) ? "brain"
+      : stage === "lesson_evaluation" ? "brain"
+      : stage === "quiz" || stage === "quiz_evaluation" ? "quiz"
+      : stage === "lesson" ? "lesson"
+      : stage === "extraction" ? "extraction"
+      : request.component === "clarification" ? "clarification" : "";
+    const effort = key ? mockStageConfig(key).effort : null;
+    if (MOCK_EFFORT_LEVELS.includes(effort)) sample.effort = effort;
+  }
+  return request;
+}
 async function boundedLabConversationCreate(request, { deadlineMs = LAB_CONVERSATION_CREATE_DEADLINE_MS } = {}) {
+  applyMockEffort(request);
   const ownerUserId = labState.verifiedUserId;
   if (!ownerUserId || labState.workspaceOwnerId !== ownerUserId) throw new Error("Verify the same Lab account before sending this message.");
   const pendingList = labState.pendingConversationCreates ||= [];
@@ -5020,7 +5062,7 @@ async function runTextExperiment(kind, options = {}) {
             maxTokens: pipelineArtifact
               ? run.mapRequestMaxTokens
               : maxOutputTokens(kind),
-            ...(pipelineArtifact ? { effort: PIPELINE_MAP_PLANNER_EFFORT } : {}),
+            ...(pipelineArtifact ? { effort: mockStageConfig("map").effort || PIPELINE_MAP_PLANNER_EFFORT } : {}),
             ...(lane.research ? { research: true, researchMaxUses: kind === "lesson" ? 10 : 2 } : {}),
             metadata: {
               ...(pipelineArtifact && run.replayMetadata ? run.replayMetadata : {}),
@@ -7498,8 +7540,8 @@ async function ensurePipelineMapChapterResearch(plannerJob, artifact = selectedP
     chapters:plannerMap.chapters,
   }));
   const plannerSample = plannerRecord.sample || labState.jobDetails.get(plannerJob.id)?.samples?.[0] || {};
-  const provider = plannerSample.provider || mockStageConfig("map").provider;
-  const model = plannerSample.model || mockStageConfig("map").model;
+  const plannerRoute = { provider: plannerSample.provider || mockStageConfig("map").provider, model: plannerSample.model || mockStageConfig("map").model };
+  const { provider, model } = mockResearchRoute(plannerRoute.provider, plannerRoute.model);
   const requests = [];
   const pendingIds = new Set();
   for (const [chapterIndex, chapter] of plannerMap.chapters.entries()) {
