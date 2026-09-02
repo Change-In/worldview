@@ -98,7 +98,9 @@ const LAB_MODEL_RATES = {
   "gemini-3.5-flash-lite": { input: 0.3, output: 2.5 },
   "gemini-2.5-pro": { input: 1.25, output: 10 },
   "gemini-2.5-flash": { input: 0.3, output: 2.5 },
-  "gpt-5.6-luna": { input: 2, output: 8 },
+  // Luna list price verified 2026-09-02 (Artificial Analysis, OpenRouter): the
+  // earlier $2/$8 row overstated it tenfold and skewed every estimate.
+  "gpt-5.6-luna": { input: 0.2, output: 1.2 },
   "gpt-5.6-terra": { input: 2, output: 8 },
   "gpt-4.1": { input: 2, output: 8 },
   "gpt-4.1-mini": { input: 0.4, output: 1.6 },

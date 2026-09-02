@@ -2104,11 +2104,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v193 · Sep 2";
+const BUILD = "v194 · Sep 2";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v194", date: "Sep 2", changes: [
+    "Corrected the ChatGPT 5.6 Luna price used in the spend estimate. It was ten times too high, so Luna runs were being estimated at roughly $2 per million input tokens instead of 20 cents."
+  ]},
   { tag: "v193", date: "Sep 2", changes: [
     "The \u201Ckeep your existing library\u201D linking step is gone. Sign in or create an account directly on any device; lessons saved only on that device stay there.",
     "Gemini 3.7 Flash and 3.8 Flash are selectable for every phase, with their current prices in the spend estimate."
