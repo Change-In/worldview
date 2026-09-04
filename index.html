@@ -1597,6 +1597,19 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     #chat-header{padding-left:max(18px,calc((100% - 820px) / 2));padding-right:max(18px,calc((100% - 820px) / 2))}
     .msg{font-size:15px;line-height:1.5}
   }
+
+  /* Quiet Home: controls occupy independent layout slots. */
+  #home-header{grid-template-columns:52px minmax(0,1fr) 52px;gap:6px;padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right));align-items:start}
+  #home-header .home-brand{grid-column:2;grid-row:1}#home-header .home-header-left{grid-column:1;grid-row:1}
+  #home-header #developer-lab-launcher{position:static;grid-column:3;grid-row:1;justify-self:end;align-self:start;min-height:40px;box-sizing:border-box;display:inline-flex;padding:8px 12px;font-size:12px;gap:0;box-shadow:none}
+  #home-header #developer-lab-launcher[hidden]{display:none}#developer-lab-launcher::before{display:none}
+  #mobile-category-button,#mobile-category-sheet,#lesson-layer-guide,#category-active-label{display:none!important}
+  #settings-appearance{margin:18px 0 22px}#settings-appearance h4{font:500 18px Georgia,serif;margin:0 0 12px}
+  .theme-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px}.theme-choices button{min-height:48px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--paper);color:var(--ink);font:600 14px system-ui;cursor:pointer}
+  .theme-choices button[aria-pressed="true"]{border:2px solid var(--accent);background:var(--accent-100);color:var(--accent-700)}.theme-choices button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+  #set-theme[hidden]{display:none!important}.lesson-card .card-cat{display:none}
+  .lesson-options-button{left:8px;top:8px;width:44px;height:44px;padding:0}
+  #home-archive-entry{margin-bottom:calc(env(safe-area-inset-bottom) + 60px)}
 </style>
 </head>
 <body>
@@ -1771,9 +1784,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     <button id="rail-explore" class="rail-item active" type="button">Explore</button>
     <button id="rail-sources" class="rail-item" type="button">Upload</button>
   </nav>
-  <button id="mobile-category-button" type="button" aria-haspopup="dialog">Most recent</button>
+  <button id="mobile-category-button" type="button" hidden disabled>All lessons</button>
   <button id="models-button" type="button" aria-haspopup="dialog" hidden>Models</button>
-  <a id="developer-lab-launcher" href="lab/" aria-label="Open the protected developer Lab" hidden>Developer lab</a>
   <div id="home-header">
     <div class="home-header-left">
       <button id="home-menu" class="menu-button" type="button" aria-label="Open menu">&#9776;</button>
@@ -1786,9 +1798,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       <button id="home-build" class="home-build" type="button" title="What's new in this version"></button>
     </div>
     <button id="gear" title="Settings">&#9881;</button>
-    <button id="theme-toggle" class="menu-button" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
-      <svg id="theme-toggle-icon" viewBox="0 0 24 24" width="21" height="21" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></svg>
-    </button>
+    <a id="developer-lab-launcher" href="lab/" aria-label="Open Lab" hidden>Lab</a>
   </div>
 
   <div id="models-sheet" aria-hidden="true">
@@ -1821,12 +1831,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       <section id="carousel-page" class="home-deck-page" aria-label="Questions and saved lessons">
         <div id="carousel-wrap">
           <div id="carousel"></div>
-          <div id="lesson-layer-guide" aria-label="Lesson folder selector">
+          <div id="lesson-layer-guide" aria-label="Lesson folder selector" hidden>
             <div id="lesson-layer-up" class="layer-destination"></div>
             <div id="lesson-layer-name"></div>
             <div id="lesson-layer-down" class="layer-destination"></div>
           </div>
-          <div id="category-active-label"><span></span><b>Most recent</b></div>
+          <div id="category-active-label" hidden><span></span><b>Most recent</b></div>
           <div id="paths-ring">
             <svg viewBox="0 0 40 40" width="40" height="40">
               <circle cx="20" cy="20" r="16" fill="none" stroke="var(--line)" stroke-width="3"></circle>
@@ -2109,7 +2119,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     </div>
     <div class="legacy-voice-settings">
     <label>Appearance</label>
-    <select id="set-theme">
+    <select id="set-theme" hidden aria-hidden="true" tabindex="-1">
       <option value="system">Match this device</option>
       <option value="light">Light</option>
       <option value="dark">Dark</option>
@@ -2169,11 +2179,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v200 · Sep 4";
+const BUILD = "v201 · Sep 4";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v201", date: "Sep 4", changes: ["Home is quieter: lessons stay newest-first, folders sit beside Ask Anything, and the recency selector is gone.","Lab has its own top-right space. Light and Dark are one-tap choices in Settings.","Pinch lesson cards with two fingers to zoom out or in within a comfortable range."]},
   { tag: "v200", date: "Sep 4", changes: ["After confirming email in another browser, enter your password directly in the pinned app to continue.","Your account now has a back arrow, clearer settings and password controls, and a separate sign-out action."] },
   { tag: "v199", date: "Sep 4", changes: ["Lab opens to saved starting points, with a full Mock Run always available.", "Test phases with fewer visible controls; Tutor and Quiz require the matching saved Map and Extraction.", "Compare two Map models on the same input, view results side by side, and choose supported speech routes."] },
   { tag: "v198", date: "Sep 4", changes: ["Folders now opens your library, with a quiet Archive drawer and optional New folder.","Archive lessons without losing progress or folders, and move them back whenever you like.","Lesson options now give the full title room, with map access and larger folder choices."]},
@@ -3269,10 +3280,15 @@ function saveLocalOnly() {
 }
 const THEME_ICON_SUN = '<circle cx="12" cy="12" r="4.2"/><path d="M12 3v2M12 19v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M3 12h2M19 12h2M4.6 19.4l1.4-1.4M18 6l1.4-1.4"/>';
 const THEME_ICON_MOON = '<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>';
+function setAppearance(theme) {
+  if(theme!=="light" && theme!=="dark")return;
+  state.theme=theme;if($("set-theme"))$("set-theme").value=theme;applyTheme();save();
+}
 function applyTheme() {
   const theme = ["system","light","dark"].includes(state.theme) ? state.theme : "system";
   document.documentElement.dataset.theme = theme;
   const dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme:dark)").matches);
+  document.querySelectorAll("[data-theme-choice]").forEach(button => button.setAttribute("aria-pressed",String(button.dataset.themeChoice === (dark ? "dark" : "light"))));
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = dark ? "#241f1a" : "#f8f4ec";
   const icon = document.getElementById("theme-toggle-icon");
@@ -5983,13 +5999,7 @@ function categoriesForSection(section) {
 }
 
 function categoryLayerEntries() {
-  const counts = new Map();
-  state.lessons.filter(lesson => !isSourceLesson(lesson) && !lessonIsArchived(lesson)).forEach(lesson => { const category = lessonCategory(lesson); counts.set(category, (counts.get(category) || 0) + 1); });
-  const generated = [...counts.keys()]
-    .sort((a,b) => (counts.get(b)-counts.get(a)) || a.localeCompare(b))
-    .map(label => ({ key:`topic:${label.toLocaleLowerCase()}`, label, kind:"topic" }));
-  const custom = categoriesForSection("explore").map(category => ({ key:`custom:${category.id}`, label:category.name, kind:"custom", id:category.id }));
-  return [{ key:null,label:"Most recent",kind:"recent" }, ...custom, ...generated];
+  return [{key:null,label:"All lessons",kind:"recent"}, ...categoriesForSection("explore").map(category => ({key:"custom:"+category.id,label:category.name,kind:"custom",id:category.id}))];
 }
 function categoryLayers() { return categoryLayerEntries().map(entry => entry.label); }
 function lessonMatchesLayer(lesson,layerKey = wheel.layerCategory) {
@@ -6045,35 +6055,7 @@ function applyCategoryLayer(index, animate = true) {
 
 function cycleCategoryLayer(direction) { applyCategoryLayer(wheel.layerIndex + direction); }
 
-function updateLayerGuide() {
-  const guide = $("lesson-layer-guide");
-  const entries = categoryLayerEntries();
-  const layers = entries.map(entry => entry.label);
-  if (!layers.length) { guide.classList.remove("show"); return; }
-  const current = ((wheel.previewLayerIndex ?? wheel.layerIndex) % layers.length + layers.length) % layers.length;
-  const polygonMode = (wheel.categorySelecting || wheel.categoryOverview) && layers.length <= 5;
-  const visibleIndexes = polygonMode ? layers.map((_,i)=>i)
-    : layers.length === 1 ? [0]
-    : layers.length === 2 ? [current, (current + 1) % 2]
-    : [-1,0,1].map(offset => (current + offset + layers.length) % layers.length);
-  const points = visibleIndexes.map((_,position) => {
-    if (!polygonMode) return { x:50, y:50 + (position - (visibleIndexes.length - 1) / 2) * 21 };
-    const angle = -Math.PI/2 + (Math.PI*2*position/visibleIndexes.length);
-    return { x:50 + Math.cos(angle)*40, y:50 + Math.sin(angle)*40 };
-  });
-  const signature = JSON.stringify([wheel.categoryOverview,wheel.categorySelecting,current,entries.map(entry => entry.key)]);
-  if (guide.dataset.signature !== signature) {
-    guide.dataset.signature = signature;
-    const shape = polygonMode ? `<polygon points="${points.map(p=>`${p.x},${p.y}`).join(" ")}"></polygon>` : `<polyline points="${points.map(p=>`${p.x},${p.y}`).join(" ")}"></polyline>`;
-    guide.innerHTML = `<svg class="category-map-svg" viewBox="0 0 100 100" aria-hidden="true">${shape}</svg>` + visibleIndexes.map((index,position) => `<button type="button" title="${esc(layers[index])}" aria-label="Show ${esc(layers[index])}" class="map-node${index===current?" active":""}" data-layer-index="${index}" style="left:${16+points[position].x}px;top:${16+points[position].y}px"></button>`).join("") + `<div class="category-map-label">${esc(layers[current])}</div>`;
-    guide.querySelectorAll(".map-node").forEach(button => { button.onclick = () => applyCategoryLayer(Number(button.dataset.layerIndex)); });
-  }
-  $("category-active-label").querySelector("b").textContent = layers[current];
-  guide.classList.toggle("overview", wheel.categoryOverview);
-  guide.classList.add("category-map");
-  guide.classList.add("show");
-  renderMobileCategoryMenu();
-}
+function updateLayerGuide() { $("lesson-layer-guide").hidden = true; }
 
 /* Keep the phone cards generous, but do not enlarge them into tablet-sized
    objects on a laptop. Wide screens use their extra room as breathing space. */
@@ -6082,7 +6064,7 @@ function updateCardSize() {
   const laptop = innerWidth >= 900;
   const minScale = mobile ? 0.68 : 0.58;
   const maxScale = mobile ? 1.20 : 1.35;
-  const scale = Math.max(minScale, Math.min(maxScale, Number(state.cardScale) || 1));
+  const scale = boundedCardScale(state.cardScale,mobile);
   if (state.cardScale !== scale) state.cardScale = scale;
   const wrapHeight = $("carousel-wrap")?.clientHeight || innerHeight * 0.72;
   const widthFactor = mobile ? 0.66 : laptop ? 0.24 : 0.30;
@@ -6155,6 +6137,10 @@ function syncDeveloperLauncherVisibility() {
   }
 }
 
+function recentLessonOrder(lessons) {
+  const stamp = lesson => { const value = lesson.updatedAt || lesson.createdAt;return Number(value) || Date.parse(value) || 0; };
+  return [...lessons].reverse().sort((a,b) => stamp(b)-stamp(a));
+}
 function renderHome() {
   if ($("home-archive-count")) $("home-archive-count").textContent = archivedLessons().length;
   syncDeveloperLauncherVisibility();
@@ -6224,7 +6210,7 @@ function renderHome() {
   }
 
   // lesson cards, newest first
-  const visibleLessons = [...state.lessons].reverse().filter(lesson => {
+  const visibleLessons = recentLessonOrder(state.lessons).filter(lesson => {
     if (isSourceLesson(lesson) || lessonIsArchived(lesson) || !lessonMatchesLayer(lesson)) return false;
     if (!wheel.layerCategory && (lesson.customCategoryIds || []).length) return false;
     // Finishing never archives a lesson; the learner chooses when to put it away.
@@ -6267,7 +6253,7 @@ function renderHome() {
   if (insidePersonalCategory && !visibleLessons.length) {
     const empty = document.createElement("div");
     empty.className = "card custom-category-card";
-    empty.innerHTML = `<div class="card-cat">collection</div><div class="card-title serif">Nothing filed here yet</div><div class="custom-category-count">Return to Most recent and hold a lesson to add it.</div>`;
+    empty.innerHTML = `<div class="card-cat">collection</div><div class="card-title serif">Nothing filed here yet</div><div class="custom-category-count">Return to All lessons and open a lesson’s options to add it.</div>`;
     c.appendChild(empty);
     wheel.cards.push(empty); wheel.ids.push(null);
   }
@@ -6389,17 +6375,10 @@ function layoutWheel(animate = true, refreshGuide = true) {
 /* The deck label ("Most recent") belongs to the lesson cards, so it stays out
    of the way until you are actually among them — it should not be sitting in
    the corner the moment Explore opens, above the Ask Anything card. */
-function updateDeckLabelVisibility() {
-  const button = $("mobile-category-button");
-  if (!button) return;
-  /* Inside a folder the pill is also the way out, so it is never hidden. On
-     the main shelf there is nothing "recent" to choose until a real lesson
-     exists; once one does, reveal the pill as that first lesson enters focus. */
-  if (wheel.layerCategory) { button.classList.remove("deck-label-hidden"); return; }
-  const firstLessonIndex = wheel.cards.findIndex(card => card.classList.contains("lesson-card"));
-  const show = firstLessonIndex >= 0 && wheel.pos >= Math.max(0,firstLessonIndex - .55);
-  button.classList.toggle("deck-label-hidden", !show);
-}
+function updateDeckLabelVisibility() { $("mobile-category-button").hidden = true; }
+let cardPinchActive=false,cardPinchSuppressUntil=0;
+function boundedCardScale(scale,mobile=innerWidth<=700) { return Math.max(mobile ? .68 : .58,Math.min(mobile?1.2:1.35,Number(scale)||1)); }
+function pinchCardScale(startScale,startDistance,distance) { return boundedCardScale(startScale*Math.max(1,distance)/Math.max(1,startDistance)); }
 let resetCarouselGesture = () => {};
 let wheelLayoutFrame = 0;
 let wheelLayoutNeedsGuide = false;
@@ -6490,6 +6469,7 @@ function pathControlAtPoint(x, y) {
   }
 
   area.addEventListener("pointerdown", e => {
+    if(cardPinchActive || Date.now()<cardPinchSuppressUntil)return;
     if (e.target && e.target.closest && e.target.closest(".category-add-button")) return;
     const pathHit = pathControlAtPoint(e.clientX, e.clientY);
     if (pathHit) {
@@ -6517,6 +6497,7 @@ function pathControlAtPoint(x, y) {
     try { area.setPointerCapture(e.pointerId); } catch (error) {}
   });
   area.addEventListener("pointermove", e => {
+    if(cardPinchActive)return;
     if (pathPress && pathPress.pointerId === e.pointerId) {
       if (Math.hypot(e.clientX - pathPress.x, e.clientY - pathPress.y) > 14) pathPress.canceled = true;
       return;
@@ -6546,6 +6527,7 @@ function pathControlAtPoint(x, y) {
     }
   });
   area.addEventListener("pointerup", e => {
+    if(cardPinchActive || Date.now()<cardPinchSuppressUntil){activePointers.delete(e.pointerId);down=false;pathPress=null;return;}
     if (organizerConsumedPointers.has(e.pointerId)) {
       activePointers.delete(e.pointerId);
       down = false; moved = true; gestureAxis = null;
@@ -6626,11 +6608,35 @@ function pathControlAtPoint(x, y) {
      pointerup that an overlay may have swallowed. Cheap, and it makes the
      freeze unreachable rather than merely fixed at the two known leaks. */
   resetCarouselGesture = () => {
+    cancelAnimationFrame(momId);vel=0;
     activePointers.clear();
     down = false; moved = false; gestureAxis = null; pathPress = null;
     wheel.methodInteracting = false;
     if (target >= 0 && wheel.cards[target]) wheel.cards[target].style.translate = "";
   };
+  /* CARD_PINCH_START */
+  let pinchStartDistance=0,pinchStartScale=1;
+  const touchDistance=touches=>Math.hypot(touches[0].clientX-touches[1].clientX,touches[0].clientY-touches[1].clientY);
+  function finishCardPinch(){
+    if(!cardPinchActive)return;
+    cardPinchActive=false;cardPinchSuppressUntil=Date.now()+350;
+    resetCarouselGesture();cancelOrganizerLongPress();save();
+  }
+  area.addEventListener("touchstart",event=>{
+    if(event.touches.length!==2 || cardPinchActive)return;
+    cardPinchActive=true;pinchStartDistance=touchDistance(event.touches);pinchStartScale=boundedCardScale(state.cardScale);
+    resetCarouselGesture();cancelOrganizerLongPress();if(event.cancelable)event.preventDefault();
+  },{capture:true,passive:false});
+  area.addEventListener("touchmove",event=>{
+    if(!cardPinchActive)return;if(event.cancelable)event.preventDefault();if(event.touches.length!==2)return;
+    state.cardScale=pinchCardScale(pinchStartScale,pinchStartDistance,touchDistance(event.touches));updateCardSize();scheduleWheelLayout(false);
+  },{capture:true,passive:false});
+  area.addEventListener("touchend",event=>{if(!cardPinchActive)return;if(event.cancelable)event.preventDefault();if(event.touches.length===0)finishCardPinch();},{capture:true,passive:false});
+  area.addEventListener("touchcancel",finishCardPinch,{capture:true});
+  area.addEventListener("click",event=>{if(cardPinchActive || Date.now()<cardPinchSuppressUntil){event.preventDefault();event.stopImmediatePropagation();}},{capture:true});
+  window.addEventListener("blur",finishCardPinch);
+  document.addEventListener("visibilitychange",()=>{if(document.hidden)finishCardPinch();});
+  /* CARD_PINCH_END */
   // Laptop trackpad: horizontal movement spins the carousel. Vertical wheel
   // movement stays with the page and never changes the organizational layer.
   // Registered on the document in the capture phase and gated by the
@@ -10905,7 +10911,7 @@ function syncHomeRail() {
   if (index === 0) renderProfile(); // keep the profile page fresh when it scrolls into view
   // Lesson folders only describe Explore. Keep the thumb control out of
   // Profile/Upload, where "Most recent" has no meaning.
-  $("mobile-category-button").style.display = innerWidth <= 700 && index === 1 ? "flex" : "none";
+  $("mobile-category-button").hidden = true;
 }
 $("home-deck-scroll").addEventListener("scroll", syncHomeRail, { passive:true });
 syncHomeRail();
@@ -11095,6 +11101,7 @@ function cancelOrganizerLongPress() {
 }
 function attachOrganizerLongPress(element,lessonId,section) {
   element.addEventListener("pointerdown",event => {
+    if(cardPinchActive || Date.now()<cardPinchSuppressUntil)return;
     if (event.target.closest(".source-card-path,.lesson-path-button,.lesson-options-button")) return;
     cancelOrganizerLongPress();
     organizerLongPress = { pointerId:event.pointerId,x:event.clientX,y:event.clientY,opened:false,lessonId,section };
@@ -15123,6 +15130,9 @@ function organizeSettingsPanel() {
   if (developerToggle) { developerToggle.className = "settings-check"; developerToggle.hidden = !(state.developerUnlocked && state.developerMode); }
   const speechLanguageHint = $("set-speechlanguage") && $("set-speechlanguage").nextElementSibling;
   if (speechLanguageHint) speechLanguageHint.remove();
+  theme.forEach(node => {if(node) node.hidden=true;});
+  const appearance=document.createElement("section");appearance.id="settings-appearance";
+  appearance.innerHTML='<h4>Appearance</h4><div class="theme-choices" role="group" aria-label="Appearance"><button type="button" data-theme-choice="light">☀ Light</button><button type="button" data-theme-choice="dark">☾ Dark</button></div>';
   const learning = group("Learning & conversation", [microphoneLauncher, ...theme, ...speechLanguage, developerToggle], true, true);
   const thinkingHint = $("set-thinking") && $("set-thinking").nextElementSibling;
   const ttsProvider = fieldNodes("set-ttsprovider"), deepgramKey = fieldNodes("set-deepgramkey"), deepgramModel = fieldNodes("set-deepgrammodel");
@@ -15153,13 +15163,16 @@ function organizeSettingsPanel() {
     <button id="workspace-sync" class="workspace-action" type="button">Check for updates</button>
     <p id="workspace-sync-result" class="hint" role="status"></p>
     <div id="workspace-owner" hidden><div class="workspace-divider"></div><span class="workspace-kicker">OWNER STUDIO</span><h4>A space to shape Worldview.</h4><p>Explore the model lab, compare your experiments, and return to the learner experience with the same account.</p>
-      <button id="workspace-lab" class="workspace-action workspace-primary" type="button">Open Developer Lab <span aria-hidden="true">↗</span></button>
+      <button id="workspace-lab" class="workspace-action workspace-primary" type="button">Open Lab <span aria-hidden="true">↗</span></button>
       <button id="workspace-view" class="workspace-action" type="button"></button>
       <details class="workspace-roadmap"><summary>On the horizon</summary><p>Developer invitations, scoped test workspaces and release controls. These will be added here as the project grows.</p></details>
     </div>
     <details id="workspace-recovery" class="workspace-roadmap" hidden><summary>Earlier device library</summary><p>Your account library is ready to use. Older device content remains separate until you choose to add it.</p><button id="workspace-recover" class="workspace-action" type="button">Add earlier lessons to this account</button></details>
     <p class="workspace-version"></p>`;
   account.after(workspace);
+  intro.after(appearance);
+  appearance.querySelectorAll("[data-theme-choice]").forEach(button => {button.onclick=()=>setAppearance(button.dataset.themeChoice);});
+  applyTheme();
   $("workspace-lab").onclick = () => { if (ownerToolsAvailable()) location.assign(new URL("lab/",location.href).href); };
   $("workspace-view").onclick = () => {
     if (!ownerToolsAvailable()) return;
@@ -15700,14 +15713,6 @@ window.addEventListener("storage",event => {
 });
 syncDeveloperSettingsVisibility();
 $("set-theme").addEventListener("change",event => { state.theme = event.target.value;applyTheme();save(); });
-$("theme-toggle").addEventListener("click", () => {
-  const dark = document.documentElement.dataset.theme === "dark"
-    || (document.documentElement.dataset.theme === "system" && matchMedia("(prefers-color-scheme:dark)").matches);
-  state.theme = dark ? "light" : "dark";
-  applyTheme();
-  save();
-  if ($("set-theme")) $("set-theme").value = state.theme;
-});
 function setSettingsInteractive(active) {
   const settings = $("settings");
   if (!active && document.activeElement && settings.contains(document.activeElement)) {
@@ -15767,7 +15772,7 @@ renderHomeAccount();
 // voice list, which made every close look like an unsaved change)
 let settingsSnap = "";
 function settingsFields() {
-  return JSON.stringify([$("set-testercode").value.trim(), $("set-elkey").value.trim(), $("set-cartkey").value.trim(), $("set-cartvoice").value.trim(), $("set-deepgramkey").value.trim(), $("set-deepgrammodel").value, $("set-ttsprovider").value, $("set-model").value, $("set-thinking").value, $("set-speechlanguage").value, $("set-theme").value, $("set-voicedefault").checked, $("set-developer").checked]);
+  return JSON.stringify([$("set-testercode").value.trim(), $("set-elkey").value.trim(), $("set-cartkey").value.trim(), $("set-cartvoice").value.trim(), $("set-deepgramkey").value.trim(), $("set-deepgrammodel").value, $("set-ttsprovider").value, $("set-model").value, $("set-thinking").value, $("set-speechlanguage").value, $("set-voicedefault").checked, $("set-developer").checked]);
 }
 function settingsDirty() { return settingsFields() !== settingsSnap; }
 function applySettings() {
