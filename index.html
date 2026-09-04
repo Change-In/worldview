@@ -207,6 +207,21 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #password-account-status[data-error=true] { color:var(--danger,#b3473e); }
   #password-account-remember { font-size:12px; line-height:1.5; color:var(--ink-soft); margin:16px 0 0; text-align:center; }
   .account-switch-confirm { display:flex; align-items:flex-start; gap:9px; margin-top:14px; font-size:13px; line-height:1.5; }
+  .account-topbar { display:flex;align-items:center;gap:12px; }
+  #password-account-back { display:grid;place-items:center;width:44px;height:44px;flex-shrink:0;border:1px solid var(--line);border-radius:50%;background:transparent;color:var(--ink);cursor:pointer; }
+  #password-account-back svg { width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round; }
+  .account-identity { display:flex;align-items:center;gap:14px;padding:20px 0 26px; }
+  #account-avatar { display:grid;place-items:center;width:54px;height:54px;flex-shrink:0;border-radius:50%;background:var(--paper);border:1px solid var(--line);color:var(--accent);font:600 26px Georgia,serif;text-transform:uppercase; }
+  .account-identity>div { min-width:0; }.account-identity strong { display:block;font-size:15px;overflow-wrap:anywhere; }
+  .account-verified { display:block;color:var(--ink-soft);font-size:12px;margin-top:5px; }
+  .account-menu { border-top:1px solid var(--line);border-bottom:1px solid var(--line); }
+  .account-menu button { display:flex;align-items:center;gap:13px;width:100%;min-height:78px;padding:15px 2px;border:0;background:transparent;color:var(--ink);text-align:left;cursor:pointer;font:inherit; }
+  .account-menu button+button { border-top:1px solid var(--line); }.account-menu button>span:first-child { width:28px;text-align:center;font-size:23px;color:var(--accent); }.account-menu button>span:last-child { margin-left:auto;font-size:24px;color:var(--ink-soft); }
+  .account-menu strong,.account-menu small { display:block; }.account-menu strong { font-size:14px; }.account-menu small { font-size:12px;color:var(--ink-soft);margin-top:5px; }
+  .account-device-note { font-size:12px;line-height:1.5;color:var(--ink-soft);margin:20px 0 8px; }
+  #account-dialog[data-mode=manage] .account-dialog-actions { justify-content:flex-start;margin-top:14px; }
+  #account-dialog[data-mode=manage] #password-account-signout { color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 17px; }
+  #account-dialog button:focus-visible { outline:2px solid var(--accent);outline-offset:3px; }
   #account-dialog [hidden] { display:none!important; }
   .intro-question { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin:0; }
   #intro-topic { min-width:0;height:48px;border:1.5px solid var(--line);border-radius:12px;background:var(--paper);color:var(--ink);padding:0 13px;font-size:15px;outline:none; }
@@ -1605,9 +1620,17 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 
 <dialog id="account-dialog" aria-labelledby="account-dialog-title" aria-describedby="account-dialog-copy">
   <section class="account-dialog-card">
-    <div class="intro-wordmark">Worldview</div>
+    <div class="account-topbar"><button id="password-account-back" type="button" aria-label="Back" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6M8 12h12"/></svg></button><div class="intro-wordmark">Worldview</div></div>
     <h2 id="account-dialog-title">Sign in</h2>
     <p id="account-dialog-copy">Your lessons, wherever you return.</p>
+    <section id="account-summary" hidden aria-label="Account details">
+      <div class="account-identity"><span id="account-avatar" aria-hidden="true"></span><div><strong id="account-email"></strong><span class="account-verified">Verified email</span></div></div>
+      <div class="account-menu">
+        <button id="account-settings" type="button"><span aria-hidden="true">⚙</span><span><strong>Settings</strong><small>Appearance, voice and saving</small></span><span aria-hidden="true">›</span></button>
+        <button id="account-password" type="button"><span aria-hidden="true"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg></span><span><strong>Change password</strong><small>Keep your account secure</small></span><span aria-hidden="true">›</span></button>
+      </div>
+      <p class="account-device-note">Signed in on this device. Your library belongs to this account.</p>
+    </section>
     <form id="password-account-form" novalidate>
       <fieldset id="password-account-fields">
         <label id="password-account-email-label" for="password-account-email">Email</label>
@@ -1631,7 +1654,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       <button id="password-account-forgot" type="button">Forgot password?</button>
       <button id="password-account-signin" type="button" hidden>Back to sign in</button>
       <button id="password-account-resend" type="button" hidden>Resend email</button>
-      <button id="password-account-close" type="button" hidden>Return to Worldview</button>
+      <button id="password-account-close" type="button" hidden>Done</button>
       <button id="password-account-signout" type="button" hidden>Sign out</button>
     </div>
   </section>
@@ -2146,11 +2169,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v199 · Sep 4";
+const BUILD = "v200 · Sep 4";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v200", date: "Sep 4", changes: ["After confirming email in another browser, enter your password directly in the pinned app to continue.","Your account now has a back arrow, clearer settings and password controls, and a separate sign-out action."] },
   { tag: "v199", date: "Sep 4", changes: ["Lab opens to saved starting points, with a full Mock Run always available.", "Test phases with fewer visible controls; Tutor and Quiz require the matching saved Map and Extraction.", "Compare two Map models on the same input, view results side by side, and choose supported speech routes."] },
   { tag: "v198", date: "Sep 4", changes: ["Folders now opens your library, with a quiet Archive drawer and optional New folder.","Archive lessons without losing progress or folders, and move them back whenever you like.","Lesson options now give the full title room, with map access and larger folder choices."]},
   { tag: "v197", date: "Sep 4", changes: [
@@ -15295,15 +15319,23 @@ function renderPasswordAccount() {
   const reset = mode === "reset";
   const manage = mode === "manage";
   const checking = mode === "checking";
-  const needsPassword = ["signin","signup","update"].includes(mode);
-  $("account-dialog-title").textContent = checking ? "Checking your account…" : update ? "Set your password" : upgrade ? "Keep your existing library" : verify ? "Check your email" : reset ? "Reset your password" : signup ? "Create account" : manage ? "Your account" : "Sign in";
+  const verifyPassword = verify && accountPending?.mode !== "email_change";
+  const needsPassword = ["signin","signup","update"].includes(mode) || verifyPassword;
+  dialog.dataset.mode = mode;
+  $("account-summary").hidden = !manage;
+  $("account-email").textContent = cloudAccount?.email || "";
+  $("account-avatar").textContent = (cloudAccount?.email || "")[0] || "";
+  $("password-account-back").hidden = checking || accountRecoveryRequired() || (["signin","verify"].includes(mode) && accountEntryNeeded());
+  $("password-account-back").disabled = passwordAccountBusy;
+  $("password-account-form").hidden = manage || checking;
+  $("account-dialog-title").textContent = checking ? "Checking your account…" : update ? (accountRecoveryRequired() ? "Set your password" : "Change password") : upgrade ? "Keep your existing library" : verify ? "Check your email" : reset ? "Reset your password" : signup ? "Create account" : manage ? "Your account" : "Sign in";
   $("account-dialog-copy").textContent = checking ? "Restoring your secure session."
     : upgrade ? "Connect an email to this device's existing account. Verify it first, then choose a password. Your lessons stay with the same account."
     : update ? "Choose a password of at least 12 characters. A memorable phrase works well."
-    : verify ? "Open the confirmation email, then return here. If you already have an account, sign in instead. We never merge libraries automatically."
+    : verify ? (verifyPassword ? "Confirm your email, then enter your password here to open your library on this device." : "Open the confirmation email, then return here to continue.")
     : reset ? "If an account uses this email, we'll send a password-reset link."
     : signup ? "Email and password only. Confirm your email before starting."
-    : manage ? `${cloudAccount?.email ? `Signed in as ${cloudAccount.email}. ` : ""}You stay signed in on this device by default. Sign out when using a shared device.`
+    : manage ? "Your space in Worldview."
     : cloudAccount?.is_anonymous
       ? "Your lessons, wherever you return. Earlier device work stays safely separate."
       : "Your lessons, wherever you return.";
@@ -15311,17 +15343,17 @@ function renderPasswordAccount() {
   $("password-account-email").hidden = update || verify || manage || checking;
   $("password-account-secret-group").hidden = !needsPassword;
   $("password-account-confirm-group").hidden = !(signup || update);
-  $("password-account-secret").autocomplete = mode === "signin" ? "current-password" : "new-password";
-  $("password-account-secret").minLength = mode === "signin" ? 1 : 12;
+  $("password-account-secret").autocomplete = (mode === "signin" || verifyPassword) ? "current-password" : "new-password";
+  $("password-account-secret").minLength = (mode === "signin" || verifyPassword) ? 1 : 12;
   $("account-switch-confirm-label").hidden = true;
   $("password-account-submit").hidden = manage || checking;
-  $("password-account-submit").textContent = update ? "Save password" : upgrade ? "Send confirmation" : verify ? "I've confirmed my email" : reset ? "Send reset link" : signup ? "Create account" : "Sign in";
+  $("password-account-submit").textContent = update ? "Save password" : upgrade ? "Send confirmation" : verify ? "Continue" : reset ? "Send reset link" : signup ? "Create account" : "Sign in";
   $("password-account-signup").hidden = !["signin","upgrade"].includes(mode);
   $("password-account-signup").textContent = "Create account";
-  $("password-account-forgot").hidden = !["signin","manage"].includes(mode);
+  $("password-account-forgot").hidden = !["signin","verify"].includes(mode);
   $("password-account-signin").hidden = !["signup","reset","verify","upgrade"].includes(mode);
   $("password-account-resend").hidden = !verify || !accountPending;
-  $("password-account-close").hidden = accountEntryNeeded() || checking;
+  $("password-account-close").hidden = true; // The header arrow is the single return control.
   $("password-account-signout").hidden = (!cloudAccount && !accountSignoutPending()) || checking || cloudAccount?.is_anonymous === true;
   $("password-account-signout").textContent = accountSignoutPending() ? "Retry sign out" : "Sign out";
   $("password-account-remember").hidden = checking || manage;
@@ -15445,7 +15477,7 @@ async function preserveAnonymousAccount(user) {
 }
 async function submitPasswordAccount() {
   if (passwordAccountBusy || !backendClient) return;
-  const mode = passwordAccountMode;
+  const mode = passwordAccountMode === "verify" && accountPending?.mode !== "email_change" ? "signin" : passwordAccountMode;
   if (mode === "verify") { await checkAccountConfirmation();return; }
   if (!["signin","signup","upgrade","reset","update"].includes(mode)) return;
   const email = $("password-account-email").value.trim().toLowerCase();
@@ -15543,7 +15575,7 @@ async function submitPasswordAccount() {
     }
   }
 }
-async function checkAccountConfirmation() {
+async function checkAccountConfirmation({silent = false} = {}) {
   if (passwordAccountBusy) return;
   passwordAccountBusy = true;renderPasswordAccount();
   try {
@@ -15556,8 +15588,8 @@ async function checkAccountConfirmation() {
         markPasswordRecovery(cloudAccount.id);passwordAccountMode = "update";
       } else { setAccountPending(null);passwordAccountMode = "signin"; }
       passwordAccountNotice("");
-    } else passwordAccountNotice("Not confirmed yet. Open the email link, then return here. You can also sign in after confirming.");
-  } catch (error) { passwordAccountNotice("We could not verify this account yet. Your earlier library is still separate.",true); }
+    } else if (!silent) passwordAccountNotice("After confirming your email, enter your password to continue on this device.");
+  } catch (error) { if (!silent) passwordAccountNotice("We could not verify this account yet. Your earlier library is still separate.",true); }
   finally { passwordAccountBusy = false;renderPasswordAccount();reconcileAccountEntry(); }
 }
 async function resendAccountConfirmation() {
@@ -15640,6 +15672,14 @@ $("password-account-signin").onclick = () => openPasswordAccount("signin");
 $("password-account-forgot").onclick = () => openPasswordAccount("reset");
 $("password-account-resend").onclick = resendAccountConfirmation;
 $("password-account-close").onclick = closePasswordAccount;
+$("password-account-back").onclick = () => {
+  if (permanentAccountVerified() && !accountRecoveryRequired()) {
+    if (passwordAccountMode === "manage") closePasswordAccount();
+    else openPasswordAccount("manage");
+  } else openPasswordAccount("signin");
+};
+$("account-settings").onclick = () => { if (closePasswordAccount()) openSettings(); };
+$("account-password").onclick = () => { if (permanentAccountVerified()) openPasswordAccount("update"); };
 $("password-account-signout").onclick = signOutAccount;
 $("account-dialog").addEventListener("cancel",event => { if (!closePasswordAccount()) event.preventDefault(); });
 $("account-dialog").addEventListener("close",() => { clearPasswordFields();syncCredentialFieldInteractivity(); });
@@ -16140,9 +16180,11 @@ window.addEventListener("pageshow",() => { if (backendClient && !accountTransiti
 window.addEventListener("online",() => { if (backendClient && !accountTransitionInProgress) initCloudPersistence(); });
 let accountReturnCheckAt = 0;
 async function refreshAccountOnReturn() {
-  if (document.hidden || !permanentAccountVerified() || accountTransitionInProgress || passwordAccountBusy
+  if (document.hidden || accountTransitionInProgress || passwordAccountBusy
       || currentLessonId || voice.active || activeLessonIntake || Date.now()-accountReturnCheckAt < 15000) return;
   accountReturnCheckAt = Date.now();
+  if (accountPending && passwordAccountMode === "verify") { await checkAccountConfirmation({silent:true});return; }
+  if (!permanentAccountVerified()) return;
   const id = cloudAccount.id;
   try {
     if (cloudSyncReady && !accountCacheReadOnly) await cloudSyncNow();
