@@ -1359,6 +1359,25 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     }
     .card.new-card .prompt-line { margin-bottom:10px; }
   }
+  #settings-workspace { border:1px solid var(--line); border-radius:20px; padding:22px; margin:18px 0 24px; background:linear-gradient(145deg,var(--card),var(--surface-soft)); }
+  .workspace-heading { display:flex;align-items:center;justify-content:space-between;gap:12px; }
+  .workspace-kicker { font:600 10px/1.5 system-ui;letter-spacing:.18em;color:var(--ink-soft); }
+  .workspace-badge { font:600 11px/1.4 system-ui;padding:5px 10px;border-radius:30px;background:var(--accent-100);color:var(--accent-700); }
+  .workspace-stats { display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:10px;margin:24px 0; }
+  .workspace-stats strong { display:block;font:500 25px/1.2 Georgia,serif;overflow-wrap:anywhere; }
+  .workspace-stats span { display:block;font:12px/1.5 system-ui;color:var(--ink-soft);margin-top:6px; }
+  .workspace-action { display:flex;justify-content:space-between;align-items:center;width:100%;min-height:46px;padding:12px 15px;margin:9px 0;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);font:600 14px/1.4 system-ui;text-align:left;cursor:pointer; }
+  .workspace-action:disabled { opacity:.55;cursor:wait; }
+  .workspace-primary { background:var(--ink);color:var(--paper);border-color:var(--ink); }
+  .workspace-divider { height:1px;background:var(--line);margin:24px 0; }
+  #workspace-owner h4 { font:500 25px/1.2 Georgia,serif;margin:10px 0; }
+  #workspace-owner p,.workspace-roadmap p { font:13px/1.6 system-ui;color:var(--ink-soft);margin:10px 0 16px; }
+  .workspace-roadmap summary { cursor:pointer;font:500 13px/1.5 system-ui;padding:14px 0; }
+  .workspace-version { font:11px/1.5 system-ui;color:var(--ink-soft);margin-top:20px; }
+  .settings-account-card { display:grid;grid-template-columns:1fr 1fr;gap:0 9px; }
+  .settings-account-card>p { grid-column:1/-1;overflow-wrap:anywhere; }
+  #settings-dismiss { float:right;border:1px solid var(--line);border-radius:50%;width:36px;height:36px;background:var(--card);color:var(--ink);font:22px/1 system-ui;cursor:pointer; }
+  #settings-workspace [hidden] { display:none!important; }
   #settings-panel .hint { font-size: 12px; color: var(--ink-soft); margin-top: 8px; line-height: 1.5; }
   #settings-save {
     margin-top: 20px; width: 100%; padding: 14px; font-size: 16px;
@@ -2104,11 +2123,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v195 · Sep 2";
+const BUILD = "v196 · Sep 4";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v196", date: "Sep 4", changes: [
+    "Email sign-in no longer asks you to connect an earlier device library. Earlier work stays separate and recoverable.",
+    "Settings brings your account, save status, preferences and owner workspace together.",
+    "Older-account signup and sign-out paths now protect existing work and report what actually happened.",
+  ]},
   { tag: "v195", date: "Sep 2", changes: [
     "Re-entering a saved Mock Run at Extraction now automatically recovers an unusable first reply and starts with a fresh Extraction question instead of replaying Clarification's last prompt.",
     "While that first Extraction question is loading, the Mock conversation keeps the earlier context without showing the trailing Clarification offer as if it were current."
@@ -2954,6 +2978,8 @@ let cloudSyncReady = false, cloudHydrating = false, cloudSyncTimer = 0, cloudSyn
 let backendAccessRowPresent = false, backendEntitlementRecord = null, backendPilotLessonsUsed = null, backendPilotLessonsRemaining = null;
 let backendPilotRegisteredLessonIds = new Set();
 let cloudRetryDelay = 0, accountTransitionInProgress = false;
+let accountSaveStatus = "checking";
+let accountSyncConflict = false;
 let localSaveWarningShown = false;
 let accountCacheReadOnly = false, accountCacheReadOnlyWarningShown = false;
 let identityRestoreStatus = "pending", identityRetryTimer = 0, identityRetryDelay = 0;
@@ -3156,12 +3182,10 @@ function normalizeCustomCategoryScopes(categories = state.customCategories,lesso
 }
 normalizeCustomCategoryScopes();
 function save() {
-  if (accountCacheReadOnly || pendingLegacyRecovery) {
+  if (accountCacheReadOnly) {
     if (!accountCacheReadOnlyWarningShown) {
       accountCacheReadOnlyWarningShown = true;
-      setTimeout(() => { if (typeof toast === "function") toast(pendingLegacyRecovery
-        ? "Choose Import this device or Start fresh before editing this account."
-        : "This offline account copy is read-only until Worldview verifies the secure session.",6500); },0);
+      setTimeout(() => { if (typeof toast === "function") toast("Your device copy is preserved. Reconnect your account before editing.",6500); },0);
     }
     return false;
   }
@@ -3253,17 +3277,18 @@ async function boundedAuthFetch(input, options = {}) {
   // The Auth SDK owns session storage. Bound the actual request and body read,
   // not just the caller's wait, so a late password operation cannot sign in
   // after a retry has already selected a different account.
-  if (!String(input?.url || input).includes("/auth/v1/")) return fetch(input,options);
+  const isAuthRequest = String(input?.url || input).includes("/auth/v1/");
   const controller = new AbortController();
+  if (!isAuthRequest) accountRequestControllers.add(controller);
   const abort = () => controller.abort();
   if (options.signal?.aborted) controller.abort();
   else options.signal?.addEventListener("abort",abort,{once:true});
-  const timer = setTimeout(abort,12000);
+  const timer = setTimeout(abort,isAuthRequest ? 12000 : 30000);
   try {
     const response = await fetch(input,{...options,signal:controller.signal});
     const body = [204,205,304].includes(response.status) ? null : await response.arrayBuffer();
     return new Response(body,{status:response.status,statusText:response.statusText,headers:response.headers});
-  } finally { clearTimeout(timer);options.signal?.removeEventListener("abort",abort); }
+  } finally { clearTimeout(timer);options.signal?.removeEventListener("abort",abort);accountRequestControllers.delete(controller); }
 }
 const backendClient = !LOCAL_UI_PREVIEW && window.supabase && window.supabase.createClient
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
@@ -3531,6 +3556,34 @@ function rememberedAccountId() {
 function cloudSnapshotFingerprint(snapshot) {
   return JSON.stringify(stableCanonical(snapshot || {lessons:[],notes:[],customCategories:[],preferences:{}}));
 }
+function accountBaselineKey(userId) { return "worldview-sync-baseline-v1:" + userId; }
+function mergeAccountSnapshots(local, remote, base) {
+  const same = (a,b) => JSON.stringify(stableCanonical(a ?? null)) === JSON.stringify(stableCanonical(b ?? null));
+  const result = {};
+  for (const field of ["lessons","notes","customCategories"]) {
+    const maps = [local,remote,base].map(s => new Map((s?.[field] || []).map(item => [item.id,item])));
+    result[field] = [];
+    for (const id of new Set([...maps[0].keys(),...maps[1].keys(),...maps[2].keys()])) {
+      const [a,b,original] = maps.map(map => map.get(id));
+      let value;
+      if (same(a,b) || same(b,original)) value = a;
+      else if (same(a,original)) value = b;
+      else throw Object.assign(new Error("This item changed on both devices. Both account copies are preserved."),{revisionConflict:true});
+      if (value !== undefined) result[field].push(cloudClone(value));
+    }
+  }
+  result.preferences = {};
+  const keys = new Set([local,remote,base].flatMap(s => Object.keys(s?.preferences || {})));
+  for (const key of keys) {
+    const a = local?.preferences?.[key], b = remote?.preferences?.[key], original = base?.preferences?.[key];
+    const value = same(a,original) ? b : a;
+    if (value !== undefined) result.preferences[key] = cloudClone(value);
+  }
+  return result;
+}
+function storeAccountBaseline(userId,snapshot) {
+  localStorage.setItem(accountBaselineKey(userId),JSON.stringify(snapshot));
+}
 function cloudSnapshotMeaningful(snapshot) {
   return !!((snapshot?.lessons || []).length || (snapshot?.notes || []).length || (snapshot?.customCategories || []).length
     || snapshot?.preferences?.introSeenVersion);
@@ -3555,7 +3608,7 @@ function removeLegacyLibraryQuarantine() {
   catch (error) { console.warn("Legacy recovery artifact could not be cleared",error);return false; }
 }
 function accountMutationBlocked() {
-  return !!(accountCacheReadOnly || pendingLegacyRecovery || accountIdentityHeldForRetry()
+  return !!(accountCacheReadOnly || accountIdentityHeldForRetry()
     || (identityRestoreStatus === "checking" && cloudAccount));
 }
 function renderAccountGuardUI() {
@@ -3564,13 +3617,11 @@ function renderAccountGuardUI() {
   const title = $("account-guard-title"), copy = $("account-guard-copy");
   const retry = $("account-guard-retry"), importButton = $("account-guard-import"), fresh = $("account-guard-fresh");
   retry.hidden = true;importButton.hidden = true;fresh.hidden = true;
-  if (pendingLegacyRecovery) {
-    const payload = pendingLegacyRecovery.payload || {};
-    const lessonCount = (payload.lessons || []).length, noteCount = (payload.notes || []).length;
+  if (accountSyncConflict) {
     guard.hidden = false;
-    title.textContent = "Choose what to do with this device's earlier library";
-    copy.textContent = `${lessonCount} lesson${lessonCount === 1 ? "" : "s"} and ${noteCount} Note${noteCount === 1 ? "" : "s"} were kept separate because the old copy had no verified owner.`;
-    importButton.hidden = false;fresh.hidden = false;
+    title.textContent = "This item changed on two devices";
+    copy.textContent = "Your device copy and the saved account copy are both preserved. Retry to check again; conflicting changes will never be silently overwritten.";
+    retry.hidden = false;
   } else if (accountCacheReadOnly || identityRestoreStatus === "offline") {
     guard.hidden = false;
     title.textContent = "Library is read-only while the secure session reconnects";
@@ -3589,9 +3640,7 @@ function renderAccountGuardUI() {
 function guardAccountMutation(action = "make that change") {
   if (!accountMutationBlocked()) return true;
   renderAccountGuardUI();
-  toast(pendingLegacyRecovery
-    ? "Choose Import this device or Start fresh before editing this account."
-    : `Worldview must verify the secure session before it can ${action}.`,6200);
+  toast(`Worldview must reconnect your account before it can ${action}. Your device copy is preserved.`,6200);
   return false;
 }
 async function ensureStableIdentityForMutation(action = "save") {
@@ -3801,21 +3850,23 @@ async function cloudSyncNow() {
   let revisionConflict = false;
   cloudSyncInFlight = (async () => {
     const beforeMedia = cloudSnapshot();
-    if (cloudRemoteBaseline === "missing" && !cloudSnapshotMeaningful(beforeMedia)) { succeeded = true;return; }
+    if (cloudRemoteBaseline === "missing" && !cloudSnapshotMeaningful(beforeMedia)) { succeeded = true;updateCloudAccountUI("connected");return; }
     await syncSourceMediaToCloud(account);
     if (!cloudAccount || cloudAccount.id !== account.id || !cloudSyncReady || !accountOwnershipResolved || !identityMutationReady) return;
     syncedRevision = Number(state.libraryUpdatedAt) || Date.now();
     const snapshot = cloudSnapshot();
     const fingerprint = cloudSnapshotFingerprint(snapshot);
-    if (cloudRemoteBaseline === "missing" && !cloudSnapshotMeaningful(snapshot)) { succeeded = true;return; }
-    if (cloudRemoteBaseline === "row" && fingerprint === cloudSyncedFingerprint) { succeeded = true;return; }
+    if (cloudRemoteBaseline === "missing" && !cloudSnapshotMeaningful(snapshot)) { succeeded = true;updateCloudAccountUI("connected");return; }
+    if (cloudRemoteBaseline === "row" && fingerprint === cloudSyncedFingerprint) { succeeded = true;updateCloudAccountUI("synced");return; }
     let storedServerRevision = cloudRemoteRevision;
-    if (typeof backendEntitlementRecord !== "undefined" && backendEntitlementRecord?.access_tier === "paid") {
+    let storedSnapshot = snapshot;
+    {
       const result = await backendClient.rpc("save_worldview_app_state",{
         p_snapshot:snapshot,
         p_expected_server_revision:cloudRemoteBaseline === "row" ? cloudRemoteRevision : 0,
         p_client_updated_at:syncedRevision,
       });
+      if (cloudAccount?.id !== account.id || !cloudSyncReady) return;
       if (result.error) throw result.error;
       if (!result.data?.saved) {
         if (result.data?.reason === "revision_conflict") {
@@ -3827,22 +3878,27 @@ async function cloudSyncNow() {
         throw Object.assign(new Error(`Validated cloud save was refused: ${result.data?.reason || "unknown"}`),{type:result.data?.reason || "cloud_save_refused"});
       }
       storedServerRevision = Number(result.data.server_revision) || 0;
-    } else {
-      const result = await backendClient.from("user_app_state").upsert({
-        user_id:account.id,schema_version:CLOUD_SCHEMA_VERSION,snapshot,
-        client_updated_at:syncedRevision,updated_at:new Date().toISOString(),
-      },{onConflict:"user_id"});
-      if (result.error) throw result.error;
+      storedSnapshot = result.data.snapshot || snapshot;
     }
+    if (cloudAccount?.id !== account.id || !cloudSyncReady) return;
     succeeded = true;
     cloudRemoteBaseline = "row";
     cloudRemoteRevision = storedServerRevision;
-    cloudSyncedFingerprint = fingerprint;
+    cloudSyncedFingerprint = cloudSnapshotFingerprint(storedSnapshot);
+    const savedLessonIds = new Set((storedSnapshot.lessons || []).map(lesson => lesson.id));
+    const removedByServer = new Set((snapshot.lessons || []).filter(lesson => !savedLessonIds.has(lesson.id)).map(lesson => lesson.id));
+    if (removedByServer.size) {
+      state.lessons = state.lessons.filter(lesson => !removedByServer.has(lesson.id));
+      writeLocalState();renderHome();renderProfile();
+    }
+    storeAccountBaseline(account.id,storedSnapshot);
     cloudRetryDelay = 0;
     updateCloudAccountUI("synced");
   })().catch(error => {
+    if (cloudAccount?.id !== account.id) return;
     console.warn("Cloud sync failed",error);
     if (error?.revisionConflict) {
+      accountSyncConflict = true;
       accountCacheReadOnly = true;
       accountCacheReadOnlyWarningShown = true;
       renderAccountGuardUI();
@@ -3861,6 +3917,7 @@ async function cloudSyncNow() {
 }
 function scheduleCloudSync(delay = 250) {
   clearTimeout(cloudSyncTimer);
+  if (cloudSyncReady && permanentAccountVerified()) updateCloudAccountUI("syncing");
   cloudSyncTimer = setTimeout(() => cloudSyncNow(),delay);
 }
 function paidPilotHasUnregisteredLessons() {
@@ -3901,6 +3958,7 @@ async function runPilotCloudMutation(operation, options = {}) {
   }
 }
 function updateCloudAccountUI(status = "") {
+  if (status) accountSaveStatus = status;
   const label = $("account-status");
   const email = cloudAccount && cloudAccount.email;
   const held = accountIdentityHeldForRetry();
@@ -3908,14 +3966,14 @@ function updateCloudAccountUI(status = "") {
     ? "Offline copy · secure session retrying"
     : "Checking saved secure session…";
   if (label) label.textContent = email
-    ? `${email} · ${accountCacheReadOnly ? "read-only, reconnecting" : pendingLegacyRecovery ? "recovery choice needed" : status === "error" ? "save retrying" : "saved"}`
+    ? `${email} · ${accountCacheReadOnly ? "read-only, reconnecting" : accountSaveStatus === "error" ? "save retrying" : accountSaveStatus === "syncing" ? "saving…" : accountSaveStatus === "synced" ? "saved" : "connected"}`
     : held ? heldStatus
     : status === "error" ? "Cloud save needs another try." : "Sign in to protect your library";
   const signOut = $("account-signout");
   if (signOut) signOut.hidden = !email;
   if ($("nav-account-label")) $("nav-account-label").textContent = permanentAccountVerified() ? "Account" : held ? "Secure session retrying" : "Sign in";
   if ($("drawer-account-status")) $("drawer-account-status").textContent = email
-    ? `${email} · ${accountCacheReadOnly ? "read-only, reconnecting" : pendingLegacyRecovery ? "recovery choice needed" : status === "error" ? "save retrying" : "saved"}`
+    ? `${email} · ${accountCacheReadOnly ? "read-only, reconnecting" : accountSaveStatus === "error" ? "save retrying" : accountSaveStatus === "syncing" ? "saving…" : accountSaveStatus === "synced" ? "saved" : "connected"}`
     : held ? heldStatus : "Sign in / create account";
   const accessStatus = $("account-access-status");
   if (accessStatus) {
@@ -3936,6 +3994,7 @@ function updateCloudAccountUI(status = "") {
       : "Tester access is active.";
   }
   renderAccountSetupUI(status);
+  renderAccountWorkspace();
   syncDeveloperLauncherVisibility();
   syncDeveloperSettingsVisibility();
   renderAccountGuardUI();
@@ -4079,7 +4138,14 @@ async function initCloudPersistence() {
     cloudHydrating = true;
     switchLocalAccount(user.id,scoped || deviceStateWithoutLibrary(state));
     const localRevision = scoped ? Number(state.libraryUpdatedAt) || 0 : 0;
-    if (hasRemote) mergeCloudSnapshot(remoteSnapshot,remoteClientRevision >= localRevision);
+    if (hasRemote) {
+      const baseline = storedState(accountBaselineKey(user.id));
+      if (baseline || !scoped || remoteClientRevision >= localRevision) {
+        const merged = baseline ? mergeAccountSnapshots(cloudSnapshot(),remoteSnapshot,baseline) : remoteSnapshot;
+        state.lessons = [];state.notes = [];state.customCategories = [];
+        mergeCloudSnapshot(merged,true);
+      } else mergeCloudSnapshot(remoteSnapshot,false);
+    }
     state.libraryUpdatedAt = Math.max(localRevision,remoteClientRevision);
     if (legacyMatchesOwned && legacy) {
       const fingerprint = legacyRecoveryFingerprint(legacy);
@@ -4093,14 +4159,16 @@ async function initCloudPersistence() {
     cloudRemoteBaseline = hasRemote ? "row" : "missing";
     cloudRemoteRevision = remoteServerRevision;
     cloudSyncedFingerprint = hasRemote ? cloudSnapshotFingerprint(remoteSnapshot) : "";
+    storeAccountBaseline(user.id,remoteSnapshot);
+    accountSyncConflict = false;
     pendingLegacyRecovery = decision.requiresChoice && legacy
       ? {accountId:user.id,payload:legacy,ownedBaseline:hasRemote ? "remote" : scoped ? "scoped" : "missing"}
       : null;
-    accountOwnershipResolved = !pendingLegacyRecovery;
+    accountOwnershipResolved = true; // The verified account library is separate from optional legacy recovery.
     identityMutationReady = accountOwnershipResolved && permanentAccountVerified(user) && !accountRecoveryRequired(user);
     accountCacheReadOnly = false;
     accountCacheReadOnlyWarningShown = false;
-    cloudSyncReady = accountOwnershipResolved && decision.allowSync && !accountRecoveryRequired(user);
+    cloudSyncReady = accountOwnershipResolved && (decision.allowSync || !!pendingLegacyRecovery) && !accountRecoveryRequired(user);
     if (backendAccessRowPresent && state.testerInvite) {
       // Once the server has an access row, that row is the sole authority.
       // Removing the device copy prevents an old QA code from appearing to be
@@ -4112,8 +4180,9 @@ async function initCloudPersistence() {
     renderHome();
     renderProfile();
     if (accountOwnershipResolved && state.introSeenVersion === INTRO_VERSION && $("intro-demo")?.classList.contains("open")) setIntroOpen(false);
-    updateCloudAccountUI(pendingLegacyRecovery ? "recovery" : hasRemote ? "synced" : "");
+    updateCloudAccountUI(hasRemote ? "synced" : "");
     renderAccountGuardUI();
+    reconcileAccountEntry();
     if (cloudSyncReady) scheduleCloudSync(100);
     return accountOwnershipResolved;
   } catch (error) {
@@ -4125,6 +4194,7 @@ async function initCloudPersistence() {
     identityMutationReady = false;
     accountOwnershipResolved = false;
     console.warn("Cloud library is unavailable",error);
+    accountSyncConflict = !!error?.revisionConflict;
     identityRestoreStatus = "offline";
     accountCacheReadOnly = true;
     accountCacheReadOnlyWarningShown = false;
@@ -14938,7 +15008,8 @@ function organizeSettingsPanel() {
   if (panel.dataset.organized) return;
   panel.dataset.organized = "true";
   const heading = panel.querySelector("h3");
-  const intro = document.createElement("p"); intro.className = "settings-intro"; intro.hidden = true;
+  const dismiss = document.createElement("button"); dismiss.id = "settings-dismiss";dismiss.type = "button";dismiss.textContent = "×";dismiss.setAttribute("aria-label","Close settings");dismiss.onclick = () => closeSettings(true);panel.prepend(dismiss);
+  const intro = document.createElement("p"); intro.className = "settings-intro"; intro.textContent = "Your learning, your space.";
   heading.after(intro);
   function group(title, nodes, open = false, flat = false) {
     const details = document.createElement(flat ? "section" : "details"); details.className = "settings-group"; details.open = open;
@@ -14979,10 +15050,62 @@ function organizeSettingsPanel() {
   const row = $("export-btn") && $("export-btn").closest(".row2"), dataLabel = row && row.previousElementSibling, file=$("import-file"), dataHint=file && file.nextElementSibling;
   const data = group("Your data", [dataLabel,row,file,dataHint]);
   data.id = "settings-data-group";
-  [learning,account,connection,developer,premium,data].reverse().forEach(section => intro.after(section));
+  [account,learning,connection,developer,premium,data].reverse().forEach(section => intro.after(section));
+  const workspace = document.createElement("section");
+  workspace.id = "settings-workspace";
+  workspace.innerHTML = `<div class="workspace-heading"><span class="workspace-kicker">YOUR WORKSPACE</span><span id="workspace-role" class="workspace-badge"></span></div>
+    <div class="workspace-stats"><div><strong id="workspace-lessons">0</strong><span>Lessons</span></div><div><strong id="workspace-notes">0</strong><span>Notes</span></div><div><strong id="workspace-save">Connecting</strong><span>Account saving</span></div></div>
+    <button id="workspace-sync" class="workspace-action" type="button">Check for updates</button>
+    <p id="workspace-sync-result" class="hint" role="status"></p>
+    <div id="workspace-owner" hidden><div class="workspace-divider"></div><span class="workspace-kicker">OWNER STUDIO</span><h4>A space to shape Worldview.</h4><p>Explore the model lab, compare your experiments, and return to the learner experience with the same account.</p>
+      <button id="workspace-lab" class="workspace-action workspace-primary" type="button">Open Developer Lab <span aria-hidden="true">↗</span></button>
+      <button id="workspace-view" class="workspace-action" type="button"></button>
+      <details class="workspace-roadmap"><summary>On the horizon</summary><p>Developer invitations, scoped test workspaces and release controls. These will be added here as the project grows.</p></details>
+    </div>
+    <details id="workspace-recovery" class="workspace-roadmap" hidden><summary>Earlier device library</summary><p>Your account library is ready to use. Older device content remains separate until you choose to add it.</p><button id="workspace-recover" class="workspace-action" type="button">Add earlier lessons to this account</button></details>
+    <p class="workspace-version"></p>`;
+  account.after(workspace);
+  $("workspace-lab").onclick = () => { if (ownerToolsAvailable()) location.assign(new URL("lab/",location.href).href); };
+  $("workspace-view").onclick = () => {
+    if (!ownerToolsAvailable()) return;
+    state.developerMode = !state.developerMode; $("set-developer").checked = state.developerMode;
+    save(); syncDeveloperLauncherVisibility(); syncDeveloperSettingsVisibility(); renderAccountWorkspace();
+  };
+  $("workspace-sync").onclick = async () => {
+    if (!permanentAccountVerified() || accountTransitionInProgress) return;
+    const button = $("workspace-sync"), result = $("workspace-sync-result"), id = cloudAccount.id;
+    button.disabled = true; result.textContent = "Checking your saved library…";
+    try {
+      if (cloudSyncReady && !accountCacheReadOnly) await cloudSyncNow();
+      if (cloudAccount?.id !== id) return;
+      if (accountSaveStatus === "error" && !accountCacheReadOnly) throw new Error("save_pending");
+      await initCloudPersistence();
+      if (cloudAccount?.id !== id) return;
+      result.textContent = accountCacheReadOnly ? "Your device copy is safe. Reconnect to finish syncing." : "Your account library is up to date.";
+    } catch (_) { if (cloudAccount?.id === id) result.textContent = "Changes are still saved on this device. We will retry when connected."; }
+    finally { button.disabled = false; }
+  };
+  $("workspace-recover").onclick = async () => {
+    if (!permanentAccountVerified() || !pendingLegacyRecovery || accountCacheReadOnly) return;
+    $("workspace-recover").disabled = true;
+    try { await completeLegacyRecovery("import"); } finally { $("workspace-recover").disabled = false;renderAccountWorkspace(); }
+  };
   panel.querySelectorAll(".legacy-voice-settings").forEach(wrapper => { if (!wrapper.children.length) wrapper.remove(); });
 }
 organizeSettingsPanel();
+function renderAccountWorkspace() {
+  if (!$("settings-workspace")) return;
+  const signedIn = permanentAccountVerified(), owner = ownerToolsAvailable();
+  $("settings-workspace").hidden = !signedIn;
+  $("workspace-role").textContent = owner ? "Owner" : "Learner";
+  $("workspace-lessons").textContent = String(state.lessons.length);
+  $("workspace-notes").textContent = String(state.notes.length);
+  $("workspace-save").textContent = accountCacheReadOnly ? "Offline" : accountSaveStatus === "error" ? "Retrying" : accountSaveStatus === "syncing" ? "Saving" : accountSaveStatus === "synced" ? "Saved" : "Connected";
+  $("workspace-owner").hidden = !owner;
+  $("workspace-view").textContent = state.developerMode ? "Use learner settings" : "Show developer settings";
+  $("workspace-recovery").hidden = !pendingLegacyRecovery;
+  $("settings-workspace").querySelector(".workspace-version").textContent = BUILD;
+}
 const SECRET_SETTING_IDS = ["set-testercode","set-cartkey","set-elkey","set-deepgramkey"];
 function credentialFieldIsVisibleWithin(field, root) {
   if (!field || !root || !root.contains(field)) return false;
@@ -15007,7 +15130,7 @@ function syncDeveloperSettingsVisibility() {
   const admin = ownerToolsAvailable();
   const developer = !!(admin && state.developerMode);
   const developerToggle = $("set-developer") && $("set-developer").closest("label");
-  if (developerToggle) developerToggle.hidden = !admin;
+  if (developerToggle) developerToggle.hidden = true; // Workspace view switch is the single control.
   const group = $("settings-developer-group");
   if (group) group.hidden = !developer;
   if (developer) renderVoiceTimingReadout();
@@ -15016,8 +15139,9 @@ function syncDeveloperSettingsVisibility() {
   const data = $("settings-data-group");
   if (data) data.hidden = true;
   const tester = $("settings-tester-group");
-  if (tester) tester.hidden = backendAccessEnabled() && !developer;
+  if (tester) tester.hidden = backendAccessEnabled();
   document.querySelectorAll(".owner-provider-field").forEach(node => { node.hidden = !developer; });
+  renderAccountWorkspace();
   syncCredentialFieldInteractivity();
 }
 const ACCOUNT_PENDING_KEY = "worldview-account-pending-v1";
@@ -15110,7 +15234,7 @@ function renderPasswordAccount() {
     : signup ? "Email and password only. Confirm your email before starting."
     : manage ? `${cloudAccount?.email ? `Signed in as ${cloudAccount.email}. ` : ""}You stay signed in on this device by default. Sign out when using a shared device.`
     : cloudAccount?.is_anonymous
-      ? "Sign in and your account's lessons load here. Anything saved only on this device stays on this device \u2014 use Create account to bring it across instead."
+      ? "Your lessons, wherever you return. Earlier device work stays safely separate."
       : "Your lessons, wherever you return.";
   $("password-account-email-label").hidden = update || verify || manage || checking;
   $("password-account-email").hidden = update || verify || manage || checking;
@@ -15118,16 +15242,16 @@ function renderPasswordAccount() {
   $("password-account-confirm-group").hidden = !(signup || update);
   $("password-account-secret").autocomplete = mode === "signin" ? "current-password" : "new-password";
   $("password-account-secret").minLength = mode === "signin" ? 1 : 12;
-  $("account-switch-confirm-label").hidden = !(mode === "signin" && cloudAccount?.is_anonymous === true);
+  $("account-switch-confirm-label").hidden = true;
   $("password-account-submit").hidden = manage || checking;
   $("password-account-submit").textContent = update ? "Save password" : upgrade ? "Send confirmation" : verify ? "I've confirmed my email" : reset ? "Send reset link" : signup ? "Create account" : "Sign in";
   $("password-account-signup").hidden = !["signin","upgrade"].includes(mode);
-  $("password-account-signup").textContent = cloudAccount?.is_anonymous ? "Connect this library" : "Create account";
+  $("password-account-signup").textContent = "Create account";
   $("password-account-forgot").hidden = !["signin","manage"].includes(mode);
   $("password-account-signin").hidden = !["signup","reset","verify","upgrade"].includes(mode);
   $("password-account-resend").hidden = !verify || !accountPending;
   $("password-account-close").hidden = accountEntryNeeded() || checking;
-  $("password-account-signout").hidden = (!cloudAccount && !accountSignoutPending()) || checking;
+  $("password-account-signout").hidden = (!cloudAccount && !accountSignoutPending()) || checking || cloudAccount?.is_anonymous === true;
   $("password-account-signout").textContent = accountSignoutPending() ? "Retry sign out" : "Sign out";
   $("password-account-remember").hidden = checking || manage;
   $("password-account-fields").disabled = passwordAccountBusy || checking;
@@ -15176,7 +15300,7 @@ function reconcileAccountEntry() {
     }
     return;
   }
-  if (accountIdentityHeldForRetry() || accountCacheReadOnly || pendingLegacyRecovery) {
+  if (accountIdentityHeldForRetry() || accountCacheReadOnly) {
     if ($("account-dialog").open && passwordAccountMode === "checking") { $("account-dialog").close();syncCredentialFieldInteractivity(); }
     return;
   }
@@ -15205,6 +15329,8 @@ function suspendAccountIdentity() {
   backendEntitled = false;backendAccessRowPresent = false;backendEntitlementRecord = null;
   backendPilotLessonsUsed = null;backendPilotLessonsRemaining = null;backendPilotRegisteredLessonIds = new Set();
   cloudAccount = null;pendingLegacyRecovery = null;
+  accountSaveStatus = "checking";
+  accountSyncConflict = false;
   state.developerMode = false;state.developerUnlocked = false;
   clearLocalAccountView();
   syncDeveloperLauncherVisibility();
@@ -15229,6 +15355,23 @@ function anonymousLibraryNeedsProtection(user = cloudAccount) {
       .some(prefix => !!localStorage.getItem(prefix + user.id));
   } catch (_) { return true; }
 }
+async function preserveAnonymousAccount(user) {
+  // Preserve the existing SDK session before replacement, never the entered
+  // password. This stays on this device, outside cloud/export/diagnostic data.
+  // Signing in does not revoke this older session; anonymous sign-out is barred.
+  await preserveCurrentAccountBeforeSwitch();
+  const result = await backendClient.auth.getSession();
+  const session = result.data?.session;
+  if (result.error || session?.user?.id !== user.id || !session.access_token || !session.refresh_token) {
+    throw new Error("anonymous_library_unprotected");
+  }
+  const key = "worldview-earlier-account-v1:" + user.id;
+  const value = JSON.stringify({version:1,userId:user.id,savedAt:Date.now(),session});
+  try {
+    localStorage.setItem(key,value);
+    if (localStorage.getItem(key) !== value) throw new Error("storage_write_failed");
+  } catch (_) { throw new Error("anonymous_library_unprotected"); }
+}
 async function submitPasswordAccount() {
   if (passwordAccountBusy || !backendClient) return;
   const mode = passwordAccountMode;
@@ -15244,22 +15387,13 @@ async function submitPasswordAccount() {
   if (["signup","update"].includes(mode) && password.length < 12) { passwordAccountNotice("Use at least 12 characters for a new password.",true);return; }
   if (["signup","update"].includes(mode) && password !== confirmation) { passwordAccountNotice("The passwords do not match.",true);return; }
   let original = cloudAccount;
-  // Creating an account on a device that holds anonymous lessons is a plain
-  // sign-up. Those lessons stay on the device and are not linked.
-  if (mode === "signin" && original?.is_anonymous && !$("account-switch-confirm").checked) {
-    passwordAccountNotice("Confirm that the current device library should stay separate before signing in to another account.",true);return;
-  }
   passwordAccountBusy = true;
   accountTransitionInProgress = true;
   passwordAccountNotice("Working…");
   renderPasswordAccount();
   try {
     original = await cloudUser();
-    if (mode === "signup" && original?.is_anonymous) {
-      passwordAccountNotice("Confirm your email, then sign in.");return;
-    }
-    if (mode === "signin" && original?.is_anonymous && !$("account-switch-confirm").checked) throw new Error("account_switch_not_confirmed");
-    if (["signin","reset"].includes(mode) && anonymousLibraryNeedsProtection(original)) throw new Error("anonymous_library_unprotected");
+    if (["signin","signup","reset"].includes(mode) && original?.is_anonymous) await preserveAnonymousAccount(original);
     if (["signin","upgrade","signup"].includes(mode)) await preserveCurrentAccountBeforeSwitch();
     if (mode === "reset") {
       const result = await accountAuthCommand(() => backendClient.auth.resetPasswordForEmail(email,{redirectTo:accountEmailRedirect()}));
@@ -15303,8 +15437,12 @@ async function submitPasswordAccount() {
     // Do not display provider errors containing identities or login-existence details.
     const code = String(error?.code || "");
     const status = Number(error?.status || 0);
+    if (mode === "signin" && code === "email_not_confirmed") {
+      setAccountPending({email,mode:"signup",originalUserId:"",sentAt:Date.now()-60000});
+      passwordAccountMode = "verify";
+    }
     const message = error?.message === "anonymous_library_unprotected"
-      ? "Connect and confirm this device's existing library before changing accounts. If that email is already in use, ask for a library migration; nothing has been moved or deleted."
+      ? "This device could not preserve its earlier account. Free some browser storage and try again. Your earlier work has not been removed."
       : mode === "signin" && ["invalid_credentials","user_not_found"].includes(code)
       ? "Email or password is incorrect."
       : code === "email_not_confirmed" ? "Confirm your email before signing in. You can resend the confirmation."
@@ -15374,7 +15512,11 @@ async function resendAccountConfirmation() {
 }
 async function signOutAccount() {
   if (!backendClient || passwordAccountBusy) return;
-  // Signing out of an anonymous device library is allowed; nothing is linked.
+  // Revoking an anonymous session would invalidate its recovery credentials.
+  if (anonymousLibraryNeedsProtection()) {
+    passwordAccountNotice("Sign in to your account to continue. Earlier work will be kept separate on this device.",true);
+    return;
+  }
   passwordAccountBusy = true;
   let identitySuspended = false;
   try {
@@ -15816,7 +15958,7 @@ function finishIdentityBootstrap() {
   /* A remembered account under transient verification failure is not signed in,
      but it is also not a new visitor. Keep its scoped cache read-only and keep
      onboarding/recovery prompts closed while the secure-session retry runs. */
-  if (accountIdentityHeldForRetry() || accountCacheReadOnly || pendingLegacyRecovery) return;
+  if (accountIdentityHeldForRetry() || accountCacheReadOnly) return;
   const introNeeded = state.introSeenVersion !== INTRO_VERSION;
   if (introNeeded) setTimeout(() => setIntroOpen(true),80);
 }
@@ -15925,6 +16067,19 @@ document.addEventListener("visibilitychange", () => {
 });
 window.addEventListener("pageshow",() => { if (backendClient && !accountTransitionInProgress) initCloudPersistence(); });
 window.addEventListener("online",() => { if (backendClient && !accountTransitionInProgress) initCloudPersistence(); });
+let accountReturnCheckAt = 0;
+async function refreshAccountOnReturn() {
+  if (document.hidden || !permanentAccountVerified() || accountTransitionInProgress || passwordAccountBusy
+      || currentLessonId || voice.active || activeLessonIntake || Date.now()-accountReturnCheckAt < 15000) return;
+  accountReturnCheckAt = Date.now();
+  const id = cloudAccount.id;
+  try {
+    if (cloudSyncReady && !accountCacheReadOnly) await cloudSyncNow();
+    if (cloudAccount?.id === id && !accountTransitionInProgress) await initCloudPersistence();
+  } catch (_) { /* Existing bounded sync recovery retains the account copy. */ }
+}
+window.addEventListener("focus",refreshAccountOnReturn);
+document.addEventListener("visibilitychange",refreshAccountOnReturn);
 window.addEventListener("pagehide",() => { clearTimeout(cloudSyncTimer);cloudSyncTimer = 0;cloudSyncNow(); });
 window.addEventListener("blur", () => {
   if (voice.active && voice.spaceHeld) pauseVoiceCapture("The Space-key recording paused when the window lost focus.");
@@ -15932,4 +16087,3 @@ window.addEventListener("blur", () => {
 </script>
 </body>
 </html>
-
