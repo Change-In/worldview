@@ -2123,11 +2123,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v196 · Sep 4";
+const BUILD = "v197 · Sep 4";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v197", date: "Sep 4", changes: [
+    "Lesson cards no longer lift or open paths when dragged vertically. Use the map button to view a lesson path.",
+  ]},
   { tag: "v196", date: "Sep 4", changes: [
     "Email sign-in no longer asks you to connect an earlier device library. Earlier work stays separate and recoverable.",
     "Settings brings your account, save status, preferences and owner workspace together.",
@@ -6179,14 +6182,14 @@ function renderHome() {
     const progressLabel = progress.percent == null
       ? "Lesson progress unavailable"
       : `${progress.percent}% complete, ${progress.completedCount} of ${progress.totalCount} checkpoints demonstrated`;
-    card.setAttribute("aria-label",`${l.title || l.topic || "Lesson"}. ${progressLabel}. Tap to continue; drag up for paths.`);
+    card.setAttribute("aria-label",`${l.title || l.topic || "Lesson"}. ${progressLabel}. Tap to continue.`);
     card.innerHTML = `
       <button type="button" class="lesson-path-button card-path-button" aria-label="Open lesson path" title="Lesson path">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6v4m10-4v4M7 10h10M12 10v5"/><circle cx="7" cy="4" r="2"/><circle cx="17" cy="4" r="2"/><circle cx="12" cy="18" r="2"/></svg>
       </button>
       <div class="card-cat">${esc(l.category || "")}</div>
       <div class="card-title serif ${cardTitleSizeClass(l.title)}">${cardTitleHtml(l.title)}</div>
-      <div class="card-hint">${state.continueHintDismissed ? "" : "tap to continue &middot; "}drag &#9650; for paths</div>
+      ${state.continueHintDismissed ? "" : '<div class="card-hint">tap to continue</div>'}
     `;
     const pathButton = card.querySelector(".card-path-button");
     pathButton.addEventListener("pointerdown", event => { wheel.methodInteracting = true; event.stopPropagation(); });
@@ -6464,16 +6467,13 @@ function pathControlAtPoint(x, y) {
     if (!gestureAxis && distance > 8) gestureAxis = Math.abs(dx) >= Math.abs(dy) ? "horizontal" : "vertical";
     if (gestureAxis === "vertical") {
       vel = 0;
-      if (target >= 0 && wheel.ids[target]) {
-        const lift = Math.max(-72, Math.min(42, dy * 0.42));
-        wheel.cards[target].style.translate = `0 ${lift}px`;
-      }
+      // Vertical movement belongs to page navigation, not lesson actions.
       return;
     }
     if (gestureAxis !== "horizontal") return;
     if (target >= 0 && wheel.cards[target]) wheel.cards[target].style.translate = "";
     // Once horizontal intent wins, keep the ring attached to that axis.
-    // Circular motion can no longer alternate between card lift and rotation.
+    // Vertical movement never lifts cards or opens lesson paths.
     wheel.pos = Math.max(-0.4, Math.min(wheel.cards.length - 0.6, startPos - dx / (wheel.cardW * 0.8)));
     scheduleWheelLayout(false);
     const now = performance.now();
@@ -6509,28 +6509,12 @@ function pathControlAtPoint(x, y) {
     activePointers.delete(e.pointerId);
     if (!down) return;
     down = false;
-    const dx = e.clientX - sx, dy = e.clientY - sy;
     const centeredIdx = Math.round(wheel.pos);
     if (target >= 0 && wheel.cards[target]) {
       const lifted = wheel.cards[target]; lifted.style.transition += ", translate .2s ease"; lifted.style.translate = "0 0";
       setTimeout(() => { lifted.style.translate = ""; }, 220);
     }
 
-    // drag up on the centered lesson card → learning paths (works with mouse too)
-    if (dy < -60 && Math.abs(dx) < 50 && wheel.ids[centeredIdx]) {
-      wheel.pos = centeredIdx; layoutWheel();
-      openPaths(wheel.ids[centeredIdx]);
-      return;
-    }
-    // drag down → revisit paths this lesson already generated (free, instant)
-    if (dy > 60 && Math.abs(dx) < 50 && wheel.ids[centeredIdx]) {
-      const dl = getLesson(wheel.ids[centeredIdx]);
-      if (dl && dl.paths && dl.paths.length) {
-        wheel.pos = centeredIdx; layoutWheel();
-        openPaths(wheel.ids[centeredIdx]);
-        return;
-      }
-    }
     if (moved) wheel.lastDragAt = Date.now();
     if (!moved) {
       // re-measure at release too — cheap, and covers the rare case where a
