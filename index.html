@@ -2146,11 +2146,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v198 · Sep 4";
+const BUILD = "v199 · Sep 4";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v199", date: "Sep 4", changes: ["Lab opens to saved starting points, with a full Mock Run always available.", "Test phases with fewer visible controls; Tutor and Quiz require the matching saved Map and Extraction.", "Compare two Map models on the same input, view results side by side, and choose supported speech routes."] },
   { tag: "v198", date: "Sep 4", changes: ["Folders now opens your library, with a quiet Archive drawer and optional New folder.","Archive lessons without losing progress or folders, and move them back whenever you like.","Lesson options now give the full title room, with map access and larger folder choices."]},
   { tag: "v197", date: "Sep 4", changes: [
     "Lesson cards no longer lift or open paths when dragged vertically. Use the map button to view a lesson path.",

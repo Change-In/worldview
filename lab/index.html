@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=195">
+<link rel="stylesheet" href="./lab.css?v=199">
 </head>
 <body>
 
@@ -16,6 +16,8 @@
     <h1>Model Lab</h1>
   </div>
   <div class="lab-topbar-actions">
+    <button id="lab-workspace-home" class="button button-quiet" type="button" hidden>Workspace</button>
+    <select id="lab-tool-select" aria-label="Lab tools" hidden><option value="pipeline">Test workspace</option><option value="results">Results &amp; comparisons</option><option value="stt">Speech to text tests</option><option value="speech">Text to speech tests</option><option value="scenario">Test scenarios</option><option value="tutor">Tutor component tests</option><option value="brain">Evaluator tests</option></select>
     <button id="lab-open-timing" class="lab-clock" type="button" aria-label="Open timing" title="Timing" disabled>◷</button>
     <div id="lab-health" class="lab-health" aria-live="polite">Locked</div>
   </div>
@@ -35,37 +37,36 @@
 <main id="lab-shell" class="lab-shell" hidden>
   <section id="panel-pipeline" class="tab-panel is-active" role="region" aria-label="Lesson Pipeline" data-panel="pipeline">
     <div class="pipeline-mode-bar" aria-label="Model Lab mode">
-      <div><p class="eyebrow">Model Lab</p><strong>Choose how to work</strong></div>
+      <div><p class="eyebrow">Model Lab</p><strong>Test workspace</strong></div>
       <div class="pipeline-mode-options" role="group" aria-label="Model Lab mode">
-        <button id="pipeline-mode-controls" class="pipeline-mode-option is-active" type="button" aria-pressed="true">Lab controls</button>
-        <button id="pipeline-mode-mock" class="pipeline-mode-option" type="button" aria-pressed="false">Mock run</button>
+        <button id="pipeline-mode-controls" class="pipeline-mode-option is-active" type="button" aria-pressed="true">Inspect phase</button>
+        <button id="pipeline-mode-mock" class="pipeline-mode-option" type="button" aria-pressed="false">Saved runs &amp; Mock Run</button>
       </div>
       <p id="pipeline-mode-note" class="pipeline-mode-note">Inspect or run one phase at a time.</p>
     </div>
     <div id="pipeline-mock-progress" class="pipeline-mock-progress" hidden aria-label="Mock run progress"><span>Mock run</span><strong id="pipeline-mock-stage">1 · Clarification</strong><button id="pipeline-mock-new" class="text-button" type="button">New mock run</button><button id="pipeline-mock-history" class="text-button" type="button">Past mock runs</button><button id="pipeline-mock-exit" class="text-button" type="button">Back to controls</button></div>
     <section id="mock-setup-screen" class="mock-setup-screen" hidden aria-labelledby="mock-setup-title">
       <div class="mock-setup-heading">
-        <div><p class="eyebrow">Mock Run setup</p><h2 id="mock-setup-title">Choose what this rehearsal will use</h2></div>
+        <div><p class="eyebrow">Model Lab</p><h2 id="mock-setup-title">Test workspace</h2></div>
         <div class="mock-setup-heading-actions">
-          <p>No model is called until you open the learner view and begin a conversation.</p>
-          <button id="mock-setup-launch-top" class="mock-setup-play" type="button" aria-label="Open new Mock Run" title="Open new Mock Run">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5 18 12 8 18.5Z"/></svg>
-          </button>
+          <button id="mock-setup-launch-top" class="button button-primary" type="button">＋ Full Mock Run</button>
         </div>
       </div>
       <div class="mock-setup-grid">
         <div class="mock-setup-main">
+          <section id="lab-selected-run" class="lab-selected-run" aria-label="Selected starting point"></section>
+          <details id="lab-voice-settings" class="mock-setup-card"><summary>Voice settings</summary><div class="lab-voice-fields"><label>Speech to text<select id="lab-mock-stt"></select></label><label>Text to speech<select id="lab-mock-tts"><option value="aura-2-arcas-en">Deepgram Aura-2 · Arcas</option><option value="device">This device</option></select></label></div><small>Applies to the next recording or spoken reply on this device.</small></details>
           <aside id="mock-run-config" class="mock-run-config" hidden aria-label="Mock run setup and live work">
             <div class="mock-run-config-head"><div><p class="eyebrow">This mock run</p><h3>Models &amp; spend</h3></div><div class="mock-run-config-actions"><span id="mock-run-total-cost">Estimate unavailable</span><button id="mock-run-config-toggle" class="text-button" type="button" aria-expanded="true">Minimize</button></div></div>
             <div id="mock-run-config-body" class="mock-run-config-body">
-              <div class="mock-run-defaults"><p class="mock-run-config-note">Recommended defaults are ready. Model choices stay on this device; each run still uses the protected Lab jobs and fixed prompt core. Change a model only when you are testing it.</p><button id="mock-run-reset-all" class="button button-quiet" type="button">Use all defaults</button></div>
+              <div class="mock-run-defaults"><p class="mock-run-config-note">Models for your next test.</p><button id="mock-run-reset-all" class="button button-quiet" type="button">Use all defaults</button><button id="lab-all-models" class="button button-quiet" type="button" aria-pressed="false">All phase models</button></div>
               <div class="mock-run-stage-config" id="mock-run-stage-config"></div>
               <div class="mock-run-live" id="mock-run-live" aria-live="polite"><strong>Run status</strong><span id="mock-run-live-status">Waiting for Clarification.</span></div>
             </div>
           </aside>
-          <details class="mock-setup-card mock-setup-prompt-card" open>
+          <details class="mock-setup-card mock-setup-prompt-card">
           <summary class="mock-setup-card-head"><div><p class="eyebrow">Phase One</p><h3>Clarification prompt</h3></div><span id="mock-setup-prompt-source" class="mock-setup-source">Built in</span></summary>
-          <p>This is the exact editable prompt shared with the Clarification controls. Edits below apply only to the next run unless you deliberately make them the shared default.</p>
+          <p>Next run only, unless saved as the shared default.</p>
           <label for="mock-setup-prompt">Prompt used by this run</label>
           <textarea id="mock-setup-prompt" class="packet-editor" rows="18" maxlength="18000" spellcheck="false"></textarea>
           <div class="inline-actions"><button id="mock-setup-prompt-reset" class="button button-quiet" type="button">Restore active default</button><button id="mock-setup-prompt-shared" class="button button-quiet" type="button">Set as Phase One default</button></div>
@@ -74,8 +75,7 @@
         </div>
         <div class="mock-setup-side">
           <details class="mock-setup-card" open>
-            <summary class="mock-setup-card-head"><div><p class="eyebrow">Saved work</p><h3>Previous mock runs</h3></div></summary>
-            <p>Continue exactly where a run stopped, or choose a phase to test without repeating earlier work. A run you reopen uses the models selected above, not the ones it first ran with.</p>
+            <summary class="mock-setup-card-head"><h3>Saved starting points</h3></summary>
             <div id="mock-previous-runs" class="mock-previous-runs"><p class="mock-empty">No saved Mock Runs yet.</p></div>
           </details>
           <details class="mock-setup-card">
@@ -89,14 +89,14 @@
             <textarea id="mock-script-final-copy" rows="2" maxlength="500" spellcheck="true"></textarea>
             <p id="mock-boundary-message" class="form-message" role="status"></p>
           </details>
-          <button id="mock-setup-launch" class="button button-primary mock-setup-launch" type="button">Open new Mock Run</button>
+          <button id="mock-setup-launch" class="button button-primary mock-setup-launch" type="button">New topic · Full Mock Run</button>
         </div>
       </div>
     </section>
-    <button id="pipeline-learner-exit" class="pipeline-learner-exit" type="button" hidden aria-label="Exit Mock Run and return to Lab controls" title="Return to Lab controls. Your durable run stays saved.">←</button>
+    <button id="pipeline-learner-exit" class="pipeline-learner-exit" type="button" hidden aria-label="Exit Mock Run and return to Lab controls" title="Return to the test workspace. Your durable run stays saved.">←</button>
     <section id="mock-learner-shell" class="mock-learner-shell" hidden aria-label="Worldview lesson conversation">
       <header id="mock-learner-header" class="mock-learner-header">
-        <button id="mock-learner-back" class="mock-learner-back" type="button" aria-label="Leave this mock run" title="Return to Lab controls">←</button>
+        <button id="mock-learner-back" class="mock-learner-back" type="button" aria-label="Leave this mock run" title="Return to the test workspace">←</button>
         <h2>Worldview</h2>
         <div class="mock-learner-header-actions">
           <button id="mock-learner-mode" class="mock-learner-tool" type="button" aria-label="Switch to Voice" title="Switch conversation mode">Voice</button>
@@ -626,7 +626,7 @@
   </section>
 
   <section id="panel-results" class="tab-panel" role="tabpanel" aria-labelledby="tab-results" data-panel="results" hidden>
-    <div class="results-head"><div><p class="eyebrow">Owner tool</p><h2>Timing</h2><p>Pick a stage, provider, and model.</p></div><div class="results-actions"><button id="timing-back" class="button button-quiet" type="button">Back to pipeline</button><button id="jobs-refresh" class="button button-quiet" type="button">Refresh</button><button id="export-results" class="button button-quiet" type="button">Export</button><button id="clear-results" class="button button-danger" type="button">Clear results</button></div></div>
+    <div class="results-head"><div><p class="eyebrow">Owner tool</p><h2>Results &amp; comparisons</h2></div><div class="results-actions"><button id="timing-back" class="button button-quiet" type="button">Back to pipeline</button><button id="jobs-refresh" class="button button-quiet" type="button">Refresh</button><button id="export-results" class="button button-quiet" type="button">Export</button><button id="clear-results" class="button button-danger" type="button">Clear results</button></div></div>
     <section class="latency-card" aria-labelledby="latency-title">
       <div class="card-heading"><div><p class="eyebrow">Measured runs</p><h3 id="latency-title">Compare</h3></div><button id="latency-clear" class="button button-danger-soft" type="button">Clear timing</button></div>
       <div class="latency-filters" aria-label="Timing filters">
@@ -639,7 +639,7 @@
       <details class="latency-about"><summary>How this compares runs</summary><p>Runs are compared only when the scenario, stage, route, prompt, and input match. p95 appears after 10 matching runs. Phone audio timing still needs a phone run.</p></details>
     </section>
     <section class="job-board" aria-labelledby="jobs-title"><div class="card-heading"><div><p class="eyebrow">Server history</p><h3 id="jobs-title">Text jobs</h3></div><span id="jobs-status" class="rate-note">Not loaded</span></div><div id="jobs-list" class="jobs-list" aria-live="polite"></div></section>
-    <div class="results-summary"><span id="results-count">0 outputs</span><span id="results-cost">Estimated total $0.00</span><span id="results-rate-note" class="rate-note"></span></div>
+    <div class="results-summary"><span id="results-count">0 outputs</span><span id="results-cost">Estimated total $0.00</span><span id="results-rate-note" class="rate-note"></span><button id="lab-results-layout" class="button button-quiet" type="button" aria-pressed="false">Side by side</button></div>
     <div id="results-list" class="results-list" aria-live="polite"></div>
     <section class="comparison-library" aria-labelledby="comparison-title">
       <div class="comparison-head">
@@ -688,7 +688,7 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=195" defer></script>
+<script src="./lab.js?v=199" defer></script>
 </body>
 </html>
 

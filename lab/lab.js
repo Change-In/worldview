@@ -2338,7 +2338,7 @@ function renderMockRunConfig() {
     toggle.setAttribute("aria-expanded", String(!collapsed));
     toggle.setAttribute("aria-label", collapsed ? "Show Models and spend" : "Minimize Models and spend");
   }
-  const artifact = labState.mockSetupActive ? null : selectedPipelineArtifact();
+  const artifact = labState.mockSetupActive ? labState.clarificationArtifacts.find((item) => item.runId === labState.workspaceRunId) || null : selectedPipelineArtifact();
   root.replaceChildren();
   let total = 0;
   let hasCost = false;
@@ -2347,6 +2347,7 @@ function renderMockRunConfig() {
   for (const stage of MOCK_RUN_STAGES) {
     const config = mockStageConfig(stage);
     const card = element("article", { className: "mock-run-stage-card" });
+    card.hidden = !labState.workspaceAllModels && stage !== (labState.workspaceStage || "extraction");
     const head = element("div", { className:"mock-run-stage-card-head" });
     const heading = element("strong", { text: MOCK_RUN_STAGE_LABELS[stage] });
     const useDefault = element("button", { className:"button button-quiet mock-run-stage-default", type:"button", text:mockStageUsesDefault(stage) ? "Default" : "Use default", disabled:mockStageUsesDefault(stage) });
@@ -2395,7 +2396,9 @@ function renderMockRunConfig() {
       persistMockRunConfig();
       renderMockRunConfig();
     });
-    label.append(provider, model, customModel);
+    label.append(provider, model);
+    const advanced = element("details", { className:"lab-model-advanced" });
+    advanced.append(element("summary", { text:"Model ID & limits" }), customModel);
     const effortLabel = element("label", { className: "mock-run-stage-effort", text: "Reasoning" });
     const effortSelect = element("select", { attrs: { "aria-label": `${MOCK_RUN_STAGE_LABELS[stage]} reasoning effort`, "data-mock-stage-effort": stage } });
     for (const level of MOCK_EFFORT_LEVELS) effortSelect.append(element("option", { value: level, text: level === "low" ? "low · cheapest" : level }));
@@ -2406,7 +2409,7 @@ function renderMockRunConfig() {
       renderMockRunConfig();
     });
     effortLabel.append(effortSelect);
-    label.append(effortLabel);
+    advanced.append(effortLabel);
     const outputLabel = element("label", { className: "mock-run-stage-output-cap", text: "Response cap" });
     outputLabel.append(outputCap);
     const actualCost = mockStageActualCost(stage, artifact);
@@ -2416,16 +2419,19 @@ function renderMockRunConfig() {
     else if (cost !== null) hasEstimate = true;
     const meta = element("div", { className: "mock-run-stage-meta" });
     const costLabel = cost === null ? "Estimate unavailable" : `${actualCost !== null ? "Actual" : "Estimate"} ${formatCost(cost).replace("Estimated ", "")}`;
-    meta.append(element("span", { text: mockStageStatus(stage, artifact) }), element("strong", { text: costLabel }));
-    card.append(head, label, outputLabel, meta);
+    const visibleStatus = stage === "map" && artifact && !savedMockRunMapContext({ runId:artifact.runId, artifact }).selection ? "Not ready for Tutor" : mockStageStatus(stage, artifact);
+    meta.append(element("span", { text: visibleStatus }), element("strong", { text: costLabel }));
+    advanced.append(outputLabel);
+    card.append(head, label, advanced, meta);
     const diagnostic = mockStageDiagnostic(stage, artifact);
     if (diagnostic) card.append(element("small", { className:`mock-run-stage-diagnostic ${diagnostic.kind === "error" ? "is-error" : "is-working"}`, text:diagnostic.text, attrs:{ role:diagnostic.kind === "error" ? "alert" : "status" } }));
-    if (stage === "map") card.append(element("small", { className: "mock-run-stage-research", text: config.provider === "openai" ? `Research automatic on ${MOCK_RESEARCH_ROUTE.model} · ChatGPT cannot run web research on this route.` : "Research automatic on the same model." }));
+    if (stage === "map") advanced.append(element("small", { className: "mock-run-stage-research", text: config.provider === "openai" ? `Research: ${MOCK_RESEARCH_ROUTE.model}` : "Research: same model" }));
     const outputSummary = mockStageOutputSummary(stage, artifact);
-    if (outputSummary) card.append(element("small", { className: "mock-run-stage-output", text: `Latest output · ${outputSummary}` }));
+    if (outputSummary) advanced.append(element("small", { className: "mock-run-stage-output", text: `Latest output · ${outputSummary}` }));
     root.append(card);
   }
   const totalLabel = hasCost ? (hasActual && !hasEstimate ? "Actual total" : "Total estimate") : "Estimate unavailable";
+  q("lab-all-models")?.setAttribute("aria-pressed", String(Boolean(labState.workspaceAllModels)));
   q("mock-run-total-cost").textContent = hasCost ? `${totalLabel} ${formatCost(total).replace("Estimated ", "")}` : totalLabel;
   const status = q("mock-run-live-status");
   if (status) status.textContent = artifact ? `${MOCK_RUN_STAGE_LABELS[labState.pipelineStage] || "Clarification"} · ${mockStageStatus(labState.pipelineStage, artifact)}` : "Waiting for Clarification.";
@@ -2463,7 +2469,7 @@ function savedMockRunMapContext(row) {
   const orderedJobs = [
     jobs.find((job) => job.id === preferredJobId),
     ...jobs,
-  ].filter((job, index, values) => job && values.findIndex((candidate) => candidate.id === job.id) === index);
+  ].filter((job, index, values) => job && values.findIndex((candidate) => candidate?.id === job.id) === index);
   let selection = null;
   let latestSelection = null;
   for (const job of orderedJobs) {
@@ -2523,6 +2529,7 @@ function savedMockRunStageOptions(row) {
   const lessonJobs = map.selection ? pipelineLessonJobs(map.selection) : [];
   const quiz = savedMockRunQuizContext(row, map.selection);
   const needsMap = map.loadingJob ? "Loading the saved Lesson Map…" : "Needs a completed Lesson Map.";
+  const tutorReady = labTutorReadiness(map.selection);
   const mapOptions = map.loadingJob
     ? [{ stage:"map", label:"Lesson Map is loading", note:"Worldview is loading the saved route before enabling dependent phases.", enabled:false }]
     : map.active
@@ -2552,16 +2559,148 @@ function savedMockRunStageOptions(row) {
     {
       stage:"lesson",
       label:lessonJobs.length ? "Resume Lesson" : "Start Lesson",
-      note:map.selection ? "Use this run's exact completed Lesson Map." : needsMap,
-      enabled:Boolean(map.selection),
+      note:map.selection ? tutorReady.note : needsMap,
+      enabled:tutorReady.ready,
     },
     {
       stage:"quiz",
       label:quiz.terminal ? "Start another Quiz attempt" : quiz.jobs.length ? "Resume Quiz" : "Start Quiz",
-      note:map.selection ? (quiz.loadingJob ? "Loading the saved Quiz…" : "Use this run's exact completed Lesson Map.") : needsMap,
-      enabled:Boolean(map.selection && !quiz.loadingJob),
+      note:map.selection ? (quiz.loadingJob ? "Loading the saved Quiz…" : tutorReady.note) : needsMap,
+      enabled:Boolean(tutorReady.ready && !quiz.loadingJob),
     },
   ];
+}
+
+function labTutorReadiness(selection = selectedPipelineMapRecord()) {
+  if (!selection?.artifact?.runId) return { ready:false, note:"Finish Clarification first." };
+  if (!pipelineMapSelectionIsUsable(selection)) return { ready:false, note:"Needs a completed Lesson Map." };
+  const saved = labState.extractionArtifacts.find((item) => item.runId === selection.artifact.runId
+    && item.sourceMapJobId === selection.job.id && item.sourceMapRecordId === selection.recordKey
+    && item.sourceMapFingerprint === selection.fingerprint);
+  return saved ? { ready:true, note:"Clarification, Map and Extraction saved." }
+    : { ready:false, note:"Finish and save Extraction for this Map first." };
+}
+
+function renderLabSelectedRun() {
+  const root = q("lab-selected-run");
+  if (!root) return;
+  root.replaceChildren();
+  const row = (labState.workspaceRows || []).find((item) => item.runId === labState.workspaceRunId);
+  if (!row) { root.append(element("h3", { text:"Start with a full Mock Run" }), element("p", { text:"Saved starting points will appear here." })); return; }
+  const stage = labState.workspaceStage || "extraction";
+  const options = savedMockRunStageOptions(row);
+  const phases = [["clarification","Clarification"],["map","Map"],["extraction","Extraction"],["lesson","Tutor"],["quiz","Quiz"]];
+  root.append(element("p", { className:"eyebrow", text:"Saved starting point" }), element("h2", { text:clip(row.topic, 100) }));
+  const rail = element("div", { className:"lab-workspace-phases", attrs:{ "aria-label":"Phase to test" } });
+  for (const [id, label] of phases) {
+    const button = element("button", { type:"button", text:label, className:"button button-quiet", attrs:{ "aria-pressed":String(stage === id) } });
+    button.addEventListener("click", () => { labState.workspaceStage = id; renderLabSelectedRun(); renderMockRunConfig(); });
+    rail.append(button);
+  }
+  root.append(rail);
+  const option = options.find((item) => item.stage === stage);
+  root.append(element("p", { className:"lab-workspace-readiness", text:option?.note || "Finish Clarification first.", attrs:{ role:"status" } }));
+  const actions = element("div", { className:"inline-actions" });
+  const launch = element("button", { className:"button button-primary", type:"button", text:option?.label?.replace(/Lesson$/, "Tutor") || "Open phase", disabled:!option?.enabled || Boolean(labState.mockSetupLaunchToken) });
+  launch.addEventListener("click", () => { void launchSavedMockRunStage(row, stage); });
+  const resume = element("button", { className:"button button-quiet", type:"button", text:"Continue full Mock Run", disabled:Boolean(labState.mockSetupLaunchToken) });
+  resume.addEventListener("click", () => { void launchSavedMockRunStage(row, "continue"); });
+  actions.append(launch, resume);
+  if (row.kind !== "active") {
+    const inspect = element("button", { className:"button button-quiet", type:"button", text:"Inspect saved work" });
+    inspect.addEventListener("click", () => { viewSavedMockRunFromSetup(row.runId); setPipelineStage(stage); });
+    actions.append(inspect);
+  }
+  root.append(actions);
+  if (stage === "map" && row.kind !== "active") {
+    const compare = element("details", { className:"lab-workspace-compare" });
+    compare.open = Boolean(labState.workspaceCompareOpen);
+    compare.addEventListener("toggle", () => { labState.workspaceCompareOpen = compare.open; });
+    compare.append(element("summary", { text:"Compare two models · optional" }));
+    const fields = element("div", { className:"lab-voice-fields" });
+    const providerLabel = element("label", { text:"Model B provider" });
+    const provider = element("select", { attrs:{ "aria-label":"Comparison provider" } });
+    for (const [id, info] of Object.entries(LAB_PROVIDER_CATALOG)) provider.append(element("option", { value:id, text:info.label }));
+    provider.value = labState.workspaceCompareProvider || mockStageConfig("map").provider;
+    const modelLabel = element("label", { text:"Model B" });
+    const model = element("select", { attrs:{ "aria-label":"Comparison model" } });
+    addProviderOptions(model, provider.value);
+    if ([...model.options].some((item) => item.value === labState.workspaceCompareModel)) model.value = labState.workspaceCompareModel;
+    else if (provider.value === mockStageConfig("map").provider && model.value === mockStageConfig("map").model && model.options.length > 1) model.selectedIndex = 1;
+    provider.addEventListener("change", () => { labState.workspaceCompareProvider = provider.value; labState.workspaceCompareModel = ""; addProviderOptions(model, provider.value); });
+    model.addEventListener("change", () => { labState.workspaceCompareModel = model.value; });
+    providerLabel.append(provider); modelLabel.append(model); fields.append(providerLabel, modelLabel); compare.append(fields);
+    const run = element("button", { type:"button", className:"button button-primary", text:"Run Map comparison", disabled:!option?.enabled || labState.busy || Boolean(labState.mockSetupLaunchToken) });
+    run.addEventListener("click", () => { void runLabMapComparison(row, provider.value, model.value); });
+    compare.append(element("p", { text:"Same saved Clarification and prompt. Two model calls." }), run);
+    root.append(compare);
+  }
+  const results = element("button", { className:"button button-quiet", type:"button", text:"Results, time & cost" });
+  results.addEventListener("click", () => { activateTab("results"); });
+  root.append(results);
+}
+
+async function runLabMapComparison(row, provider, model) {
+  if (labState.busy || labState.mockSetupLaunchToken) return;
+  const ownerId = labState.verifiedUserId;
+  const artifact = savedMockRunArtifact(row);
+  if (!artifact || !savedMockRunStageOptions(row).find((item) => item.stage === "map")?.enabled) return;
+  const first = { ...mockStageConfig("map") };
+  if (first.provider === provider && first.model === model) { window.alert("Choose a different second model."); return; }
+  if (!window.confirm("Run two models on this saved Clarification? Both calls use the same prompt and input; existing work stays saved.")) return;
+  if (!prepareSavedMockRunLaunch(row)) return;
+  labState.mockSetupActive = false;
+  setPipelineStage("map");
+  await runTextExperiment("lesson", { pipelineArtifact:artifact, mapCompareRoutes:[first, { ...first, provider, model }] });
+  if (labState.verifiedUserId !== ownerId) return;
+  q("results-list")?.classList.add("lab-results-paired");
+  q("lab-results-layout")?.setAttribute("aria-pressed", "true");
+  setPipelineMode("controls");
+  activateTab("results");
+}
+
+function labVoiceSettings() {
+  const defaults = { stt:"deepgram-nova-3", tts:"aura-2-arcas-en" };
+  try {
+    const stored = JSON.parse(localStorage.getItem("wv-lab-voice-routes") || "{}");
+    return { stt:LAB_STT_MODELS.some((item) => item.id === stored.stt) ? stored.stt : defaults.stt,
+      tts:["device","aura-2-arcas-en","aura-2-andromeda-en","aura-2-apollo-en","aura-2-athena-en"].includes(stored.tts) ? stored.tts : defaults.tts };
+  } catch (_) { return defaults; }
+}
+
+function initializeLabWorkspace() {
+  for (const [id, label] of [["latency-title","Timing details"],["jobs-title","Job history & failures"],["flow-title","Request details"]]) {
+    const section = q(id)?.closest("section");
+    if (section && !section.parentElement.classList.contains("lab-evidence-fold")) {
+      const fold = element("details", { className:"lab-evidence-fold" });
+      fold.append(element("summary", { text:label }));
+      section.before(fold); fold.append(section);
+    }
+  }
+  const experiments = q("mock-boundary-reset")?.closest("details");
+  if (experiments) q("lab-selected-run")?.parentElement.append(experiments);
+  q("lab-workspace-home").hidden = false;
+  q("lab-tool-select").hidden = false;
+  q("lab-workspace-home").onclick = () => { activateTab("pipeline"); openMockSetup(); };
+  q("lab-tool-select").onchange = (event) => {
+    stopMockRunLearnerMedia();
+    labState.mockSetupActive = false;
+    labState.pipelineMode = "controls";
+    renderPipelineMode();
+    activateTab(event.target.value);
+    if (event.target.value === "pipeline") openMockSetup();
+  };
+  q("lab-all-models").onclick = () => { labState.workspaceAllModels = !labState.workspaceAllModels; renderMockRunConfig(); };
+  q("lab-results-layout").onclick = () => { const paired = q("results-list").classList.toggle("lab-results-paired"); q("lab-results-layout").setAttribute("aria-pressed", String(paired)); };
+  const settings = labVoiceSettings();
+  q("lab-mock-stt").replaceChildren(...LAB_STT_MODELS.map((item) => element("option", { value:item.id, text:item.label })));
+  q("lab-mock-stt").value = settings.stt;
+  q("lab-mock-tts").value = settings.tts;
+  for (const id of ["lab-mock-stt", "lab-mock-tts"]) q(id).onchange = () => {
+    try { localStorage.setItem("wv-lab-voice-routes", JSON.stringify({ stt:q("lab-mock-stt").value, tts:q("lab-mock-tts").value })); }
+    catch (_) { setMessage("mock-boundary-message", "Voice settings could not be saved on this device.", "error"); }
+  };
+  openMockSetup();
 }
 
 function renderMockSetupPreviousRuns() {
@@ -2596,52 +2735,26 @@ function renderMockSetupPreviousRuns() {
     });
   }
   rows.sort((left, right) => (Date.parse(right.createdAt || right.updatedAt) || 0) - (Date.parse(left.createdAt || left.updatedAt) || 0));
+  labState.workspaceRows = rows;
+  if (!rows.some((row) => row.runId === labState.workspaceRunId)) labState.workspaceRunId = rows.find((row) => row.runId === labState.pipelineSelectedRunId)?.runId || rows[0]?.runId || "";
+  renderLabSelectedRun();
   if (!rows.length) {
     root.append(element("p", { className:"mock-empty", text:"No saved Mock Runs yet." }));
     return;
   }
-  for (const row of rows.slice(0, 12)) {
+  for (const row of rows) {
     const card = element("article", { className:"mock-previous-run", attrs:{ "data-run-id":row.runId } });
     const copy = element("div", { className:"mock-previous-run-copy" });
     copy.append(element("strong", { text:clip(row.topic, 100) }), element("small", { text:row.meta }));
-    const actions = element("div", { className:"mock-previous-run-actions" });
-    const resume = element("button", {
-      className:"button button-primary",
-      type:"button",
-      text:row.kind === "active" ? "Resume Clarification" : "Continue saved progress",
-      disabled:Boolean(labState.mockSetupLaunchToken),
-    });
-    resume.addEventListener("click", () => { void launchSavedMockRunStage(row, "continue"); });
-    actions.append(resume);
-    if (row.kind !== "active") {
-      const view = element("button", { className:"button button-quiet", type:"button", text:"View evidence", disabled:Boolean(labState.mockSetupLaunchToken) });
-      view.addEventListener("click", () => viewSavedMockRunFromSetup(row.runId));
-      actions.append(view);
-    }
-    const picker = element("details", { className:"mock-saved-stage-picker", attrs:{ "data-run-id":row.runId } });
-    picker.open = expandedRunIds.has(row.runId);
-    picker.append(element("summary", { text:"Choose starting point" }));
-    picker.append(element("p", { className:"mock-saved-stage-note", text:"These are Lab shortcuts. They do not rewrite the saved Clarification or count skipped phases as complete." }));
-    const choices = element("div", { className:"mock-saved-stage-choices" });
-    const options = savedMockRunStageOptions(row);
-    for (const option of options) {
-      const button = element("button", {
-        className:"mock-saved-stage-choice",
-        type:"button",
-        disabled:!option.enabled || Boolean(labState.mockSetupLaunchToken),
-        attrs:{ "data-mock-start-stage":option.stage },
-      });
-      button.append(element("strong", { text:option.label }), element("small", { text:option.note }));
-      button.addEventListener("click", () => { void launchSavedMockRunStage(row, option.stage); });
-      choices.append(button);
-    }
-    picker.append(choices);
-    card.append(copy, actions, picker);
+    const choose = element("button", { className:"lab-starting-point", type:"button", attrs:{ "aria-pressed":String(row.runId === labState.workspaceRunId) } });
+    choose.append(copy);
+    choose.addEventListener("click", () => { labState.workspaceRunId = row.runId; renderMockSetupPreviousRuns(); renderMockRunConfig(); });
+    card.append(choose);
     root.append(card);
-    const map = row.kind === "active" ? null : savedMockRunMapContext(row);
-    if (map?.loadingJob) ensurePipelineMapDetail(map.loadingJob);
-    const quiz = map?.selection ? savedMockRunQuizContext(row, map.selection) : null;
-    if (quiz?.loadingJob) ensurePipelineLessonDetail(quiz.loadingJob);
+    const savedMap = row.kind === "active" ? null : savedMockRunMapContext(row);
+    if (savedMap?.loadingJob) ensurePipelineMapDetail(savedMap.loadingJob);
+    const savedQuiz = savedMap?.selection ? savedMockRunQuizContext(row, savedMap.selection) : null;
+    if (savedQuiz?.loadingJob) ensurePipelineLessonDetail(savedQuiz.loadingJob);
   }
 }
 
@@ -2676,6 +2789,7 @@ function renderMockSetup() {
 
 function openMockSetup() {
   stopMockRunLearnerMedia();
+  if (labState.pipelineSelectedRunId) labState.workspaceRunId = labState.pipelineSelectedRunId;
   if (labState.clarification.focusMode) setClarificationFocus(false);
   labState.pipelineMode = "mock";
   labState.mockSetupActive = true;
@@ -3297,6 +3411,12 @@ function lockLabAccount(message = "Sign in to your administrator account to open
   labState.busy = false;
   labState.createStarting = false;
   const shell = q("lab-shell"), gate = q("lab-gate");
+  if (q("lab-workspace-home")) q("lab-workspace-home").hidden = true;
+  if (q("lab-tool-select")) q("lab-tool-select").hidden = true;
+  labState.workspaceRows = [];
+  labState.workspaceRunId = "";
+  q("lab-selected-run")?.replaceChildren();
+  q("mock-previous-runs")?.replaceChildren();
   if (shell) { shell.hidden = true; shell.inert = true; }
   if (gate) {
     gate.hidden = false;
@@ -4209,7 +4329,7 @@ async function boundedLabArtifactSave(body, { expectedUserId = "", deadlineMs = 
   }
 }
 
-async function speechFetch(text, { signal } = {}) {
+async function speechFetch(text, { signal, model = "aura-2-arcas-en" } = {}) {
   const url = `${SUPABASE_URL}/functions/v1/voice-stream`;
   const response = await requestWithToken((token, requestSignal) => fetch(url, {
     method: "POST",
@@ -4219,7 +4339,7 @@ async function speechFetch(text, { signal } = {}) {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ text, model: "aura-2-arcas-en" }),
+    body: JSON.stringify({ text, model }),
   }), { signal });
   if (!response.ok) await responseJson(response);
   return response;
@@ -4313,7 +4433,11 @@ function buildRun(kind, options = {}) {
   const mapRevision = kind === "lesson" && options.mapRevision ? options.mapRevision : null;
   const mapRoute = kind === "lesson" && options.mapRoute ? options.mapRoute : null;
   const mapRetry = kind === "lesson" && options.mapRetry ? options.mapRetry : null;
-  const lanes = (labState.pipelineMode === "mock" && pipelineArtifact)
+  const comparisonRoutes = pipelineArtifact && Array.isArray(options.mapCompareRoutes) ? options.mapCompareRoutes : null;
+  if (comparisonRoutes && comparisonRoutes.length !== 2) throw new Error("Choose exactly two models to compare.");
+  const lanes = comparisonRoutes
+    ? comparisonRoutes.map((route) => ({ ...route, quantity:1, promptVersionId:"builtin:lesson:first-principles", research:false }))
+    : (labState.pipelineMode === "mock" && pipelineArtifact)
     // finalizeRun first resolves a normal Lesson-Lab prompt before the fixed
     // pipeline planner prompt is installed below. Use an existing built-in id
     // for that intermediate resolution; the fixed planner is the final recorded
@@ -9212,6 +9336,7 @@ function previewPipelineLessonTurn(selection, outcomeIndex, action, answer) {
 async function createPipelineLessonTurn(action, answer = "", targetOutcomeIndex = null, options = {}) {
   const timingId = options.timingId || "";
   const selection = selectedPipelineMapRecord();
+  if (!labTutorReadiness(selection).ready) { setMessage("pipeline-lesson-output", labTutorReadiness(selection).note, "error"); abandonMockTurnTiming(timingId); return; }
   if (!pipelineMapSelectionIsUsable(selection)) {
     setMessage("pipeline-lesson-output", "Choose a completed structured roadmap before starting the guided Lesson.", "error");
     failMockTurnAudio(timingId, "lesson-not-ready");
@@ -9307,6 +9432,7 @@ async function createPipelineLessonTurn(action, answer = "", targetOutcomeIndex 
 function startPipelineLesson() {
   const selection = selectedPipelineMapRecord();
   if (!pipelineMapSelectionIsUsable(selection)) { setPipelineStage("map"); return; }
+  if (!labTutorReadiness(selection).ready) { setPipelineStage("extraction"); setMessage("pipeline-extraction-output", labTutorReadiness(selection).note, "error"); return; }
   setPipelineStage("lesson");
   if (!pipelineLessonJobs(selection).length) void createPipelineLessonTurn("opening");
   else renderPipelineLesson();
@@ -9910,6 +10036,7 @@ function latestPipelineQuizRecord(selection = selectedPipelineMapRecord()) {
 
 async function createPipelineQuizTurn(answer, { timingId = "" } = {}) {
   const selection = selectedPipelineMapRecord();
+  if (!labTutorReadiness(selection).ready) { setMessage("pipeline-quiz-output", labTutorReadiness(selection).note, "error"); abandonMockTurnTiming(timingId); return false; }
   if (!selection || labState.quiz.busy) { abandonMockTurnTiming(timingId); return false; }
   syncPipelineQuizIdentity(selection);
   const lineage = pipelineConversationLineage("quiz");
@@ -10088,6 +10215,7 @@ function maybeSpeakPipelineQuizReply(job, record) {
 function startPipelineQuiz() {
   const selection = selectedPipelineMapRecord();
   if (!pipelineMapSelectionIsUsable(selection)) { setPipelineStage("map"); return; }
+  if (!labTutorReadiness(selection).ready) { setPipelineStage("extraction"); setMessage("pipeline-extraction-output", labTutorReadiness(selection).note, "error"); return; }
   const quizKey = syncPipelineQuizIdentity(selection);
   labState.quiz.startedRunId = selection.artifact.runId;
   labState.quiz.startedMapKey = quizKey;
@@ -11763,12 +11891,14 @@ function createMockSpeechStartGate(voiceToken, budgetMs = MOCK_SPEECH_FIRST_AUDI
 }
 
 async function playMockCloudSpeech(spoken, { state, playbackGeneration, owner, voiceToken, audio, timingId = "", errorMessage = "The generated voice could not play on this device." } = {}) {
+  if (labVoiceSettings().tts === "device") return playLabSpeechSynthesisFallback(spoken, state, playbackGeneration, null, owner, voiceToken, { timingId });
+  const speechModel = labVoiceSettings().tts;
   const responseGate = createMockSpeechStartGate(voiceToken, MOCK_SPEECH_RESPONSE_BUDGET_MS);
   let playbackGate = null;
   let url = "";
   let ownedCancel = null;
   try {
-    const response = await responseGate.wait(speechFetch(spoken, { signal:responseGate.signal }));
+    const response = await responseGate.wait(speechFetch(spoken, { signal:responseGate.signal, model:speechModel }));
     const blob = await responseGate.wait(consumeLabResponseBody(response, "blob"));
     responseGate.dismiss();
     if (state.speechPlaybackGeneration !== playbackGeneration || !mockVoicePlaybackIsCurrent(voiceToken)) throw mockSpeechStartError("cancelled");
@@ -11796,7 +11926,7 @@ async function playMockCloudSpeech(spoken, { state, playbackGeneration, owner, v
       const noteFirstAudio = () => {
         if (!mockVoicePlaybackIsCurrent(voiceToken) || labState.mockVoicePlaybackOwner !== owner) return;
         playbackGate.started();
-        markMockTurnFirstAudio(timingId, "deepgram-aura-cloud");
+        markMockTurnFirstAudio(timingId, `deepgram/${speechModel}`);
       };
       ownedCancel = () => {
         responseGate.cancel();
@@ -11863,7 +11993,7 @@ function playLabSpeechSynthesisFallback(spoken, state, playbackGeneration, cloud
       if (started || !mockVoicePlaybackIsCurrent(voiceToken) || labState.mockVoicePlaybackOwner !== owner) return;
       started = true;
       clearTimeout(startWatchdog);
-      markMockTurnFirstAudio(timingId, "browser-device-fallback");
+      markMockTurnFirstAudio(timingId, cloudError ? "browser-device-fallback" : "browser-device-selected");
     };
     const finish = () => {
       if (settled) return;
@@ -12075,7 +12205,7 @@ async function transcribePipelineExtractionRecording(blob, operationId = "", cap
       if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
       try {
         setMessage("pipeline-extraction-output", attempt ? "Transcribing again…" : "Transcribing your voice message…");
-        const result = await boundedLabTranscriptionFetch(blob, "deepgram-nova-3", "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId, deadlineAt:transcriptionDeadlineAt });
+        const result = await boundedLabTranscriptionFetch(blob, labVoiceSettings().stt, "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId, deadlineAt:transcriptionDeadlineAt });
         if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
         const transcript = clip(result.text, 1200);
         if (!transcript) {
@@ -12135,7 +12265,7 @@ async function transcribePipelineLessonRecording(blob, operationId = "", capture
   renderPipelineExtractionModeControls();
   setMessage("pipeline-lesson-output", "Transcribing your voice message…");
   try {
-    const result = await boundedLabTranscriptionFetch(blob, "deepgram-nova-3", "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId });
+    const result = await boundedLabTranscriptionFetch(blob, labVoiceSettings().stt, "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId });
     if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
     const transcript = clip(result.text, 1200);
     if (!transcript) throw new Error("No speech was found in that recording.");
@@ -12171,7 +12301,7 @@ async function transcribePipelineQuizRecording(blob, operationId = "", captureCo
   renderPipelineExtractionModeControls();
   setMessage("pipeline-quiz-output", "Transcribing your final explanation…");
   try {
-    const result = await boundedLabTranscriptionFetch(blob, "deepgram-nova-3", "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId });
+    const result = await boundedLabTranscriptionFetch(blob, labVoiceSettings().stt, "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId });
     if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
     const transcript = clip(result.text, 2400);
     if (!transcript) throw new Error("No speech was found in that recording.");
@@ -13473,7 +13603,10 @@ function setPipelineMode(mode = "controls") {
 
 function setPipelineStage(stage = "clarification") {
   const stages = ["clarification", "map", "extraction", "lesson", "quiz"];
-  const next = stages.includes(stage) ? stage : "clarification";
+  let next = stages.includes(stage) ? stage : "clarification";
+  if (["lesson", "quiz"].includes(next) && !labTutorReadiness().ready) {
+    next = !selectedPipelineArtifact() ? "clarification" : !pipelineMapSelectionIsUsable(selectedPipelineMapRecord()) ? "map" : "extraction";
+  }
   const previous = labState.pipelineStage;
   if (previous !== next) {
     labState.mockCar.entryToken = makeId();
@@ -14104,7 +14237,7 @@ function clarificationActivityLabel(label, elapsedSeconds = 0) {
     opening: "Preparing a short reply…",
     following: "Following what you said and shaping the scope…",
     transcribing: "Turning your recording into text…",
-    "transcribing again": "Deepgram is trying the saved recording again…",
+    "transcribing again": "Transcribing the saved recording again…",
     "saving output": "Saving the clarified scope…",
   };
   if (elapsedSeconds >= 8 && ["starting", "running", "opening", "following"].includes(label)) {
@@ -14438,7 +14571,7 @@ async function toggleClarificationTopicRecording() {
       setClarificationTopicMicStatus("Turning your topic into text…");
       const transcriptionController = beginLabTranscription(state);
       try {
-        const result = await boundedLabTranscriptionFetch(blob, "deepgram-nova-3", "en", state.operationId, { signal:transcriptionController.signal, expectedUserId:captureOwnerUserId });
+        const result = await boundedLabTranscriptionFetch(blob, labVoiceSettings().stt, "en", state.operationId, { signal:transcriptionController.signal, expectedUserId:captureOwnerUserId });
         if (state.captureToken !== captureToken || q("clarification-setup")?.hidden) return;
         if (labState.verifiedUserId !== captureOwnerUserId) return;
         const transcript = clip(result.text, 500);
@@ -16119,7 +16252,7 @@ async function transcribeClarificationRecording(blob, operationId = "", captureC
       if (!lineageIsCurrent()) return false;
       setClarificationBusy(true, attempt ? "transcribing again" : "transcribing");
       try {
-        const result = await boundedLabTranscriptionFetch(blob, "deepgram-nova-3", "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId, deadlineAt:transcriptionDeadlineAt });
+        const result = await boundedLabTranscriptionFetch(blob, labVoiceSettings().stt, "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId, deadlineAt:transcriptionDeadlineAt });
         if (!lineageIsCurrent()) return false;
         const transcript = clip(result.text, 1200);
         if (!transcript) {
@@ -16162,7 +16295,7 @@ async function retryClarificationTranscription() {
   try {
     await transcribeClarificationRecording(state.retainedRecording, state.retainedOperationId, state.retainedCaptureContext);
   } catch (error) {
-    setMessage("clarification-message", `Deepgram still could not transcribe it. The recording remains here to retry: ${error.message}`, "error");
+    setMessage("clarification-message", `The selected model still could not transcribe it. The recording remains here to retry: ${error.message}`, "error");
   }
 }
 
@@ -16485,6 +16618,7 @@ function bindClarificationEvents() {
 }
 
 function activateTab(tab) {
+  if (q("lab-tool-select")) q("lab-tool-select").value = tab;
   if (["pipeline", "scenario", "lesson"].includes(tab)) labState.lastPrimaryTab = tab;
   if (tab === "lesson") mountLessonWorkspace("lesson");
   if (tab === "pipeline" && labState.pipelineStage === "map") mountLessonWorkspace("pipeline");
@@ -16526,6 +16660,7 @@ function initializeWorkspace() {
   renderLatencyDashboard();
   initializeClarification();
   setPipelineStage("clarification");
+  initializeLabWorkspace();
   return true;
 }
 
@@ -16734,8 +16869,8 @@ function bindEvents() {
   q("pipeline-mock-new").addEventListener("click", openMockSetup);
   q("pipeline-mock-history").addEventListener("click", openMockSetup);
   q("pipeline-mock-exit").addEventListener("click", () => setPipelineMode("controls"));
-  q("pipeline-learner-exit").addEventListener("click", () => setPipelineMode("controls"));
-  q("mock-learner-back")?.addEventListener("click", () => setPipelineMode("controls"));
+  q("pipeline-learner-exit").addEventListener("click", openMockSetup);
+  q("mock-learner-back")?.addEventListener("click", openMockSetup);
   q("mock-learner-mode")?.addEventListener("click", () => { void switchMockLearnerConversationMode(); });
   q("mock-learner-sources")?.addEventListener("click", toggleMockLearnerSources);
   q("mock-learner-source-close")?.addEventListener("click", () => closeMockLearnerSources({ restoreFocus:true }));
@@ -16972,6 +17107,8 @@ function bindEvents() {
   });
   q("lab-open-timing").addEventListener("click", () => {
     activateTab("results");
+    const timing = q("latency-title").closest(".lab-evidence-fold");
+    if (timing) timing.open = true;
     q("latency-title").scrollIntoView({ behavior:"smooth", block:"start" });
   });
   q("timing-back").addEventListener("click", () => activateTab(labState.lastPrimaryTab || "pipeline"));
