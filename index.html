@@ -1016,6 +1016,25 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .category-add-button .category-add-icon { font-size:19px;font-weight:400;line-height:1; }
   #source-page .category-add-button { left:max(18px,env(safe-area-inset-left));bottom:14%; }
 
+
+  /* Library drawers are secondary, never disabled-looking. */
+  .lesson-options-button{position:absolute;top:15px;left:14px;min-width:44px;min-height:44px;border:1px solid var(--line);border-radius:50%;background:var(--paper);color:var(--ink);cursor:pointer;z-index:5;letter-spacing:2px}
+  #category-organizer .category-organizer-panel{width:min(680px,100%);margin:0 auto;height:86dvh;max-height:92dvh;padding:24px;display:flex;flex-direction:column;gap:16px;box-sizing:border-box;overscroll-behavior:contain}
+  #category-organizer .category-organizer-panel>*{flex-shrink:0}
+  #category-organizer .organizer-head{position:sticky;top:-24px;background:var(--card);padding:12px 0;z-index:2}
+  #category-organizer-title{white-space:normal!important;overflow:visible!important;display:block!important;-webkit-line-clamp:unset!important;overflow-wrap:anywhere;font-size:28px!important}
+  #library-browser{order:4}#lesson-library-actions{order:1;display:flex;gap:10px;flex-wrap:wrap}#category-organizer-list{order:2}#category-new-folder{order:3}#category-organizer-help{order:1;margin:0}
+  #category-new-folder summary{cursor:pointer;min-height:44px;display:flex;align-items:center;color:var(--ink-soft);font-size:14px}
+  #category-organizer [hidden]{display:none!important}
+  #lesson-library-actions button,#library-back,.archive-lesson button{min-height:44px;border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:var(--paper);color:var(--ink);cursor:pointer}
+  .archive-drawer{display:flex;align-items:center;gap:16px;width:100%;box-sizing:border-box;padding:18px 20px;border:1px solid var(--line);border-top:3px double var(--line);border-radius:6px 6px 18px 18px;background:var(--paper);color:var(--ink);text-align:left;box-shadow:inset 0 5px 12px #00000006;cursor:pointer}
+  .archive-drawer>span:first-child{font-size:28px;color:var(--ink-soft)}.archive-drawer>span:nth-child(2){flex:1}.archive-drawer strong,.archive-drawer small{display:block}.archive-drawer strong{font:500 21px Georgia,serif}.archive-drawer small{font-size:12px;color:var(--ink-soft);margin-top:5px}.archive-drawer b{font:500 14px system-ui}
+  #library-browser .archive-drawer{margin-top:12px}#home-archive-entry{width:min(540px,calc(100% - 32px));margin:0 auto max(16px,env(safe-area-inset-bottom));flex:none;padding:12px 18px}
+  .archive-intro{font-size:14px;color:var(--ink-soft)}.archive-empty{text-align:center;padding:35px 18px;border:1px dashed var(--line);border-radius:18px;color:var(--ink-soft)}.archive-empty>span{font-size:40px}.archive-empty h3{color:var(--ink);font:24px Georgia,serif}.archive-empty p{max-width:340px;margin:auto;font-size:14px;line-height:1.6}
+  .archive-carousel{display:flex;overflow-x:auto;gap:16px;scroll-snap-type:x mandatory;padding:8px 2px 20px}.archive-lesson{flex:0 0 min(82%,340px);scroll-snap-align:start;border:1px solid var(--line);border-radius:18px;padding:24px;box-sizing:border-box;background:var(--paper)}.archive-lesson h3{font:25px/1.25 Georgia,serif;overflow-wrap:anywhere}.archive-lesson button{width:100%;margin-top:9px}
+  #category-organizer .organizer-category-main{min-height:62px}#category-organizer .organizer-category-main strong{white-space:normal;overflow-wrap:anywhere}#category-organizer button:focus-visible,#category-new-folder summary:focus-visible,.archive-drawer:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+  @media(min-width:701px){#category-organizer{align-items:center}#category-organizer .category-organizer-panel{border-radius:24px}}
+
   /* User collections and source preview */
   #category-organizer,#source-preview-sheet { position:fixed;inset:0;z-index:124;display:none;align-items:flex-end;background:rgba(44,36,28,.34); }
   #category-organizer.open,#source-preview-sheet.open { display:flex; }
@@ -1818,6 +1837,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
           </div>
           <button id="source-category-add" class="category-add-button" type="button" aria-label="Create or organize source folders"><span class="category-add-icon">+</span><span>Folders</span></button>
         </div>
+        <button id="home-archive-entry" class="archive-drawer" type="button"><span aria-hidden="true">▤</span><span><strong>Archive</strong><small>Kept out of the way, still yours</small></span><b id="home-archive-count">0</b><span aria-hidden="true">›</span></button>
       </section>
     </div>
   </div>
@@ -1847,11 +1867,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       <div><div class="organizer-kicker" id="category-organizer-kicker">your folders</div><h2 id="category-organizer-title">Organize lessons</h2></div>
       <button id="category-organizer-close" type="button" aria-label="Close folder organizer">&times;</button>
     </div>
-    <div class="category-create-row">
+    <div id="lesson-library-actions"></div>
+    <div id="category-organizer-list"></div>
+    <details id="category-new-folder"><summary>＋ New folder</summary><div class="category-create-row">
       <input id="category-name-input" type="text" maxlength="36" autocomplete="off" placeholder="Name a folder" aria-label="New folder name">
       <button id="category-create" type="button">Create</button>
     </div>
-    <div id="category-organizer-list"></div>
+    </details>
+    <div id="library-browser"></div>
     <p id="category-organizer-help" class="organizer-help"></p>
   </div>
 </div>
@@ -2123,11 +2146,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v197 · Sep 4";
+const BUILD = "v198 · Sep 4";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v198", date: "Sep 4", changes: ["Folders now opens your library, with a quiet Archive drawer and optional New folder.","Archive lessons without losing progress or folders, and move them back whenever you like.","Lesson options now give the full title room, with map access and larger folder choices."]},
   { tag: "v197", date: "Sep 4", changes: [
     "Lesson cards no longer lift or open paths when dragged vertically. Use the map button to view a lesson path.",
   ]},
@@ -3474,16 +3498,26 @@ function planningOnlyCloudUpdate(lesson, artifact) {
     && lesson.checkpointContractEnvelope.operation === "retrofit"
     && Number(lesson.updatedAt || 0) === Number(lesson.checkpointContractAcceptedAt || -1));
 }
+function lessonIsArchived(lesson) { return Number(lesson?.archivedAt || 0) > 0; }
+function reconcileLessonArchive(local,remote) {
+  const stamp = item => Number(item.archiveUpdatedAt || 0);
+  if (!stamp(local) && !stamp(remote)) return;
+  const latest = stamp(remote) > stamp(local) ? remote : stamp(local) > stamp(remote) ? local : lessonIsArchived(remote) ? remote : local;
+  const fields = { archivedAt:Number(latest.archivedAt) || 0, archiveUpdatedAt:stamp(latest) };
+  Object.assign(local,fields); Object.assign(remote,fields);
+}
 function mergeCloudLessons(remoteLessons) {
   const localById = new Map((state.lessons || []).map(lesson => [lesson.id,lesson]));
   (Array.isArray(remoteLessons) ? remoteLessons : []).forEach(remote => {
     if (!remote || !remote.id) return;
+    remote = cloudClone(remote); // Keep the remote baseline immutable during metadata reconciliation.
     // Teaching styles are an internal implementation detail now. Older cloud
     // snapshots may still contain a learner-selected method, so normalize them
     // before they can reintroduce the retired card/header switch.
     remote.method = "socratic";
     const local = localById.get(remote.id);
     if (!local) { state.lessons.push(remote);localById.set(remote.id,remote);return; }
+    reconcileLessonArchive(local,remote);
     const localMessages = Array.isArray(local.messages) ? local.messages : [];
     const remoteMessages = Array.isArray(remote.messages) ? remote.messages : [];
     const localPrefix = messagePrefix(localMessages,remoteMessages);
@@ -5925,7 +5959,7 @@ function categoriesForSection(section) {
 
 function categoryLayerEntries() {
   const counts = new Map();
-  state.lessons.filter(lesson => !isSourceLesson(lesson)).forEach(lesson => { const category = lessonCategory(lesson); counts.set(category, (counts.get(category) || 0) + 1); });
+  state.lessons.filter(lesson => !isSourceLesson(lesson) && !lessonIsArchived(lesson)).forEach(lesson => { const category = lessonCategory(lesson); counts.set(category, (counts.get(category) || 0) + 1); });
   const generated = [...counts.keys()]
     .sort((a,b) => (counts.get(b)-counts.get(a)) || a.localeCompare(b))
     .map(label => ({ key:`topic:${label.toLocaleLowerCase()}`, label, kind:"topic" }));
@@ -6097,6 +6131,7 @@ function syncDeveloperLauncherVisibility() {
 }
 
 function renderHome() {
+  if ($("home-archive-count")) $("home-archive-count").textContent = archivedLessons().length;
   syncDeveloperLauncherVisibility();
   const selectedLayerIndex = categoryLayerEntries().findIndex(entry => entry.key === wheel.layerCategory);
   if (wheel.layerCategory && selectedLayerIndex < 0) { wheel.layerCategory = null; wheel.layerIndex = 0; }
@@ -6141,7 +6176,7 @@ function renderHome() {
       </div>
       ${insidePersonalCategory
         ? `<button id="new-card-leave-folder" type="button" aria-label="Leave ${esc(layerName)} and show all lessons"><span>&#8592;</span> All lessons</button>`
-        : `<button id="new-card-folders" type="button" aria-label="Create or organize folders"><span>+</span> Folders</button>`}
+        : `<button id="new-card-folders" type="button" aria-label="Browse folders and archive"><span aria-hidden="true">▱</span> Folders</button>`}
     `;
     c.appendChild(nc);
     wheel.cards.push(nc); wheel.ids.push(null);
@@ -6151,7 +6186,7 @@ function renderHome() {
   // the main shelf, then become filters only after the learner enters one.
   if (!wheel.layerCategory) {
     categoriesForSection("explore").forEach(category => {
-      const count = state.lessons.filter(lesson => !isSourceLesson(lesson) && (lesson.customCategoryIds || []).includes(category.id)).length;
+      const count = state.lessons.filter(lesson => !isSourceLesson(lesson) && !lessonIsArchived(lesson) && (lesson.customCategoryIds || []).includes(category.id)).length;
       const card = document.createElement("button");
       card.type = "button";
       card.className = "card custom-category-card";
@@ -6165,11 +6200,9 @@ function renderHome() {
 
   // lesson cards, newest first
   const visibleLessons = [...state.lessons].reverse().filter(lesson => {
-    if (isSourceLesson(lesson) || !lessonMatchesLayer(lesson)) return false;
+    if (isSourceLesson(lesson) || lessonIsArchived(lesson) || !lessonMatchesLayer(lesson)) return false;
     if (!wheel.layerCategory && (lesson.customCategoryIds || []).length) return false;
-    /* A finished lesson leaves the deck. Explore is for what is still open;
-       completed work lives on Profile, inside its category. */
-    if (!wheel.layerCategory && lessonRouteComplete(lesson)) return false;
+    // Finishing never archives a lesson; the learner chooses when to put it away.
     return true;
   });
   visibleLessons.forEach(l => {
@@ -6187,10 +6220,15 @@ function renderHome() {
       <button type="button" class="lesson-path-button card-path-button" aria-label="Open lesson path" title="Lesson path">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6v4m10-4v4M7 10h10M12 10v5"/><circle cx="7" cy="4" r="2"/><circle cx="17" cy="4" r="2"/><circle cx="12" cy="18" r="2"/></svg>
       </button>
+      <button type="button" class="lesson-options-button" aria-label="Lesson options" title="Lesson options">•••</button>
       <div class="card-cat">${esc(l.category || "")}</div>
       <div class="card-title serif ${cardTitleSizeClass(l.title)}">${cardTitleHtml(l.title)}</div>
       ${state.continueHintDismissed ? "" : '<div class="card-hint">tap to continue</div>'}
     `;
+    const optionsButton = card.querySelector(".lesson-options-button");
+    optionsButton.addEventListener("pointerdown",event => event.stopPropagation());
+    optionsButton.addEventListener("pointerup",event => event.stopPropagation());
+    optionsButton.onclick = event => { event.stopPropagation();openCategoryOrganizer(l.id,"explore"); };
     const pathButton = card.querySelector(".card-path-button");
     pathButton.addEventListener("pointerdown", event => { wheel.methodInteracting = true; event.stopPropagation(); });
     pathButton.addEventListener("pointerup", event => { event.stopPropagation(); setTimeout(() => { wheel.methodInteracting = false; }, 0); });
@@ -10881,11 +10919,53 @@ function showHomeLauncher(focusPrompt) {
 }
 const organizerConsumedPointers = new Set();
 let sourceLibraryCategoryId = null;
-let categoryOrganizerState = { lessonId:null,section:"explore",press:null };
+let categoryOrganizerState = { lessonId:null,section:"explore",press:null,archive:false };
+let organizerReturnFocus = null;
+function archivedLessons() { return state.lessons.filter(lesson => !isSourceLesson(lesson) && lessonIsArchived(lesson)).sort((a,b) => Number(b.archivedAt)-Number(a.archivedAt)); }
+function setLessonArchived(lessonId,archived) {
+  if (!guardAccountMutation(archived ? "archive this lesson" : "restore this lesson")) return false;
+  const lesson = getLesson(lessonId);
+  if (!lesson || isSourceLesson(lesson)) return false;
+  const previous = {archivedAt:lesson.archivedAt,archiveUpdatedAt:lesson.archiveUpdatedAt,updatedAt:lesson.updatedAt};
+  const stamp = Math.max(Date.now(),Number(lesson.archiveUpdatedAt || 0)+1);
+  lesson.archivedAt = archived ? stamp : 0; lesson.archiveUpdatedAt = stamp; lesson.updatedAt = stamp;
+  if (!save()) {
+    Object.entries(previous).forEach(([key,value]) => { if (value === undefined) delete lesson[key];else lesson[key] = value; });
+    toast("Could not save that change on this device. Please try again.");return false;
+  }
+  renderHome();renderProfile();
+  toast(archived ? "Lesson moved to Archive" : "Lesson moved back. Its folders and progress are kept.");
+  return true;
+}
+function openLessonArchive() { openCategoryOrganizer(null,"explore");categoryOrganizerState.archive = true;renderCategoryOrganizer();$("library-back").focus(); }
+function renderLibraryBrowser(lesson) {
+  const host = $("library-browser"), actions = $("lesson-library-actions");
+  host.innerHTML = "";actions.innerHTML = "";
+  actions.hidden = !lesson;
+  $("category-organizer-help").hidden = !lesson;
+  $("category-new-folder").hidden = categoryOrganizerState.archive;
+  $("category-organizer-list").hidden = categoryOrganizerState.archive;
+  if (lesson) {
+    actions.innerHTML = '<button type="button" id="organizer-map">View lesson map</button>' + (!isSourceLesson(lesson) ? '<button type="button" id="organizer-archive">'+(lessonIsArchived(lesson) ? 'Move back to lessons' : 'Archive lesson')+'</button>' : '');
+    $("organizer-map").onclick = () => {closeCategoryOrganizer();openLessonPath(lesson.id);};
+    if ($("organizer-archive")) $("organizer-archive").onclick = () => {if(setLessonArchived(lesson.id,!lessonIsArchived(lesson)))closeCategoryOrganizer();};
+    return;
+  }
+  if (categoryOrganizerState.section !== "explore") return;
+  const lessons = archivedLessons();
+  if (!categoryOrganizerState.archive) {
+    host.innerHTML = '<button class="archive-drawer" id="library-archive" type="button"><span aria-hidden="true">▤</span><span><strong>Archive</strong><small>Saved, just out of the way</small></span><b>'+lessons.length+'</b><span aria-hidden="true">›</span></button>';
+    $("library-archive").onclick = openLessonArchive;return;
+  }
+  host.innerHTML = '<button id="library-back" type="button">← Your library</button><p class="archive-intro">Your progress and folders stay with every lesson.</p>' + (lessons.length ? '<div class="archive-carousel" aria-label="Archived lessons">'+lessons.map(item => '<article class="archive-lesson"><span class="organizer-kicker">Archived</span><h3>'+esc(item.title || item.topic || 'Lesson')+'</h3><button type="button" data-archive-open="'+attr(item.id)+'">Open lesson</button><button type="button" data-archive-restore="'+attr(item.id)+'">Move back to lessons</button></article>').join('')+'</div>' : '<div class="archive-empty"><span aria-hidden="true">▤</span><h3>Room for later</h3><p>Archive a lesson from its options when you want it off your active shelf. You can bring it back anytime.</p></div>');
+  $("library-back").onclick = () => {categoryOrganizerState.archive=false;renderCategoryOrganizer();$("library-archive").focus();};
+  host.querySelectorAll('[data-archive-open]').forEach(button => {button.onclick=()=>{const id=button.dataset.archiveOpen;closeCategoryOrganizer();openChat(id);};});
+  host.querySelectorAll('[data-archive-restore]').forEach(button => {button.onclick=()=>{if(setLessonArchived(button.dataset.archiveRestore,false)){renderCategoryOrganizer();$("library-back").focus();}};});
+}
 function customCategoryCount(categoryId,section) {
   return state.lessons.filter(lesson => {
     if (section === "upload" ? !isSourceLesson(lesson) : isSourceLesson(lesson)) return false;
-    return (lesson.customCategoryIds || []).includes(categoryId);
+    return !lessonIsArchived(lesson) && (lesson.customCategoryIds || []).includes(categoryId);
   }).length;
 }
 function setLessonCategoryMembership(lesson,categoryId,include) {
@@ -10900,21 +10980,20 @@ function setLessonCategoryMembership(lesson,categoryId,include) {
 }
 function renderCategoryOrganizer() {
   const lesson = getLesson(categoryOrganizerState.lessonId);
-  $("category-organizer-kicker").textContent = categoryOrganizerState.section === "upload" ? "source folders" : "lesson folders";
-  $("category-organizer-title").textContent = lesson ? `Organize “${lesson.title || lesson.topic || "lesson"}”` : "Your folders";
-  $("category-organizer-help").textContent = lesson
-    ? "Keep holding and release over a folder, or tap folders to add or remove this item. One item can live in more than one folder."
-    : "Create a folder here. Tap one to open it; hold any lesson or source later to place it there.";
+  $("category-organizer-kicker").textContent = lesson ? "lesson details" : categoryOrganizerState.archive ? "put aside, not forgotten" : "your collection";
+  $("category-organizer-title").textContent = lesson ? (lesson.title || lesson.topic || "Lesson") : categoryOrganizerState.archive ? "Archive" : "Your library";
+  $("category-organizer-help").textContent = lesson ? "Choose any folders for this lesson." : "";
+  renderLibraryBrowser(lesson);
   const list = $("category-organizer-list");
   const sectionCategories = categoriesForSection(categoryOrganizerState.section);
   if (!sectionCategories.length) {
-    list.innerHTML = `<div class="organizer-empty">Create your first folder above.</div>`;
+    list.innerHTML = `<div class="organizer-empty">No folders yet. Create one whenever you need it.</div>`;
     return;
   }
   list.innerHTML = sectionCategories.map(category => {
     const included = !!lesson && (lesson.customCategoryIds || []).includes(category.id);
     const count = customCategoryCount(category.id,categoryOrganizerState.section);
-    return `<div class="organizer-category-row" data-organizer-category-id="${attr(category.id)}"><button type="button" class="organizer-category-main"><span class="organizer-category-check">${included ? "✓" : ""}</span><strong>${esc(category.name)}</strong><span>${count} ${categoryOrganizerState.section === "upload" ? "source" : "lesson"}${count === 1 ? "" : "s"}</span></button><button type="button" class="organizer-category-delete" aria-label="Delete ${attr(category.name)}">&times;</button></div>`;
+    return `<div class="organizer-category-row" data-organizer-category-id="${attr(category.id)}"><button type="button" class="organizer-category-main"${lesson ? ` aria-pressed="${included}"` : ""}><span class="organizer-category-check">${included ? "✓" : ""}</span><strong>${esc(category.name)}</strong><span>${count} ${categoryOrganizerState.section === "upload" ? "source" : "lesson"}${count === 1 ? "" : "s"}</span></button>${lesson ? "" : `<button type="button" class="organizer-category-delete" aria-label="Delete ${attr(category.name)}">&times;</button>`}</div>`;
   }).join("");
   list.querySelectorAll(".organizer-category-main").forEach(button => {
     button.onclick = () => {
@@ -10961,11 +11040,16 @@ async function createCustomCategory() {
   save();renderCategoryOrganizer();renderHome();
 }
 function openCategoryOrganizer(lessonId = null,section = "explore") {
+  if (!$("category-organizer").classList.contains("open")) organizerReturnFocus = document.activeElement;
+  categoryOrganizerState.archive = false;
   categoryOrganizerState.lessonId = lessonId;
   categoryOrganizerState.section = section;
   $("category-name-input").value = "";
+  $("category-new-folder").open = false;
   renderCategoryOrganizer();
   $("category-organizer").classList.add("open");
+  setActiveViewInert(true);
+  $("category-organizer-close").focus();
   $("category-organizer").setAttribute("aria-hidden","false");
 }
 function closeCategoryOrganizer() {
@@ -10973,6 +11057,10 @@ function closeCategoryOrganizer() {
   $("category-organizer").classList.remove("open");
   $("category-organizer").setAttribute("aria-hidden","true");
   $("category-organizer-list").querySelectorAll(".drop-target").forEach(row => row.classList.remove("drop-target"));
+  setActiveViewInert(false);
+  if (organizerReturnFocus?.isConnected) organizerReturnFocus.focus();
+  else $("new-card-folders")?.focus();
+  organizerReturnFocus = null;
   categoryOrganizerState.press = null;
 }
 let organizerLongPress = null;
@@ -10982,7 +11070,7 @@ function cancelOrganizerLongPress() {
 }
 function attachOrganizerLongPress(element,lessonId,section) {
   element.addEventListener("pointerdown",event => {
-    if (event.target.closest(".source-card-path,.lesson-path-button")) return;
+    if (event.target.closest(".source-card-path,.lesson-path-button,.lesson-options-button")) return;
     cancelOrganizerLongPress();
     organizerLongPress = { pointerId:event.pointerId,x:event.clientX,y:event.clientY,opened:false,lessonId,section };
     organizerLongPress.timer = setTimeout(() => {
@@ -11006,28 +11094,26 @@ document.addEventListener("pointermove",event => {
   if (!press || event.pointerId !== press.pointerId) return;
   if (!press.opened && Math.hypot(event.clientX-press.x,event.clientY-press.y) > 12) { cancelOrganizerLongPress(); return; }
   if (!press.opened) return;
-  $("category-organizer-list").querySelectorAll(".drop-target").forEach(row => row.classList.remove("drop-target"));
-  const target = document.elementFromPoint(event.clientX,event.clientY);
-  const row = target && target.closest && target.closest("[data-organizer-category-id]");
-  if (row) row.classList.add("drop-target");
 },true);
 document.addEventListener("pointerup",event => {
   const press = organizerLongPress;
   if (!press || event.pointerId !== press.pointerId) return;
   clearTimeout(press.timer);
   if (press.opened) {
-    const target = document.elementFromPoint(event.clientX,event.clientY);
-    const row = target && target.closest && target.closest("[data-organizer-category-id]");
-    if (row) {
-      setLessonCategoryMembership(getLesson(press.lessonId),row.dataset.organizerCategoryId,true);
-      renderHome();
-      closeCategoryOrganizer();
-    }
     setTimeout(() => organizerConsumedPointers.delete(event.pointerId),0);
   }
   organizerLongPress = null;
 },true);
 document.addEventListener("pointercancel",event => { if (organizerLongPress && event.pointerId === organizerLongPress.pointerId) cancelOrganizerLongPress(); },true);
+$("home-archive-entry").onclick = openLessonArchive;
+$("category-organizer").addEventListener("keydown",event => {
+  if (event.key === "Escape") {event.preventDefault();event.stopPropagation();closeCategoryOrganizer();return;}
+  if (event.key !== "Tab") return;
+  const controls = [...$("category-organizer").querySelectorAll('button,input,summary')].filter(el => !el.disabled && el.getClientRects().length);
+  const first=controls[0],last=controls[controls.length-1];
+  if(event.shiftKey && document.activeElement===first){event.preventDefault();last?.focus();}
+  else if(!event.shiftKey && document.activeElement===last){event.preventDefault();first?.focus();}
+});
 $("category-organizer-close").onclick = closeCategoryOrganizer;
 $("category-organizer").onclick = event => { if (event.target === $("category-organizer")) closeCategoryOrganizer(); };
 $("category-create").onclick = createCustomCategory;
