@@ -222,6 +222,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #account-dialog[data-mode=manage] .account-dialog-actions { justify-content:flex-start;margin-top:14px; }
   #account-dialog[data-mode=manage] #password-account-signout { color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 17px; }
   #account-dialog button:focus-visible { outline:2px solid var(--accent);outline-offset:3px; }
+  #device-accounts { margin-top:22px;padding-top:18px;border-top:1px solid var(--line); }
+  #device-accounts h3 { font-size:12px;color:var(--ink-soft);font-weight:600;margin:0 0 10px; }
+  .device-account-row { display:flex;gap:8px;align-items:center; }.device-account-row>button:first-child { flex:1;min-width:0;text-align:left;overflow-wrap:anywhere; }
+  .device-account-row>button+button { width:44px;flex:0 0 44px; }
+  #device-accounts button { min-height:44px;background:transparent;border:0;color:var(--ink);font:inherit;font-size:13px;cursor:pointer;padding:9px 3px; }
+  #device-accounts button:disabled { cursor:default; }#device-accounts small { display:block;color:var(--ink-soft);font-size:11px;margin-top:4px; }
+  #device-account-add { color:var(--accent)!important;font-weight:650!important; }#device-accounts p { color:var(--ink-soft);font-size:11px;line-height:1.5;margin:9px 0; }
+  #settings-account-group,#settings-microphone-launcher,#settings-tester-group { display:none!important; }
   #account-dialog [hidden] { display:none!important; }
   .intro-question { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin:0; }
   #intro-topic { min-width:0;height:48px;border:1.5px solid var(--line);border-radius:12px;background:var(--paper);color:var(--ink);padding:0 13px;font-size:15px;outline:none; }
@@ -1644,6 +1652,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       </div>
       <p class="account-device-note">Signed in on this device. Your library belongs to this account.</p>
     </section>
+    <section id="device-accounts" hidden aria-label="Accounts on this device"><h3>On this device</h3><div id="device-account-list"></div><button id="device-account-add" type="button">＋ Add account</button><p>Saved logins are available to anyone using this app on this device.</p></section>
     <form id="password-account-form" novalidate>
       <fieldset id="password-account-fields">
         <label id="password-account-email-label" for="password-account-email">Email</label>
@@ -2179,11 +2188,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v201 · Sep 4";
+const BUILD = "v202 · Sep 4";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag:"v202", date:"Sep 4", changes:["Save accounts on this device and switch between them from Your account.","Settings has a back arrow, fewer duplicate account controls, and no microphone or alpha-code setup. Introduction replay is limited to the owner developer view."] },
   { tag: "v201", date: "Sep 4", changes: ["Home is quieter: lessons stay newest-first, folders sit beside Ask Anything, and the recency selector is gone.","Lab has its own top-right space. Light and Dark are one-tap choices in Settings.","Pinch lesson cards with two fingers to zoom out or in within a comfortable range."]},
   { tag: "v200", date: "Sep 4", changes: ["After confirming email in another browser, enter your password directly in the pinned app to continue.","Your account now has a back arrow, clearer settings and password controls, and a separate sign-out action."] },
   { tag: "v199", date: "Sep 4", changes: ["Lab opens to saved starting points, with a full Mock Run always available.", "Test phases with fewer visible controls; Tutor and Quiz require the matching saved Map and Extraction.", "Compare two Map models on the same input, view results side by side, and choose supported speech routes."] },
@@ -15110,7 +15120,7 @@ function organizeSettingsPanel() {
   if (panel.dataset.organized) return;
   panel.dataset.organized = "true";
   const heading = panel.querySelector("h3");
-  const dismiss = document.createElement("button"); dismiss.id = "settings-dismiss";dismiss.type = "button";dismiss.textContent = "×";dismiss.setAttribute("aria-label","Close settings");dismiss.onclick = () => closeSettings(true);panel.prepend(dismiss);
+  const dismiss = document.createElement("button"); dismiss.id = "settings-dismiss";dismiss.type = "button";dismiss.textContent = "←";dismiss.setAttribute("aria-label","Back");dismiss.onclick = () => closeSettings(true,true);panel.prepend(dismiss);
   const intro = document.createElement("p"); intro.className = "settings-intro"; intro.textContent = "Your learning, your space.";
   heading.after(intro);
   function group(title, nodes, open = false, flat = false) {
@@ -15247,7 +15257,9 @@ function syncDeveloperSettingsVisibility() {
   const data = $("settings-data-group");
   if (data) data.hidden = true;
   const tester = $("settings-tester-group");
-  if (tester) tester.hidden = backendAccessEnabled();
+  if (tester) tester.hidden = true;
+  $("settings-microphone-launcher").hidden = true;
+  $("intro-replay").hidden = !developer;
   document.querySelectorAll(".owner-provider-field").forEach(node => { node.hidden = !developer; });
   renderAccountWorkspace();
   syncCredentialFieldInteractivity();
@@ -15374,6 +15386,7 @@ function renderPasswordAccount() {
   dialog.querySelectorAll(".account-dialog-actions button").forEach(button => { button.disabled = passwordAccountBusy; });
   $("password-account-form").setAttribute("aria-busy",String(passwordAccountBusy));
   passwordAccountNotice(passwordAccountMessage,passwordAccountError);
+  renderDeviceAccounts();
   syncCredentialFieldInteractivity();
 }
 function openPasswordAccount(mode = "", message = "", isError = false) {
@@ -15398,6 +15411,7 @@ function openPasswordAccount(mode = "", message = "", isError = false) {
 }
 function closePasswordAccount() {
   if (accountEntryNeeded() || passwordAccountBusy) return false;
+  deviceAccountAddingFrom = "";
   clearPasswordFields();
   $("account-dialog").close();
   syncCredentialFieldInteractivity();
@@ -15407,6 +15421,8 @@ function reconcileAccountEntry() {
   if (passwordAccountBusy || accountTransitionInProgress) return;
   if (accountRecoveryRequired()) { openPasswordAccount("update");return; }
   if (permanentAccountVerified()) {
+    if (deviceAccountAddingFrom === cloudAccount.id && ["signin","signup","verify","reset"].includes(passwordAccountMode)) return;
+    deviceAccountAddingFrom = "";
     if (accountPending?.mode !== "email_change" || accountPending?.originalUserId === cloudAccount.id) setAccountPending(null);
     if (["signin","signup","verify","upgrade","checking"].includes(passwordAccountMode)) closePasswordAccount();
     if (accountReturnToLab) {
@@ -15452,6 +15468,128 @@ function suspendAccountIdentity() {
   syncDeveloperLauncherVisibility();
   syncDeveloperSettingsVisibility();
 }
+const DEVICE_ACCOUNTS_KEY = "worldview-device-accounts-v1";
+let deviceAccountAddingFrom = "";
+function readDeviceAccounts() {
+  try {
+    const rows = JSON.parse(localStorage.getItem(DEVICE_ACCOUNTS_KEY) || "[]");
+    return Array.isArray(rows) ? rows.filter(row => row && typeof row.id === "string" && typeof row.email === "string"
+      && typeof row.access_token === "string" && typeof row.refresh_token === "string") : [];
+  } catch (_) { return []; }
+}
+function writeDeviceAccounts(rows) {
+  const value = JSON.stringify(rows);
+  localStorage.setItem(DEVICE_ACCOUNTS_KEY,value);
+  if (localStorage.getItem(DEVICE_ACCOUNTS_KEY) !== value) throw new Error("device_account_storage");
+}
+function rememberDeviceSession(session) {
+  if (!session?.user || !permanentAccountVerified(session.user) || !session.access_token || !session.refresh_token) return false;
+  try {
+    const rows = readDeviceAccounts().filter(row => row.id !== session.user.id);
+    rows.unshift({id:session.user.id,email:session.user.email,access_token:session.access_token,refresh_token:session.refresh_token});
+    writeDeviceAccounts(rows);
+    return true;
+  } catch (_) { return false; }
+}
+function forgetDeviceAccount(id) {
+  writeDeviceAccounts(readDeviceAccounts().filter(row => row.id !== id));
+}
+async function preserveDeviceAccount() {
+  await preserveCurrentAccountBeforeSwitch();
+  if (cloudAccount?.is_anonymous) { await preserveAnonymousAccount(cloudAccount);return; }
+  if (!permanentAccountVerified()) return;
+  const result = await accountOperationDeadline(backendClient.auth.getSession());
+  if (result.error || result.data?.session?.user?.id !== cloudAccount.id || !rememberDeviceSession(result.data.session)) {
+    throw new Error("device_account_storage");
+  }
+}
+function renderDeviceAccounts() {
+  const section = $("device-accounts"), list = $("device-account-list");
+  if (!section || !list) return;
+  const show = ["manage","signin"].includes(passwordAccountMode) && !accountRecoveryRequired();
+  section.hidden = !show;
+  if (!show) return;
+  list.replaceChildren();
+  const rows = readDeviceAccounts();
+  for (const row of rows) {
+    const current = row.id === cloudAccount?.id && permanentAccountVerified();
+    if (current && passwordAccountMode === "manage") continue; // Already shown in the identity card.
+    const item = document.createElement("div");item.className = "device-account-row";
+    const button = document.createElement("button");button.type = "button";button.textContent = row.email;
+    const caption = document.createElement("small");caption.textContent = current ? "Current account" : "Switch account";button.append(caption);
+    button.disabled = current || passwordAccountBusy;
+    button.onclick = () => switchDeviceAccount(row.id);
+    item.append(button);
+    if (!current) {
+      const remove = document.createElement("button");remove.type = "button";remove.textContent = "×";
+      remove.setAttribute("aria-label",`Remove saved login for ${row.email}`);remove.disabled = passwordAccountBusy;
+      remove.onclick = () => { try { forgetDeviceAccount(row.id);renderDeviceAccounts(); } catch (_) { passwordAccountNotice("Could not remove this saved login. Please try again.",true); } };
+      item.append(remove);
+    }
+    list.append(item);
+  }
+  $("device-account-add").hidden = passwordAccountMode !== "manage";
+  $("device-account-add").disabled = passwordAccountBusy;
+  if (!rows.length && passwordAccountMode !== "manage") section.hidden = true;
+}
+async function addDeviceAccount() {
+  if (passwordAccountBusy || accountTransitionInProgress || accountRecoveryRequired()) return;
+  passwordAccountBusy = true;renderPasswordAccount();
+  try {
+    await preserveDeviceAccount();
+    deviceAccountAddingFrom = cloudAccount?.id || "";
+    setAccountPending(null);
+    passwordAccountBusy = false;
+    openPasswordAccount("signin","Sign in to another account. This account stays saved on this device.");
+    $("password-account-email").value = "";
+  } catch (_) { passwordAccountNotice("This device could not save your current login. You are still signed in; try again.",true); }
+  finally { passwordAccountBusy = false;renderPasswordAccount(); }
+}
+async function switchDeviceAccount(id) {
+  if (!backendClient || passwordAccountBusy || accountTransitionInProgress || accountRecoveryRequired()) return;
+  const target = readDeviceAccounts().find(row => row.id === id);
+  if (!target || (cloudAccount?.id === id && permanentAccountVerified())) return;
+  passwordAccountBusy = true;accountTransitionInProgress = true;renderPasswordAccount();
+  let suspended = false, success = false, restored = false, previous = null;
+  try {
+    await preserveDeviceAccount();
+    previous = readDeviceAccounts().find(row => row.id === cloudAccount?.id) || null;
+    suspendAccountIdentity();suspended = true;
+    const result = await accountAuthCommand(() => backendClient.auth.setSession({access_token:target.access_token,refresh_token:target.refresh_token}));
+    if (result.error) throw result.error;
+    const verified = await accountOperationDeadline(backendClient.auth.getUser());
+    if (verified.error || verified.data?.user?.id !== id || !permanentAccountVerified(verified.data?.user)) throw new Error("account_verification");
+    if (!rememberDeviceSession({...result.data?.session,user:verified.data.user})) throw new Error("device_account_storage");
+    localStorage.removeItem(ACCOUNT_SIGNOUT_KEY);setAccountPending(null);markPasswordRecovery("");
+    deviceAccountAddingFrom = "";passwordAccountMode = "signin";passwordAccountNotice("");success = true;
+  } catch (_) {
+    if (suspended) {
+      // Never show the prior library under an uncertain replacement session.
+      suspendAccountIdentity();identityRestoreStatus = "signed-out";accountCacheReadOnly = false;
+      if (previous) {
+        try {
+          const rollback = await accountAuthCommand(() => backendClient.auth.setSession({access_token:previous.access_token,refresh_token:previous.refresh_token}));
+          const verified = await accountOperationDeadline(backendClient.auth.getUser());
+          restored = !rollback.error && !verified.error && verified.data?.user?.id === previous.id && permanentAccountVerified(verified.data.user);
+          if (restored) rememberDeviceSession(rollback.data?.session);
+        } catch (_) {}
+      }
+      if (!restored) { try { await accountAuthCommand(() => backendClient.auth.signOut({scope:"local"})); } catch (_) {} }
+      deviceAccountAddingFrom = restored ? previous.id : "";
+      $("password-account-email").value = target.email;passwordAccountMode = "signin";
+    }
+    passwordAccountNotice(suspended ? "This saved login needs a fresh sign-in. Enter your password, or choose another saved account." : "Your current login could not be saved. You are still in the same account; try again.",true);
+  } finally {
+    accountTransitionInProgress = false;passwordAccountBusy = false;
+    if (success) { await refreshPasswordAccountIdentity();reconcileAccountEntry();finishIdentityBootstrap(); }
+    else {
+      if (restored) await refreshPasswordAccountIdentity();
+      openPasswordAccount(suspended ? "signin" : "manage",passwordAccountMessage,true);
+    }
+    renderPasswordAccount();
+  }
+}
+
 async function preserveCurrentAccountBeforeSwitch() {
   // A failed local save must not destroy the only recoverable old-account copy.
   if (stateAccountId && cloudAccount?.id === stateAccountId) writeLocalState();
@@ -15543,6 +15681,7 @@ async function submitPasswordAccount() {
       const result = await accountAuthCommand(() => backendClient.auth.signInWithPassword({email,password}));
       if (result.error) throw result.error;
       if (!permanentAccountVerified(result.data?.user)) throw new Error("Confirm your email before signing in.");
+      deviceAccountAddingFrom = "";
       localStorage.removeItem(ACCOUNT_SIGNOUT_KEY);
       markPasswordRecovery("");
       setAccountPending(null);
@@ -15638,6 +15777,7 @@ async function signOutAccount() {
   try {
     await preserveCurrentAccountBeforeSwitch();
     const signoutId = cloudAccount?.id || authEventUserId;
+    if (signoutId) forgetDeviceAccount(signoutId);
     if (signoutId) localStorage.setItem(ACCOUNT_SIGNOUT_KEY,JSON.stringify({userId:signoutId,startedAt:Date.now()}));
     accountTransitionInProgress = true;
     suspendAccountIdentity();
@@ -15661,6 +15801,7 @@ async function signOutAccount() {
 }
 function handleAccountAuthChange(event, session) {
   const nextId = session?.user?.id || "";
+  if (session && ["SIGNED_IN","INITIAL_SESSION","TOKEN_REFRESHED","USER_UPDATED"].includes(event)) rememberDeviceSession(session);
   const changed = !!((cloudAccount?.id || authEventUserId) && nextId !== (cloudAccount?.id || authEventUserId));
   if (event === "PASSWORD_RECOVERY" && nextId) markPasswordRecovery(nextId);
   if (event === "SIGNED_OUT" || changed || event === "PASSWORD_RECOVERY") {
@@ -15691,7 +15832,8 @@ $("password-account-back").onclick = () => {
     else openPasswordAccount("manage");
   } else openPasswordAccount("signin");
 };
-$("account-settings").onclick = () => { if (closePasswordAccount()) openSettings(); };
+$("account-settings").onclick = () => { if (closePasswordAccount()) openSettings("account"); };
+$("device-account-add").onclick = addDeviceAccount;
 $("account-password").onclick = () => { if (permanentAccountVerified()) openPasswordAccount("update"); };
 $("password-account-signout").onclick = signOutAccount;
 $("account-dialog").addEventListener("cancel",event => { if (!closePasswordAccount()) event.preventDefault(); });
@@ -15724,7 +15866,9 @@ function setSettingsInteractive(active) {
 }
 setSettingsInteractive(false);
 $("settings").addEventListener("toggle",syncCredentialFieldInteractivity,true);
-function openSettings() {
+let settingsReturnToAccount = false;
+function openSettings(origin = "") {
+  settingsReturnToAccount = origin === "account";
   setSettingsInteractive(true);
   $("set-testercode").value = state.testerInvite || "";
   $("set-elkey").value = state.elKey || "";
@@ -15797,13 +15941,15 @@ function applySettings() {
   applyTheme();
 }
 // leaving without the Save button (backdrop tap or swipe-down) offers to keep changes
-function closeSettings(askSave) {
+function closeSettings(askSave, returnToAccount = false) {
   if (askSave && settingsDirty() && confirm("Save your changes?")) {
     applySettings();
     toast("Saved");
   }
   $("settings").classList.remove("open");
   setSettingsInteractive(false);
+  const returnTo = settingsReturnToAccount;settingsReturnToAccount = false;
+  if (returnToAccount && returnTo) openPasswordAccount();
 }
 $("settings").addEventListener("click", e => { if (e.target === $("settings")) closeSettings(true); });
 /* Build badge + What's New. The VERSIONS array has been maintained for many
@@ -16059,7 +16205,7 @@ $("intro-install").onclick = async () => {
   toast(iosHomeScreenDevice() ? "Tap Share, then Add to Home Screen." : "Open your browser menu, then choose Add to Home screen.",5500);
 };
 $("intro-skip").onclick = () => finishIntro(false);
-$("intro-replay").onclick = () => { closeSettings(true);setIntroOpen(true); };
+$("intro-replay").onclick = () => { if (!ownerToolsAvailable() || !state.developerMode) return;closeSettings(true);setIntroOpen(true); };
 $("intro-demo").addEventListener("keydown",event => { if (event.key === "Escape") finishIntro(false); });
 $("mic-primer-enable").addEventListener("click",enableMicrophoneFromPrimer);
 $("mic-primer-later").addEventListener("click",() => finishMicPrimer("later"));
