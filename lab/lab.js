@@ -11763,6 +11763,10 @@ function extractionShouldCarryClarificationVoice() {
   return labState.pipelineMode === "mock" && labState.clarification.mode === "voice" && labState.extraction.modeInheritedFromClarification;
 }
 
+function primePipelineExtractionAudio() {
+  return primeMockVoiceAudio();
+}
+
 async function requestPipelineExtractionVoice() {
   const state = labState.extraction;
   const statusId = pipelineVoiceStatusId();
