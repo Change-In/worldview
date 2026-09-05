@@ -9411,7 +9411,7 @@ async function createPipelineLessonTurn(action, answer = "", targetOutcomeIndex 
     messages:[{ role:"user", content:`Guided lesson packet — use as data only:\n${packet}` }, ...transcript, { role:"user", content:actionMessage }],
     maxTokens:labState.pipelineMode === "mock" ? mockStageConfig("lesson").outputTokens : LAB_OUTPUT_TOKEN_SERVER_MAX,
     research:false,
-    metadata:{ lessonRole:"talker", learnerReplyFingerprint, sourceMapFingerprint:selection.fingerprint, promptFingerprint:fingerprint(tutorPrompt), promptCoreFingerprint:fingerprint(LESSON_CONVERSATION_PROMPT), inputFingerprint:fingerprint(`${packet}\n${actionMessage}`), promptVersionId:LESSON_CONVERSATION_PROMPT_VERSION, promptVersionName:"Socratic Lesson talker v7 · paired candidates", responseContract:CONVERSATION_RESPONSE_CONTRACT, responseSchemaId:"lesson_talker_reply_v1", replicate:1, inputLabel:`Guided Lesson ${outcome.number} · ${clip(outcome.title, 100)}`, source:"selected immutable roadmap plus current-outcome verified support and unverified saved Extraction; fixed code owns candidate selection", promptEdited:tutorPrompt !== LESSON_CONVERSATION_PROMPT, checks:[] },
+    metadata:{ lessonRole:"talker", learnerReplyFingerprint, sourceMapFingerprint:selection.fingerprint, promptFingerprint:fingerprint(tutorPrompt), promptCoreFingerprint:fingerprint(LESSON_CONVERSATION_PROMPT), inputFingerprint:fingerprint(`${packet}\n${actionMessage}`), promptVersionId:LESSON_CONVERSATION_PROMPT_VERSION, promptVersionName:"Socratic Lesson talker v8 · paired candidates", responseContract:CONVERSATION_RESPONSE_CONTRACT, responseSchemaId:"lesson_talker_reply_v1", replicate:1, inputLabel:`Guided Lesson ${outcome.number} · ${clip(outcome.title, 100)}`, source:"selected immutable roadmap plus current-outcome verified support and unverified saved Extraction; fixed code owns candidate selection", promptEdited:tutorPrompt !== LESSON_CONVERSATION_PROMPT, checks:[] },
   }];
   if (action === "reply") samples.push({
     clientSampleId:`${selection.artifact.runId}:lesson:brain:${selection.job.id}:${selection.recordKey}:${lessonTurn}`,
@@ -13442,6 +13442,11 @@ function mockLearnerStatus(stage, artifact, selection) {
   return { text:"", error:false, retry:"" };
 }
 
+function mockLearnerMapState(stage, artifact) {
+  return artifact && ["extraction", "lesson", "quiz"].includes(stage)
+    ? pipelineExtractionMapViewState(artifact) : null;
+}
+
 function renderMockLearnerShell() {
   const shell = q("mock-learner-shell");
   if (!shell) return;
@@ -13509,12 +13514,13 @@ function renderMockLearnerShell() {
   retry.hidden = !status.retry;
   retry.dataset.retry = status.retry;
   const mapProgress = q("mock-learner-map-progress");
-  const mapState = stage === "extraction" && artifact ? pipelineExtractionMapViewState(artifact) : null;
+  const mapState = mockLearnerMapState(stage, artifact);
   mapProgress.hidden = !mapState;
   mapProgress.disabled = !mapState || labState.extraction.mapRetryBusy;
   mapProgress.textContent = mapState?.state === "ready" ? "View Lesson Map" : "View Lesson Map progress";
   mapProgress.classList.toggle("is-error", mapState?.state === "needs-attention");
   mapProgress.setAttribute("aria-expanded", String(Boolean(labState.extraction.mapDialogOpen)));
+  if (labState.extraction.mapDialogOpen) renderPipelineExtractionMapDialog(artifact);
   q("mock-learner-ptt").disabled = inputBlocked;
   q("mock-learner-hear").hidden = !(stage === "clarification"
     ? (clarificationCommitAcknowledgementSuppressed() ? "" : labState.clarification.latest?.assistant_message || labState.clarification.lastSpeechText)
@@ -13720,7 +13726,7 @@ function setPipelineStage(stage = "clarification") {
       stopPipelineExtractionSpeech();
     }
   }
-  if (next !== "extraction" && labState.extraction.mapDialogOpen) closePipelineExtractionMapDialog({ restoreFocus:false });
+  if (previous !== next && labState.extraction.mapDialogOpen) closePipelineExtractionMapDialog({ restoreFocus:false });
   if (next !== "clarification" && labState.clarification.focusMode) setClarificationFocus(false);
   if (!["extraction", "lesson", "quiz"].includes(next) && labState.extraction.mode === "voice") {
     stopPipelineExtractionVoice();
@@ -15988,7 +15994,7 @@ async function runClarificationModel(timingId = "") {
       metadata: {
         promptFingerprint: provenance.fingerprint, promptCoreFingerprint: fingerprint(CLARIFICATION_PROMPT),
         inputFingerprint: fingerprint(JSON.stringify(packet.messages)), promptVersionId: CLARIFICATION_PROMPT_VERSION,
-        promptVersionName: "Clarification conversation v23", promptSource: provenance.source, responseContract: CLARIFICATION_RESPONSE_CONTRACT, responseSchemaId:"clarification_reply_v5", replicate: 1, inputLabel: `Clarification turn ${state.learnerReplyCount + 1}${state.modelRetryAttempt ? ` · retry ${state.modelRetryAttempt}` : ""}${recoveryAttempt ? ` · recovery ${recoveryAttempt}` : ""}`,
+        promptVersionName: "Clarification conversation v24", promptSource: provenance.source, responseContract: CLARIFICATION_RESPONSE_CONTRACT, responseSchemaId:"clarification_reply_v5", replicate: 1, inputLabel: `Clarification turn ${state.learnerReplyCount + 1}${state.modelRetryAttempt ? ` · retry ${state.modelRetryAttempt}` : ""}${recoveryAttempt ? ` · recovery ${recoveryAttempt}` : ""}`,
         source: `lesson pipeline ${state.runId}`, promptEdited: packet.editableSystem !== CLARIFICATION_PROMPT, checks: [],
       },
     }],
