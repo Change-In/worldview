@@ -9804,7 +9804,7 @@ function renderPipelineLesson() {
     renderPipelineExtractionModeControls();
     return;
   }
-  if (reviewOutcomeIndex >= 0 && Number(record.completedOutcomeIndex) === reviewOutcomeIndex && labState.pipelineMode === "mock" && labState.pipelineStage === "lesson" && !q("panel-pipeline")?.hidden) {
+  if (!labState.quiz.reviewToken && !pendingPipelineConversationCreate("lesson", selection.artifact, selection) && reviewOutcomeIndex >= 0 && Number(record.completedOutcomeIndex) === reviewOutcomeIndex && labState.pipelineMode === "mock" && labState.pipelineStage === "lesson" && !q("panel-pipeline")?.hidden) {
     input.disabled = true;
     send.hidden = true;
     setStatus("That review checkpoint is complete. Returning to a fresh final teach-back…", "ok");
@@ -10139,7 +10139,7 @@ async function createPipelineQuizTurn(answer, { timingId = "" } = {}) {
 function quizReviewIntent(value) {
   const normalized = normalizeExtractionIntent(value);
   if (!normalized || /\b(?:don't|do not|not|no|skip|without)\b.{0,24}\b(?:review|go back|revisit|try again|practice)\b/.test(normalized)) return false;
-  return /^(?:yes\s+)?(?:please\s+)?(?:review(?: it)?|go back|revisit(?: it)?|try again|practice it)(?:\s+please)?$/.test(normalized)
+  return /^(?:yes\s+)?(?:please\s+)?(?:review(?: it)?|go back|revisit(?: it)?|try again|practice it)(?:\s+(?:please|now))?$/.test(normalized)
     || /\bi (?:want|would like) to (?:review|go back|revisit|try again|practice)\b/.test(normalized);
 }
 
@@ -10166,8 +10166,9 @@ async function submitPipelineQuizReply(value = q("pipeline-quiz-reply")?.value, 
       const targetId = latest.assessment?.unresolvedOutcomeIds?.[0];
       const targetIndex = pipelineLessonOutcomes(selection).findIndex((outcome) => outcome.id === targetId);
       const reviewToken = makeId();
+      const previousAttempt = Number(labState.quiz.attempt || 0);
       labState.quiz.reviewToken = reviewToken;
-      labState.quiz.attempt = Number(labState.quiz.attempt || 0) + 1;
+      labState.quiz.attempt = previousAttempt + 1;
       labState.quiz.startedRunId = "";
       labState.quiz.startedMapKey = "";
       labState.quiz.completionMessage = "";
@@ -10184,6 +10185,7 @@ async function submitPipelineQuizReply(value = q("pipeline-quiz-reply")?.value, 
         const reviewCurrent = reviewOwned && pipelineConversationLineageIsCurrent(reviewLineage);
         if (reviewOwned) labState.quiz.reviewToken = "";
         if (!created && reviewCurrent) {
+          labState.quiz.attempt = previousAttempt;
           labState.quiz.reviewOutcomeId = "";
           setPipelineStage("quiz");
           setMessage("pipeline-quiz-output", "The review checkpoint did not reopen. Your Quiz result is unchanged; try “review it” again.", "error");
