@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=199">
+<link rel="stylesheet" href="./lab.css?v=203">
 </head>
 <body>
 
@@ -108,17 +108,18 @@
       <div id="mock-learner-progress" class="mock-learner-progress" hidden aria-label="Lesson chapters"></div>
       <main class="mock-learner-conversation">
         <ol id="mock-learner-transcript" class="mock-learner-transcript" aria-live="polite"></ol>
+        <input id="mock-learner-scroll" class="mock-learner-scroll" type="range" min="0" max="1000" value="1000" aria-label="Scroll conversation" hidden>
         <div id="mock-learner-waiting" class="mock-learner-waiting" hidden aria-hidden="true"><span></span><span></span><span></span></div>
       </main>
       <p id="mock-learner-status" class="mock-learner-status" role="status" aria-live="polite"></p>
       <footer id="mock-learner-composer" class="mock-learner-composer">
         <div id="mock-learner-text-controls" class="mock-learner-text-controls">
           <label class="sr-only" for="mock-learner-reply">Your message</label>
-          <textarea id="mock-learner-reply" rows="2" maxlength="2400" placeholder="What do you think?"></textarea>
+          <textarea id="mock-learner-reply" name="mock-learner-reply" autocomplete="off" data-1p-ignore data-lpignore="true" rows="2" placeholder="What do you think?"></textarea>
           <button id="mock-learner-send" class="mock-learner-send" type="button" aria-label="Send message">Send</button>
         </div>
         <div id="mock-learner-voice-controls" class="mock-learner-voice-controls" hidden>
-          <p id="mock-learner-recording-status" role="status" aria-live="polite">Hold, or tap the switch. Wait for the tone.</p>
+          <p id="mock-learner-recording-status" role="status" aria-live="polite">Hold the conversation to talk, or tap the switch. Wait for the tone.</p>
           <div class="mock-recording-row">
             <button id="mock-learner-ptt" class="mock-learner-ptt" type="button">Hold to talk</button>
             <button id="mock-learner-recording-toggle" class="mock-recording-toggle" type="button" role="switch" aria-label="Tap recording" aria-checked="false" aria-describedby="mock-learner-recording-status"><span class="mock-recording-lever" aria-hidden="true"></span><span data-recording-label>Tap to record</span></button>
@@ -127,6 +128,7 @@
         </div>
         <div class="mock-learner-utilities">
           <button id="mock-learner-map-progress" class="text-button mock-learner-map-progress" type="button" aria-controls="pipeline-extraction-map-dialog" aria-expanded="false" aria-haspopup="dialog" hidden>View Lesson Map progress</button>
+          <span id="mock-learner-source-numbers" class="mock-learner-source-numbers" aria-label="Numbered sources" hidden></span>
           <button id="mock-learner-sources" class="text-button" type="button" aria-controls="mock-learner-source-panel" aria-expanded="false" aria-haspopup="dialog" hidden>Sources</button>
         </div>
         <button id="mock-learner-retry" class="text-button mock-learner-retry" type="button" hidden>Try again</button>
@@ -203,7 +205,7 @@
           <div id="clarification-note-row" class="clarification-note-row" hidden><label for="clarification-note">Start from one of your Notes</label><select id="clarification-note"><option value="">Type a topic instead</option></select></div>
           <label for="clarification-topic">What do you want to learn?</label>
           <div class="clarification-topic-field">
-            <textarea id="clarification-topic" rows="3" maxlength="500" placeholder="Ramen&#10;How vaccines train the immune system&#10;Why cities develop where they do"></textarea>
+            <textarea id="clarification-topic" name="clarification-topic" autocomplete="off" data-1p-ignore data-lpignore="true" rows="3" maxlength="500" placeholder="Ramen&#10;How vaccines train the immune system&#10;Why cities develop where they do"></textarea>
             <button id="clarification-topic-mic" class="clarification-topic-mic" type="button" aria-label="Record lesson topic" aria-pressed="false" title="Tap to record your topic">
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M8.5 21h7"/></svg>
             </button>
@@ -241,7 +243,7 @@
           </div>
           <div id="clarification-text-controls" class="clarification-text-controls" hidden>
             <label class="sr-only" for="clarification-reply">Your reply</label>
-            <textarea id="clarification-reply" rows="2" maxlength="1200" placeholder="Tell it what interests you or ask for different ideas."></textarea>
+            <textarea id="clarification-reply" name="clarification-reply" autocomplete="off" data-1p-ignore data-lpignore="true" rows="2" placeholder="Tell it what interests you or ask for different ideas."></textarea>
             <button id="clarification-send" class="clarification-send button button-primary" type="button" hidden>Send</button>
           </div>
           <div class="clarification-voice-actions">
@@ -396,7 +398,7 @@
           <ol id="pipeline-extraction-transcript" class="extraction-transcript"></ol>
           <div id="pipeline-extraction-text-controls" class="extraction-composer">
             <label for="pipeline-extraction-reply">Your message</label>
-            <textarea id="pipeline-extraction-reply" rows="3" maxlength="1200" placeholder="Explain it in your own words. It is fine to be unsure."></textarea>
+            <textarea id="pipeline-extraction-reply" name="pipeline-extraction-reply" autocomplete="off" data-1p-ignore data-lpignore="true" rows="3" placeholder="Explain it in your own words. It is fine to be unsure."></textarea>
             <div class="inline-actions"><button id="pipeline-extraction-send" class="button button-primary" type="button" hidden>Send</button></div>
           </div>
           <div id="pipeline-extraction-voice-controls" class="extraction-voice-controls" hidden>
@@ -418,7 +420,7 @@
         <section id="pipeline-lesson-conversation" class="lesson-conversation" hidden>
           <div id="pipeline-lesson-route" class="lesson-route-context"></div>
           <ol id="pipeline-lesson-transcript" class="extraction-transcript lesson-transcript"></ol>
-          <div id="pipeline-lesson-text-controls" class="extraction-text-controls lesson-text-controls"><label class="sr-only" for="pipeline-lesson-reply">Your reply</label><textarea id="pipeline-lesson-reply" rows="3" maxlength="1200" placeholder="Write what you think, predict, or notice."></textarea><button id="pipeline-lesson-send" class="button button-primary" type="button" hidden>Send</button></div>
+          <div id="pipeline-lesson-text-controls" class="extraction-text-controls lesson-text-controls"><label class="sr-only" for="pipeline-lesson-reply">Your reply</label><textarea id="pipeline-lesson-reply" name="pipeline-lesson-reply" autocomplete="off" data-1p-ignore data-lpignore="true" rows="3" placeholder="Write what you think, predict, or notice."></textarea><button id="pipeline-lesson-send" class="button button-primary" type="button" hidden>Send</button></div>
           <div id="pipeline-lesson-voice-controls" class="extraction-voice-controls lesson-voice-controls" hidden><p class="extraction-voice-hint">Hold, wait for the tone, then talk. Release to transcribe and send.</p><button id="pipeline-lesson-ptt" class="extraction-ptt" type="button">Hold to talk</button><div class="inline-actions"><button id="pipeline-lesson-hear" class="button button-quiet" type="button" hidden>Hear last reply</button></div></div>
           <p id="pipeline-lesson-routing" class="privacy-note">Worldview will check each reply before deciding whether to keep teaching this idea or move to the next one.</p>
           <div class="lesson-conversation-actions"><button id="pipeline-lesson-next" class="button button-quiet" type="button" hidden>Next section</button></div>
@@ -435,7 +437,7 @@
         <section id="pipeline-quiz-conversation" class="lesson-conversation quiz-conversation">
           <div id="pipeline-quiz-route" class="lesson-route-context"></div>
           <ol id="pipeline-quiz-transcript" class="extraction-transcript lesson-transcript"></ol>
-          <div id="pipeline-quiz-text-controls" class="extraction-text-controls lesson-text-controls"><label class="sr-only" for="pipeline-quiz-reply">Your reply</label><textarea id="pipeline-quiz-reply" rows="3" maxlength="2400" placeholder="Explain what you learned as if you were teaching a curious beginner."></textarea><button id="pipeline-quiz-send" class="button button-primary" type="button" hidden>Send</button></div>
+          <div id="pipeline-quiz-text-controls" class="extraction-text-controls lesson-text-controls"><label class="sr-only" for="pipeline-quiz-reply">Your reply</label><textarea id="pipeline-quiz-reply" name="pipeline-quiz-reply" autocomplete="off" data-1p-ignore data-lpignore="true" rows="3" placeholder="Explain what you learned as if you were teaching a curious beginner."></textarea><button id="pipeline-quiz-send" class="button button-primary" type="button" hidden>Send</button></div>
           <div id="pipeline-quiz-voice-controls" class="extraction-voice-controls lesson-voice-controls" hidden><p class="extraction-voice-hint">Hold, wait for the tone, then talk. Release to transcribe and send.</p><button id="pipeline-quiz-ptt" class="extraction-ptt" type="button">Hold to talk</button><div class="inline-actions"><button id="pipeline-quiz-hear" class="button button-quiet" type="button" hidden>Hear last reply</button></div></div>
         </section>
         <details class="extraction-backend"><summary>Quiz backend evidence</summary><p class="privacy-note">The assessor receives only the frozen Lesson Map and this Quiz's learner answers. Extraction and the guided Lesson transcript are deliberately excluded from scoring.</p><pre id="pipeline-quiz-validated">No Quiz assessment yet.</pre><pre id="pipeline-quiz-raw" hidden></pre><pre id="pipeline-quiz-packet" hidden></pre></details>
@@ -688,7 +690,7 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=199" defer></script>
+<script src="./lab.js?v=203" defer></script>
 </body>
 </html>
 

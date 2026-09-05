@@ -1762,3 +1762,19 @@ body.mock-setup #lab-voice-settings { order:-1; }
 .lab-evidence-fold { margin:14px 0; padding:14px; border:1px solid var(--lab-line); border-radius:12px; }
 .lab-evidence-fold>summary { cursor:pointer; color:var(--lab-muted); }
 .lab-evidence-fold>section { margin-top:14px; }
+
+/* One stable voice surface above the composer; dialogs own their gestures. */
+body.mock-learner-shell-active #panel-pipeline { inset:auto; top:var(--lab-viewport-top,0px); left:var(--lab-viewport-left,0px); }
+.mock-learner-shell[data-voice="true"] { touch-action:none; user-select:none; -webkit-user-select:none; }
+.mock-learner-shell[data-voice="true"] .mock-learner-transcript { touch-action:none; padding-right:max(48px,calc((100vw - 760px)/2)); }
+.mock-learner-shell[data-voice="true"] #mock-learner-ptt { display:none; }
+.mock-learner-shell[data-voice="true"] .mock-recording-row { justify-content:center; }
+.mock-learner-shell .extraction-map-dialog, .mock-learner-source-panel, .mock-learner-composer { touch-action:pan-y; user-select:text; -webkit-user-select:text; }
+.mock-learner-transcript { box-sizing:border-box; overflow-wrap:anywhere; }
+.mock-learner-shell[data-voice="true"] .mock-learner-transcript { scrollbar-width:none; }
+.mock-learner-shell[data-voice="true"] .mock-learner-transcript::-webkit-scrollbar { display:none; }
+.mock-learner-scroll { position:absolute; inset:16px 4px 16px auto; width:36px!important; height:calc(100% - 32px); margin:0!important; padding:0!important; writing-mode:vertical-lr; direction:ltr; appearance:auto; accent-color:#a09aa4; touch-action:none; cursor:ns-resize; }
+.mock-learner-scroll[hidden], .mock-learner-source-numbers[hidden] { display:none!important; }
+.mock-learner-source-numbers { display:inline-flex; gap:6px; flex-wrap:wrap; }
+.mock-learner-source-numbers a { display:grid; place-items:center; min-width:32px; min-height:32px; border:1px solid #78e5c055; border-radius:50%; color:#9cebd0; font-size:12px; text-decoration:none; }
+@media(max-width:380px) { .mock-learner-header h2 { font-size:1.05rem; } .mock-learner-header { justify-content:flex-start; padding-left:62px; } }
