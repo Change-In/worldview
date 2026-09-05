@@ -2200,11 +2200,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v1.2.5 · Sep 5";
+const BUILD = "v1.2.6 · Sep 5";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag:"v1.2.6", date:"Sep 5", changes:["Continuing a saved Tutor or Quiz restores missing map references from that exact lesson’s saved work.","New checkpoints save the actual selected map, including maps chosen automatically in the background.","Includes the completed handoff, answer organization, Gemini defaults and measured research costs."] },
   { tag:"v1.2.5", date:"Sep 5", changes:["Saved broad Extraction now enters Tutor against its verified same-lesson map.","Your extracted answers render under the chapter and outcome they relate to.","Research cost uses recorded sample usage once, with older attempt costs marked unknown.","Research notes are bounded within the existing budget to improve completion."] },
   { tag:"v1.2.4", date:"Sep 5", changes:["Introduction appears once; returning learners go straight Home.","Gemini 3.8 Flash defaults, restored research history and bounded research recovery.","The Mock map shows where your answers fit and measured research usage.","Handoff failures retain their precise recovery reason."] },
   { tag:"v1.2.3", date:"Sep 5", changes:["Restored the missing shared-audio bridge that prevented Voice from opening in saved Mock lessons.","Includes the recovered-provider and editable-draft repairs from 1.2.2."] },

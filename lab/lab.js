@@ -14289,15 +14289,29 @@ function sanitizeMockResume(value) {
   };
 }
 
+function recoverMockResumeMap(resume) {
+  if (!resume || !["lesson", "quiz"].includes(resume.stage) || (resume.mapJobId && resume.mapRecordId)) return resume;
+  // Recover missing legacy references from this exact stage's saved work,
+  // never from whichever unrelated/newer map happens to be selected today.
+  const job = labState.jobs.filter((item) => item.scenario?.pipelineRunId === resume.runId
+    && item.scenario?.pipelineStage === resume.stage && item.scenario?.sourceMapJobId && item.scenario?.sourceMapRecordId
+    && (!resume.mapJobId || item.scenario.sourceMapJobId === resume.mapJobId)
+    && (!resume.mapRecordId || item.scenario.sourceMapRecordId === resume.mapRecordId))
+    .sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0))[0];
+  return job ? { ...resume, mapJobId:job.scenario.sourceMapJobId, mapRecordId:job.scenario.sourceMapRecordId } : resume;
+}
+
 function currentMockResume() {
   if (labState.resumeRestoring || labState.pipelineMode !== "mock" || !["map", "extraction", "lesson", "quiz"].includes(labState.pipelineStage)) return null;
   const runId = clip(labState.pipelineSelectedRunId || labState.clarification.finalized?.runId, 120);
   if (!runId || !labState.clarificationArtifacts.some((artifact) => artifact?.runId === runId)) return null;
+  const artifact = labState.clarificationArtifacts.find((item) => item.runId === runId);
+  const selection = selectedPipelineMapRecord(artifact);
   return sanitizeMockResume({
     runId,
     stage:labState.pipelineStage,
-    mapJobId:labState.pipelineSelectedMapJobId,
-    mapRecordId:labState.pipelineSelectedMapRecordId,
+    mapJobId:selection?.job?.id || labState.pipelineSelectedMapJobId,
+    mapRecordId:selection?.recordKey || labState.pipelineSelectedMapRecordId,
     mapDeferred:labState.extraction.mapDeferredRunId === runId,
     mapPending:labState.extraction.preMapRunId === runId,
     extractionAttempt:Math.max(0, Number(labState.extraction.activeAttempt || 0) || 0),
@@ -15721,7 +15735,7 @@ function initializeClarification() {
 }
 
 async function resumeSavedMockRun(resumeValue = labState.pendingMockResume) {
-  const resume = sanitizeMockResume(resumeValue);
+  const resume = recoverMockResumeMap(sanitizeMockResume(resumeValue));
   if (!resume) return false;
   const restoreToken = makeId();
   const restoreOwnerId = labState.workspaceOwnerId || labState.verifiedUserId
