@@ -10494,6 +10494,17 @@ function retryablePipelineExtractionTurn(artifact = selectedPipelineArtifact()) 
   return { latest, detail, sample, record };
 }
 
+function extractionRecoveryProvider(failed, artifact) {
+  const sample = failed.sample;
+  const original = { provider:sample.provider || pipelineExtractionProvider(artifact).provider, model:sample.model || pipelineExtractionProvider(artifact).model };
+  const errors = [sample.error, failed.latest.error, ...(failed.detail.attempts || []).map(attempt => attempt.error || { message:attempt.errorMessage })];
+  const billingBlocked = errors.some(error => /credit balance.*too low|insufficient.quota|insufficient.*credit|billing.hard.limit|payment.required/i.test(`${error?.type || ""} ${error?.message || ""}`));
+  if (!billingBlocked || labState.pipelineMode !== "mock") return original;
+  const configured = labState.mockRunConfig?.extraction;
+  const replacement = configured?.provider && configured.provider !== original.provider ? configured : MOCK_STAGE_DEFAULTS.extraction;
+  return replacement.provider !== original.provider ? { provider:replacement.provider, model:replacement.model } : original;
+}
+
 async function retryLatestPipelineExtractionTurn(options) {
   options = options || {};
   const automatic = options.automatic === true;
@@ -10514,8 +10525,7 @@ async function retryLatestPipelineExtractionTurn(options) {
   const originalMetadata = { ...(originalRequest.metadata || {}), ...(sample.metadata || {}) };
   const responseSchemaId = originalMetadata.responseSchemaId
     || (latest.scenario?.extractionPass === "map-aware" ? "extraction_map_reply_v1" : "extraction_broad_reply_v1");
-  const provider = sample.provider || pipelineExtractionProvider(artifact).provider;
-  const model = sample.model || pipelineExtractionProvider(artifact).model;
+  const { provider, model } = extractionRecoveryProvider(failed, artifact);
   const idempotencyKey = conversationRequestKey("extraction-turn-retry", {
     runId:artifact.runId,
     failedJobId:latest.id,
@@ -10577,6 +10587,10 @@ async function retryLatestPipelineExtractionTurn(options) {
   try {
     const created = await boundedLabConversationCreate(request);
     if (!created?.job?.id) throw new Error("The server did not return a saved Extraction retry job id.");
+    if (pipelineConversationLineageIsCurrent(lineage) && labState.mockRunActiveConfig?.extraction) {
+      Object.assign(labState.mockRunActiveConfig.extraction, { provider, model });
+      persistClarificationSettings();
+    }
     upsertJob(created.job);
     scheduleJobPoll();
     return true;
@@ -12231,7 +12245,8 @@ async function switchPipelineExtractionConversationMode() {
     return;
   }
   setPipelineExtractionConversationMode("voice");
-  await requestPipelineExtractionVoice();
+  primePipelineExtractionAudio();
+  setMessage(pipelineVoiceStatusId(), "Voice selected. Hold or tap Record when you are ready; microphone permission is requested then.");
 }
 
 function pipelineConversationLineage(stage = labState.pipelineStage, captureGeneration = null) {
@@ -12852,7 +12867,7 @@ function mockRecordingControlState() {
   const ready = mockCarConversationReady() && state.mode === "voice" && !document.hidden;
   const derived = mockCarDerivedStatus();
   const shell = q("mock-learner-shell");
-  const conversationBlocked = shell && !shell.hidden && q("mock-learner-reply")?.disabled;
+  const conversationBlocked = shell && !shell.hidden && (q("mock-learner-reply")?.disabled || q("mock-learner-reply")?.dataset.replyBlocked === "true");
   const blocked = !ready || conversationBlocked || state.saveBusy || state.modeSwitching
     || derived.status === "thinking" || derived.status === "transcribing";
   const holdActive = !latched && Boolean(state.recordingPointerStartedAt || state.recordingPointerActive || state.micAcquirePromise || state.recorder?.state === "recording");
@@ -13565,7 +13580,9 @@ function renderMockLearnerShell() {
   const resumeReadBlocked = labState.mockResumeReadError?.runId === artifact?.runId && labState.mockResumeReadError?.stage === stage;
   const inputBlocked = stageBusy || lessonReplyUnavailable || phaseReplyUnavailable || resumeReadBlocked
     || (["extraction", "lesson"].includes(stage) && Boolean(pendingPipelineConversationCreate(stage, artifact, selection)));
-  input.disabled = inputBlocked;
+  // A failed or pending model reply blocks sending, never writing a draft.
+  input.disabled = false;
+  input.dataset.replyBlocked = String(inputBlocked);
   send.disabled = inputBlocked || !input.value.trim();
   textControls.hidden = mode === "voice";
   voiceControls.hidden = mode !== "voice";

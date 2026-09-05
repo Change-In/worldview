@@ -2200,11 +2200,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v1.2.1 · Sep 5";
+const BUILD = "v1.2.2 · Sep 5";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag:"v1.2.2", date:"Sep 5", changes:["Recover saved Extraction replies when the original provider has run out of credit, using the current alternate model and the same conversation.","You can write a draft while a reply is unavailable. Sending waits for recovery.","Voice mode no longer requires a microphone preflight; permission is requested when recording starts."] },
   { tag:"v1.2.1", date:"Sep 5", changes:["Continuing a Mock run checks the saved latest reply before reopening the conversation.","Hold-to-talk follows the same ready-to-reply rules as the recording switch.","Releasing or cancelling microphone startup unlocks the controls; stalled microphone requests time out safely.","Retrying a successful transcription reuses your words, and model-reply recovery stays visible.","Version numbering now follows 1.2.1; 2.1 is reserved for bringing the proven Mock flow into the main app."] },
   { tag: "v209", date: "Sep 5", changes: ["Mock lessons now use warmer cards and a subtle matte scroll wheel.","Extraction has no chapter banner; Tutor shows only the current chapter title.","Keyboard focus recovery avoids moving the page after you leave the reply box.","Routine library loading uses a small spinner. Hover or tap for details; recovery messages remain available."] },
   { tag: "v208", date: "Sep 4", changes: ["Roll the small wheel on the right to scroll your Mock conversation, with gentle movement for precise reading.","Every new message returns the conversation to the bottom; background updates keep your reading position."] },
