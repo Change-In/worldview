@@ -2246,7 +2246,10 @@ function mockStageStatus(stage, artifact = selectedPipelineArtifact()) {
   }
   if (stage === "map" && artifact) {
     const mapState = pipelineExtractionMapViewState(artifact);
-    if (mapState.state === "ready") return "Complete";
+    if (mapState.state === "ready") {
+      const progress = mapState.selection?.meta?.workflowOutcomeProgress;
+      return progress && progress.supported < progress.total ? `Research ${progress.supported}/${progress.total}` : "Complete";
+    }
     if (mapState.state === "working") return "Running in background";
     if (mapState.state === "loading") return "Loading result";
     if (mapState.state === "needs-attention") return "Needs review";
@@ -2290,6 +2293,10 @@ function mockStageDiagnostic(stage, artifact = selectedPipelineArtifact()) {
 }
 
 function mockStageActualCost(stage, artifact = selectedPipelineArtifact()) {
+  if (stage === "map") {
+    const spend = mapResearchSpend(artifact);
+    return spend.measured ? spend.tokenCost : null;
+  }
   const jobs = mockStageJobs(stage, artifact);
   const acceptedRoles = stage === "lesson" ? new Set(["talker"])
     : stage === "brain" ? new Set(["brain", "assessor"])
@@ -2436,7 +2443,7 @@ function renderMockRunConfig() {
     if (actualCost !== null) hasActual = true;
     else if (cost !== null) hasEstimate = true;
     const meta = element("div", { className: "mock-run-stage-meta" });
-    const costLabel = cost === null ? "Estimate unavailable" : `${actualCost !== null ? "Actual" : "Estimate"} ${formatCost(cost).replace("Estimated ", "")}`;
+    const costLabel = cost === null ? "Estimate unavailable" : `${actualCost !== null ? "Recorded estimate" : "Estimate"} ${formatCost(cost).replace("Estimated ", "")}`;
     const visibleStatus = stage === "map" && artifact && !savedMockRunMapContext({ runId:artifact.runId, artifact }).selection ? "Not ready for Tutor" : mockStageStatus(stage, artifact);
     meta.append(element("span", { text: visibleStatus }), element("strong", { text: costLabel }));
     advanced.append(outputLabel);
@@ -2448,7 +2455,7 @@ function renderMockRunConfig() {
     if (outputSummary) advanced.append(element("small", { className: "mock-run-stage-output", text: `Latest output · ${outputSummary}` }));
     root.append(card);
   }
-  const totalLabel = hasCost ? (hasActual && !hasEstimate ? "Actual total" : "Total estimate") : "Estimate unavailable";
+  const totalLabel = hasCost ? (hasActual && !hasEstimate ? "Recorded estimate" : "Total estimate") : "Estimate unavailable";
   q("lab-all-models")?.setAttribute("aria-pressed", String(Boolean(labState.workspaceAllModels)));
   q("mock-run-total-cost").textContent = hasCost ? `${totalLabel} ${formatCost(total).replace("Estimated ", "")}` : totalLabel;
   const status = q("mock-run-live-status");
@@ -9086,10 +9093,12 @@ function renderExtractionOrganizationPreview(artifact = selectedPipelineArtifact
       const row = element("div", { className:"extraction-organization-outcome" });
       row.append(element("small", { text:`${outcome.number} · ${outcome.outcome}` }));
       if (outcome.mapAwareMatches.length || outcome.lexicalMatches.length) {
-        row.append(element("ul", {}, [
+        const matches = element("ul");
+        matches.append(
           ...outcome.mapAwareMatches.map((match) => element("li", { text:`Map-Aware answer · You: ${match.text}` })),
           ...outcome.lexicalMatches.map((match) => element("li", { text:`Broad word match · You: ${match.text}` })),
-        ]));
+        );
+        row.append(matches);
       } else row.append(element("span", { text:"No related learner wording captured yet." }));
       section.append(row);
     }
@@ -11250,16 +11259,19 @@ function mapResearchSpend(artifact = selectedPipelineArtifact()) {
     if (!detail) { unknown += 1; continue; }
     for (const sample of detail.samples || []) {
       const attempts = (detail.attempts || []).filter((attempt) => String(attempt.sampleId || attempt.sample_id) === String(sample.id));
-      const records = attempts.length ? attempts : [sample];
+      const records = attempts.length ? [...attempts].sort((a, b) => Number(a.attemptNo || 0) - Number(b.attemptNo || 0)) : [sample];
       for (const record of records) {
-        const result = record.result || {};
-        const input = numeric(record.inputTokens ?? result.inputTokens);
-        const output = numeric(record.outputTokens ?? result.outputTokens);
+        // The server stores usage on the latest sample, not every attempt.
+        // Assign it once to the matching last attempt; older usage is unknown.
+        const latestSample = record === records.at(-1) && record.status === sample.status ? sample : {};
+        const result = record.result || latestSample.result || {};
+        const input = numeric(record.inputTokens ?? result.inputTokens ?? latestSample.inputTokens);
+        const output = numeric(record.outputTokens ?? result.outputTokens ?? latestSample.outputTokens);
         const cost = estimateTextCost(sample.model, input, output);
         if (cost === null) unknown += 1;
         else { tokenCost += cost; measured += 1; }
         if (job.scenario?.pipelineStage === "map_research" || sample.request?.research) {
-          const count = numeric(record.searches ?? result.searches);
+          const count = numeric(record.searches ?? result.searches ?? latestSample.searches);
           if (count === null) searchUnknown += 1;
           else searches += count;
         }
