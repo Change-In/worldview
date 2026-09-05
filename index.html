@@ -2200,11 +2200,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v1.2.3 · Sep 5";
+const BUILD = "v1.2.4 · Sep 5";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag:"v1.2.4", date:"Sep 5", changes:["Introduction appears once; returning learners go straight Home.","Gemini 3.8 Flash defaults, restored research history and bounded research recovery.","The Mock map shows where your answers fit and measured research usage.","Handoff failures retain their precise recovery reason."] },
   { tag:"v1.2.3", date:"Sep 5", changes:["Restored the missing shared-audio bridge that prevented Voice from opening in saved Mock lessons.","Includes the recovered-provider and editable-draft repairs from 1.2.2."] },
   { tag:"v1.2.2", date:"Sep 5", changes:["Recover saved Extraction replies when the original provider has run out of credit, using the current alternate model and the same conversation.","You can write a draft while a reply is unavailable. Sending waits for recovery.","Voice mode no longer requires a microphone preflight; permission is requested when recording starts."] },
   { tag:"v1.2.1", date:"Sep 5", changes:["Continuing a Mock run checks the saved latest reply before reopening the conversation.","Hold-to-talk follows the same ready-to-reply rules as the recording switch.","Releasing or cancelling microphone startup unlocks the controls; stalled microphone requests time out safely.","Retrying a successful transcription reuses your words, and model-reply recovery stays visible.","Version numbering now follows 1.2.1; 2.1 is reserved for bringing the proven Mock flow into the main app."] },
@@ -3928,7 +3929,7 @@ async function completeLegacyRecovery(choice) {
   accountCacheReadOnly = false;
   cloudSyncReady = true;
   applyTheme();renderHome();renderProfile();updateCloudAccountUI(choice === "import" ? "imported" : "synced");renderAccountGuardUI();
-  if (state.introSeenVersion === INTRO_VERSION && $("intro-demo")?.classList.contains("open")) setIntroOpen(false);
+  if (Boolean(state.introSeenVersion) && !introPresentedThisBoot && $("intro-demo")?.classList.contains("open")) setIntroOpen(false);
   if (choice === "import") scheduleCloudSync(80);
   toast(choice === "import" ? "This device's earlier library is now part of this verified account." : "Started fresh. The earlier device library was not added to this account.",6500);
   return true;
@@ -4297,7 +4298,7 @@ async function initCloudPersistence() {
     applyTheme();
     renderHome();
     renderProfile();
-    if (accountOwnershipResolved && state.introSeenVersion === INTRO_VERSION && $("intro-demo")?.classList.contains("open")) setIntroOpen(false);
+    if (accountOwnershipResolved && Boolean(state.introSeenVersion) && !introPresentedThisBoot && $("intro-demo")?.classList.contains("open")) setIntroOpen(false);
     updateCloudAccountUI(hasRemote ? "synced" : "");
     renderAccountGuardUI();
     reconcileAccountEntry();
@@ -16083,6 +16084,7 @@ $("settings-save").onclick = () => {
 
 /* ================= One-screen introduction ================= */
 const INTRO_VERSION = "intro-v5";
+let introPresentedThisBoot = false;
 const MIC_PRIMER_VERSION = "mic-primer-v1";
 let micPrimerRequestGeneration = 0;
 let micPrimerRequestTimer = 0;
@@ -16197,7 +16199,8 @@ function setIntroOpen(open,remember = false) {
   intro.setAttribute("aria-hidden",open ? "false" : "true");
   intro.inert = !open;
   document.querySelectorAll(".view").forEach(view => { view.inert = open; });
-  if (remember) { state.introSeenVersion = INTRO_VERSION; save(); }
+  if (open) introPresentedThisBoot = true;
+  if ((open || remember) && !state.introSeenVersion) { state.introSeenVersion = INTRO_VERSION; save(); }
   if (open) {
     updateInstallHelp();
     updateCloudAccountUI();
@@ -16266,7 +16269,7 @@ function finishIdentityBootstrap() {
      but it is also not a new visitor. Keep its scoped cache read-only and keep
      onboarding/recovery prompts closed while the secure-session retry runs. */
   if (accountIdentityHeldForRetry() || accountCacheReadOnly) return;
-  const introNeeded = state.introSeenVersion !== INTRO_VERSION;
+  const introNeeded = !state.introSeenVersion && !hasLearnerLibrary(state);
   if (introNeeded) setTimeout(() => setIntroOpen(true),80);
 }
 

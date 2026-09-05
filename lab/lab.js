@@ -109,17 +109,17 @@ const LAB_MODEL_RATES = {
   "grok-4-1-fast": { input: 0.2, output: 0.5 },
   "grok-3-mini": { input: 0.3, output: 0.5 },
 };
-const MOCK_RUN_CONFIG_KEY = "worldview-lab-mock-run-config-v1";
+const MOCK_RUN_CONFIG_KEY = "worldview-lab-mock-run-config-gemini38-v2";
 const MOCK_BOUNDARY_CONFIG_KEY = "worldview-lab-mock-clarification-boundaries-v1";
 const MOCK_SCRIPTED_OPENING = "What first made [topic] feel worth exploring: something you heard, a problem you noticed, or a question that keeps returning?";
 const MOCK_SCRIPTED_FINAL = "Before we continue, is there anything you want to add or change?";
 const MOCK_STAGE_DEFAULTS = Object.freeze({
-  clarification:{ provider:"openai", model:"gpt-5.6-luna", outputTokens:1800, research:false, effort:"low" },
-  map:{ provider:"openai", model:"gpt-5.6-luna", outputTokens:16000, research:true, effort:"low" },
-  extraction:{ provider:"openai", model:"gpt-5.6-luna", outputTokens:1200, research:false, effort:"low" },
-  lesson:{ provider:"openai", model:"gpt-5.6-luna", outputTokens:900, research:false, effort:"low" },
-  brain:{ provider:"openai", model:"gpt-4.1-mini", outputTokens:420, research:false, effort:"low" },
-  quiz:{ provider:"openai", model:"gpt-5.6-luna", outputTokens:900, research:false, effort:"low" },
+  clarification:{ provider:"google", model:"gemini-3.8-flash", outputTokens:1800, research:false, effort:"low" },
+  map:{ provider:"google", model:"gemini-3.8-flash", outputTokens:16000, research:true, effort:"low" },
+  extraction:{ provider:"google", model:"gemini-3.8-flash", outputTokens:1200, research:false, effort:"low" },
+  lesson:{ provider:"google", model:"gemini-3.8-flash", outputTokens:900, research:false, effort:"low" },
+  brain:{ provider:"google", model:"gemini-3.8-flash", outputTokens:420, research:false, effort:"low" },
+  quiz:{ provider:"google", model:"gemini-3.8-flash", outputTokens:900, research:false, effort:"low" },
 });
 
 /* Rough pre-flight sizing. ~4 characters per token is the usual English
@@ -1985,7 +1985,7 @@ function numeric(value) {
 }
 
 function estimateTextCost(model, inputTokens, outputTokens) {
-  const rate = LAB_MODEL_RATES[model];
+  const rate = model === "gemini-3.8-flash" && Date.now() >= Date.UTC(2027, 0, 1) ? { input:1.5, output:7.5 } : LAB_MODEL_RATES[model];
   const input = numeric(inputTokens);
   const output = numeric(outputTokens);
   if (!rate || input === null || output === null) return null;
@@ -2044,9 +2044,9 @@ function formatCost(value) {
 
 const MOCK_RUN_STAGES = ["clarification", "map", "extraction", "lesson", "brain", "quiz"];
 // ChatGPT has no provable web search on this route, so a Map planned on it
-// hands chapter research to the cheapest Gemini model that can search and
+// hands chapter research to the requested Gemini default, which can search and
 // return the structured evidence schema. Any other planner keeps its own route.
-const MOCK_RESEARCH_ROUTE = Object.freeze({ provider:"google", model:"gemini-3.5-flash-lite" });
+const MOCK_RESEARCH_ROUTE = Object.freeze({ provider:"google", model:"gemini-3.8-flash" });
 const MOCK_EFFORT_LEVELS = Object.freeze(["low", "medium", "high"]);
 function mockResearchRoute(plannerProvider, plannerModel) {
   return plannerProvider === "openai" ? MOCK_RESEARCH_ROUTE : { provider:plannerProvider, model:plannerModel };
@@ -4853,6 +4853,10 @@ function syncJobDetail(detail, { deferUi = false } = {}) {
   if (!job) return false;
   labState.jobDetails.set(job.id, detail);
   if (job.scenario?.pipelineStage === "map_planner" && job.status === "completed") void ensurePipelineMapChapterResearch(job, selectedPipelineArtifact());
+  if (job.scenario?.pipelineStage === "map_research" && !LAB_ACTIVE_JOB_STATES.has(job.status)) {
+    const planner = labState.jobs.find((item) => item.id === job.scenario.plannerJobId);
+    if (planner) void ensurePipelineMapChapterResearch(planner, selectedPipelineArtifact());
+  }
   const samples = Array.isArray(detail.samples) ? detail.samples : [];
   const attempts = Array.isArray(detail.attempts) ? detail.attempts : [];
   const attemptsBySample = new Map();
@@ -4956,9 +4960,20 @@ async function refreshJobs() {
   q("jobs-status").textContent = "Refreshing…";
   const expectedUserId = labState.verifiedUserId;
   try {
-    const payload = await boundedLabJobRead({ action:"list" }, { expectedUserId });
-    if (labState.verifiedUserId !== expectedUserId) return;
-    labState.jobs = (Array.isArray(payload.jobs) ? payload.jobs : []).map(normalizeJob).filter(Boolean);
+    const collected = new Map();
+    let cursor = null;
+    for (let page = 0; page < 100; page += 1) {
+      const payload = await boundedLabJobRead({ action:"list", ...(cursor ? { cursor } : {}) }, { expectedUserId });
+      if (labState.verifiedUserId !== expectedUserId) return;
+      for (const raw of Array.isArray(payload.jobs) ? payload.jobs : []) {
+        const job = normalizeJob(raw);
+        if (job) collected.set(job.id, job);
+      }
+      cursor = payload.nextCursor || null;
+      if (!cursor) break;
+      if (page === 99) throw new Error("History exceeds this load limit. Existing saved work was preserved.");
+    }
+    labState.jobs = [...collected.values()];
     labState.jobUiDirty = true;
     q("jobs-status").textContent = `${labState.jobs.length} recent job${labState.jobs.length === 1 ? "" : "s"}`;
     scheduleJobUiReconcile();
@@ -6567,7 +6582,7 @@ async function beginLessonFromExtractionVoiceOrText() {
       if (!handoffIsCurrent()) return false;
       if (!selectedPipelineExtractionArtifact(artifact)) {
         labState.extraction.lessonHandoffFailureKey = handoffKey;
-        labState.extraction.lessonHandoffFailureMessage = "Your request to begin is saved, but the conversation handoff could not be saved. Retry when you are ready; your answers have not been restarted.";
+        labState.extraction.lessonHandoffFailureMessage = labState.extraction.lastSaveError || "Your request to begin is saved, but the conversation handoff could not be saved. Retry when you are ready; your answers have not been restarted.";
         persistClarificationSettings();
         return false;
       }
@@ -7717,7 +7732,7 @@ async function ensurePipelineMapChapterResearch(plannerJob, artifact = selectedP
     chapters:plannerMap.chapters,
   }));
   const plannerSample = plannerRecord.sample || labState.jobDetails.get(plannerJob.id)?.samples?.[0] || {};
-  const plannerRoute = { provider: plannerSample.provider || mockStageConfig("map").provider, model: plannerSample.model || mockStageConfig("map").model };
+  const plannerRoute = mockStageConfig("map");
   const { provider, model } = mockResearchRoute(plannerRoute.provider, plannerRoute.model);
   const requests = [];
   const pendingIds = new Set();
@@ -7733,7 +7748,9 @@ async function ensurePipelineMapChapterResearch(plannerJob, artifact = selectedP
       const candidates = state.candidates.filter((job) => !job.scenario?.researchOutcomeIds?.length || job.scenario.researchOutcomeIds.includes(outcome.id));
       if (candidates.some((job) => LAB_ACTIVE_JOB_STATES.has(job.status))) continue;
       const key = pipelineMapResearchCreateKey(plannerJob.id, planFingerprint, chapter.id, [outcome.id]);
-      if (!retryMissing && (candidates.length || labState.mapResearchCreateFailures?.has(key))) continue;
+      // One automatic recovery per outcome/route, then a visible manual retry.
+      const routeAttempts = candidates.filter((job) => labState.jobDetails.get(job.id)?.samples?.some((sample) => sample.provider === provider && sample.model === model));
+      if (!retryMissing && (routeAttempts.length >= 2 || labState.mapResearchCreateFailures?.has(key))) continue;
       const previous = candidates[0];
       const previousSample = previous ? labState.jobDetails.get(previous.id)?.samples?.[0] : null;
       if (previous && !previousSample?.request) { ensurePipelineMapDetail(previous); continue; }
@@ -7777,8 +7794,9 @@ async function ensurePipelineMapChapterResearch(plannerJob, artifact = selectedP
         },
         samples:[{
           clientSampleId:`${artifact.runId}:map-research:${chapter.id}:${outcome.id}`,
-          provider:previousSample?.provider || provider,
-          model:previousSample?.model || model,
+          provider,
+          model,
+          effort:"low",
           system,
           messages:[{ role:"user", content:`Research only the outcomes listed in chapter.outcomes. chapterContext contains the complete locked chapter for context, not extra outcomes to return. Echo planFingerprint and chapterId exactly in the response.\n${chapterPacket}` }],
           maxTokens:PIPELINE_MAP_RESEARCH_MAX_TOKENS,
@@ -7808,7 +7826,7 @@ async function ensurePipelineMapChapterResearch(plannerJob, artifact = selectedP
         }
         request.samples = [{
           ...saved, clientSampleId:request.samples[0].clientSampleId,
-          provider:previousSample.provider, model:previousSample.model,
+          provider, model, effort:"low",
           metadata:JSON.parse(JSON.stringify(metadata)),
         }];
       }
@@ -9055,7 +9073,7 @@ function renderExtractionOrganizationPreview(artifact = selectedPipelineArtifact
   const preview = extractionOrganizationPreview(artifact, selection);
   if (!preview) return null;
   const details = element("details", { className:"extraction-organization-preview" });
-  details.append(element("summary", { text:"Extraction organized by this map’s chapters (unverified)" }));
+  details.append(element("summary", { text:"Where your ideas fit in this lesson" }));
   if (preview.empty) {
     details.append(element("p", { text:"No Extraction learner messages exist for this exact map yet. Start its Extraction conversation; save it when you want this to become the immutable Lesson input." }));
     return details;
@@ -10444,6 +10462,7 @@ async function savePipelineExtractionConversation() {
     renderPipelineExtraction();
     return;
   }
+  labState.extraction.lastSaveError = "";
   labState.extraction.saveBusy = true;
   const saveToken = makeId();
   const expectedUserId = labState.verifiedUserId;
@@ -10464,7 +10483,9 @@ async function savePipelineExtractionConversation() {
     if (error?.type === "artifact_save_timeout" && rememberExtractionArtifact(snapshot, "device")) {
       setMessage("pipeline-extraction-output", "The private server save took too long, so this exact Map-bound conversation was saved on this device for the signed-in account. Its original job history remains unchanged.", "ok");
     } else {
-      setMessage("pipeline-extraction-output", `The conversation is still in the protected job history, but its reusable snapshot was not saved: ${clip(error.message, 150)}`, "error");
+      labState.extraction.lastSaveError = `Your answers are saved. The lesson handoff needs a retry: ${clip(error.message, 220)}`;
+      labState.extraction.lessonHandoffFailureMessage = labState.extraction.lastSaveError;
+      setMessage("pipeline-extraction-output", labState.extraction.lastSaveError, "error");
     }
   } finally {
     if (saveIsCurrent()) {
@@ -11220,6 +11241,44 @@ function renderPipelineExtractionProgress(artifact = selectedPipelineArtifact())
   if (mapState.job && !mapState.detail) ensurePipelineMapDetail(mapState.job);
 }
 
+function mapResearchSpend(artifact = selectedPipelineArtifact()) {
+  const jobs = labState.jobs.filter((job) => artifact?.runId && job.scenario?.pipelineRunId === artifact.runId
+    && ["map", "map_planner", "map_research"].includes(job.scenario?.pipelineStage));
+  let tokenCost = 0, measured = 0, unknown = 0, searches = 0, searchUnknown = 0;
+  for (const job of jobs) {
+    const detail = labState.jobDetails.get(job.id);
+    if (!detail) { unknown += 1; continue; }
+    for (const sample of detail.samples || []) {
+      const attempts = (detail.attempts || []).filter((attempt) => String(attempt.sampleId || attempt.sample_id) === String(sample.id));
+      const records = attempts.length ? attempts : [sample];
+      for (const record of records) {
+        const result = record.result || {};
+        const input = numeric(record.inputTokens ?? result.inputTokens);
+        const output = numeric(record.outputTokens ?? result.outputTokens);
+        const cost = estimateTextCost(sample.model, input, output);
+        if (cost === null) unknown += 1;
+        else { tokenCost += cost; measured += 1; }
+        if (job.scenario?.pipelineStage === "map_research" || sample.request?.research) {
+          const count = numeric(record.searches ?? result.searches);
+          if (count === null) searchUnknown += 1;
+          else searches += count;
+        }
+      }
+    }
+  }
+  return { tokenCost, measured, unknown, searches, searchUnknown, jobs:jobs.length };
+}
+
+function renderMapResearchSpend(artifact) {
+  const spend = mapResearchSpend(artifact);
+  const details = element("details", { className:"extraction-organization-preview" });
+  details.append(element("summary", { text:`Map & research cost · ${spend.measured ? `$${spend.tokenCost.toFixed(4)} recorded token estimate` : "usage pending"}` }));
+  details.append(element("p", { text:`${spend.jobs} saved jobs, including retries. ${spend.measured} attempts have token usage; ${spend.unknown} have unavailable usage. Missing usage is not counted as free.` }));
+  details.append(element("p", { text:`${spend.searches} provider-reported search queries; search counts unavailable for ${spend.searchUnknown} attempts. Search charges are separate from the token estimate. Gemini search is $0.014 per billable request after the shared monthly allowance; query counts do not establish the invoice or remaining allowance.` }));
+  details.append(element("p", { text:"Gemini 3.8 Flash rates checked September 5, 2026: $0.75/million input tokens and $3.75/million output tokens including thinking through December 31. Older records may omit thinking usage; estimates can understate those costs. Failed calls with no returned usage remain unknown." }));
+  return details;
+}
+
 function renderPipelineExtractionMapDialog(artifact = selectedPipelineArtifact()) {
   const dialog = q("pipeline-extraction-map-dialog");
   const status = q("pipeline-extraction-map-dialog-status");
@@ -11260,6 +11319,8 @@ function renderPipelineExtractionMapDialog(artifact = selectedPipelineArtifact()
     Number(mapState.selection?.meta?.researchFailures?.length || 0),
     fingerprint(JSON.stringify(mapState.selection?.map || {})),
     fingerprint(JSON.stringify(attemptHistory)),
+    fingerprint(JSON.stringify(extractionOrganizationPreview(artifact, mapState.selection))),
+    fingerprint(JSON.stringify(mapResearchSpend(artifact))),
   ].join("|");
   if (content.dataset.mapRenderKey === renderKey) return;
   const previousScrollTop = content.scrollTop;
@@ -11267,6 +11328,9 @@ function renderPipelineExtractionMapDialog(artifact = selectedPipelineArtifact()
   if (mapState.selection?.record) {
     const rendered = renderPipelineRoadmap(mapState.selection.record, artifact, { includeStart:false, mapOverride:mapState.selection.map, metaOverride:mapState.selection.meta });
     content.append(rendered.card);
+    const organization = renderExtractionOrganizationPreview(artifact, mapState.selection);
+    if (organization) content.append(organization);
+    content.append(renderMapResearchSpend(artifact));
   } else {
     content.append(element("div", { className:"extraction-map-dialog-placeholder", text:mapState.message }));
   }
@@ -15309,7 +15373,7 @@ function restoreActiveClarificationResume(value) {
   labState.mockCar.returnFocus = null;
   applyClarificationEditorSettings(resume.editor, resume.promptSource);
   if (resume.pipelineMode === "mock") {
-    labState.mockRunActiveConfig = sanitizedMockRunConfig(resume.runConfig);
+    labState.mockRunActiveConfig = sanitizedMockRunConfig(labState.mockRunConfig || resume.runConfig);
     Object.assign(labState.mockRunActiveConfig.clarification, { provider:resume.effectiveProvider, model:resume.effectiveModel, outputTokens:resume.effectiveMaxTokens });
     labState.mockBoundaryActive = sanitizeMockBoundaryConfig(resume.clarificationBoundaries || {
       ...labState.mockBoundaryConfig,
@@ -15670,7 +15734,7 @@ async function resumeSavedMockRun(resumeValue = labState.pendingMockResume) {
     labState.mockSetupActive = false;
     selectPipelineRun(resume.runId);
     if (selectedPipelineArtifact()?.runId !== resume.runId) return false;
-    labState.mockRunActiveConfig = sanitizedMockRunConfig(resume.runConfig);
+    labState.mockRunActiveConfig = sanitizedMockRunConfig(labState.mockRunConfig || resume.runConfig);
     labState.mockBoundaryActive = sanitizeMockBoundaryConfig(resume.clarificationBoundaries, { active:true });
     q("clarification-prompt").value = labState.mockBoundaryActive.prompt;
     labState.clarification.promptSource = labState.mockBoundaryActive.promptSource;
