@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=207">
+<link rel="stylesheet" href="./lab.css?v=208">
 </head>
 <body>
 
@@ -108,7 +108,7 @@
       <div id="mock-learner-progress" class="mock-learner-progress" hidden aria-label="Lesson chapters"></div>
       <main class="mock-learner-conversation">
         <ol id="mock-learner-transcript" class="mock-learner-transcript" aria-live="polite"></ol>
-        <input id="mock-learner-scroll" class="mock-learner-scroll" type="range" min="0" max="1000" value="1000" aria-label="Scroll conversation" hidden>
+        <div id="mock-learner-scroll" class="mock-learner-scroll" role="scrollbar" tabindex="0" aria-label="Conversation scroll wheel" aria-controls="mock-learner-transcript" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" title="Roll down for newer messages; up for earlier ones" hidden><span class="mock-learner-wheel" aria-hidden="true"></span></div>
         <div id="mock-learner-waiting" class="mock-learner-waiting" hidden aria-hidden="true"><span></span><span></span><span></span></div>
       </main>
       <p id="mock-learner-status" class="mock-learner-status" role="status" aria-live="polite"></p>
@@ -690,7 +690,7 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=207" defer></script>
+<script src="./lab.js?v=208" defer></script>
 </body>
 </html>
 

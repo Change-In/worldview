@@ -2188,11 +2188,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v207 · Sep 4";
+const BUILD = "v208 · Sep 4";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v208", date: "Sep 4", changes: ["Roll the small wheel on the right to scroll your Mock conversation, with gentle movement for precise reading.","Every new message returns the conversation to the bottom; background updates keep your reading position."] },
   { tag: "v207", date: "Sep 4", changes: ["Quiz review opens the requested checkpoint before returning to a fresh teach-back.","If review cannot open, the previous assessment stays available. “Review it now” is accepted directly."] },
   { tag: "v206", date: "Sep 4", changes: ["The final Quiz checks the whole teach-back and requests distinct exact evidence for each learning outcome.","A completed Tutor checkpoint opens the Quiz without showing an unnecessary extra Tutor question."] },
   { tag: "v205", date: "Sep 4", changes: ["View your Lesson Map throughout Tutor and Quiz, including retrying missing research without leaving the conversation."] },

@@ -13573,9 +13573,68 @@ function syncMockLearnerScroll() {
   if (!transcript || !scroll) return;
   const max = Math.max(0, transcript.scrollHeight - transcript.clientHeight);
   scroll.hidden = max <= 1;
-  scroll.disabled = max <= 1;
-  scroll.value = String(max ? Math.round(transcript.scrollTop / max * 1000) : 1000);
-  scroll.setAttribute("aria-valuetext", max ? `${Math.round(Number(scroll.value) / 10)}% through conversation` : "Conversation fits on screen");
+  const position = max ? Math.round(Math.max(0, Math.min(max, transcript.scrollTop)) / max * 100) : 100;
+  scroll.setAttribute("aria-valuenow", String(position));
+  scroll.setAttribute("aria-valuetext", max ? `${position}% through conversation` : "Conversation fits on screen");
+  scroll.style.setProperty("--wheel-offset", `${(transcript.scrollTop / 2) % 8}px`);
+}
+
+function bindMockLearnerScroll() {
+  const scroll = q("mock-learner-scroll"), transcript = q("mock-learner-transcript");
+  if (!scroll || !transcript) return;
+  let pointerId = null, lastY = 0;
+  const move = (delta) => {
+    if (!Number.isFinite(delta)) return;
+    const max = Math.max(0, transcript.scrollHeight - transcript.clientHeight);
+    transcript.scrollTop = Math.max(0, Math.min(max, transcript.scrollTop + delta));
+    syncMockLearnerScroll();
+  };
+  const release = () => {
+    const id = pointerId;
+    pointerId = null;
+    delete scroll.dataset.dragging;
+    try { if (id !== null && scroll.hasPointerCapture(id)) scroll.releasePointerCapture(id); } catch (_) { /* Capture may already have ended. */ }
+  };
+  scroll.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+    if (event.isPrimary === false || (event.pointerType === "mouse" && event.button !== 0)) return;
+    event.preventDefault();
+    release();
+    pointerId = event.pointerId;
+    lastY = event.clientY;
+    scroll.dataset.dragging = "true";
+    scroll.focus({ preventScroll:true });
+    try { scroll.setPointerCapture(pointerId); } catch (_) { /* Window release still ends the gesture. */ }
+  });
+  scroll.addEventListener("pointermove", (event) => {
+    if (event.pointerId !== pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    // Relative travel makes every stroke useful, regardless of where it starts.
+    move((event.clientY - lastY) * 2);
+    lastY = event.clientY;
+  });
+  for (const name of ["pointerup", "pointercancel", "lostpointercapture"]) {
+    scroll.addEventListener(name, (event) => {
+      event.stopPropagation();
+      if (event.pointerId === pointerId) release();
+    });
+  }
+  for (const name of ["pointerup", "pointercancel"]) window.addEventListener(name, (event) => { if (event.pointerId === pointerId) release(); });
+  window.addEventListener("blur", release);
+  scroll.addEventListener("wheel", (event) => {
+    if (event.ctrlKey) return; // Preserve browser pinch/zoom gestures.
+    event.preventDefault();
+    event.stopPropagation();
+    move(event.deltaY * (event.deltaMode === 1 ? 20 : event.deltaMode === 2 ? transcript.clientHeight : 1));
+  }, { passive:false });
+  scroll.addEventListener("keydown", (event) => {
+    const deltas = { ArrowUp:-24, ArrowDown:24, PageUp:-transcript.clientHeight * .8, PageDown:transcript.clientHeight * .8, Home:-transcript.scrollHeight, End:transcript.scrollHeight };
+    if (!(event.key in deltas) || event.ctrlKey || event.metaKey || event.altKey) return;
+    event.preventDefault();
+    event.stopPropagation();
+    move(deltas[event.key]);
+  });
 }
 
 function startMockLearnerRecording(event) {
@@ -17007,10 +17066,7 @@ function bindEvents() {
     if (event.isPrimary === false) { cancelMockCarCapture(); return; }
     start(event);
   };
-  q("mock-learner-scroll")?.addEventListener("input", (event) => {
-    const transcript = q("mock-learner-transcript");
-    transcript.scrollTop = Number(event.target.value) / 1000 * Math.max(0, transcript.scrollHeight - transcript.clientHeight);
-  });
+  bindMockLearnerScroll();
   q("mock-learner-transcript")?.addEventListener("scroll", syncMockLearnerScroll, { passive:true });
   window.addEventListener("resize", syncMockLearnerScroll, { passive:true });
   q("mock-learner-shell")?.addEventListener("pointerdown", (event) => mockSurfaceHold(event, startMockLearnerRecording));
