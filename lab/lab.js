@@ -4318,6 +4318,11 @@ async function retryPendingPipelineConversationCreate() {
     upsertJob(created.job);
     scheduleJobPoll();
     if (pipelineConversationLineageIsCurrent(lineage)) {
+      const voice = labState.extraction;
+      if (voice.retainedTranscript && pending.request.scenario?.learnerReplyFingerprint === fingerprint(voice.retainedTranscript)) {
+        if (q("mock-learner-reply")?.value === voice.retainedTranscript) q("mock-learner-reply").value = "";
+        Object.assign(voice, { retainedRecording:null, retainedTranscript:"", retainedOperationId:"", retainedCaptureContext:null });
+      }
       if (stage === "lesson") {
         labState.lessonOpeningFailureKey = "";
         labState.lessonOpeningFailureMessage = "";
@@ -11599,6 +11604,32 @@ function releaseLabMicrophoneStream(state, expectedStream = null) {
   }
 }
 
+function boundedLabMicrophoneRequest() {
+  // Safari may leave a permission/device request unresolved. Bound our wait;
+  // a stream delivered after that deadline must never start a late recorder.
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      settled = true;
+      reject(new Error("The microphone did not open. Try again or use Text."));
+    }, 15000);
+    let request;
+    try { request = navigator.mediaDevices.getUserMedia(labMicrophoneConstraints()); }
+    catch (error) { clearTimeout(timer); reject(error); return; }
+    Promise.resolve(request).then((stream) => {
+      if (settled) { for (const track of stream.getTracks()) track.stop(); return; }
+      settled = true;
+      clearTimeout(timer);
+      resolve(stream);
+    }, (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(error);
+    });
+  });
+}
+
 function setPipelineExtractionMicTracksEnabled(enabled) {
   for (const track of labState.extraction.micStream?.getAudioTracks?.() || []) track.enabled = enabled;
 }
@@ -11637,7 +11668,7 @@ async function ensurePipelineExtractionMicStream({ fresh = false, capture = fals
   state.micAcquireToken = acquireToken;
   const request = (async () => {
     setPipelineExtractionAudioSession("play-and-record");
-    const stream = await navigator.mediaDevices.getUserMedia(labMicrophoneConstraints());
+    const stream = await boundedLabMicrophoneRequest();
     if (state.mode !== "voice" || state.micAcquireGeneration !== generation || state.micAcquireToken !== acquireToken) {
       for (const track of stream.getTracks()) track.stop();
       const error = new Error("Microphone request superseded");
@@ -12153,7 +12184,7 @@ function stopPipelineExtractionVoice() {
   state.recordingPointerId = null;
   invalidateLabCapture(state);
   releaseLabMicrophoneStream(state);
-  state.retainedRecording = null;
+  state.retainedRecording = null; state.retainedTranscript = "";
   state.retainedOperationId = "";
   state.retainedCaptureContext = null;
   state.voiceTranscriptionToken = "";
@@ -12175,7 +12206,7 @@ function abortPipelineTranscriptionForStageChange() {
   abortLabTranscription(state);
   state.voiceTranscriptionToken = "";
   state.retainedCaptureContext = null;
-  state.retainedRecording = null;
+  state.retainedRecording = null; state.retainedTranscript = "";
   state.retainedOperationId = "";
   if (cancelledStage === "extraction") labState.extractionBusy = false;
   if (cancelledStage === "lesson") labState.lessonBusy = false;
@@ -12245,6 +12276,7 @@ async function transcribePipelineExtractionRecording(blob, operationId = "", cap
   state.voiceTranscriptionToken = transcriptionToken;
   const transcriptionController = beginLabTranscription(state);
   const transcriptionDeadlineAt = performance.now() + LAB_TRANSCRIPTION_DEADLINE_MS;
+  if (state.retainedRecording !== blob) state.retainedTranscript = "";
   state.retainedRecording = blob;
   state.retainedOperationId = stableOperationId;
   state.retainedCaptureContext = lineage;
@@ -12257,9 +12289,10 @@ async function transcribePipelineExtractionRecording(blob, operationId = "", cap
       if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
       try {
         setMessage("pipeline-extraction-output", attempt ? "Transcribing again…" : "Transcribing your voice message…");
-        const result = await boundedLabTranscriptionFetch(blob, labVoiceSettings().stt, "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId, deadlineAt:transcriptionDeadlineAt });
+        const result = state.retainedTranscript ? { text:state.retainedTranscript } : await boundedLabTranscriptionFetch(blob, labVoiceSettings().stt, "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId, deadlineAt:transcriptionDeadlineAt });
         if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
         const transcript = completeLearnerTurn(result.text);
+    state.retainedTranscript = transcript;
     if (q("mock-learner-reply")) q("mock-learner-reply").value = transcript;
         if (!transcript) {
           const empty = new Error("No speech was found in that recording.");
@@ -12268,7 +12301,7 @@ async function transcribePipelineExtractionRecording(blob, operationId = "", cap
         }
         labState.extractionBusy = false;
         const accepted = await submitPipelineExtractionReply(transcript, "voice", { originPerf:lineage.turnStartedAt });
-        if (accepted) { state.retainedRecording = null; state.retainedOperationId = ""; state.retainedCaptureContext = null; }
+        if (accepted) { state.retainedRecording = null; state.retainedTranscript = ""; state.retainedOperationId = ""; state.retainedCaptureContext = null; }
         if (accepted && q("mock-learner-reply")?.value === transcript) q("mock-learner-reply").value = "";
         return Boolean(accepted);
       } catch (error) {
@@ -12313,21 +12346,23 @@ async function transcribePipelineLessonRecording(blob, operationId = "", capture
   state.voiceTranscriptionToken = transcriptionToken;
   const transcriptionController = beginLabTranscription(state);
   state.retainedCaptureContext = lineage;
+  if (state.retainedRecording !== blob) state.retainedTranscript = "";
   state.retainedRecording = blob;
   state.retainedOperationId = stableOperationId;
   labState.lessonBusy = true;
   renderPipelineExtractionModeControls();
   setMessage("pipeline-lesson-output", "Transcribing your voice message…");
   try {
-    const result = await boundedLabTranscriptionFetch(blob, labVoiceSettings().stt, "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId });
+    const result = state.retainedTranscript ? { text:state.retainedTranscript } : await boundedLabTranscriptionFetch(blob, labVoiceSettings().stt, "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId });
     if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
     const transcript = completeLearnerTurn(result.text);
+    state.retainedTranscript = transcript;
     if (q("mock-learner-reply")) q("mock-learner-reply").value = transcript;
     if (!transcript) throw new Error("No speech was found in that recording.");
     labState.lessonBusy = false;
     const timingId = beginMockTurnTiming({ stage:"lesson", inputMode:"voice", originKind:"ptt-release", originPerf:lineage.turnStartedAt });
     const accepted = await submitPipelineLessonReply(transcript, { inputMode:"voice", timingId });
-    if (accepted === true) { state.retainedRecording = null; state.retainedOperationId = ""; state.retainedCaptureContext = null; if (q("mock-learner-reply")?.value === transcript) q("mock-learner-reply").value = ""; }
+    if (accepted === true) { state.retainedRecording = null; state.retainedTranscript = ""; state.retainedOperationId = ""; state.retainedCaptureContext = null; if (q("mock-learner-reply")?.value === transcript) q("mock-learner-reply").value = ""; }
   } catch (error) {
     if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
     throw error;
@@ -12353,21 +12388,23 @@ async function transcribePipelineQuizRecording(blob, operationId = "", captureCo
   state.voiceTranscriptionToken = transcriptionToken;
   const transcriptionController = beginLabTranscription(state);
   state.retainedCaptureContext = lineage;
+  if (state.retainedRecording !== blob) state.retainedTranscript = "";
   state.retainedRecording = blob;
   state.retainedOperationId = stableOperationId;
   labState.quiz.busy = true;
   renderPipelineExtractionModeControls();
   setMessage("pipeline-quiz-output", "Transcribing your final explanation…");
   try {
-    const result = await boundedLabTranscriptionFetch(blob, labVoiceSettings().stt, "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId });
+    const result = state.retainedTranscript ? { text:state.retainedTranscript } : await boundedLabTranscriptionFetch(blob, labVoiceSettings().stt, "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId });
     if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
     const transcript = completeLearnerTurn(result.text);
+    state.retainedTranscript = transcript;
     if (q("mock-learner-reply")) q("mock-learner-reply").value = transcript;
     if (!transcript) throw new Error("No speech was found in that recording.");
     labState.quiz.busy = false;
     const timingId = beginMockTurnTiming({ stage:"quiz", inputMode:"voice", originKind:"ptt-release", originPerf:lineage.turnStartedAt });
     const accepted = await submitPipelineQuizReply(transcript, { inputMode:"voice", timingId });
-    if (accepted === true) { state.retainedRecording = null; state.retainedOperationId = ""; state.retainedCaptureContext = null; if (q("mock-learner-reply")?.value === transcript) q("mock-learner-reply").value = ""; }
+    if (accepted === true) { state.retainedRecording = null; state.retainedTranscript = ""; state.retainedOperationId = ""; state.retainedCaptureContext = null; if (q("mock-learner-reply")?.value === transcript) q("mock-learner-reply").value = ""; }
   } catch (error) {
     if (!pipelineConversationLineageIsCurrent(lineage, transcriptionToken)) return false;
     throw error;
@@ -12580,6 +12617,14 @@ function stopPipelineExtractionRecording(event) {
   state.recordingPointerActive = false;
   state.recordingPointerId = null;
   const recorder = state.recorder;
+  if (!recorder && state.micAcquirePromise) {
+    invalidateLabCapture(state);
+    releaseLabMicrophoneStream(state);
+    setPipelineExtractionAudioSession("playback");
+    setMockCarStatus("idle", "Microphone start cancelled. Hold again when ready.");
+    renderPipelineExtractionModeControls();
+    return;
+  }
   if (recorder?.state === "recording") {
     pipelineVoicePtt()?.classList.remove("is-listening");
     q("mock-car-ptt")?.classList.remove("is-listening");
@@ -13133,6 +13178,8 @@ function exitMockCarMode({ switchToText = false } = {}) {
 
 function startMockCarRecording(event) {
   if (!labState.mockCar.active || !mockCarConversationReady()) return;
+  const control = mockRecordingControlState();
+  if (control.blocked || control.latched || control.holdActive) return;
   try { event?.currentTarget?.setPointerCapture?.(event.pointerId); } catch (_) { /* Pointer capture is optional. */ }
   if (labState.pipelineStage === "clarification") armClarificationRecording(event);
   else if (["extraction", "lesson", "quiz"].includes(labState.pipelineStage)) void startPipelineExtractionRecording(event);
@@ -13404,11 +13451,10 @@ function mockLearnerStatus(stage, artifact, selection) {
     : stage === "extraction" ? labState.extractionBusy || labState.extraction.lessonHandoffBusy
       : stage === "lesson" ? labState.lessonBusy : Boolean(labState.quiz.busy);
   const voiceState = stage === "clarification" ? labState.clarification : labState.extraction;
-  if (voiceState.retainedRecording && !busy && voiceState.retainedCaptureContext?.stage === stage) {
-    return { text:"Your recording is still here. Retry transcription or switch to Text to use your draft.", error:true, retry:"transcription" };
-  }
-  if (stage === "clarification" && voiceState.retainedRecording && !busy) return { text:"Your recording is still here. Retry transcription or switch to Text.", error:true, retry:"transcription" };
   if (busy) return { text:"Thinking…", error:false, retry:"" };
+  if (labState.mockResumeReadError?.runId === artifact?.runId && labState.mockResumeReadError?.stage === stage) {
+    return { text:"Your saved reply could not be checked. Retry reconnects to the same lesson; it does not send another answer.", error:true, retry:"resume-read" };
+  }
   if (stage === "clarification" && labState.clarification.runError) {
     return { text:"Sorry—we’re having trouble getting a reply. Your conversation is still here.", error:true, retry:"clarification" };
   }
@@ -13447,6 +13493,11 @@ function mockLearnerStatus(stage, artifact, selection) {
     if (["opening", "working", "loading"].includes(lessonState.state)) {
       return { text:"Worldview is preparing the next question…", error:false, retry:"" };
     }
+  }
+  if (voiceState.retainedRecording && (!voiceState.retainedCaptureContext || voiceState.retainedCaptureContext.stage === stage)) {
+    return { text:voiceState.retainedTranscript
+      ? "Your words are saved on this screen. Retry sends the same draft, or switch to Text to edit it."
+      : "Your recording is still on this screen. Retry transcription or switch to Text.", error:true, retry:"transcription" };
   }
   if (stage === "extraction" && artifact) {
     const mapState = pipelineExtractionMapViewState(artifact);
@@ -13510,7 +13561,9 @@ function renderMockLearnerShell() {
   input.placeholder = placeholders[stage];
   const lessonReplyUnavailable = stage === "lesson" && (pipelineLessonConversationState(selection).state !== "ready"
     || Boolean(pendingPipelineConversationCreate("lesson", artifact, selection)));
-  const inputBlocked = stageBusy || lessonReplyUnavailable
+  const phaseReplyUnavailable = ["extraction", "quiz"].includes(stage) && Boolean(q(`pipeline-${stage}-reply`)?.disabled);
+  const resumeReadBlocked = labState.mockResumeReadError?.runId === artifact?.runId && labState.mockResumeReadError?.stage === stage;
+  const inputBlocked = stageBusy || lessonReplyUnavailable || phaseReplyUnavailable || resumeReadBlocked
     || (["extraction", "lesson"].includes(stage) && Boolean(pendingPipelineConversationCreate(stage, artifact, selection)));
   input.disabled = inputBlocked;
   send.disabled = inputBlocked || !input.value.trim();
@@ -13556,6 +13609,9 @@ async function submitMockLearnerReply() {
   if (labState.pipelineStage === "extraction") {
     q("pipeline-extraction-reply").value = reply;
     const accepted = await submitPipelineExtractionReply(reply, "text");
+    if (accepted && labState.extraction.retainedTranscript === reply) {
+      Object.assign(labState.extraction, { retainedRecording:null, retainedTranscript:"", retainedOperationId:"", retainedCaptureContext:null });
+    }
     if (!accepted && !q("pipeline-extraction-reply").value) q("pipeline-extraction-reply").value = reply;
     input.value = accepted ? "" : reply;
     renderMockLearnerShell();
@@ -13566,15 +13622,26 @@ async function submitMockLearnerReply() {
     const submittedValue = input.value;
     q("pipeline-lesson-reply").value = reply;
     const accepted = await submitPipelineLessonReply(reply, { inputMode:"text" });
+    if (accepted && labState.extraction.retainedTranscript === reply) {
+      Object.assign(labState.extraction, { retainedRecording:null, retainedTranscript:"", retainedOperationId:"", retainedCaptureContext:null });
+    }
     if (pipelineConversationLineageIsCurrent(lineage)) {
       if (accepted && input.value === submittedValue) input.value = "";
       renderMockLearnerShell();
     }
     return;
   }
-  input.value = "";
-  if (labState.pipelineStage === "clarification") { q("clarification-reply").value = reply; await submitClarificationReply(reply); return; }
-  if (labState.pipelineStage === "quiz") { q("pipeline-quiz-reply").value = reply; await submitPipelineQuizReply(reply, { inputMode:"text" }); }
+  const stage = labState.pipelineStage;
+  const state = stage === "clarification" ? labState.clarification : labState.extraction;
+  const draft = input.value;
+  let accepted = false;
+  if (stage === "clarification") { q("clarification-reply").value = reply; accepted = await submitClarificationReply(reply); }
+  if (stage === "quiz") { q("pipeline-quiz-reply").value = reply; accepted = await submitPipelineQuizReply(reply, { inputMode:"text" }); }
+  if (accepted && state.retainedTranscript === reply) {
+    Object.assign(state, { retainedRecording:null, retainedTranscript:"", retainedOperationId:"", retainedCaptureContext:null });
+  }
+  if (accepted && input.value === draft) input.value = "";
+  renderMockLearnerShell();
 }
 
 async function switchMockLearnerConversationMode() {
@@ -13653,6 +13720,8 @@ function bindMockLearnerScroll() {
 }
 
 function startMockLearnerRecording(event) {
+  const control = mockRecordingControlState();
+  if (control.blocked || control.latched || control.holdActive) return;
   try { event?.currentTarget?.setPointerCapture?.(event.pointerId); } catch (_) { /* Pointer capture is optional. */ }
   if (labState.pipelineStage === "clarification") armClarificationRecording(event);
   else void startPipelineExtractionRecording(event);
@@ -13667,6 +13736,18 @@ function stopMockLearnerRecording(event) {
 
 async function retryMockLearnerAction() {
   const action = q("mock-learner-retry")?.dataset.retry;
+  if (action === "resume-read") {
+    const pending = labState.mockResumeReadError;
+    if (!pending || pending.busy || pending.runId !== selectedPipelineArtifact()?.runId || pending.stage !== labState.pipelineStage) return;
+    pending.busy = true;
+    try {
+      await refreshJob(pending.jobId);
+      if (labState.mockResumeReadError === pending) labState.mockResumeReadError = null;
+      scheduleJobPoll();
+    } catch (_) { /* Keep the same read-only retry available. */ }
+    finally { pending.busy = false; renderMockLearnerShell(); }
+    return;
+  }
   if (action === "transcription") {
     if (labState.pipelineStage === "clarification") await retryClarificationTranscription();
     else {
@@ -14607,7 +14688,7 @@ async function ensureClarificationMicStream(runId = labState.clarification.runId
   state.micAcquireToken = acquireToken;
   const request = (async () => {
     setClarificationAudioSession("play-and-record");
-    const stream = await navigator.mediaDevices.getUserMedia(labMicrophoneConstraints());
+    const stream = await boundedLabMicrophoneRequest();
     if (state.runId !== runId || state.mode !== "voice" || state.micAcquireGeneration !== generation || state.micAcquireToken !== acquireToken) {
       for (const track of stream.getTracks()) track.stop();
       const error = new Error("Microphone request superseded");
@@ -14718,7 +14799,7 @@ async function toggleClarificationTopicRecording() {
   setClarificationAudioSession("auto");
   setClarificationAudioSession("play-and-record");
   try {
-    const stream = await navigator.mediaDevices.getUserMedia(labMicrophoneConstraints());
+    const stream = await boundedLabMicrophoneRequest();
     if (state.acquireToken !== acquireToken || q("clarification-setup")?.hidden) {
       for (const track of stream.getTracks()) track.stop();
       return;
@@ -15561,6 +15642,7 @@ async function resumeSavedMockRun(resumeValue = labState.pendingMockResume) {
   }
 
   labState.resumeRestoring = true;
+  labState.mockResumeReadError = null;
   try {
     stopMockRunLearnerMedia();
     labState.pipelineMode = "mock";
@@ -15633,6 +15715,17 @@ async function resumeSavedMockRun(resumeValue = labState.pendingMockResume) {
       logFlow("Restored the saved Mock Run Map checkpoint", `${resume.runId} · ${mapJob?.id || "no durable Map job"}`);
       return true;
     }
+    const resumeJobs = stage === "lesson" ? pipelineLessonJobs(exactSelection)
+      : stage === "quiz" ? pipelineQuizJobs(exactSelection) : stage === "extraction" ? pipelineExtractionJobs(artifact) : [];
+    const lastReply = resumeJobs.at(-1);
+    if (lastReply && !labState.preview) {
+      try { await refreshJob(lastReply.id); }
+      catch (_) {
+        if (restoreIsCurrent()) labState.mockResumeReadError = { runId:resume.runId, stage, jobId:lastReply.id };
+      }
+      if (!restoreIsCurrent()) return false;
+    }
+    scheduleJobPoll();
     setPipelineStage(stage);
     if (["extraction", "lesson", "quiz"].includes(stage)) setMockRunConfigCollapsed(true);
     persistClarificationSettings();
@@ -16424,6 +16517,7 @@ async function transcribeClarificationRecording(blob, operationId = "", captureC
   state.transcriptionToken = transcriptionToken;
   const transcriptionController = beginLabTranscription(state);
   const transcriptionDeadlineAt = performance.now() + LAB_TRANSCRIPTION_DEADLINE_MS;
+  if (state.retainedRecording !== blob) state.retainedTranscript = "";
   state.retainedRecording = blob;
   state.retainedRecordingMime = blob.type || "audio/webm";
   state.retainedOperationId = stableOperationId;
@@ -16436,9 +16530,10 @@ async function transcribeClarificationRecording(blob, operationId = "", captureC
       if (!lineageIsCurrent()) return false;
       setClarificationBusy(true, attempt ? "transcribing again" : "transcribing");
       try {
-        const result = await boundedLabTranscriptionFetch(blob, labVoiceSettings().stt, "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId, deadlineAt:transcriptionDeadlineAt });
+        const result = state.retainedTranscript ? { text:state.retainedTranscript } : await boundedLabTranscriptionFetch(blob, labVoiceSettings().stt, "en", stableOperationId, { signal:transcriptionController.signal, expectedUserId:lineage.ownerUserId, deadlineAt:transcriptionDeadlineAt });
         if (!lineageIsCurrent()) return false;
         const transcript = completeLearnerTurn(result.text);
+    state.retainedTranscript = transcript;
     if (q("mock-learner-reply")) q("mock-learner-reply").value = transcript;
         if (!transcript) {
           const empty = new Error("No speech was found in that recording.");
@@ -16448,7 +16543,7 @@ async function transcribeClarificationRecording(blob, operationId = "", captureC
         state.transcriptionToken = "";
         setClarificationBusy(false);
         const accepted = await submitClarificationReply(transcript, { inputMode:"voice", originPerf:lineage.turnStartedAt });
-        if (accepted) { state.retainedRecording = null; state.retainedRecordingMime = ""; state.retainedOperationId = ""; state.retainedCaptureContext = null; }
+        if (accepted) { state.retainedRecording = null; state.retainedTranscript = ""; state.retainedRecordingMime = ""; state.retainedOperationId = ""; state.retainedCaptureContext = null; }
         if (accepted && q("mock-learner-reply")?.value === transcript) q("mock-learner-reply").value = "";
         return Boolean(accepted);
       } catch (error) {
