@@ -735,6 +735,8 @@ const q = (id) => document.getElementById(id);
    viewport to the full-screen learner shell so it cannot remain wider than
    the physical screen until a later scroll or input focus causes a repaint. */
 let labViewportLayoutTimer = 0;
+let labViewportLayoutFrame = 0;
+let labFieldRevealGeneration = 0;
 function syncLabViewportLayout() {
   const viewport = window.visualViewport;
   const width = Math.max(1, Math.round(Number(viewport?.width) || window.innerWidth || document.documentElement.clientWidth || 1));
@@ -748,8 +750,8 @@ function syncLabViewportLayout() {
   const learnerViewportActive = labLearnerViewportActive();
   document.documentElement.classList.toggle("lab-viewport-locked", learnerViewportActive);
   if (learnerViewportActive) {
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
+    if (document.documentElement.scrollTop) document.documentElement.scrollTop = 0;
+    if (document.body.scrollTop) document.body.scrollTop = 0;
   }
   document.documentElement.scrollLeft = 0;
   document.body.scrollLeft = 0;
@@ -760,10 +762,12 @@ function syncLabViewportLayout() {
 }
 function scheduleLabViewportLayout() {
   if (labViewportLayoutTimer) clearTimeout(labViewportLayoutTimer);
-  const paint = () => requestAnimationFrame(() => syncLabViewportLayout());
+  const paint = () => {
+    if (labViewportLayoutFrame) return;
+    labViewportLayoutFrame = requestAnimationFrame(() => { labViewportLayoutFrame = 0; syncLabViewportLayout(); });
+  };
   paint();
-  labViewportLayoutTimer = setTimeout(() => { labViewportLayoutTimer = 0; paint(); }, 90);
-  setTimeout(paint, 320);
+  labViewportLayoutTimer = setTimeout(() => { labViewportLayoutTimer = 0; paint(); }, 320);
 }
 window.addEventListener("resize", scheduleLabViewportLayout, { passive:true });
 window.addEventListener("orientationchange", scheduleLabViewportLayout, { passive:true });
@@ -825,8 +829,12 @@ function labFieldNeedsReveal(target) {
   return rect.top < viewport.top + 18 || rect.bottom > lowerSafeEdge;
 }
 function revealLabField(target) {
+  if (!target?.isConnected || document.activeElement !== target || target.disabled) return;
   resetLabRootScroll();
   syncLabViewportLayout();
+  // The fixed Mock composer already follows the visible keyboard viewport.
+  // scrollIntoView here pans the entire page and can hide the header on iOS.
+  if (target.closest?.("#mock-learner-composer")) return;
   const owner = nearestLabScrollOwner(target);
   if (owner) {
     const targetRect = target.getBoundingClientRect();
@@ -849,12 +857,13 @@ function revealLabField(target) {
   resetLabRootScroll();
 }
 function keepLabFieldVisible(event) {
+  const generation = ++labFieldRevealGeneration;
   const target = event.target;
   if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
   if (target.type === "file" || target.type === "checkbox" || target.type === "radio" || target.disabled) return;
   scheduleLabViewportLayout();
   const reveal = () => {
-    revealLabField(target);
+    if (generation === labFieldRevealGeneration && document.activeElement === target && target.isConnected) revealLabField(target);
   };
   requestAnimationFrame(reveal);
   setTimeout(reveal, 180);
@@ -862,7 +871,7 @@ function keepLabFieldVisible(event) {
   setTimeout(reveal, 760);
 }
 document.addEventListener("focusin", keepLabFieldVisible, { passive:true });
-document.addEventListener("focusout", () => scheduleLabViewportLayout(), { passive:true });
+document.addEventListener("focusout", () => { labFieldRevealGeneration++; scheduleLabViewportLayout(); }, { passive:true });
 const now = () => new Date().toISOString();
 const clip = (value, length = 1700) => {
   const text = String(value ?? "").trim();
@@ -13194,6 +13203,12 @@ function mockLearnerChapterProgress(map, currentIndex = 0, completedIndexes = []
   }));
 }
 
+function mockLearnerVisibleChapters(selection, stage, chapterState) {
+  if (stage !== "lesson" || !selection || chapterState.currentIndex < 0) return [];
+  const chapter = mockLearnerChapterProgress(selection.map, chapterState.currentIndex, chapterState.completedIndexes)[chapterState.currentIndex];
+  return chapter ? [{ ...chapter, status:"current" }] : [];
+}
+
 function mockLearnerConversationActive() {
   if (labState.pipelineMode !== "mock" || labState.mockSetupActive || !MOCK_LEARNER_STAGES.includes(labState.pipelineStage)) return false;
   if (labState.pipelineStage === "clarification") return Boolean(labState.clarification.runId && labState.clarification.mode);
@@ -13470,7 +13485,7 @@ function renderMockLearnerShell() {
 
   const progressRoot = q("mock-learner-progress");
   const chapterState = mockLearnerLessonChapterState(selection, stage);
-  const chapters = selection ? mockLearnerChapterProgress(selection.map, chapterState.currentIndex, chapterState.completedIndexes) : [];
+  const chapters = mockLearnerVisibleChapters(selection, stage, chapterState);
   progressRoot.hidden = !chapters.length;
   progressRoot.replaceChildren(...chapters.map((chapter) => element("span", {
     className:`mock-learner-chapter is-${chapter.status}`,

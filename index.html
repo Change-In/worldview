@@ -134,6 +134,17 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .account-guard-actions button { min-height:38px;padding:0 11px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink);font-size:11.5px;font-weight:700;cursor:pointer; }
   #account-guard-import { border-color:var(--accent);background:var(--accent);color:#fff; }
   @media(max-width:560px){#account-guard{grid-template-columns:1fr;top:max(7px,env(safe-area-inset-top))}.account-guard-actions{justify-content:stretch}.account-guard-actions button{flex:1}}
+  #account-guard[data-compact="true"] { left:auto; right:max(12px,env(safe-area-inset-right)); transform:none; width:44px; height:44px; display:block; padding:0; border:0; background:transparent; box-shadow:none; }
+  #account-guard-toggle { display:grid; place-items:center; width:44px; height:44px; padding:0; border:1px solid var(--line); border-radius:50%; background:var(--card); color:var(--accent); cursor:pointer; }
+  #account-guard-toggle[hidden] { display:none; }
+  #account-guard-toggle::before { content:""; width:17px; height:17px; border:2px solid var(--line); border-top-color:var(--accent); border-radius:50%; animation:library-sync-spin 1s linear infinite; }
+  #account-guard[data-compact="true"] #account-guard-detail { display:none; position:absolute; top:50px; right:0; width:min(300px,calc(100vw - 28px)); padding:14px; border:1px solid var(--line); border-radius:16px; background:var(--card); box-shadow:var(--shadow-sm); }
+  #account-guard[data-compact="true"] .account-guard-actions { display:none; }
+  #account-guard[data-compact="true"][data-expanded="true"] #account-guard-detail { display:block; }
+  @media(hover:hover) { #account-guard[data-compact="true"]:hover #account-guard-detail { display:block; } }
+  #account-guard-toggle:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+  @keyframes library-sync-spin { to { transform:rotate(360deg); } }
+  @media(prefers-reduced-motion:reduce) { #account-guard-toggle::before { animation:none; } }
 
   #update-banner {
     display: none; flex: 0 0 auto; align-items: center; gap: 10px;
@@ -1716,7 +1727,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 </div>
 
 <div id="account-guard" role="status" aria-live="polite" hidden>
-  <div><strong id="account-guard-title">Checking your saved account\u2026</strong><span id="account-guard-copy"></span></div>
+  <button id="account-guard-toggle" type="button" aria-label="Loading your library. Show details" aria-controls="account-guard-detail" aria-expanded="false" hidden></button>
+  <div id="account-guard-detail"><strong id="account-guard-title">Checking your saved account…</strong><span id="account-guard-copy"></span></div>
   <div class="account-guard-actions">
     <button id="account-guard-retry" type="button" hidden>Retry</button>
     <button id="account-guard-import" type="button" hidden>Import this device</button>
@@ -2188,11 +2200,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v208 · Sep 4";
+const BUILD = "v209 · Sep 5";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag: "v209", date: "Sep 5", changes: ["Mock lessons now use warmer cards and a subtle matte scroll wheel.","Extraction has no chapter banner; Tutor shows only the current chapter title.","Keyboard focus recovery avoids moving the page after you leave the reply box.","Routine library loading uses a small spinner. Hover or tap for details; recovery messages remain available."] },
   { tag: "v208", date: "Sep 4", changes: ["Roll the small wheel on the right to scroll your Mock conversation, with gentle movement for precise reading.","Every new message returns the conversation to the bottom; background updates keep your reading position."] },
   { tag: "v207", date: "Sep 4", changes: ["Quiz review opens the requested checkpoint before returning to a fresh teach-back.","If review cannot open, the previous assessment stays available. “Review it now” is accepted directly."] },
   { tag: "v206", date: "Sep 4", changes: ["The final Quiz checks the whole teach-back and requests distinct exact evidence for each learning outcome.","A completed Tutor checkpoint opens the Quiz without showing an unnecessary extra Tutor question."] },
@@ -3729,6 +3742,14 @@ function renderAccountGuardUI() {
   } else {
     guard.hidden = true;
   }
+  const compact = !guard.hidden && !accountSyncConflict && !accountCacheReadOnly && identityRestoreStatus === "checking";
+  if (!compact || guard.dataset.compact !== "true") guard.dataset.expanded = "false";
+  guard.dataset.compact = String(compact);
+  const toggle = $("account-guard-toggle");
+  if (toggle) {
+    toggle.hidden = !compact;
+    toggle.setAttribute("aria-expanded", String(guard.dataset.expanded === "true"));
+  }
   document.body.classList.toggle("account-read-only",!guard.hidden && (accountCacheReadOnly || !!pendingLegacyRecovery));
 }
 function guardAccountMutation(action = "make that change") {
@@ -4306,6 +4327,21 @@ async function initCloudPersistence() {
     return false;
   }
 }
+document.getElementById("account-guard-toggle").onclick = () => {
+  const guard = $("account-guard");
+  guard.dataset.expanded = String(guard.dataset.expanded !== "true");
+  $("account-guard-toggle").setAttribute("aria-expanded", guard.dataset.expanded);
+};
+document.getElementById("account-guard-toggle").addEventListener("keydown", event => {
+  if (event.key !== "Escape") return;
+  $("account-guard").dataset.expanded = "false";
+  $("account-guard-toggle").setAttribute("aria-expanded", "false");
+});
+document.addEventListener("pointerdown", event => {
+  if (event.target?.closest?.("#account-guard")) return;
+  $("account-guard").dataset.expanded = "false";
+  $("account-guard-toggle").setAttribute("aria-expanded", "false");
+}, { passive:true });
 document.getElementById("account-guard-retry").onclick = async () => {
   document.getElementById("account-guard-retry").disabled = true;
   try { await initCloudPersistence(); }
