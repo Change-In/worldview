@@ -11404,7 +11404,7 @@ function closePipelineExtractionMapDialog({ restoreFocus = true } = {}) {
 
 function setPipelineExtractionAudioSession(type) {
   try {
-    if (navigator.audioSession && "type" in navigator.audioSession) navigator.audioSession.type = type;
+    if (navigator.audioSession && "type" in navigator.audioSession && navigator.audioSession.type !== type) navigator.audioSession.type = type;
   } catch (_) { /* The browser owns the physical route when this API is unavailable. */ }
 }
 
@@ -11427,30 +11427,68 @@ function labMicrophoneStreamIsLive(stream) {
   return Boolean(stream?.getAudioTracks?.().some((track) => track.readyState === "live"));
 }
 
-const LAB_MIC_MUTE_GRACE_MS = 1800;
-
 function watchLabMicrophoneTrack(track, isCurrent, onDisconnect) {
-  let muteTimer = 0;
-  const clearMuteTimer = () => {
-    if (muteTimer) clearTimeout(muteTimer);
-    muteTimer = 0;
-  };
-  const disconnect = () => {
-    clearMuteTimer();
-    if (isCurrent()) onDisconnect();
-  };
-  const temporarilyMuted = () => {
+  // A muted live track can recover after Bluetooth negotiation. Never destroy
+  // a recording merely because its input is temporarily unavailable.
+  track.addEventListener?.("ended", () => { if (isCurrent()) onDisconnect(); }, { once:true });
+}
+
+function finishInterruptedLabCapture(state) {
+  const recorder = state.recorder;
+  if (!recorder || recorder.state === "inactive") return false;
+  recorder.wvInterrupted = true;
+  requestLabRecorderData(recorder);
+  try { recorder.stop(); return true; }
+  catch (_) { return false; }
+}
+
+function announceLabRecordingReady(state, stream, recorder, isCurrent, onReady, onWaiting) {
+  const tracks = stream.getAudioTracks?.() || [];
+  let announcing = false;
+  let generation = 0;
+  const available = () => isCurrent() && !tracks.some(track => track.muted || track.readyState === "ended");
+  const update = () => {
     if (!isCurrent()) return;
-    clearMuteTimer();
-    muteTimer = setTimeout(() => {
-      muteTimer = 0;
-      if (isCurrent() && track.readyState === "live" && track.muted) onDisconnect();
-    }, LAB_MIC_MUTE_GRACE_MS);
+    if (!available()) {
+      generation++;
+      announcing = false;
+      if (recorder.wvReadyAnnounced) recorder.wvInterrupted = true;
+      state.recordingReadyForSpeech = false;
+      onWaiting();
+      return;
+    }
+    if (announcing || state.recordingReadyForSpeech) return;
+    announcing = true;
+    const current = ++generation;
+    void playLabRecordingReadyCue(() => available() && current === generation).then(played => {
+      if (!available() || current !== generation) return;
+      announcing = false;
+      recorder.wvReadyAnnounced = true;
+      state.recordingReadyForSpeech = true;
+      onReady(played);
+    });
   };
-  track.addEventListener?.("ended", disconnect, { once:true });
-  track.addEventListener?.("mute", temporarilyMuted);
-  track.addEventListener?.("unmute", clearMuteTimer);
-  if (track.muted) temporarilyMuted();
+  for (const track of tracks) {
+    track.addEventListener?.("mute", update);
+    track.addEventListener?.("unmute", update);
+  }
+  update();
+}
+
+function reviewInterruptedLabTranscript(state, transcript, stage) {
+  // The missing interval cannot be reconstructed. Keep captured words editable
+  // and require the learner to send them, rather than silently teaching from a
+  // potentially incomplete answer. Switching here must not discard the draft.
+  state.mode = "text";
+  if (state.retainedCaptureContext) state.retainedCaptureContext.stage = stage;
+  const input = q(stage === "clarification" ? "clarification-reply" : "mock-learner-reply");
+  if (input) input.value = transcript;
+  if (q("mock-learner-reply")) q("mock-learner-reply").value = transcript;
+  const message = "Microphone audio was interrupted. Review the captured words and add anything missing before sending.";
+  setMessage(stage === "clarification" ? "clarification-message" : pipelineVoiceStatusId(), message, "error");
+  setMockCarStatus("paused", message, "recording-interrupted");
+  if (stage === "clarification") setClarificationConversationMode("text");
+  else renderPipelineExtractionModeControls();
 }
 
 function primeLabRecordingReadyCue() {
@@ -11493,7 +11531,21 @@ function playLabRecordingReadyCue(isCurrent = () => true) {
     }
   };
   if (context.state === "running") return Promise.resolve(sound());
-  return Promise.resolve(context.resume()).then(sound).catch(() => false);
+  // An interrupted iOS AudioContext can leave resume pending indefinitely.
+  // The recorder must remain usable even when an optional cue cannot play.
+  return new Promise(resolve => {
+    let settled = false;
+    const timer = setTimeout(() => { settled = true; resolve(false); }, 150);
+    let resumed;
+    try { resumed = context.resume(); }
+    catch (_) { clearTimeout(timer); settled = true; resolve(false); return; }
+    Promise.resolve(resumed).then(() => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(sound());
+    }, () => { if (!settled) { settled = true; clearTimeout(timer); resolve(false); } });
+  });
 }
 
 function supportedLabRecordingMimes() {
@@ -11732,6 +11784,7 @@ function adoptPipelineExtractionMicStream(stream, { capture = false } = {}) {
   for (const track of stream.getAudioTracks?.() || []) {
     const disconnect = () => {
       if (state.micStream !== stream) return;
+      if (finishInterruptedLabCapture(state)) return;
       invalidateLabCapture(state, stream);
       releaseLabMicrophoneStream(state, stream);
       state.recordingPointerActive = false;
@@ -12395,6 +12448,7 @@ async function transcribePipelineExtractionRecording(blob, operationId = "", cap
           throw empty;
         }
         labState.extractionBusy = false;
+        if (lineage.reviewRequired) { reviewInterruptedLabTranscript(state, transcript, "extraction"); return false; }
         const accepted = await submitPipelineExtractionReply(transcript, "voice", { originPerf:lineage.turnStartedAt });
         if (accepted) { state.retainedRecording = null; state.retainedTranscript = ""; state.retainedOperationId = ""; state.retainedCaptureContext = null; }
         if (accepted && q("mock-learner-reply")?.value === transcript) q("mock-learner-reply").value = "";
@@ -12455,6 +12509,7 @@ async function transcribePipelineLessonRecording(blob, operationId = "", capture
     if (q("mock-learner-reply")) q("mock-learner-reply").value = transcript;
     if (!transcript) throw new Error("No speech was found in that recording.");
     labState.lessonBusy = false;
+    if (lineage.reviewRequired) { reviewInterruptedLabTranscript(state, transcript, "lesson"); return false; }
     const timingId = beginMockTurnTiming({ stage:"lesson", inputMode:"voice", originKind:"ptt-release", originPerf:lineage.turnStartedAt });
     const accepted = await submitPipelineLessonReply(transcript, { inputMode:"voice", timingId });
     if (accepted === true) { state.retainedRecording = null; state.retainedTranscript = ""; state.retainedOperationId = ""; state.retainedCaptureContext = null; if (q("mock-learner-reply")?.value === transcript) q("mock-learner-reply").value = ""; }
@@ -12497,6 +12552,7 @@ async function transcribePipelineQuizRecording(blob, operationId = "", captureCo
     if (q("mock-learner-reply")) q("mock-learner-reply").value = transcript;
     if (!transcript) throw new Error("No speech was found in that recording.");
     labState.quiz.busy = false;
+    if (lineage.reviewRequired) { reviewInterruptedLabTranscript(state, transcript, "quiz"); return false; }
     const timingId = beginMockTurnTiming({ stage:"quiz", inputMode:"voice", originKind:"ptt-release", originPerf:lineage.turnStartedAt });
     const accepted = await submitPipelineQuizReply(transcript, { inputMode:"voice", timingId });
     if (accepted === true) { state.retainedRecording = null; state.retainedTranscript = ""; state.retainedOperationId = ""; state.retainedCaptureContext = null; if (q("mock-learner-reply")?.value === transcript) q("mock-learner-reply").value = ""; }
@@ -12551,9 +12607,7 @@ async function startPipelineExtractionRecording(event, options = {}) {
     releaseLabMicrophoneStream(state);
     state.recordingLatched = options.latched === true;
     if (state.recordingLatched) state.recordingPointerId = "tap-toggle";
-    setPipelineExtractionAudioSession("auto");
     setPipelineExtractionAudioSession("play-and-record");
-    primeMockVoiceAudio();
     primeLabRecordingReadyCue();
   }
   if (!labMicrophoneStreamIsLive(state.micStream)) {
@@ -12632,6 +12686,7 @@ async function startPipelineExtractionRecording(event, options = {}) {
         renderPipelineExtractionModeControls();
         return;
       }
+      captureContext.reviewRequired = recorder.wvInterrupted === true;
       captureContext.turnStartedAt = Number(recorder.wvReleasedAt) || performance.now();
       setMockCarStatus("transcribing", "Transcribing");
       try {
@@ -12679,11 +12734,11 @@ async function startPipelineExtractionRecording(event, options = {}) {
         q("mock-car-ptt")?.classList.add("is-listening");
         setMessage(captureStatusId, "Recorder ready… wait for the tone.");
         setMockCarStatus("listening", "Recorder ready. Wait for tone.");
-        void playLabRecordingReadyCue(isCurrent).then((played) => {
-          if (!isCurrent()) return;
-          state.recordingReadyForSpeech = true;
+        announceLabRecordingReady(state, captureStream, recorder, isCurrent, (played) => {
           setMessage(captureStatusId, played ? "Listening… tone played. Speak now, then release to send." : "Listening… speak now, then release to send.");
           setMockCarStatus("listening", played ? "Tone played. Speak now." : "Listening. Speak now.");
+        }, () => {
+          setMockCarStatus("listening", "Microphone audio paused. Waiting for the connection; your recording is kept.");
         });
       },
     });
@@ -12956,8 +13011,9 @@ function mockRecordingControlState() {
 }
 
 function renderMockRecordingControls() {
-  const { latched, ready, blocked, holdActive, listening, derived } = mockRecordingControlState();
-  const label = latched ? (listening ? "Tap to send" : "Cancel start") : "Tap to record";
+  const { state, latched, ready, blocked, holdActive, listening, derived } = mockRecordingControlState();
+  const capturing = state.recorder?.state === "recording" && state.recorder.wvReadyAnnounced === true;
+  const label = latched ? (listening ? "Tap to send" : (capturing ? "Stop recording" : "Cancel start")) : "Tap to record";
   for (const [id, car] of [["mock-learner-recording-toggle", false], ["mock-car-recording-toggle", true]]) {
     const toggle = q(id);
     if (!toggle) continue;
@@ -12976,7 +13032,7 @@ function renderMockRecordingControls() {
   }
   if (latched && q("mock-car-ptt")) q("mock-car-ptt").disabled = true;
   const message = latched
-    ? listening ? "Listening. Tap the switch to send." : "Opening microphone. Wait for the tone; tap the switch to cancel."
+    ? listening ? "Listening. Tap the switch to send." : capturing ? "Waiting for microphone audio. Your recording is kept; tap to stop." : "Opening microphone. Wait for the tone; tap the switch to cancel."
     : derived.status === "paused" ? `${derived.message}. Tap to try recording again.`
     : derived.status === "thinking" || derived.status === "transcribing" ? derived.message
     : holdActive ? "Hold until finished, then release to send."
@@ -12990,7 +13046,7 @@ function toggleMockRecording(event) {
   const control = mockRecordingControlState();
   if (event?.currentTarget?.disabled) return;
   if (control.latched) {
-    if (!control.listening) {
+    if (!control.listening && !control.state.recorder?.wvReadyAnnounced) {
       cancelMockCarCapture();
       setMockCarStatus("idle", "Recording cancelled");
     } else {
@@ -13590,6 +13646,9 @@ function mockLearnerStatus(stage, artifact, selection) {
     }
   }
   if (voiceState.retainedRecording && (!voiceState.retainedCaptureContext || voiceState.retainedCaptureContext.stage === stage)) {
+    if (voiceState.retainedCaptureContext?.reviewRequired && voiceState.retainedTranscript) return {
+      text:"Microphone audio was interrupted. Review your captured words and add anything missing before sending.", error:true, retry:"",
+    };
     return { text:voiceState.retainedTranscript
       ? "Your words are saved on this screen. Retry sends the same draft, or switch to Text to edit it."
       : "Your recording is still on this screen. Retry transcription or switch to Text.", error:true, retry:"transcription" };
@@ -13706,7 +13765,7 @@ async function submitMockLearnerReply() {
   if (labState.pipelineStage === "extraction") {
     q("pipeline-extraction-reply").value = reply;
     const accepted = await submitPipelineExtractionReply(reply, "text");
-    if (accepted && labState.extraction.retainedTranscript === reply) {
+    if (accepted && (labState.extraction.retainedTranscript === reply || labState.extraction.retainedCaptureContext?.reviewRequired)) {
       Object.assign(labState.extraction, { retainedRecording:null, retainedTranscript:"", retainedOperationId:"", retainedCaptureContext:null });
     }
     if (!accepted && !q("pipeline-extraction-reply").value) q("pipeline-extraction-reply").value = reply;
@@ -13719,7 +13778,7 @@ async function submitMockLearnerReply() {
     const submittedValue = input.value;
     q("pipeline-lesson-reply").value = reply;
     const accepted = await submitPipelineLessonReply(reply, { inputMode:"text" });
-    if (accepted && labState.extraction.retainedTranscript === reply) {
+    if (accepted && (labState.extraction.retainedTranscript === reply || labState.extraction.retainedCaptureContext?.reviewRequired)) {
       Object.assign(labState.extraction, { retainedRecording:null, retainedTranscript:"", retainedOperationId:"", retainedCaptureContext:null });
     }
     if (pipelineConversationLineageIsCurrent(lineage)) {
@@ -13734,7 +13793,7 @@ async function submitMockLearnerReply() {
   let accepted = false;
   if (stage === "clarification") { q("clarification-reply").value = reply; accepted = await submitClarificationReply(reply); }
   if (stage === "quiz") { q("pipeline-quiz-reply").value = reply; accepted = await submitPipelineQuizReply(reply, { inputMode:"text" }); }
-  if (accepted && state.retainedTranscript === reply) {
+  if (accepted && (state.retainedTranscript === reply || state.retainedCaptureContext?.reviewRequired)) {
     Object.assign(state, { retainedRecording:null, retainedTranscript:"", retainedOperationId:"", retainedCaptureContext:null });
   }
   if (accepted && input.value === draft) input.value = "";
@@ -14683,8 +14742,6 @@ function prepareClarificationRecordingArm(event, pointerStartedAt) {
   if (state.mode !== "voice" || state.busy || clarificationTurnPending(state) || !labMicrophoneStreamIsLive(state.micStream) || state.recorder?.state === "recording" || state.recordingPointerStartedAt !== pointerStartedAt) return;
   const pointerType = event?.pointerType || "touch";
   const button = event?.button ?? 0;
-  stopSpeechComparison();
-  stopClarificationSpeech();
   setClarificationAudioSession("play-and-record");
   setClarificationMicTracksEnabled(true);
   state.recordingArmPrepared = true;
@@ -14719,9 +14776,7 @@ function armClarificationRecording(event, options = {}) {
   releaseLabMicrophoneStream(state);
   state.recordingLatched = options.latched === true;
   if (state.recordingLatched) state.recordingPointerId = "tap-toggle";
-  setClarificationAudioSession("auto");
   setClarificationAudioSession("play-and-record");
-  primeMockVoiceAudio();
   primeLabRecordingReadyCue();
   setMessage("clarification-message", "Opening the microphone… keep holding and begin after the tone.");
   setMockCarStatus("thinking", "Opening microphone. Wait for tone.");
@@ -14758,7 +14813,7 @@ function cancelClarificationRecordingArmOnMove(event) {
 
 function setClarificationAudioSession(type) {
   try {
-    if (navigator.audioSession && "type" in navigator.audioSession) navigator.audioSession.type = type;
+    if (navigator.audioSession && "type" in navigator.audioSession && navigator.audioSession.type !== type) navigator.audioSession.type = type;
   } catch (_) { /* The browser owns the physical route when this API is unavailable. */ }
 }
 
@@ -14774,6 +14829,7 @@ function adoptClarificationMicStream(stream, runId, { capture = false } = {}) {
   for (const track of stream.getAudioTracks?.() || []) {
     const disconnect = () => {
       if (state.micStream !== stream || state.runId !== runId) return;
+      if (finishInterruptedLabCapture(state)) return;
       invalidateLabCapture(state, stream);
       releaseLabMicrophoneStream(state, stream);
       clearClarificationRecordingArm(false);
@@ -14826,6 +14882,7 @@ function setClarificationTopicMicStatus(message = "", error = false) {
 
 function releaseClarificationTopicCapture({ invalidate = true } = {}) {
   const state = labState.topicVoice;
+  const wasAcquiring = state.acquiring === true;
   abortLabTranscription(state);
   if (invalidate) {
     state.captureToken = makeId();
@@ -14851,7 +14908,10 @@ function releaseClarificationTopicCapture({ invalidate = true } = {}) {
   q("clarification-topic-mic")?.setAttribute("aria-label", "Record lesson topic");
   if (q("clarification-topic-mic")) q("clarification-topic-mic").disabled = false;
   state.busy = false;
-  setClarificationAudioSession("playback");
+  state.acquiring = false;
+  state.recordingReadyForSpeech = false;
+  q("clarification-topic-mic")?.setAttribute("aria-busy", "false");
+  if (stream || recorder || wasAcquiring) setClarificationAudioSession("playback");
 }
 
 function insertClarificationTopicTranscript(transcript, originalValue, selectionStart, selectionEnd) {
@@ -14891,6 +14951,11 @@ async function toggleClarificationTopicRecording() {
     }, LAB_RECORDING_RELEASE_TAIL_MS);
     return;
   }
+  if (state.acquiring) {
+    releaseClarificationTopicCapture();
+    setClarificationTopicMicStatus("Microphone start cancelled. Tap to try again.");
+    return;
+  }
   if (state.busy) return;
   if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
     setClarificationTopicMicStatus("This browser cannot record a topic. Type it instead.", true);
@@ -14898,17 +14963,20 @@ async function toggleClarificationTopicRecording() {
   }
   releaseClarificationTopicCapture();
   state.busy = true;
-  button.disabled = true;
+  state.acquiring = true;
+  button.disabled = false;
+  button.setAttribute("aria-busy", "true");
+  button.setAttribute("aria-label", "Cancel microphone start");
+  input.blur();
   const acquireToken = makeId();
   state.acquireToken = acquireToken;
   state.operationId = makeId();
   state.sourceValue = input.value;
+  setClarificationAudioSession("play-and-record");
   primeLabRecordingReadyCue();
   const selectionStart = Number(input.selectionStart ?? input.value.length);
   const selectionEnd = Number(input.selectionEnd ?? selectionStart);
   setClarificationTopicMicStatus("Opening the microphone… wait for the tone, then speak.");
-  setClarificationAudioSession("auto");
-  setClarificationAudioSession("play-and-record");
   try {
     const stream = await boundedLabMicrophoneRequest();
     if (state.acquireToken !== acquireToken || q("clarification-setup")?.hidden) {
@@ -14916,6 +14984,8 @@ async function toggleClarificationTopicRecording() {
       return;
     }
     state.stream = stream;
+    state.acquiring = false;
+    button.setAttribute("aria-busy", "false");
     const captureOwnerUserId = labState.verifiedUserId;
     const captureToken = makeId();
     state.captureToken = captureToken;
@@ -14987,12 +15057,15 @@ async function toggleClarificationTopicRecording() {
         button.setAttribute("aria-pressed", "true");
         button.setAttribute("aria-label", "Stop recording lesson topic");
         setClarificationTopicMicStatus("Recorder ready… wait for the tone.");
-        void playLabRecordingReadyCue(isCurrent).then((played) => {
-          if (isCurrent()) setClarificationTopicMicStatus(played ? "Tone played. Speak now, then tap again to stop." : "Listening. Speak now, then tap again to stop.");
-        });
+        announceLabRecordingReady(state, stream, recorder, isCurrent, (played) => {
+          setClarificationTopicMicStatus(played ? "Tone played. Speak now, then tap again to stop." : "Listening. Speak now, then tap again to stop.");
+        }, () => setClarificationTopicMicStatus("Waiting for microphone audio. Tap again to stop."));
       },
     });
     state.recorder = recorder;
+    for (const track of stream.getAudioTracks?.() || []) {
+      watchLabMicrophoneTrack(track, () => state.captureToken === captureToken, () => { finishInterruptedLabCapture(state); });
+    }
     button.disabled = false;
   } catch (error) {
     if (state.acquireToken !== acquireToken) return;
@@ -16653,6 +16726,7 @@ async function transcribeClarificationRecording(blob, operationId = "", captureC
         }
         state.transcriptionToken = "";
         setClarificationBusy(false);
+        if (lineage.reviewRequired) { reviewInterruptedLabTranscript(state, transcript, "clarification"); return false; }
         const accepted = await submitClarificationReply(transcript, { inputMode:"voice", originPerf:lineage.turnStartedAt });
         if (accepted) { state.retainedRecording = null; state.retainedTranscript = ""; state.retainedRecordingMime = ""; state.retainedOperationId = ""; state.retainedCaptureContext = null; }
         if (accepted && q("mock-learner-reply")?.value === transcript) q("mock-learner-reply").value = "";
@@ -16750,6 +16824,7 @@ function startClarificationRecording(event, options = {}) {
         setMockCarStatus("paused", "I didn’t hear that. Hold again.", "empty-audio");
         return;
       }
+      captureContext.reviewRequired = recorder.wvInterrupted === true;
       captureContext.turnStartedAt = Number(recorder.wvReleasedAt) || performance.now();
       setMockCarStatus("transcribing", "Transcribing");
       try {
@@ -16787,11 +16862,11 @@ function startClarificationRecording(event, options = {}) {
         q("mock-car-ptt")?.classList.add("is-listening");
         setMessage("clarification-message", "Recorder ready… wait for the tone.");
         setMockCarStatus("listening", "Recorder ready. Wait for tone.");
-        void playLabRecordingReadyCue(isCurrent).then((played) => {
-          if (!isCurrent()) return;
-          state.recordingReadyForSpeech = true;
+        announceLabRecordingReady(state, captureStream, recorder, isCurrent, (played) => {
           setMessage("clarification-message", played ? "Listening… tone played. Speak now, then release to send." : "Listening… speak now, then release to send.");
           setMockCarStatus("listening", played ? "Tone played. Speak now." : "Listening. Speak now.");
+        }, () => {
+          setMockCarStatus("listening", "Microphone audio paused. Waiting for the connection; your recording is kept.");
         });
       },
     });
