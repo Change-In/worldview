@@ -828,14 +828,14 @@ body.mock-run #pipeline-map-stage .map-workspace-bar { display:none; }
 .clarification-setup textarea { min-height:118px; border-color:rgba(238,221,187,.2); color:#fff8ec; background:rgba(11,10,9,.42); font:500 clamp(1.05rem,2.3vw,1.3rem)/1.45 Georgia,serif; }
 .clarification-setup textarea:focus { border-color:rgba(120,229,192,.72); background:rgba(11,10,9,.7); box-shadow:0 0 0 3px rgba(120,229,192,.16); }
 .clarification-setup textarea::placeholder { color:#817767; }
-.clarification-topic-field { position:relative; }
-.clarification-topic-field textarea { display:block; width:100%; padding-right:64px; }
-.clarification-topic-mic { position:absolute; right:10px; bottom:10px; display:grid; width:44px; height:44px; padding:0; place-items:center; border:1px solid rgba(238,221,187,.25); border-radius:50%; color:#f8ead7; background:rgba(28,25,22,.94); cursor:pointer; }
+.clarification-setup > .clarification-topic-field { display:grid; grid-template-columns:minmax(0,1fr) 48px; align-items:end; gap:12px; }
+.clarification-topic-field textarea { display:block; width:100%; min-width:0; }
+.clarification-topic-mic { position:static; display:grid; width:48px; height:48px; margin-bottom:2px; padding:0; place-items:center; border:1px solid rgba(238,221,187,.25); border-radius:50%; color:#f8ead7; background:rgba(28,25,22,.94); cursor:pointer; }
 .clarification-topic-mic:hover,.clarification-topic-mic:focus-visible { border-color:rgba(120,229,192,.7); outline:2px solid rgba(120,229,192,.16); outline-offset:2px; }
 .clarification-topic-mic.is-listening { border-color:#ffd5a2; color:#25170f; background:#eda06b; box-shadow:0 0 0 6px rgba(237,152,95,.13); animation:extractionPulse 1.2s ease-in-out infinite; }
 .clarification-topic-mic:disabled { cursor:wait; opacity:.65; }
 .clarification-topic-mic svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
-.clarification-topic-mic-status { min-height:18px; margin-top:6px; color:#c8bba6; font-size:10px; line-height:1.4; }
+.clarification-topic-mic-status { min-height:20px; margin-top:6px; color:#c8bba6; font-size:13px; line-height:1.4; }
 .clarification-topic-mic-status.is-error { color:#ffb6ad; }
 .clarification-start { min-height:62px; margin-top:17px; border:0; border-radius:19px; color:#21160f; background:#eda06b; font-size:16px; font-weight:900; cursor:pointer; box-shadow:0 12px 30px rgba(237,152,95,.16); }
 .clarification-mode-step { width:min(100%,660px); margin:24px auto 0; padding:22px; border:1px solid rgba(238,221,187,.16); border-radius:20px; background:rgba(8,8,7,.34); }
