@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#241f1a">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=1.2.8">
+<link rel="stylesheet" href="./lab.css?v=1.2.9">
 </head>
 <body>
 
@@ -77,6 +77,7 @@
         <div class="mock-setup-side">
           <details class="mock-setup-card" open>
             <summary class="mock-setup-card-head"><h3>Saved starting points</h3></summary>
+            <label class="mock-saved-search" for="mock-saved-search">Find a saved run<input id="mock-saved-search" type="search" placeholder="Search topics" autocomplete="off"></label>
             <div id="mock-previous-runs" class="mock-previous-runs"><p class="mock-empty">No saved Mock Runs yet.</p></div>
           </details>
           <details class="mock-setup-card">
@@ -159,10 +160,14 @@
       <div class="mock-recording-row mock-car-recording-row">
         <button id="mock-car-ptt" class="mock-car-ptt" type="button" aria-label="Hold and wait for the ready tone to talk">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M8.5 21h7"/></svg>
+          <span aria-hidden="true">Hold to talk</span>
         </button>
         <button id="mock-car-recording-toggle" class="mock-recording-toggle" type="button" role="switch" aria-label="Tap recording" aria-checked="false" aria-describedby="mock-car-status"><span class="mock-recording-lever" aria-hidden="true"></span><span data-recording-label>Tap to record</span></button>
       </div>
-      <button id="mock-car-replay" class="button button-quiet mock-car-replay" type="button" hidden>Hear reply</button>
+      <div class="mock-car-recovery-actions">
+        <button id="mock-car-replay" class="button button-quiet mock-car-replay" type="button" hidden>Hear reply</button>
+        <button id="mock-car-retry" class="button button-quiet mock-car-retry" type="button" hidden>Try again</button>
+      </div>
       <p class="mock-car-safety">Set this mode before driving. Keep your attention on the road and follow local hands-free laws.</p>
     </section>
     <div class="pipeline-run-browser" aria-label="Saved lesson runs">
@@ -691,7 +696,7 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=1.2.8" defer></script>
+<script src="./lab.js?v=1.2.9" defer></script>
 </body>
 </html>
 

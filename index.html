@@ -1030,6 +1030,18 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     transform:translateX(var(--stack-x));
     color:var(--ink-soft);font-size:10px;letter-spacing:.04em;
   }
+  /* All Explore folders share one horizontal slot. Native vertical scrolling
+     keeps this shelf familiar on phones, with nearby cards fading at its edges. */
+  .card.folder-carousel-card { padding:0;background:transparent;box-shadow:none;touch-action:pan-y;overflow:hidden;border-radius:0; }
+  .folder-carousel-list { width:100%;height:100%;overflow-y:auto;overflow-x:hidden;padding:calc(var(--cardH,320px) * .22) 8px;scrollbar-width:none;overscroll-behavior-y:contain;scroll-snap-type:y proximity;touch-action:pan-y;-webkit-overflow-scrolling:touch;mask-image:linear-gradient(transparent,#000 15%,#000 85%,transparent);-webkit-mask-image:linear-gradient(transparent,#000 15%,#000 85%,transparent); }
+  .folder-carousel-list::-webkit-scrollbar { display:none; }
+  .folder-carousel-item { display:flex;position:relative;flex-direction:column;align-items:center;justify-content:center;gap:12px;width:100%;min-height:calc(var(--cardH,320px) * .56);padding:26px 18px;margin:0 0 14px;border:1px solid var(--line);border-radius:var(--radius);background:var(--card);color:var(--ink);box-shadow:var(--shadow-sm);font:inherit;cursor:pointer;scroll-snap-align:center;touch-action:pan-y; }
+  .folder-carousel-item:last-child { margin-bottom:0; }
+  .folder-carousel-item strong { font:600 max(18px,calc(var(--cardW,262px) * .08))/1.25 Georgia,serif;overflow-wrap:anywhere; }
+  .folder-carousel-item span { color:var(--ink-soft);font-size:12px; }
+  .folder-carousel-item .folder-carousel-label { font-size:10px;letter-spacing:.13em;text-transform:uppercase; }
+  .folder-carousel-item:focus-visible { outline:3px solid var(--accent);outline-offset:-4px; }
+  @media(prefers-reduced-motion:reduce) { .folder-carousel-list { scroll-behavior:auto; } }
   /* The Upload page renders folders through the source-card markup instead, so
      it needs the identical front-face shift or it keeps the original bug. */
   .source-card.custom-category-card .source-card-host,
@@ -2200,11 +2212,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v1.2.8 · Sep 6";
+const BUILD = "v1.2.9 · Sep 6";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag:"v1.2.9", date:"Sep 6", changes:["Folders share one vertical carousel beside Ask Anything, with recent lessons alongside.","The introduction waits for account and library readiness; new mock runs keep their own conversation.","Saved mock runs show five at a time with topic search.","The taller conversation wheel glides after a flick and slows to a stop.","Car view has larger recording controls, reply playback and visible retry; hold-to-talk loses its extra startup delay.","Continuing Extraction after the lesson offer follows chapter outcomes; first Tutor speech has clearer recovery.","Missing research shows its status, and completed evidence from partial batches is preserved."] },
   { tag:"v1.2.8", date:"Sep 6", changes:["The topic microphone sits beside the text field with its own clear tap target.","Extraction asks directly about your understanding without an imagined beginner.","Natural acceptance such as Now is fine can recover the saved transition into the lesson.","Research keeps every returned source, including previously hidden fourth sources, and retries check saved results first.","Newer saved runs sync across devices without replacing your current draft."] },
   { tag:"v1.2.7", date:"Sep 6", changes:["Temporary microphone route pauses keep the same recording instead of clearing it.","Interrupted speech is kept as an editable draft for review before sending.","Microphone startup avoids redundant audio resets; a stalled ready tone cannot lock the controls.","The topic microphone shows immediate opening feedback and lets you cancel a pending start."] },
   { tag:"v1.2.6", date:"Sep 5", changes:["Continuing a saved Tutor or Quiz restores missing map references from that exact lesson’s saved work.","New checkpoints save the actual selected map, including maps chosen automatically in the background.","Includes the completed handoff, answer organization, Gemini defaults and measured research costs."] },
@@ -4306,6 +4319,7 @@ async function initCloudPersistence() {
     updateCloudAccountUI(hasRemote ? "synced" : "");
     renderAccountGuardUI();
     reconcileAccountEntry();
+    if (initialIdentityRestored) scheduleAutomaticIntroduction();
     if (cloudSyncReady) scheduleCloudSync(100);
     return accountOwnershipResolved;
   } catch (error) {
@@ -6201,6 +6215,55 @@ function recentLessonOrder(lessons) {
   const stamp = lesson => { const value = lesson.updatedAt || lesson.createdAt;return Number(value) || Date.parse(value) || 0; };
   return [...lessons].reverse().sort((a,b) => stamp(b)-stamp(a));
 }
+const homeFolderScrollPositions = new Map();
+function renderHomeFolderCarousel(carousel) {
+  const categories = categoriesForSection("explore");
+  if (wheel.layerCategory || !categories.length) return;
+  const accountKey = String(stateAccountId || "local");
+  const card = document.createElement("div");
+  card.className = "card folder-carousel-card";
+  card.dataset.kind = "folder-carousel";
+  const list = document.createElement("div");
+  list.className = "folder-carousel-list";
+  list.setAttribute("role","group");
+  list.setAttribute("aria-label","Folders. Scroll vertically to browse.");
+  categories.forEach(category => {
+    const count = state.lessons.filter(lesson => !isSourceLesson(lesson) && !lessonIsArchived(lesson) && (lesson.customCategoryIds || []).includes(category.id)).length;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "folder-carousel-item";
+    button.dataset.categoryKey = `custom:${category.id}`;
+    button.setAttribute("aria-label",`${category.name}, ${count} lesson${count === 1 ? "" : "s"}. Open folder.`);
+    button.innerHTML = `<span class="folder-carousel-label">folder</span><strong>${esc(category.name)}</strong><span>${count} lesson${count === 1 ? "" : "s"}</span>`;
+    // Pointer taps use the shared measured-rectangle resolver. Keep native
+    // keyboard/assistive clicks available without double-opening a folder.
+    button.onclick = event => { if (event.detail === 0) applyCategoryKey(button.dataset.categoryKey); };
+    list.appendChild(button);
+  });
+  list.addEventListener("scroll",() => { homeFolderScrollPositions.set(accountKey,list.scrollTop); },{passive:true});
+  list.addEventListener("keydown",event => {
+    if (!["ArrowDown","ArrowUp","Home","End"].includes(event.key)) return;
+    const buttons = [...list.querySelectorAll(".folder-carousel-item")];
+    const current = buttons.indexOf(document.activeElement);
+    const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1
+      : Math.max(0,Math.min(buttons.length - 1,current + (event.key === "ArrowDown" ? 1 : -1)));
+    event.preventDefault();buttons[next]?.focus({preventScroll:true});
+    const selected = buttons[next];
+    if (selected) list.scrollTop = selected.offsetTop - (list.clientHeight - selected.offsetHeight) / 2;
+  });
+  card.appendChild(list);carousel.appendChild(card);
+  wheel.cards.push(card);wheel.ids.push(null);
+  list.scrollTop = homeFolderScrollPositions.get(accountKey) || 0;
+}
+function homeFolderAtPoint(card,x,y) {
+  const viewport = card.querySelector(".folder-carousel-list")?.getBoundingClientRect();
+  if (!viewport || x < viewport.left || x > viewport.right || y < viewport.top || y > viewport.bottom) return "";
+  for (const button of card.querySelectorAll(".folder-carousel-item")) {
+    const rect = button.getBoundingClientRect();
+    if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) return button.dataset.categoryKey;
+  }
+  return "";
+}
 function renderHome() {
   if ($("home-archive-count")) $("home-archive-count").textContent = archivedLessons().length;
   syncDeveloperLauncherVisibility();
@@ -6253,26 +6316,13 @@ function renderHome() {
     wheel.cards.push(nc); wheel.ids.push(null);
   }
 
-  // Personal collections are real carousel destinations. They are shown on
-  // the main shelf, then become filters only after the learner enters one.
-  if (!wheel.layerCategory) {
-    categoriesForSection("explore").forEach(category => {
-      const count = state.lessons.filter(lesson => !isSourceLesson(lesson) && !lessonIsArchived(lesson) && (lesson.customCategoryIds || []).includes(category.id)).length;
-      const card = document.createElement("button");
-      card.type = "button";
-      card.className = "card custom-category-card";
-      card.dataset.kind = "custom-category";
-      card.dataset.categoryKey = `custom:${category.id}`;
-      card.innerHTML = `<div class="card-cat">collection</div><div class="card-title serif">${esc(category.name)}</div><div class="custom-category-count">${count} lesson${count === 1 ? "" : "s"}</div>`;
-      c.appendChild(card);
-      wheel.cards.push(card); wheel.ids.push(null);
-    });
-  }
+  // Folders occupy one place after Ask Anything; the remaining shelf is recent lessons.
+  renderHomeFolderCarousel(c);
 
   // lesson cards, newest first
   const visibleLessons = recentLessonOrder(state.lessons).filter(lesson => {
     if (isSourceLesson(lesson) || lessonIsArchived(lesson) || !lessonMatchesLayer(lesson)) return false;
-    if (!wheel.layerCategory && (lesson.customCategoryIds || []).length) return false;
+    // Filing changes organization, not recency. Recent lessons include filed lessons.
     // Finishing never archives a lesson; the learner chooses when to put it away.
     return true;
   });
@@ -6640,6 +6690,12 @@ function pathControlAtPoint(x, y) {
         }
         if (el.dataset.kind === "notes") { wheel.pos = idx; layoutWheel(); showNotes(); return; }
         if (el.dataset.kind === "custom-category") { applyCategoryKey(el.dataset.categoryKey); return; }
+        if (el.dataset.kind === "folder-carousel") {
+          const categoryKey = homeFolderAtPoint(el,e.clientX,e.clientY);
+          if (categoryKey) applyCategoryKey(categoryKey);
+          else { wheel.pos = idx;layoutWheel(); }
+          return;
+        }
         if (wheel.ids[idx]) {
           wheel.pos = idx; layoutWheel();
           if (!state.continueHintDismissed) { state.continueHintDismissed = true; save(); }
@@ -16265,16 +16321,34 @@ $("open-mic-primer").addEventListener("click",() => { closeSettings(true);setMic
 $("mic-primer").addEventListener("keydown",event => { if (event.key === "Escape") finishMicPrimer("later"); });
 
 let initialIdentityRestored = !backendClient;
+let automaticIntroTimer = 0;
+function automaticIntroductionNeeded() {
+  if (!initialIdentityRestored || accountTransitionInProgress || accountEntryNeeded()
+      || accountIdentityHeldForRetry() || accountCacheReadOnly) return false;
+  if (backendClient && (!accountOwnershipResolved || !identityMutationReady || cloudHydrating
+      || identityRestoreStatus !== "verified" || !cloudAccount?.id || stateAccountId !== cloudAccount.id)) return false;
+  // Owner Lab work is deliberately outside the learner's Home library. An
+  // empty Home library must not make a returning verified owner a new visitor.
+  return !ownerToolsAvailable() && !state.introSeenVersion && !hasLearnerLibrary(state);
+}
+function scheduleAutomaticIntroduction() {
+  clearTimeout(automaticIntroTimer);automaticIntroTimer = 0;
+  if (!automaticIntroductionNeeded()) return;
+  const accountId = String(cloudAccount?.id || "");
+  const generation = cloudInitGeneration;
+  automaticIntroTimer = setTimeout(() => {
+    automaticIntroTimer = 0;
+    // Authentication, a cloud merge, or account switching may finish during
+    // this short paint delay. Never show a stale first-visit decision.
+    if (generation !== cloudInitGeneration || accountId !== String(cloudAccount?.id || "")
+        || !automaticIntroductionNeeded()) return;
+    setIntroOpen(true);
+  },80);
+}
 function finishIdentityBootstrap() {
   initialIdentityRestored = true;
   reconcileAccountEntry();
-  if (accountEntryNeeded()) return;
-  /* A remembered account under transient verification failure is not signed in,
-     but it is also not a new visitor. Keep its scoped cache read-only and keep
-     onboarding/recovery prompts closed while the secure-session retry runs. */
-  if (accountIdentityHeldForRetry() || accountCacheReadOnly) return;
-  const introNeeded = !state.introSeenVersion && !hasLearnerLibrary(state);
-  if (introNeeded) setTimeout(() => setIntroOpen(true),80);
+  scheduleAutomaticIntroduction();
 }
 
 /* A Lab result can hand only its original topic back to the real app. The
