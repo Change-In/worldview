@@ -13688,11 +13688,12 @@ async function enterMockCarMode() {
   const runId = labState.clarification.runId || selectedPipelineArtifact()?.runId || "";
   let ready = true;
   if (stage === "clarification" && labState.clarification.mode !== "voice") {
-    await switchClarificationConversationMode();
+    setClarificationConversationMode("voice");
+    persistClarificationSettings();
     ready = labState.clarification.mode === "voice";
   } else if (["extraction", "lesson", "quiz"].includes(stage) && labState.extraction.mode !== "voice") {
     setPipelineExtractionConversationMode("voice");
-    ready = await requestPipelineExtractionVoice();
+    ready = labState.extraction.mode === "voice";
   }
   const stillCurrent = labState.mockCar.entryToken === entryToken
     && labState.pipelineMode === "mock"
