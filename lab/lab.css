@@ -1617,6 +1617,11 @@ body.mock-run.mock-car-active .mock-car-surface { padding:max(16px,env(safe-area
 .mock-car-recovery-actions { grid-row:4; align-self:start; display:flex; justify-content:center; flex-wrap:wrap; gap:8px; margin-top:22px; }
 .mock-car-replay,.mock-car-retry { min-width:140px; min-height:52px; margin:0; color:#eec7ab; border-color:#eec7ab44; }
 .mock-car-retry { border-color:#e2895a88; }
+.mock-car-recovery-actions > button, #mock-car-map { min-height:48px; }
+.mock-car-surface.is-discarding, .mock-learner-shell.is-discarding { box-shadow:inset 0 0 0 5px #e48471; }
+.is-discarding .mock-car-ptt { background:#64382e; color:#ffe9e1; border-color:#e48471; }
+.mock-car-recovery-actions { max-width:100%; }
+.mock-car-safety { text-align:center; line-height:1.5; }
 .mock-car-safety { max-width:400px; font-size:11px; color:#b6a894; }
 @media(max-height:540px) {
   body.mock-run.mock-car-active .mock-car-surface { grid-template-rows:48px minmax(36px,1fr) auto minmax(48px,1fr) auto; padding-block:10px; }

@@ -2212,11 +2212,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v1.2.9 · Sep 6";
+const BUILD = "v1.2.10 · Sep 6";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag:"v1.2.10", date:"Sep 6", changes:["Mock Car mode adds Repeat, Stop audio and Map with a return to the same conversation.","Slide away while holding to discard; keep holding and slide back to start a fresh recording. Tap recording also has Discard.","Mock Voice prepares the microphone connection between turns and no longer waits for the optional tone once capture is ready.","Optional Extraction asks broad familiarity questions about untouched lesson-map topics, including concepts you have not mentioned.","Car retries reload the saved reply first, preserve the same answer and repair rejected transition instructions."] },
   { tag:"v1.2.9", date:"Sep 6", changes:["Folders share one vertical carousel beside Ask Anything, with recent lessons alongside.","The introduction waits for account and library readiness; new mock runs keep their own conversation.","Saved mock runs show five at a time with topic search.","The taller conversation wheel glides after a flick and slows to a stop.","Car view has larger recording controls, reply playback and visible retry; hold-to-talk loses its extra startup delay.","Continuing Extraction after the lesson offer follows chapter outcomes; first Tutor speech has clearer recovery.","Missing research shows its status, and completed evidence from partial batches is preserved."] },
   { tag:"v1.2.8", date:"Sep 6", changes:["The topic microphone sits beside the text field with its own clear tap target.","Extraction asks directly about your understanding without an imagined beginner.","Natural acceptance such as Now is fine can recover the saved transition into the lesson.","Research keeps every returned source, including previously hidden fourth sources, and retries check saved results first.","Newer saved runs sync across devices without replacing your current draft."] },
   { tag:"v1.2.7", date:"Sep 6", changes:["Temporary microphone route pauses keep the same recording instead of clearing it.","Interrupted speech is kept as an editable draft for review before sending.","Microphone startup avoids redundant audio resets; a stalled ready tone cannot lock the controls.","The topic microphone shows immediate opening feedback and lets you cancel a pending start."] },
