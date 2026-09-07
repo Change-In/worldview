@@ -1890,3 +1890,28 @@ body.mock-learner-shell-active #panel-pipeline { inset:auto; top:var(--lab-viewp
 
 .mock-car-speaker-status { position:absolute; top:80px; left:24px; right:24px; max-width:none; }
 @media(max-height:540px) { .mock-car-speaker-status { top:58px; font-size:11px; } }
+/* The learner route renders the same phase engine without its diagnostic desk.
+   Server authorization lives at learner-jobs, independently of this class. */
+.learner-route #lab-shell { visibility: hidden; }
+.learner-route #lab-shell.learner-ready { visibility: visible; }
+.learner-route body.mock-learner-shell-active #lab-new-topbar,
+.learner-route body.mock-car-active #lab-new-topbar { display: none !important; }
+.learner-route #lab-workspace-home,
+.learner-route #lab-tool-select,
+.learner-route #lab-open-timing,
+.learner-route .pipeline-mode-bar,
+.learner-route #mock-setup-screen,
+.learner-route #pipeline-mock-progress,
+.learner-route #mock-run-config,
+.learner-route .pipeline-run-browser,
+.learner-route .pipeline-rail,
+.learner-route .clarification-workspace-bar,
+.learner-route #clarification-backend-panel,
+.learner-route .lab-evidence-fold,
+.learner-route .lab-footer,
+.learner-route .lab-tabs,
+.learner-route #lab-shell > :not(#panel-pipeline),
+.learner-route #clarification-learner-panel > .pipeline-card-head,
+.learner-route .pipeline-mode-note { display: none !important; }
+.learner-route #clarification-learner-panel { width: 100%; max-width: 620px; margin-inline: auto; }
+.learner-route #clarification-setup .privacy-note { color: var(--muted); }

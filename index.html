@@ -2212,11 +2212,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v1.2.13 · Sep 7";
+const BUILD = "v2.1 · Sep 7";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag:"v2.1", date:"Sep 7", changes:["Begin on Home now opens the complete tested lesson sequence: Clarification, Lesson Map and Extraction, Tutor, then Quiz.","Continue your saved trial lessons from Home with the same conversation, research and recovery.","Approved testers use the shared lesson engine through their own account; Lab editing controls remain restricted."] },
   { tag:"v1.2.13", date:"Sep 7", changes:["Mock Car opens for listening without waiting for microphone permission. Includes the new speaker control and playback recovery."] },
   { tag:"v1.2.12", date:"Sep 7", changes:["Mock Car: speaker button replaces the Car icon, with remembered spoken-reply control and immediate replay.", "Speaker state follows playback events; starting, interruptions and failures stay visible.", "Release idle microphone connections before replies return to media playback."] },
   { tag:"v1.2.11", date:"Sep 7", changes:["Mock Text keeps the same reply prompt and styling across phases.","A compact chapter menu expands into a clean numbered list for browsing.","A separate AI organizes your prior ideas by meaning against the exact lesson map; old word matching is retired.","Sources appear on the responses that cite them. One circle opens a source; multiple sources expand vertically."] },
@@ -4325,6 +4326,7 @@ async function initCloudPersistence() {
     reconcileAccountEntry();
     if (initialIdentityRestored) scheduleAutomaticIntroduction();
     if (cloudSyncReady) scheduleCloudSync(100);
+    refreshHomeLearnerRuns();
     return accountOwnershipResolved;
   } catch (error) {
     if (generation !== cloudInitGeneration) return;
@@ -6307,7 +6309,7 @@ function renderHome() {
     nc = document.createElement("div");
     nc.className = "card new-card";
     nc.innerHTML = `
-      <div class="card-cat">${insidePersonalCategory ? `ask &middot; filed in ${esc(layerName)}` : "ask anything"}${pilotLabel}</div>
+      <div class="card-cat">${insidePersonalCategory && !homeLearnerAccountAllowed() ? `ask &middot; filed in ${esc(layerName)}` : "ask anything"}${pilotLabel}</div>
       <input id="topic-input" type="text" autocomplete="off" autocapitalize="sentences" autocorrect="on" spellcheck="true" placeholder="${pilotAtLimit ? "Reopen a saved lesson" : "What are you curious about?"}" enterkeyhint="go"${pilotAtLimit || startStatus.blocksInput ? " disabled" : ""}>
       <div class="new-card-actions">
         <button id="start-btn" type="button"${startStatus.busy ? " disabled" : ""}>${pilotAtLimit ? "10/10 created" : startStatus.label || "Begin"}</button>
@@ -6322,6 +6324,7 @@ function renderHome() {
 
   // Folders occupy one place after Ask Anything; the remaining shelf is recent lessons.
   renderHomeFolderCarousel(c);
+  renderHomeLearnerRuns(c);
 
   // lesson cards, newest first
   const visibleLessons = recentLessonOrder(state.lessons).filter(lesson => {
@@ -6413,7 +6416,7 @@ function renderNotesList() {
     actions.className = "note-actions";
     const learn = document.createElement("button");
     learn.className = "note-start"; learn.type = "button"; learn.textContent = "Learn";
-    learn.onclick = () => beginLesson(n.text, "socratic", `Teach me this as an intuitive, first-principles overview in ordinary language: ${n.text}`);
+    learn.onclick = () => String(n.text || "").length <= 500 ? openHomeLearnerRun({topic:n.text}) : beginLesson(n.text, "socratic", `Teach me this as an intuitive, first-principles overview in ordinary language: ${n.text}`);
     const x = document.createElement("button");
     x.className = "note-x"; x.type = "button"; x.innerHTML = "&times;";
     x.title = "Delete note"; x.setAttribute("aria-label", `Delete note: ${n.text}`);
@@ -8035,6 +8038,106 @@ function openDirection(topic, mode = "voice") {
   });
 })();
 
+// Home and the learner presentation exchange only an account-bound launch and
+// small display summaries. The durable engine remains the authority for phase,
+// conversation, research and progress; legacy lessons keep their own adapter.
+const HOME_LEARNER_LAUNCH_KEY = "worldview-learner-launch-v1";
+const HOME_LEARNER_RUNS_PREFIX = "worldview-learner-runs-v1:";
+let homeLearnerLaunchBusy = false;
+let homeLearnerRefreshOwner = "";
+function homeLearnerAccountAllowed() {
+  const row = backendEntitlementRecord;
+  const expiry = row?.expires_at ? Date.parse(row.expires_at) : null;
+  return !!(stableIdentityAllowsMutation() && permanentAccountVerified() && !accountRecoveryRequired()
+    && entitlementAccountId === cloudAccount?.id && backendEntitled && row?.active === true
+    && !row.revoked_at && ["admin","tester"].includes(row.access_tier)
+    && (expiry === null || Number.isFinite(expiry) && expiry > Date.now()));
+}
+function normalizedHomeLearnerRuns(value) {
+  if (!Array.isArray(value)) return [];
+  const runs = new Map();
+  for (const item of value) {
+    const runId = String(item?.runId || "");
+    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(runId)) continue;
+    const row = {runId,title:String(item.title || "Saved lesson").slice(0,500),
+      phase:["clarification","map","extraction","lesson","quiz","complete"].includes(item.phase) ? item.phase : "clarification",
+      updatedAt:Number(item.updatedAt) || Date.parse(item.updatedAt) || 0};
+    if (!runs.has(runId) || runs.get(runId).updatedAt < row.updatedAt) runs.set(runId,row);
+  }
+  return [...runs.values()].sort((a,b) => b.updatedAt-a.updatedAt).slice(0,250);
+}
+function homeLearnerRuns() {
+  if (!homeLearnerAccountAllowed() || stateAccountId !== cloudAccount.id) return [];
+  try { return normalizedHomeLearnerRuns(JSON.parse(localStorage.getItem(HOME_LEARNER_RUNS_PREFIX+cloudAccount.id) || "[]")); }
+  catch (_) { return []; }
+}
+function renderHomeLearnerRuns(carousel) {
+  if (wheel.layerCategory) return;
+  for (const run of homeLearnerRuns()) {
+    const card = document.createElement("div");
+    card.className = "card lesson-card";
+    card.dataset.id = "learner:"+run.runId;
+    card.dataset.kind = "learner-run";
+    const stage = {clarification:"Your direction",map:"Lesson Map",extraction:"Your starting point",lesson:"Lesson",quiz:"Quiz",complete:"Completed"}[run.phase];
+    card.setAttribute("aria-label",`${run.title}. ${stage}. Tap to continue.`);
+    card.innerHTML = `<div class="card-cat">${esc(stage)}</div><div class="card-title serif ${cardTitleSizeClass(run.title)}">${cardTitleHtml(run.title)}</div><div class="card-hint">tap to continue</div>`;
+    carousel.appendChild(card);wheel.cards.push(card);wheel.ids.push(card.dataset.id);
+  }
+}
+async function refreshHomeLearnerRuns() {
+  if (!homeLearnerAccountAllowed()) return false;
+  const owner = cloudAccount.id, epoch = accountAuthEpoch;
+  if (homeLearnerRefreshOwner === owner) return false;
+  homeLearnerRefreshOwner = owner;
+  try {
+    const response = await backendFetch("learner-jobs",{headers:{"content-type":"application/json"},body:JSON.stringify({action:"list_runs"}),signal:AbortSignal.timeout(12000)});
+    if (!response.ok) { await response.body?.cancel();return false; }
+    const payload = await response.json();
+    if (epoch !== accountAuthEpoch || cloudAccount?.id !== owner || !homeLearnerAccountAllowed()) return false;
+    if (!Array.isArray(payload.runs)) return false;
+    const before = JSON.stringify(homeLearnerRuns());
+    const merged = normalizedHomeLearnerRuns([...homeLearnerRuns(),...payload.runs]);
+    localStorage.setItem(HOME_LEARNER_RUNS_PREFIX+owner,JSON.stringify(merged));
+    // A delayed library refresh must not erase a topic the learner is typing.
+    const input = $("topic-input"), draft = input?.value || "", focused = document.activeElement === input;
+    if (before !== JSON.stringify(merged)) {
+      const selectedId = wheel.ids[Math.round(wheel.pos)];
+      resetCarouselGesture();
+      renderHome();
+      if (selectedId && wheel.ids.includes(selectedId)) { wheel.pos = wheel.ids.indexOf(selectedId);layoutWheel(false); }
+      if ($("topic-input")) { $("topic-input").value = draft;syncStartButton();if (focused) $("topic-input").focus(); }
+    }
+    return true;
+  } catch (_) { return false; }
+  finally { if (homeLearnerRefreshOwner === owner) homeLearnerRefreshOwner = ""; }
+}
+async function openHomeLearnerRun({topic = "",runId = ""} = {}) {
+  if (homeLearnerLaunchBusy) return false;
+  topic = String(topic).trim();runId = String(runId);
+  if (runId ? !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(runId) : !topic) return false;
+  if (topic.length > 500) { toast("Keep the topic under 500 characters; you can add the details in the conversation.",5000);return false; }
+  const startingOwner = cloudAccount?.id || "", startingEpoch = accountAuthEpoch;
+  homeLearnerLaunchBusy = true;
+  try {
+    if (!await ensureStableIdentityForMutation("start or continue a lesson")) return false;
+    if (!startingOwner || startingEpoch !== accountAuthEpoch || cloudAccount?.id !== startingOwner) return false;
+    if (!homeLearnerAccountAllowed()) {
+      // Commerce migration remains separate; preserve the existing paid path.
+      if (!runId && backendEntitled && backendEntitlementRecord?.access_tier === "paid") { openDirection(topic,"voice");return true; }
+      toast("Sign in with your approved tester account to begin. If you have just joined, your tester access needs to be enabled.",6500);return false;
+    }
+    const owner = cloudAccount.id;
+    const packet = {ownerUserId:owner,topic,mode:"text",...(runId ? {runId} : {})};
+    const serialized = JSON.stringify(packet);
+    sessionStorage.setItem(HOME_LEARNER_LAUNCH_KEY,serialized);
+    if (sessionStorage.getItem(HOME_LEARNER_LAUNCH_KEY) !== serialized) throw new Error("launch_storage_unavailable");
+    if (cloudAccount?.id !== owner || !homeLearnerAccountAllowed()) { sessionStorage.removeItem(HOME_LEARNER_LAUNCH_KEY);return false; }
+    location.assign(new URL("lab/?learner=1",location.href).href);
+    return true;
+  } catch (_) { toast("The lesson could not open. Your topic is still here; try again.",5000);return false; }
+  finally { homeLearnerLaunchBusy = false; }
+}
+
 async function startLesson() {
   // guards against a double-call: the native button "onclick" and the
   // coordinate-based tap resolution in wheelGestures can both fire for the
@@ -8043,14 +8146,7 @@ async function startLesson() {
   if (!topic) return;
   if (Date.now() - (startLesson._t || 0) < 500) return;
   startLesson._t = Date.now();
-  /* Rebuild stage 1: a typed topic now opens the direction conversation
-     instead of going straight into lesson creation. Everything before this
-     point — Home, the carousel, the topic field — is unchanged, and every
-     other caller of beginLesson (Explore cards, sources, uploads) still
-     takes the original path. */
-  openDirection(topic,"voice");
-  $("topic-input").value = "";
-  syncStartButton();
+  await openHomeLearnerRun({topic});
 }
 
 const KNOWLEDGE_PLAN_VERSION = "dependency-graph-v6-overview-first";
@@ -10276,6 +10372,7 @@ function renderConversationModelSwitches() {
 }
 
 function openChat(id, noVoice, entryConfirmed = false) {
+  if (String(id || "").startsWith("learner:")) { openHomeLearnerRun({runId:String(id).slice(8)});return; }
   const lesson = getLesson(id);
   if (!lesson) return;
   const readOnlyView = accountMutationBlocked();
@@ -16285,19 +16382,14 @@ async function startIntroLesson() {
   const input = $("intro-topic");
   const topic = input.value.trim();
   if (!topic || startIntroLesson.running) return;
-  if (!await ensureStableIdentityForMutation("start a lesson")) return;
-  if (!aiAvailable()) {
-    finishIntro(false);
-    openSettings();
-    toast("Enter the access code, then Save.");
-    return;
-  }
+  const introOwner = cloudAccount?.id || "", introEpoch = accountAuthEpoch;
   startIntroLesson.running = true;
   $("intro-start").disabled = true;
   setIntroOpen(false,true);
   try {
-    const started = await beginLesson(topic,"socratic",METHODS[0].starter(topic));
-    if (started === null) setIntroOpen(true,false);
+    const started = await openHomeLearnerRun({topic});
+    if (introEpoch !== accountAuthEpoch || cloudAccount?.id !== introOwner) { input.value = "";return; }
+    if (!started) setIntroOpen(true,false);
     else input.value = "";
   } finally {
     startIntroLesson.running = false;

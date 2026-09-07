@@ -11,6 +11,211 @@
 const LAB_PREVIEW = ["localhost", "127.0.0.1"].includes(window.location.hostname)
   && new URLSearchParams(window.location.search).get("preview") === "1";
 const LAB_SUPABASE_SDK_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js";
+// Presentation selects the learner gateway; it never grants account access.
+const LAB_LEARNER = new URLSearchParams(window.location.search).get("learner") === "1";
+const LEARNER_LAUNCH_KEY = "worldview-learner-launch-v1";
+const LEARNER_RUNS_PREFIX = "worldview-learner-runs-v1:";
+
+function learnerRunSummaries() {
+  const rows = new Map();
+  const timestamp = value => Number(value) || Date.parse(value) || 0;
+  const durableTimes = new Map();
+  for (const job of labState.jobs || []) {
+    const runId = job.scenario?.pipelineRunId;
+    if (runId) durableTimes.set(runId, Math.max(durableTimes.get(runId) || 0, timestamp(job.updatedAt || job.finishedAt || job.createdAt)));
+  }
+  const add = (runId, title, phase, updatedAt) => {
+    if (!/^[A-Za-z0-9-]{8,128}$/.test(String(runId || "")) || !String(title || "").trim()) return;
+    const previous = rows.get(runId);
+    const updated = durableTimes.get(runId) || timestamp(updatedAt) || previous?.updatedAt || 0;
+    rows.set(runId, { runId, title:String(title).trim().slice(0, 500), phase:["clarification", "map", "extraction", "lesson", "quiz"].includes(phase) ? phase : "clarification", updatedAt:updated });
+  };
+  for (const artifact of labState.clarificationArtifacts || []) add(artifact.runId, artifact.topic, "extraction", artifact.createdAt);
+  for (const resume of labState.mockClarificationHistory || []) add(resume.runId, resume.topic, "clarification", resume.updatedAt);
+  for (const resume of labState.mockResumeHistory || []) {
+    const artifact = (labState.clarificationArtifacts || []).find(item => item.runId === resume.runId);
+    add(resume.runId, artifact?.topic || resume.topic, resume.stage, resume.updatedAt);
+  }
+  const current = labState.clarification;
+  if (current?.runId && current.topic) {
+    const clocks = labState.learnerSummaryClocks ||= new Map();
+    const key = `${labState.verifiedUserId}:${current.runId}`;
+    const signature = [labState.pipelineStage, current.learnerReplyCount || 0, current.latestJobId || "", current.pendingRequestKey || "",
+      labState.extraction?.stagedLearnerTurns?.length || 0, labState.quiz?.attempt || 0, labState.quiz?.completionChoice || ""].join(":");
+    const previous = clocks.get(key);
+    const updatedAt = !previous
+      ? durableTimes.get(current.runId) || rows.get(current.runId)?.updatedAt || Date.now()
+      : previous.signature === signature ? previous.updatedAt : Date.now();
+    clocks.set(key, { signature, updatedAt });
+    add(current.runId, current.topic, labState.pipelineStage, updatedAt);
+  }
+  return [...rows.values()].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 100);
+}
+
+function publishLearnerRunSummaries() {
+  if (!LAB_LEARNER || !labState.verifiedUserId || labState.workspaceOwnerId !== labState.verifiedUserId) return false;
+  try {
+    const key = LEARNER_RUNS_PREFIX + labState.verifiedUserId;
+    const existing = JSON.parse(localStorage.getItem(key) || "[]");
+    const summaries = new Map((Array.isArray(existing) ? existing : []).filter(row => row?.runId && row?.title)
+      .map(row => [row.runId, { runId:String(row.runId), title:String(row.title).slice(0, 500), phase:String(row.phase || "clarification"), updatedAt:Number(row.updatedAt) || Date.parse(row.updatedAt) || 0 }]));
+    for (const row of learnerRunSummaries()) summaries.set(row.runId, row);
+    localStorage.setItem(key, JSON.stringify([...summaries.values()].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 100)));
+    return true;
+  } catch (_) { return false; }
+}
+
+function leaveLearnerLesson() {
+  persistClarificationSettings();
+  publishLearnerRunSummaries();
+  stopMockRunLearnerMedia();
+  window.location.assign("../index.html");
+}
+
+function initializeLearnerPresentation() {
+  if (!LAB_LEARNER) return;
+  document.documentElement.classList.add("learner-route");
+  document.title = "Worldview — Lesson";
+  q("lab-gate-title").textContent = "Your lesson";
+  q("lab-gate-title").nextElementSibling.textContent = "Sign in to your Worldview account to continue.";
+  q("lab-account-signin").href = "../index.html?account=signin";
+  q("lab-new-topbar").querySelector("h1").textContent = "Your lesson";
+  for (const id of ["mock-learner-back", "pipeline-learner-exit"]) {
+    q(id)?.setAttribute("aria-label", "Return to Home");
+    q(id)?.setAttribute("title", "Your lesson stays saved");
+  }
+  q("clarification-setup").querySelector(".privacy-note").textContent = "Your conversation is saved to your account so you can return to it.";
+  q("clarification-setup").querySelector(".clarification-home-copy > p:last-child").textContent = "Choose a question or topic you would like to understand.";
+}
+
+function readLearnerLaunch() {
+  let packet;
+  try { packet = JSON.parse(sessionStorage.getItem(LEARNER_LAUNCH_KEY) || "null"); }
+  catch (_) { return null; }
+  if (!packet || packet.ownerUserId !== labState.verifiedUserId || labState.workspaceOwnerId !== packet.ownerUserId) return null;
+  if (packet.runId && !/^[A-Za-z0-9-]{8,128}$/.test(String(packet.runId))) return null;
+  return { ownerUserId:packet.ownerUserId, topic:String(packet.topic || "").trim().slice(0, 500), mode:packet.mode === "voice" ? "voice" : "text", runId:String(packet.runId || "") };
+}
+
+async function hydrateLearnerSavedRun(runId) {
+  const ownerId = labState.verifiedUserId;
+  const epoch = labState.authEpoch;
+  let row = labState.workspaceRows.find(item => item.runId === runId);
+  if (row?.resume || row?.kind === "active") return row;
+  const jobs = labState.jobs.filter(job => job.scenario?.pipelineRunId === runId)
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  if (row?.artifact) {
+    // Only an already requested teaching/quiz phase establishes a later resume.
+    // A completed Map alone never grants permission to skip Extraction.
+    const later = jobs.find(job => ["lesson", "quiz"].includes(job.scenario?.pipelineStage)
+      && job.scenario?.sourceMapJobId && job.scenario?.sourceMapRecordId);
+    if (later) {
+      const scenario = later.scenario;
+      const resume = sanitizeMockResume({ runId, stage:scenario.pipelineStage, mapJobId:scenario.sourceMapJobId,
+        mapRecordId:scenario.sourceMapRecordId, conversationMode:"text", updatedAt:later.createdAt,
+        runConfig:row.artifact.mockRunSettings?.runConfig || labState.mockRunConfig,
+        clarificationBoundaries:row.artifact.mockRunSettings?.clarificationBoundaries,
+        quiz:{ attempt:Number(scenario.quizAttempt || 0), startedRunId:scenario.pipelineStage === "quiz" ? runId : "" } });
+      if (resume) row = { ...row, kind:"resume", resume };
+    }
+    return row;
+  }
+  const job = jobs.find(item => item.component === "clarification");
+  if (!job) return null;
+  const detail = await boundedLabJobRead({ action:"get", jobId:job.id }, { expectedUserId:ownerId });
+  assertLabRequestOwner(epoch, ownerId);
+  if (detail?.job?.scenario?.pipelineRunId !== runId || detail.job.component !== "clarification") return null;
+  const sample = detail.samples?.[0];
+  const request = sample?.request;
+  const scenario = detail.job.scenario;
+  const turns = Array.isArray(request?.messages) ? request.messages.map(message => ({ role:message.role, content:String(message.content || "") })) : [];
+  const turn = Number(scenario.turn);
+  if (!request?.system || !turns.length || turns[0].role !== "user" || turns.at(-1).role !== "user"
+    || turns.filter(message => message.role === "user").length - 1 !== turn) return null;
+  const system = String(request.system);
+  const boundaries = [system.indexOf("\n\n" + CLARIFICATION_CONTINUITY_GUARD), system.indexOf("\n\n" + CLARIFICATION_RUNTIME_CONTRACT)].filter(index => index > 0);
+  if (!boundaries.length) return null;
+  const prompt = system.slice(0, Math.min(...boundaries));
+  let latest = null, previousJobId = "";
+  const previous = jobs.find(item => item.component === "clarification" && Number(item.scenario?.turn) === turn - 1 && item.status === "completed");
+  if (previous) {
+    const previousDetail = await boundedLabJobRead({ action:"get", jobId:previous.id }, { expectedUserId:ownerId });
+    assertLabRequestOwner(epoch, ownerId);
+    const previousSample = previousDetail?.samples?.[0];
+    if (previousDetail?.job?.scenario?.pipelineRunId === runId && previousSample?.status === "completed") {
+      try {
+        const parsed = parseClarificationOutput(attemptResultText(null, previousSample), turn === 1, scenario.topic, null, turns.slice(0, -1));
+        const precedingAssistant = [...turns].reverse().find(message => message.role === "assistant");
+        if (parsed.assistant_message === precedingAssistant?.content) {
+          latest = { ...parsed, phase_action_run_id:runId, transition_authorized:false };
+          previousJobId = previous.id;
+        }
+      } catch (_) { /* The exact prior output remains untrusted if parsing fails. */ }
+    }
+  }
+  const pendingRequestKey = conversationRequestKey("clarification", { runId, turn,
+    inputFingerprint:fingerprint(JSON.stringify(turns)), promptFingerprint:fingerprint(system),
+    provider:sample.provider, model:sample.model, retryAttempt:Number(scenario.retryAttempt || 0),
+    automaticRecoveryAttempt:Number(scenario.automaticRecoveryAttempt || 0) });
+  const runConfig = sanitizedMockRunConfig(labState.mockRunConfig);
+  runConfig.clarification = { ...runConfig.clarification, provider:sample.provider, model:sample.model, outputTokens:request.maxTokens };
+  const activeResume = sanitizeActiveClarificationResume({ ownerUserId:ownerId, runId, topic:scenario.topic,
+    mode:"text", pipelineMode:"mock", turns, learnerReplyCount:turn, latest, latestJobId:previousJobId,
+    pendingJobId:job.id, pendingRequestKey, pendingRequestTurn:turn, modelRetryAttempt:Number(scenario.retryAttempt || 0),
+    effectiveProvider:sample.provider, effectiveModel:sample.model, effectiveMaxTokens:request.maxTokens,
+    promptSource:scenario.promptSource, editor:{ prompt, provider:sample.provider, model:sample.model }, runConfig,
+    clarificationBoundaries:{ prompt, promptSource:scenario.promptSource }, updatedAt:job.createdAt });
+  if (!activeResume) return null;
+  syncJobDetail(detail);
+  return { runId, topic:scenario.topic, kind:"active", activeResume, updatedAt:job.createdAt };
+}
+
+async function openLearnerLesson() {
+  const ownerId = labState.verifiedUserId;
+  const packet = readLearnerLaunch();
+  renderMockSetupPreviousRuns();
+  publishLearnerRunSummaries();
+  q("lab-shell").classList.add("learner-ready");
+  if (packet?.runId) {
+    const row = await hydrateLearnerSavedRun(packet.runId);
+    if (!row) throw new Error("This saved lesson is not ready on this device. Return Home and try opening it again.");
+    await continueMockRunFromSetup(row);
+    if (labState.verifiedUserId !== ownerId) throw labAccountError("identity_changed");
+    if (labState.mockSetupActive) throw new Error("This saved lesson could not reconnect yet. Return Home and try again.");
+    sessionStorage.removeItem(LEARNER_LAUNCH_KEY);
+    labState.learnerLessonOpened = true;
+    publishLearnerRunSummaries();
+    return;
+  }
+  // A refresh rejoins the exact saved phase. A Home topic packet explicitly
+  // starts fresh, after all optional server hydration has completed.
+  if (!packet?.topic) {
+    const runId = labState.pendingClarificationResume?.runId || labState.pendingMockResume?.runId || labState.pipelineSelectedRunId;
+    const row = labState.workspaceRows.find(item => item.runId === runId);
+    if (row) {
+      await continueMockRunFromSetup(row);
+      if (labState.verifiedUserId !== ownerId) throw labAccountError("identity_changed");
+      if (labState.mockSetupActive) throw new Error("This saved lesson could not reconnect yet. Return Home and try again.");
+      labState.learnerLessonOpened = true;
+      return;
+    }
+  }
+  // Hydration may have replaced the prompt editor with its server default.
+  // Refresh the same setup controls before freezing the normal Mock settings.
+  if (q("mock-setup-prompt")) delete q("mock-setup-prompt").dataset.loaded;
+  renderMockSetup();
+  launchNewMockRun();
+  labState.learnerLessonOpened = true;
+  if (packet?.topic) {
+    q("clarification-topic").value = packet.topic;
+    syncClarificationTopic("clarification-topic");
+    // Consume before the paid request; a reload must resume, never resubmit
+    // the original Home launch. startClarification saves its run first.
+    sessionStorage.removeItem(LEARNER_LAUNCH_KEY);
+    await startClarification(packet.mode);
+    publishLearnerRunSummaries();
+  }
+}
 
 /*
   Model catalogue. The server deliberately does NOT allow-list model ids (see
@@ -2112,6 +2317,7 @@ function normalizeMockStageOutputTokens(stage, value, fallback) {
 function loadMockRunConfig() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(MOCK_RUN_CONFIG_KEY) || "null"); } catch (_) { saved = null; }
+  if (typeof LAB_LEARNER !== "undefined" && LAB_LEARNER && !labState.verifiedAdmin) saved = null;
   for (const stage of MOCK_RUN_STAGES) {
     const fallback = MOCK_STAGE_DEFAULTS[stage];
     const value = saved?.[stage] && typeof saved[stage] === "object" ? saved[stage] : {};
@@ -2168,6 +2374,7 @@ function loadMockBoundaryConfig() {
 }
 
 function persistMockBoundaryConfig() {
+  if (typeof LAB_LEARNER !== "undefined" && LAB_LEARNER && !labState.verifiedAdmin) return true;
   try { localStorage.setItem(MOCK_BOUNDARY_CONFIG_KEY, JSON.stringify(labState.mockBoundaryConfig)); return true; }
   catch (_) { return false; }
 }
@@ -2840,6 +3047,7 @@ function renderMockSetup() {
 }
 
 function openMockSetup() {
+  if (typeof LAB_LEARNER !== "undefined" && LAB_LEARNER && labState.learnerLessonOpened) { leaveLearnerLesson(); return; }
   stopMockRunLearnerMedia();
   if (labState.pipelineSelectedRunId) labState.workspaceRunId = labState.pipelineSelectedRunId;
   if (labState.clarification.focusMode) setClarificationFocus(false);
@@ -3423,7 +3631,7 @@ function rerenderWorkspaceAfterIdentitySwitch() {
 function switchToVerifiedLabUser(userId) {
   const nextUserId = String(userId || "");
   if (!/^[A-Za-z0-9-]{8,128}$/.test(nextUserId)) return false;
-  if (!labState.preview && (!labState.verifiedAdmin || labState.verifiedRoleUserId !== nextUserId)) return false;
+  if (!labState.preview && ((!labState.verifiedAdmin && !(typeof LAB_LEARNER !== "undefined" && LAB_LEARNER)) || labState.verifiedRoleUserId !== nextUserId)) return false;
   if (labState.workspaceOwnerId === nextUserId && labState.verifiedUserId === nextUserId) return false;
   stopSpeechComparison();
   clearTimeout(workspaceSaveTimer);
@@ -3462,6 +3670,7 @@ function lockLabAccount(message = "Sign in to your administrator account to open
   labState.accessVerified = false;
   labState.busy = false;
   labState.createStarting = false;
+  labState.learnerLessonOpened = false;
   const shell = q("lab-shell"), gate = q("lab-gate");
   if (q("lab-workspace-home")) q("lab-workspace-home").hidden = true;
   if (q("lab-tool-select")) q("lab-tool-select").hidden = true;
@@ -3496,6 +3705,7 @@ function lockLabAccount(message = "Sign in to your administrator account to open
   if (q("lab-account-signin")) {
     q("lab-account-signin").hidden = false;
     q("lab-account-signin").textContent = status === "admin-required" ? "Switch account in Worldview" : status === "recovery" ? "Finish password reset in Worldview" : "Sign in to Worldview";
+    if (typeof LAB_LEARNER !== "undefined" && LAB_LEARNER) q("lab-account-signin").textContent = "Return to Worldview";
   }
   if (q("lab-enter")) { q("lab-enter").disabled = !labState.client; q("lab-enter").textContent = "Check account"; }
   setMessage("lab-gate-message", message, status === "checking" ? "" : "error");
@@ -3805,7 +4015,12 @@ function labAccountError(type) {
     identity_changed: "The signed-in account changed. The earlier request cannot open or update this workspace.",
     account_check_timeout: "Checking the account took too long. Your saved work is unchanged; check again when the connection is ready.",
   };
-  return Object.assign(new Error(messages[type] || "The administrator account could not be verified. Check your connection and try again."), { type });
+  if (typeof LAB_LEARNER !== "undefined" && LAB_LEARNER) {
+    messages.signed_out = "Sign in to Worldview to open your lesson.";
+    messages.admin_required = "Your account needs trial access before you can start. Return Home and check your account.";
+    messages.password_recovery_required = "Finish resetting your password in Worldview before opening your lesson.";
+  }
+  return Object.assign(new Error(messages[type] || "The account could not be verified. Check your connection and try again."), { type });
 }
 
 function labSignoutPending(userId = "") {
@@ -3829,10 +4044,11 @@ function labAccountCanOpen() {
   if (labState.preview) return true;
   const role = labState.verifiedRole;
   const expiresAt = role?.expires_at ? Date.parse(role.expires_at) : null;
-  return !!(labState.verifiedAdmin && labState.verifiedUserId
+  const learner = typeof LAB_LEARNER !== "undefined" && LAB_LEARNER;
+  return !!((labState.verifiedAdmin || learner) && labState.verifiedUserId
     && labState.verifiedRoleUserId === labState.verifiedUserId
     && labState.workspaceOwnerId === labState.verifiedUserId
-    && role?.active === true && role.access_tier === "admin" && !role.revoked_at
+    && role?.active === true && (learner ? ["admin", "tester"].includes(role.access_tier) : role.access_tier === "admin") && !role.revoked_at
     && (expiresAt === null || (Number.isFinite(expiresAt) && expiresAt > Date.now()))
     && !labPasswordRecoveryRequired(labState.verifiedUserId)
     && !labSignoutPending(labState.verifiedUserId));
@@ -3878,7 +4094,8 @@ async function verifyLabAdminSession(forceRefresh = false) {
     if (labSignoutPending(verifiedUserId)) throw labAccountError("signout_pending");
     if (labPasswordRecoveryRequired(verifiedUserId)) throw labAccountError("password_recovery_required");
     if (labState.verifiedUserId && labState.verifiedUserId !== verifiedUserId) throw labAccountError("identity_changed");
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/lab-jobs`, {
+    const learner = typeof LAB_LEARNER !== "undefined" && LAB_LEARNER;
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/${learner ? "learner-jobs" : "lab-jobs"}`, {
       method: "POST", signal: controller.signal,
       headers: { apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ action: "account_access" }),
@@ -3886,9 +4103,9 @@ async function verifyLabAdminSession(forceRefresh = false) {
     const role = await responseJson(response);
     assertCurrent();
     const expiresAt = role?.expires_at ? Date.parse(role.expires_at) : null;
-    if (role?.active !== true || role.access_tier !== "admin" || role.revoked_at
+    if (role?.active !== true || !(learner ? ["admin", "tester"].includes(role.access_tier) : role.access_tier === "admin") || role.revoked_at
       || (expiresAt !== null && (!Number.isFinite(expiresAt) || expiresAt <= Date.now()))) throw labAccountError("admin_required");
-    labState.verifiedAdmin = true;
+    labState.verifiedAdmin = role.access_tier === "admin";
     labState.verifiedRoleUserId = verifiedUserId;
     labState.verifiedRole = role;
     labState.verifiedRoleCheckedAt = Date.now();
@@ -4023,6 +4240,7 @@ async function responseJson(response) {
 }
 
 async function labFetch(body) {
+  if (typeof LAB_LEARNER !== "undefined" && LAB_LEARNER) throw new Error("Developer model experiments are unavailable in a lesson.");
   const url = `${SUPABASE_URL}/functions/v1/lab-tutor`;
   const response = await requestWithToken((token, signal) => fetch(url, {
     method: "POST",
@@ -4138,7 +4356,7 @@ async function boundedLabTranscriptionFetch(file, model, language, operationId, 
 }
 
 async function labJobsFetch(body, expectedUserId = "", { signal } = {}) {
-  const url = `${SUPABASE_URL}/functions/v1/lab-jobs`;
+  const url = `${SUPABASE_URL}/functions/v1/${typeof LAB_LEARNER !== "undefined" && LAB_LEARNER ? "learner-jobs" : "lab-jobs"}`;
   const response = await requestWithToken((token, requestSignal) => {
     if (signal?.aborted) throw signal.reason || new Error("This Lab request was cancelled before it could be sent.");
     if (expectedUserId && labState.verifiedUserId !== expectedUserId) {
@@ -4667,6 +4885,19 @@ function pushOutput(output, { deferUi = false } = {}) {
   }
   renderResults();
   return true;
+}
+
+async function probeLearnerProviders() {
+  const epoch = labState.authEpoch, userId = labState.verifiedUserId;
+  const status = await labJobsFetch({ action:"capabilities" });
+  assertLabRequestOwner(epoch, userId);
+  for (const provider of Object.keys(LAB_PROVIDER_CATALOG)) {
+    const route = status?.providers?.[provider];
+    labState.configured[provider] = route?.configured === true;
+    labState.providerDefaultModels[provider] = clip(route?.defaultModel, 80);
+  }
+  if (!Object.values(labState.configured).some(Boolean)) throw new Error("Worldview cannot answer right now. Please try again later.");
+  q("lab-health").textContent = "Preparing your lesson…";
 }
 
 function normalizeJob(value) {
@@ -15170,7 +15401,11 @@ function persistClarificationSettings({ deviceDraft = null, globalDefault = null
   };
   if (deviceDraft) payload.deviceDraft = clarificationConfig(deviceDraft);
   if (globalDefault) payload.globalDefaultCache = clarificationGlobalDefault(globalDefault);
-  try { localStorage.setItem(storageKey, JSON.stringify(payload)); return true; }
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(payload));
+    if (typeof LAB_LEARNER !== "undefined" && LAB_LEARNER) publishLearnerRunSummaries();
+    return true;
+  }
   catch (_) { return false; }
 }
 
@@ -16450,7 +16685,8 @@ function initializeClarification() {
   if (labState.newRunDraftActive) labState.pendingMockResume = null;
   labState.mockResumeHistory = mergeMockResumeHistory(saved.mockResumeHistory, labState.pendingMockResume);
   labState.mockClarificationHistory = mergeMockClarificationHistory(saved.mockClarificationHistory, savedActiveResume?.pipelineMode === "mock" ? savedActiveResume : null);
-  const deviceDraft = clarificationDeviceDraft(saved) || (saved.prompt ? clarificationConfig(saved) : null);
+  const deviceDraft = typeof LAB_LEARNER !== "undefined" && LAB_LEARNER && !labState.verifiedAdmin
+    ? null : clarificationDeviceDraft(saved) || (saved.prompt ? clarificationConfig(saved) : null);
   const savedPrompt = clip(deviceDraft?.prompt, 18000);
   const previousBuiltIn = savedPrompt && CLARIFICATION_PREVIOUS_BUILTIN_FINGERPRINTS.has(fingerprint(savedPrompt));
   applyClarificationEditorSettings({
@@ -17801,6 +18037,9 @@ function initializeWorkspace() {
   q("lab-open-timing").disabled = false;
   loadMockRunConfig();
   loadMockBoundaryConfig();
+  if (typeof LAB_LEARNER !== "undefined" && LAB_LEARNER && !labState.verifiedAdmin) {
+    labState.mockBoundaryConfig = sanitizeMockBoundaryConfig({});
+  }
   loadLocalLibrary();
   resetPreset("lesson");
   resetPreset("tutor");
@@ -17929,18 +18168,20 @@ async function openLab() {
   if (labState.busy) return;
   const epoch = labState.authEpoch;
   setBusy(true);
-  setMessage("lab-gate-message", "Checking your administrator account…");
+  const learner = typeof LAB_LEARNER !== "undefined" && LAB_LEARNER;
+  setMessage("lab-gate-message", learner ? "Checking your account…" : "Checking your administrator account…");
   try {
     await verifyLabAdminSession();
     const userId = labState.verifiedUserId;
     assertLabRequestOwner(epoch, userId);
     // Account/role proof and the gateway's existing access/spend checks remain
     // separate. This capability probe never calls a paid provider.
-    await labFetch({ provider: "anthropic", probe: true });
+    if (!learner) await labFetch({ provider: "anthropic", probe: true });
     assertLabRequestOwner(epoch, userId);
     labState.accessVerified = true;
     if (!initializeWorkspace()) throw labAccountError("admin_required");
-    await probeProviders();
+    if (learner) await probeLearnerProviders();
+    else await probeProviders();
     assertLabRequestOwner(epoch, userId);
     await loadGlobalClarificationDefault();
     assertLabRequestOwner(epoch, userId);
@@ -17952,8 +18193,9 @@ async function openLab() {
     assertLabRequestOwner(epoch, userId);
     renderMockSetupPreviousRuns();
     setMessage("lab-gate-message", "");
+    if (learner) await openLearnerLesson();
   } catch (error) {
-    if (epoch === labState.authEpoch) lockLabAccount(`Could not open the Model Lab: ${error.message || "check the account and try again"}`);
+    if (epoch === labState.authEpoch) lockLabAccount(`${learner ? "Could not open your lesson" : "Could not open the Model Lab"}: ${error.message || "check the account and try again"}`);
   } finally {
     if (epoch === labState.authEpoch) setBusy(false);
   }
@@ -18400,6 +18642,7 @@ async function boot() {
   fillPresetSelect("tutor");
   fillPresetSelect("brain");
   bindEvents();
+  initializeLearnerPresentation();
   renderFlow();
   renderResults();
   renderComparisonLibrary();
