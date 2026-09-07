@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#241f1a">
 <title>Worldview — Model Lab</title>
-<link rel="stylesheet" href="./lab.css?v=1.2.10">
+<link rel="stylesheet" href="./lab.css?v=1.2.11">
 </head>
 <body>
 
@@ -117,7 +117,7 @@
       <footer id="mock-learner-composer" class="mock-learner-composer">
         <div id="mock-learner-text-controls" class="mock-learner-text-controls">
           <label class="sr-only" for="mock-learner-reply">Your message</label>
-          <textarea id="mock-learner-reply" name="mock-learner-reply" autocomplete="off" inputmode="text" autocapitalize="sentences" spellcheck="true" data-1p-ignore data-lpignore="true" rows="2" placeholder="What do you think?"></textarea>
+          <textarea id="mock-learner-reply" name="mock-learner-reply" autocomplete="off" inputmode="text" autocapitalize="sentences" spellcheck="true" data-1p-ignore data-lpignore="true" rows="2" placeholder="Your reply…"></textarea>
           <button id="mock-learner-send" class="mock-learner-send" type="button" aria-label="Send message">Send</button>
         </div>
         <div id="mock-learner-voice-controls" class="mock-learner-voice-controls" hidden>
@@ -130,16 +130,9 @@
         </div>
         <div class="mock-learner-utilities">
           <button id="mock-learner-map-progress" class="text-button mock-learner-map-progress" type="button" aria-controls="pipeline-extraction-map-dialog" aria-expanded="false" aria-haspopup="dialog" hidden>View Lesson Map progress</button>
-          <span id="mock-learner-source-numbers" class="mock-learner-source-numbers" aria-label="Numbered sources" hidden></span>
-          <button id="mock-learner-sources" class="text-button" type="button" aria-controls="mock-learner-source-panel" aria-expanded="false" aria-haspopup="dialog" hidden>Sources</button>
         </div>
         <button id="mock-learner-retry" class="text-button mock-learner-retry" type="button" hidden>Try again</button>
       </footer>
-      <section id="mock-learner-source-panel" class="mock-learner-source-panel" role="dialog" aria-modal="false" aria-labelledby="mock-learner-source-title" hidden>
-        <header><h3 id="mock-learner-source-title">Lesson sources</h3><button id="mock-learner-source-close" type="button" aria-label="Close sources">×</button></header>
-        <p id="mock-learner-source-note"></p>
-        <ul id="mock-learner-source-links"></ul>
-      </section>
       <section id="pipeline-extraction-map-dialog" class="extraction-map-dialog" role="dialog" aria-modal="true" aria-labelledby="pipeline-extraction-map-dialog-title" hidden>
         <div class="extraction-map-dialog-card">
           <header class="extraction-map-dialog-head"><div><p class="eyebrow">Generated in the background</p><h3 id="pipeline-extraction-map-dialog-title">Your Lesson Map</h3></div><button id="pipeline-extraction-map-dialog-close" class="extraction-map-dialog-close" type="button" aria-label="Close Lesson Map">×</button></header>
@@ -699,7 +692,6 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=1.2.10" defer></script>
+<script src="./lab.js?v=1.2.11" defer></script>
 </body>
 </html>
-
