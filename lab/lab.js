@@ -12226,6 +12226,67 @@ function setPipelineExtractionConversationMode(mode) {
 
 const LAB_VALID_SILENT_WAV = "data:audio/wav;base64,UklGRqQCAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YYACAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA";
 
+function mockSpeakerState() {
+  if (!labState.mockSpeaker) {
+    let enabled = true;
+    try { enabled = localStorage.getItem("worldview.mock.spokenReplies") !== "off"; } catch (_) { /* Keep the session choice when storage is unavailable. */ }
+    labState.mockSpeaker = { enabled, status:enabled ? "unverified" : "off", verified:false };
+  }
+  return labState.mockSpeaker;
+}
+
+function setMockSpeakerStatus(status, token = "") {
+  if (labState.pipelineMode !== "mock") return;
+  if (token && (!mockVoicePlaybackIsCurrent(token) || labState.mockVoicePlaybackOwner === "prime")) return;
+  const state = mockSpeakerState();
+  if (status === "playing") state.verified = true;
+  if (status === "starting" || status === "error" || status === "interrupted") state.verified = false;
+  state.status = state.enabled ? status : "off";
+  if (labState.mockCar.active) renderMockCarMode();
+  else renderMockSpeakerButton();
+}
+
+function renderMockSpeakerButton() {
+  const button = q("mock-car-speaker");
+  if (!button) return;
+  const state = mockSpeakerState();
+  const labels = { off:"Off", unverified:"Speaker", starting:"Starting", playing:"Playing", ready:"On", error:"Retry", interrupted:"Retry" };
+  const label = labels[state.status] || "Speaker";
+  button.dataset.audioState = state.status;
+  button.setAttribute("aria-pressed", String(state.enabled && state.verified));
+  button.setAttribute("aria-label", state.status === "error" || state.status === "interrupted" ? "Retry speaker playback" : state.enabled && state.verified ? "Turn spoken replies off" : state.status === "starting" ? "Cancel speaker startup" : "Turn spoken replies on and hear the current reply");
+  button.setAttribute("aria-busy", String(state.status === "starting"));
+  button.classList.toggle("is-active", state.enabled && state.verified);
+  const recording = labState.pipelineStage === "clarification" ? labState.clarification : labState.extraction;
+  button.disabled = Boolean(recording?.recorder?.state === "recording" || recording?.recordingPointerActive || recording?.recordingPointerStartedAt || (recording?.micAcquirePromise && !recording?.mockMicWarm));
+  const caption = button.querySelector("[data-speaker-label]");
+  if (caption) caption.textContent = label;
+  const feedback = q("mock-car-speaker-status");
+  if (feedback) {
+    feedback.hidden = !["off", "starting", "error", "interrupted"].includes(state.status);
+    feedback.textContent = state.status === "off" ? "Spoken replies off" : state.status === "starting" ? "Starting audio…" : "Playback did not continue. Tap the speaker to retry.";
+  }
+}
+
+async function toggleMockCarSpeaker() {
+  if (!labState.mockCar.active || q("mock-car-speaker")?.disabled) return;
+  const state = mockSpeakerState();
+  const disable = state.enabled && (state.verified || state.status === "starting");
+  state.enabled = !disable;
+  state.verified = false;
+  try { localStorage.setItem("worldview.mock.spokenReplies", disable ? "off" : "on"); } catch (_) { /* Session choice still applies. */ }
+  if (disable) {
+    stopClarificationSpeech();
+    stopPipelineExtractionSpeech();
+    setMockSpeakerStatus("off");
+    renderMockCarMode();
+    return;
+  }
+  setMockSpeakerStatus("starting");
+  if (!mockCarLastSpeechText()) { setMockSpeakerStatus("unverified"); return; }
+  await replayMockCarReply({ repeat:true });
+}
+
 function sharedMockVoiceAudio() {
   const audio = labState.mockVoiceAudio || new Audio();
   labState.mockVoiceAudio = audio;
@@ -12247,12 +12308,19 @@ function clearMockVoiceAudioSource(token) {
   audio.onended = null;
   audio.onerror = null;
   audio.onplaying = null;
+  audio.onpause = null;
+  audio.onwaiting = null;
+  audio.onstalled = null;
   try { audio.removeAttribute("src"); audio.load(); } catch (_) { /* The owned source is already released. */ }
   return true;
 }
 
 function finishMockVoicePlayback(token) {
   if (!mockVoicePlaybackIsCurrent(token)) return false;
+  if (labState.pipelineMode === "mock" && labState.mockVoicePlaybackOwner !== "prime") {
+    const speaker = mockSpeakerState();
+    if (!["error", "interrupted"].includes(speaker.status)) setMockSpeakerStatus(speaker.verified ? "ready" : "unverified", token);
+  }
   clearMockVoiceAudioSource(token);
   if (labState.mockVoiceAudio?.wvPlaybackToken === token) labState.mockVoiceAudio.wvPlaybackToken = "";
   labState.mockVoicePlaybackCancel = null;
@@ -12279,12 +12347,16 @@ function stopMockVoicePlayback(owner = "") {
       audio.onended = null;
       audio.onerror = null;
       audio.onplaying = null;
+      audio.onpause = null;
+      audio.onwaiting = null;
+      audio.onstalled = null;
       try { audio.removeAttribute("src"); audio.load(); } catch (_) { /* The owned source is already released. */ }
       audio.wvPlaybackToken = "";
     }
   }
   try { speechSynthesis.cancel(); } catch (_) { /* Device speech is optional. */ }
   labState.mockDeviceUtterance = null;
+  if (labState.pipelineMode === "mock") { const speaker = mockSpeakerState(); if (!["error", "interrupted"].includes(speaker.status)) setMockSpeakerStatus(speaker.verified ? "ready" : "unverified"); }
   return true;
 }
 
@@ -12296,6 +12368,7 @@ function beginMockVoicePlayback(owner) {
   labState.mockVoicePlaybackOwner = owner;
   labState.mockVoicePlaybackCancel = null;
   audio.wvPlaybackToken = token;
+  if (owner !== "prime") setMockSpeakerStatus("starting", token);
   return { audio, token };
 }
 
@@ -12310,7 +12383,10 @@ function primeMockVoiceAudio() {
   labState.clarification.audioPrimed = false;
   labState.extraction.audioPrimed = false;
   audio.src = LAB_VALID_SILENT_WAV;
-  const prime = Promise.resolve(audio.play())
+  let primeTimer = 0;
+  let playAttempt;
+  try { playAttempt = audio.play(); } catch (_) { playAttempt = Promise.reject(new Error("Playback unlock failed.")); }
+  const prime = Promise.race([Promise.resolve(playAttempt), new Promise((_, reject) => { primeTimer = setTimeout(() => reject(new Error("Playback unlock timed out.")), 1500); })])
     .then(() => {
       if (!mockVoicePlaybackIsCurrent(token)) return false;
       labState.clarification.audioPrimed = true;
@@ -12321,6 +12397,7 @@ function primeMockVoiceAudio() {
       if (mockVoicePlaybackIsCurrent(token)) finishMockVoicePlayback(token);
       return false;
     });
+  void prime.finally(() => clearTimeout(primeTimer));
   labState.mockVoicePrimePromise = prime;
   return prime;
 }
@@ -12336,10 +12413,11 @@ function reportMockSpeechFailure(statusId, error) {
   if (stage && labState.pipelineStage !== stage) return;
   const state = stage === "clarification" ? labState.clarification : labState.extraction;
   if (stage) state.speechFailureKey = mockSpeechReplyKey(stage);
+  setMockSpeakerStatus("error");
   setMessage(statusId, "The reply is available, but speech did not play: " + clip(error?.message || "audio is unavailable", 150), "error");
   if (labState.mockCar.active) {
     try { navigator.vibrate?.([80, 50, 80]); } catch (_) { /* Vibration is optional and unavailable on iPhone. */ }
-    setMockCarStatus("paused", "Audio unavailable. Use Hear reply or Text.", "speech");
+    setMockCarStatus("paused", "Audio unavailable. Tap the speaker to retry, or use Text.", "speech");
   }
 }
 
@@ -12429,6 +12507,7 @@ async function playMockCloudSpeech(spoken, { state, playbackGeneration, owner, v
     playbackGate = createMockSpeechStartGate(voiceToken, MOCK_SPEECH_FIRST_AUDIO_BUDGET_MS);
     await new Promise((resolve, reject) => {
       let settled = false;
+      let playbackStarted = false;
       let watchdog = 0;
       const finish = () => {
         if (settled) return;
@@ -12444,6 +12523,7 @@ async function playMockCloudSpeech(spoken, { state, playbackGeneration, owner, v
       };
       const noteFirstAudio = () => {
         if (!mockVoicePlaybackIsCurrent(voiceToken) || labState.mockVoicePlaybackOwner !== owner) return;
+        playbackStarted = true;
         playbackGate.started();
         markMockTurnFirstAudio(timingId, `deepgram/${speechModel}`);
       };
@@ -12454,8 +12534,10 @@ async function playMockCloudSpeech(spoken, { state, playbackGeneration, owner, v
       };
       state.voiceSpeechCancel = ownedCancel;
       setMockVoicePlaybackCancel(voiceToken, ownedCancel);
-      audio.onplaying = noteFirstAudio;
-      audio.onended = () => { noteFirstAudio(); finish(); };
+      audio.onplaying = () => { setMockSpeakerStatus("playing", voiceToken); noteFirstAudio(); };
+      audio.onwaiting = audio.onstalled = () => setMockSpeakerStatus(playbackStarted ? "interrupted" : "starting", voiceToken);
+      audio.onpause = () => { if (!audio.ended) setMockSpeakerStatus("interrupted", voiceToken); };
+      audio.onended = () => playbackStarted ? finish() : fail(new Error("Audio ended before playback was confirmed."));
       audio.onerror = () => fail(new Error(errorMessage));
       playbackGate.failure.catch(fail);
       watchdog = setTimeout(() => fail(new Error("Speech playback stalled on this device.")), mockSpeechPlaybackTimeout(spoken));
@@ -12539,8 +12621,10 @@ function playLabSpeechSynthesisFallback(spoken, state, playbackGeneration, cloud
         utterance.voice = voice;
         if (voice.lang) utterance.lang = voice.lang;
       }
-      utterance.onstart = noteFirstAudio;
-      utterance.onend = () => { noteFirstAudio(); finish(); };
+      utterance.onstart = () => { setMockSpeakerStatus("playing", voiceToken); noteFirstAudio(); };
+      utterance.onpause = () => setMockSpeakerStatus("interrupted", voiceToken);
+      utterance.onresume = () => setMockSpeakerStatus("playing", voiceToken);
+      utterance.onend = () => started ? finish() : fail(new Error("Speech ended before playback was confirmed."));
       utterance.onerror = () => fail(cloudError || new Error("The spoken reply could not play on this device."));
       ownedCancel = () => {
         try { speechSynthesis.cancel(); } catch (_) { /* already stopped */ }
@@ -12572,13 +12656,15 @@ async function playPipelineExtractionSpeech(text, { timingId = "" } = {}) {
   const state = labState.extraction;
   const spoken = clip(text, 2000);
   if (!spoken) return;
+  state.lastSpeechText = spoken;
+  if (labState.pipelineMode === "mock" && !mockSpeakerState().enabled) return;
   state.speechFailureKey = "";
   const playbackGeneration = (Number(state.speechPlaybackGeneration) || 0) + 1;
   state.speechPlaybackGeneration = playbackGeneration;
   state.lastSpeechText = spoken;
   const owner = "pipeline";
   const { audio, token:voiceToken } = beginMockVoicePlayback(owner);
-  if (state.mockMicWarm || state.micAcquirePromise) releaseLabMicrophoneStream(state);
+  if (state.recorder?.state !== "recording") releaseLabMicrophoneStream(state);
   setPipelineExtractionMicTracksEnabled(false);
   setPipelineExtractionAudioSession("playback");
   let cloudError = null;
@@ -13330,7 +13416,7 @@ function renderMockRecordingControls() {
   if (latched && q("mock-car-ptt")) q("mock-car-ptt").disabled = true;
   const message = latched
     ? listening ? "Listening. Tap the switch to send." : capturing ? "Waiting for microphone audio. Your recording is kept; tap to stop." : "Opening microphone. Wait for the tone; tap the switch to cancel."
-    : derived.status === "paused" ? `${derived.message}. Tap to try recording again.`
+    : derived.status === "paused" ? labState.mockCar.errorKey === "speech" ? derived.message : `${derived.message}. Tap to try recording again.`
     : derived.status === "thinking" || derived.status === "transcribing" ? derived.message
     : holdActive ? "Hold until finished, then release to send."
     : ready ? "Hold the conversation to talk, or tap the switch. Wait for the tone." : "Recording is unavailable while the conversation is preparing.";
@@ -13399,7 +13485,7 @@ function mockCarDerivedStatus() {
     if (state.recorder?.state === "recording" && state.recordingPointerStartedAt) return { status:"listening", message:state.recordingReadyForSpeech ? "Listening. Speak now." : "Waiting for microphone audio. Your recording is kept." };
     if (state.recorder?.state === "recording" && state.recordingStopTimer) return { status:"transcribing", message:"Finishing" };
     if (state.transcriptionToken) return { status:"transcribing", message:"Transcribing" };
-    if (state.speaking) return { status:"speaking", message:"Speaking" };
+    if (state.speaking) return { status:"speaking", message:labState.mockSpeaker?.status === "playing" ? "Speaking" : "Starting audio…" };
     if (state.busy || clarificationTurnPending(state)) return { status:"thinking", message:"Still finishing this turn" };
   } else {
     const state = labState.extraction;
@@ -13407,7 +13493,7 @@ function mockCarDerivedStatus() {
     if (state.recorder?.state === "recording" && state.recordingPointerActive) return { status:"listening", message:state.recordingReadyForSpeech ? "Listening. Speak now." : "Waiting for microphone audio. Your recording is kept." };
     if (state.recorder?.state === "recording" && state.recordingStopTimer) return { status:"transcribing", message:"Finishing" };
     if (state.voiceTranscriptionToken) return { status:"transcribing", message:"Transcribing" };
-    if (state.speaking) return { status:"speaking", message:"Speaking" };
+    if (state.speaking) return { status:"speaking", message:labState.mockSpeaker?.status === "playing" ? "Speaking" : "Starting audio…" };
     if (labState.extractionBusy || labState.lessonBusy || labState.quiz.busy || state.modeSwitching) return { status:"thinking", message:"Thinking" };
   }
   if (labState.mockCar.errorKey) return { status:"paused", message:labState.mockCar.message || "Paused" };
@@ -13568,6 +13654,7 @@ function renderMockCarMode() {
   if (retry) { retry.hidden = !active || !recovery?.retry; retry.disabled = labState.mockCar.retryBusy === true; }
   renderMockRecordingControls();
   renderMockRecordingGesture();
+  renderMockSpeakerButton();
 }
 
 function mockCarRecoveryState() {
@@ -13691,6 +13778,11 @@ function stopMockCarRecording(event) {
 }
 
 async function replayMockCarReply({ repeat = false } = {}) {
+  if (labState.pipelineMode === "mock" && repeat) {
+    const speaker = mockSpeakerState();
+    speaker.enabled = true;
+    try { localStorage.setItem("worldview.mock.spokenReplies", "on"); } catch (_) { /* Keep the session choice. */ }
+  }
   if (labState.mockCar.active && (labState.pipelineStage === "clarification" ? labState.clarification.speaking : labState.extraction.speaking)) {
     if (labState.pipelineStage === "clarification") stopClarificationSpeech();
     else stopPipelineExtractionSpeech();
@@ -13707,6 +13799,7 @@ async function replayMockCarReply({ repeat = false } = {}) {
   speakingState.speaking = true;
   setMockCarStatus("speaking", "Speaking");
   const primePromise = primeMockVoiceAudio();
+  if (labState.pipelineMode === "mock") setMockSpeakerStatus("starting");
   try {
     await primePromise;
     if (!labState.mockCar.active || labState.pipelineStage !== replayStage || speakingState.speakingToken !== speakingToken) {
@@ -13718,7 +13811,7 @@ async function replayMockCarReply({ repeat = false } = {}) {
   } catch (_) {
     if (speakingState.speakingToken === speakingToken) {
       speakingState.speaking = false;
-      if (labState.mockCar.active && labState.pipelineStage === replayStage) setMockCarStatus("paused", "Audio unavailable", "speech");
+      if (labState.mockCar.active && labState.pipelineStage === replayStage) { setMockSpeakerStatus("error"); setMockCarStatus("paused", "Audio unavailable. Tap the speaker to retry.", "speech"); }
     }
     return;
   }
@@ -16522,13 +16615,15 @@ async function playClarificationSpeech(text, { timingId = "" } = {}) {
   const state = labState.clarification;
   const spoken = clip(text, 2000);
   if (!spoken) return;
+  state.lastSpeechText = spoken;
+  if (labState.pipelineMode === "mock" && !mockSpeakerState().enabled) return;
   state.speechFailureKey = "";
   const playbackGeneration = (Number(state.speechPlaybackGeneration) || 0) + 1;
   state.speechPlaybackGeneration = playbackGeneration;
   state.lastSpeechText = spoken;
   const owner = "clarification";
   const { audio, token:voiceToken } = beginMockVoicePlayback(owner);
-  if (state.mockMicWarm || state.micAcquirePromise) releaseLabMicrophoneStream(state);
+  if (state.recorder?.state !== "recording") releaseLabMicrophoneStream(state);
   setClarificationMicTracksEnabled(false);
   setClarificationAudioSession("playback");
   let cloudError = null;
@@ -17999,7 +18094,7 @@ function bindEvents() {
     q(id)?.addEventListener("click", () => { void enterMockCarMode(); });
   }
   q("mock-car-text")?.addEventListener("click", () => exitMockCarMode({ switchToText:true }));
-  q("mock-car-exit")?.addEventListener("click", () => exitMockCarMode());
+  q("mock-car-speaker")?.addEventListener("click", () => { void toggleMockCarSpeaker(); });
   q("mock-car-replay")?.addEventListener("click", () => { void replayMockCarReply({ repeat:true }); });
   q("mock-car-stop-audio")?.addEventListener("click", () => { void replayMockCarReply(); });
   q("mock-car-map")?.addEventListener("click", () => { cancelMockCarCapture(); openPipelineExtractionMapDialog(); });

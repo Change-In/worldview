@@ -1875,3 +1875,18 @@ body.mock-learner-shell-active #panel-pipeline { inset:auto; top:var(--lab-viewp
 .mock-learner-transcript > li:has(.mock-response-source-circle) > strong { min-height:32px; padding-right:44px; display:flex; align-items:center; margin-bottom:12px; }
 
 .mock-response-sources[data-direction="up"] .mock-response-source-list { top:auto; bottom:calc(100% + 8px); }
+
+/* Mock speaker: the filled state requires a real playback-start event. */
+.mock-car-speaker { gap:2px; align-content:center; font-size:9px; }
+.mock-car-speaker svg { width:21px; height:21px; }
+.mock-car-speaker .speaker-muted { display:none; }
+.mock-car-speaker[data-audio-state="off"] .speaker-waves { display:none; }
+.mock-car-speaker[data-audio-state="off"] .speaker-muted { display:block; }
+.mock-car-speaker[data-audio-state="error"],.mock-car-speaker[data-audio-state="interrupted"] { border-color:#edb6a0; }
+.mock-car-speaker[aria-busy="true"] { border-style:dashed; }
+.mock-car-speaker.is-active { color:#241f1a; background:#eec7ab; border-color:#eec7ab; }
+.mock-car-speaker-status { margin:0; max-width:30ch; text-align:center; font-size:13px; line-height:1.35; color:#eec7ab; }
+.mock-car-speaker-status[hidden] { display:none; }
+
+.mock-car-speaker-status { position:absolute; top:80px; left:24px; right:24px; max-width:none; }
+@media(max-height:540px) { .mock-car-speaker-status { top:58px; font-size:11px; } }
