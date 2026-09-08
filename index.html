@@ -760,6 +760,13 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #home-topic-mic-status { min-height:1.4em; max-width:100%; margin:8px 0 0; font:12px/1.4 system-ui,sans-serif; text-align:center; color:var(--ink-soft); }
   #home-topic-mic-cancel { min-height:36px; margin-top:4px; background:transparent; color:var(--ink); border:0; text-decoration:underline; }
   #home-topic-mic-cancel[hidden] { display:none; }
+  .card.new-card .new-card-actions #home-topic-mic { display:flex; align-items:center; justify-content:center; box-sizing:border-box; padding:0; flex:0 0 48px; width:48px; min-width:48px; max-width:48px; height:48px; min-height:48px; aspect-ratio:1; border:1px solid var(--accent-500,#d4946b); border-radius:50%; background:transparent; box-shadow:none; }
+  #home-topic-mic svg { flex:none; display:block; width:22px; height:22px; margin:0; }
+  #home-topic-mic[data-capture-state="recording"] { background:var(--accent-100); }
+  #home-topic-mic[data-capture-state="recording"] svg { visibility:hidden; }
+  #home-topic-mic { position:relative; }
+  #home-topic-mic[data-capture-state="recording"]::after { content:""; position:absolute; inset:0; margin:auto; width:14px; height:14px; border-radius:3px; background:var(--ink); }
+  #home-topic-mic-status { height:2.8em; min-height:2.8em; overflow:auto; }
   /* Folders lives on the Ask Anything card's bottom-right corner (moved off the
      old floating pill that made Explore feel cluttered). */
   #new-card-folders, #new-card-leave-folder {
@@ -2218,11 +2225,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.1 · Sep 7";
+const BUILD = "v2.1.2 · Sep 8";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag:"v2.1.2", date:"Sep 8", changes:["Simplified microphone controls and reserved space for Car status and connection recovery.","Returning from another app avoids automatic microphone requests unless permission is already granted.","Car connection recovery stays tappable; choosing an available audio output replays the current reply.","Main lessons hide all map controls and use Worldview loading without the Model Lab screen."] },
   { tag:"v2.1.1", date:"Sep 7", changes:["New Home lessons open without waiting for old lesson history, with visible loading and retry feedback.","Ask Anything has a microphone: speak, review the topic, then Begin.","Removed the extra bottom View Lesson Map button from the main lesson conversation."] },
   { tag:"v2.1", date:"Sep 7", changes:["Begin on Home now opens the complete lesson sequence: Clarification, Lesson Map and Extraction, Tutor, then Quiz.","Continue your saved trial lessons from Home with the same conversation, research and recovery.","Approved testers use the shared lesson engine through their own account; Lab editing controls remain restricted.","Temporary account-check connection failures preserve the active lesson for retry.","Car audio offers Phone speaker and Phone receiver where the browser supports them; the old Off control is removed."] },
   { tag:"v1.2.13", date:"Sep 7", changes:["Mock Car opens for listening without waiting for microphone permission. Includes the new speaker control and playback recovery."] },
@@ -6212,6 +6220,8 @@ function syncStartButton() {
   $("start-btn").disabled = atPilotLimit || startStatus.busy || Boolean(homeTopicCapture?.busy) || !$("topic-input").value.trim();
   const mic = $("home-topic-mic");
   if (mic) {
+    mic.dataset.captureState = homeTopicCapture?.phase || "idle";
+    mic.setAttribute("aria-busy", String(["opening", "finishing", "transcribing"].includes(homeTopicCapture?.phase)));
     mic.disabled = atPilotLimit || startStatus.blocksInput || ["finishing", "transcribing"].includes(homeTopicCapture?.phase);
     mic.setAttribute("aria-pressed", String(homeTopicCapture?.phase === "recording"));
     mic.setAttribute("aria-label", homeTopicCapture?.phase === "recording" ? "Stop topic recording" : homeTopicCapture?.phase === "opening" ? "Cancel microphone startup" : homeTopicCapture?.blob ? "Retry topic transcription" : "Speak your topic");

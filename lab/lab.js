@@ -76,6 +76,7 @@ function initializeLearnerPresentation() {
   if (!LAB_LEARNER) return;
   document.documentElement.classList.add("learner-route");
   document.title = "Worldview — Lesson";
+  labState.extraction.mapDialogOpen = false;
   q("lab-gate-title").textContent = "Your lesson";
   q("lab-gate-title").nextElementSibling.textContent = "Sign in to your Worldview account to continue.";
   q("lab-account-signin").href = "../index.html?account=signin";
@@ -944,7 +945,9 @@ let labViewportLayoutTimer = 0;
 let labViewportLayoutFrame = 0;
 let labFieldRevealGeneration = 0;
 function syncLabViewportLayout() {
-  const viewport = window.visualViewport;
+  // Car has no keyboard. Screenshot/permission sheets can briefly pan the
+  // visual viewport; applying those offsets moves the entire fixed surface.
+  const viewport = document.body.classList.contains("mock-car-active") ? null : window.visualViewport;
   const width = Math.max(1, Math.round(Number(viewport?.width) || window.innerWidth || document.documentElement.clientWidth || 1));
   const height = Math.max(1, Math.round(Number(viewport?.height) || window.innerHeight || document.documentElement.clientHeight || 1));
   const offsetTop = Math.max(0, Math.round(Number(viewport?.offsetTop) || 0));
@@ -986,7 +989,7 @@ window.visualViewport?.addEventListener("scroll", () => {
   // browsers. The repaint loop exists only for the fixed learner shell; on the
   // Lab controls homepage it needlessly rewrites layout variables and forces a
   // layout read during the gesture, producing visible scroll jitter.
-  if (labLearnerViewportActive()) scheduleLabViewportLayout();
+  if (labLearnerViewportActive() && !document.body.classList.contains("mock-car-active")) scheduleLabViewportLayout();
 }, { passive:true });
 window.addEventListener("pageshow", scheduleLabViewportLayout, { passive:true });
 syncLabViewportLayout();
@@ -11877,6 +11880,7 @@ function renderPipelineExtractionMapDialog(artifact = selectedPipelineArtifact()
 }
 
 function openPipelineExtractionMapDialog() {
+  if (typeof LAB_LEARNER !== "undefined" && LAB_LEARNER) return;
   const dialog = q("pipeline-extraction-map-dialog");
   const progress = !q("mock-learner-map-progress")?.hidden ? q("mock-learner-map-progress") : q("pipeline-extraction-progress");
   if (!dialog || !progress || progress.disabled) return;
@@ -12262,11 +12266,19 @@ async function prepareMockMicrophone() {
   const stage = labState.pipelineStage;
   if (!["clarification", "extraction", "lesson", "quiz"].includes(stage)) return;
   const state = stage === "clarification" ? labState.clarification : labState.extraction;
+  const epoch = labState.authEpoch;
   if (state.mode !== "voice" || state.speaking || state.modeSwitching || state.recordingPointerActive || state.recordingPointerStartedAt || state.recordingLatched || state.recorder || state.micAcquirePromise || state.mockMicWarm) return;
   // Prepare only the device connection. No recorder, samples or transcription
   // exist until an intentional press; idle tracks are disabled by adoption.
   state.mockMicWarm = true;
   try {
+    // Avoid requesting unknown permission from rendering, app return or a
+    // screenshot interruption. Unknown/Ask permission belongs to a real press.
+    if (!navigator.permissions?.query) { state.mockMicWarm = false; return; }
+    const permission = await navigator.permissions.query({name:"microphone"});
+    if (permission.state !== "granted" || document.hidden || epoch !== labState.authEpoch || stage !== labState.pipelineStage || state !== (stage === "clarification" ? labState.clarification : labState.extraction) || !state.mockMicWarm || state.recorder || state.recordingPointerActive || state.recordingPointerStartedAt || state.recordingLatched || state.micAcquirePromise || state.mode !== "voice" || state.speaking || state.modeSwitching || labState.extraction.mapDialogOpen) {
+      state.mockMicWarm = false; return;
+    }
     if (stage === "clarification") await ensureClarificationMicStream(state.runId, { capture:false });
     else await ensurePipelineExtractionMicStream({ capture:false });
   } catch (_) {
@@ -12515,8 +12527,8 @@ function renderMockSpeakerButton() {
   const routeNote = q("mock-car-output-note");
   if (routeNote) routeNote.textContent = state.routeMessage || "Choose where you want to hear the reply.";
   if (feedback) {
-    feedback.hidden = choicesOpen || (!state.routeMessage && !["starting", "playing", "error", "interrupted"].includes(state.status));
-    feedback.textContent = state.routeMessage || (state.status === "starting" ? "Starting audio…" : state.status === "playing" ? "Playing reply" : "Playback did not continue. Tap Repeat to retry.");
+    feedback.hidden = choicesOpen || !["starting", "playing", "error", "interrupted"].includes(state.status);
+    feedback.textContent = state.status === "starting" ? "Starting audio…" : state.status === "playing" ? "Playing reply" : "Audio paused. Tap Repeat to retry.";
   }
   for (const route of ["speaker", "receiver"]) {
     const choice = q(`mock-car-output-${route}`);
@@ -12544,11 +12556,15 @@ async function chooseMockPhoneOutput(route) {
   const state = mockSpeakerState();
   if (state.selecting) return;
   const epoch = labState.authEpoch;
+  let hearReply = false;
   state.selecting = true;
   state.routeMessage = "Checking available phone audio…";
   renderMockSpeakerButton();
   try {
     const audio = sharedMockVoiceAudio();
+    // Unlock the actual player during the tap, before device enumeration can
+    // consume iOS user activation. A silent primer is not playback evidence.
+    if (route === "speaker" || typeof audio.setSinkId === "function") void primeMockVoiceAudio();
     const devices = typeof audio.setSinkId === "function" && navigator.mediaDevices?.enumerateDevices
       ? await navigator.mediaDevices.enumerateDevices() : [];
     if (epoch !== labState.authEpoch || !labState.mockCar.active) return;
@@ -12556,27 +12572,35 @@ async function chooseMockPhoneOutput(route) {
     if (!output) {
       // AudioSession playback is a category hint, never evidence of a selected
       // physical speaker. No invented receiver/default device IDs.
-      if (route === "speaker" && !state.route) setPipelineExtractionAudioSession("playback");
-      state.routeMessage = route === "receiver"
-        ? "This browser does not expose the phone receiver. Audio output is still controlled by your phone."
-        : "This browser does not expose a separate phone speaker. Use your phone’s audio controls, then tap Repeat.";
-      return;
+      if (route === "receiver") { state.routeMessage = "Receiver switching is unavailable in this browser."; return; }
+      stopClarificationSpeech();
+      stopPipelineExtractionSpeech();
+      if (typeof audio.setSinkId === "function") await audio.setSinkId("");
+      if (epoch !== labState.authEpoch || !labState.mockCar.active) return;
+      state.sinkId = ""; state.route = "";
+      setPipelineExtractionAudioSession("playback");
+      state.routeMessage = "Using your phone’s current audio output.";
+      q("mock-car-output-choices").hidden = true;
+      hearReply = true;
+    } else {
+      stopClarificationSpeech();
+      stopPipelineExtractionSpeech();
+      await audio.setSinkId(output.deviceId);
+      if (epoch !== labState.authEpoch || !labState.mockCar.active) return;
+      state.sinkId = output.deviceId;
+      state.route = route;
+      state.verified = false;
+      state.routeMessage = `${route === "receiver" ? "Receiver" : "Speaker"} selected.`;
+      q("mock-car-output-choices").hidden = true;
+      hearReply = true;
     }
-    stopClarificationSpeech();
-    stopPipelineExtractionSpeech();
-    await audio.setSinkId(output.deviceId);
-    if (epoch !== labState.authEpoch || !labState.mockCar.active) return;
-    state.sinkId = output.deviceId;
-    state.route = route;
-    state.verified = false;
-    state.routeMessage = `${route === "receiver" ? "Receiver" : "Speaker"} selected. Tap Repeat to check.`;
-    q("mock-car-output-choices").hidden = true;
   } catch (_) {
     if (epoch === labState.authEpoch) state.routeMessage = "The audio output could not switch. Check your phone’s audio controls and try again.";
   } finally {
     state.selecting = false;
     if (epoch === labState.authEpoch) renderMockSpeakerButton();
   }
+  if (hearReply && epoch === labState.authEpoch && labState.mockCar.active) await replayMockCarReply({repeat:true});
 }
 
 async function applyMockPhoneOutput(audio, voiceToken) {
@@ -13759,6 +13783,12 @@ function toggleMockRecording(event) {
 
 function cancelBackgroundMockRecording() {
   if (!document.hidden || labState.pipelineMode !== "mock") return;
+  const state = labState.pipelineStage === "clarification" ? labState.clarification : labState.extraction;
+  if (!state.recorder && !state.recordingPointerActive && !state.recordingPointerStartedAt && !state.recordingLatched) {
+    releaseLabMicrophoneStream(state);
+    state.mockMicWarm = false;
+    return;
+  }
   labState.mockRecordingGesture = null;
   cancelMockCarCapture();
   setMockCarStatus("idle", "Recording cancelled when the page went into the background");
@@ -13900,12 +13930,26 @@ function mockCarReturnFocusTarget(preferred = null) {
   return [q("pipeline-learner-exit"), q("pipeline-mode-mock")].find(isAvailable) || null;
 }
 
+function placeLabConnectionNotice(active, surface) {
+  const connection = q("lab-connection-status");
+  if (!connection || !surface) return;
+  const parent = active ? surface : document.body;
+  if (connection.parentElement === parent) return;
+  connection.inert = false;
+  connection.removeAttribute("aria-hidden");
+  delete connection.dataset.mockCarIsolated;
+  delete connection.dataset.mockCarWasInert;
+  delete connection.dataset.mockCarPreviousAriaHidden;
+  parent.append(connection);
+}
+
 function renderMockCarMode() {
   const available = mockCarConversationAvailable();
   const ready = mockCarConversationReady();
   const active = available && labState.mockCar.active;
   document.body.classList.toggle("mock-car-active", active);
   const surface = q("mock-car-surface");
+  placeLabConnectionNotice(active, surface);
   if (surface) surface.hidden = !active;
   if (active && labState.extraction.mapDialogOpen) {
     setMockCarIsolation(false, surface);
@@ -13937,16 +13981,11 @@ function renderMockCarMode() {
   if (surface) surface.dataset.status = derived.status;
   const ptt = q("mock-car-ptt");
   if (ptt) {
-    const wasDisabled = ptt.disabled;
     const blocked = !ready || derived.status === "thinking" || derived.status === "transcribing" || (derived.status === "paused" && labState.mockCar.errorKey === "microphone-permission");
     ptt.disabled = !active || (blocked && !labState.mockRecordingGesture);
     ptt.setAttribute("aria-label", derived.status === "listening" ? "Release to send" : "Hold and wait for the ready tone to talk");
     ptt.classList.toggle("is-listening", derived.status === "listening");
-    if (active && ready && !labState.extraction.mapDialogOpen && wasDisabled && !ptt.disabled) {
-      queueMicrotask(() => {
-        if (labState.mockCar.active && mockCarConversationReady() && !ptt.disabled) ptt.focus({ preventScroll:true });
-      });
-    }
+    // Async readiness must not repeatedly move iOS focus/viewport while idle.
   }
   const replay = q("mock-car-replay");
   if (replay) {
@@ -18248,10 +18287,12 @@ async function prepareLabEntry(epoch, learner) {
     if (!initializeWorkspace()) throw labAccountError("admin_required");
     if (learner) {
       setMessage("lab-gate-message", "Preparing your lesson…");
-      await probeLearnerProviders();
-    } else await probeProviders();
-    assertLabRequestOwner(epoch, userId);
-    await loadGlobalClarificationDefault();
+      await Promise.all([probeLearnerProviders(), loadGlobalClarificationDefault()]);
+    } else {
+      await probeProviders();
+      assertLabRequestOwner(epoch, userId);
+      await loadGlobalClarificationDefault();
+    }
     assertLabRequestOwner(epoch, userId);
     // New topics have no history dependency. Loading every previous job and
     // its details here made owner accounts wait on unrelated past lessons.
@@ -18300,11 +18341,22 @@ async function openLab() {
   }
 }
 
+async function reconnectLabAccount() {
+  const notice = q("lab-connection-status"), button = q("lab-connection-retry");
+  if (!notice || notice.hidden || document.hidden || button?.disabled) return;
+  if (button) { button.disabled = true; button.textContent = "Reconnecting…"; }
+  try { await accessToken(false); }
+  catch (_) { /* Verification retains the current lesson or locks a changed identity. */ }
+  finally {
+    if (button) { button.disabled = false; button.textContent = "Reconnect"; }
+  }
+}
+
 function bindEvents() {
   q("lab-enter").addEventListener("click", openLab);
-  q("lab-connection-retry")?.addEventListener("click", async () => {
-    try { await accessToken(false); } catch (_) { /* Keep the same-owner recovery notice or the actual sign-out gate. */ }
-  });
+  q("lab-connection-retry")?.addEventListener("click", reconnectLabAccount);
+  window.addEventListener("online", () => { void reconnectLabAccount(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) void reconnectLabAccount(); });
   bindClarificationEvents();
   document.querySelectorAll("[data-load-prompt]").forEach((button) => button.addEventListener("click", () => resetPreset(button.dataset.loadPrompt)));
   document.querySelectorAll("[data-save-prompt]").forEach((button) => button.addEventListener("click", () => savePromptVersion(button.dataset.savePrompt)));
