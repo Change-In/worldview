@@ -1875,6 +1875,7 @@ body.mock-learner-shell-active #panel-pipeline { inset:auto; top:var(--lab-viewp
 .mock-learner-transcript > li:has(.mock-response-source-circle) > strong { min-height:32px; padding-right:44px; display:flex; align-items:center; margin-bottom:12px; }
 
 .mock-response-sources[data-direction="up"] .mock-response-source-list { top:auto; bottom:calc(100% + 8px); }
+.mock-response-source-empty { margin:0; padding:10px; color:#cabeae; font:400 14px/1.5 system-ui,sans-serif; }
 
 /* Mock speaker: the filled state requires a real playback-start event. */
 .mock-car-speaker { gap:2px; align-content:center; font-size:9px; }
@@ -1963,3 +1964,5 @@ body.mock-run.mock-car-active .mock-car-surface {
   .mock-car-surface .lab-connection-status { max-height:48px; padding:2px 10px; }
   .mock-car-surface .mock-car-safety { font-size:10px; }
 }
+
+.mock-response-sources { touch-action:pan-y; user-select:text; -webkit-user-select:text; }
