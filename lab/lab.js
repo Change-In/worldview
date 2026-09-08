@@ -89,13 +89,56 @@ function initializeLearnerPresentation() {
   q("clarification-setup").querySelector(".clarification-home-copy > p:last-child").textContent = "Choose a question or topic you would like to understand.";
 }
 
+function setLearnerEntry(ready = false, topic = "", complete = false) {
+  if (!LAB_LEARNER) return;
+  labState.learnerEntryReady = ready;
+  document.documentElement.classList.toggle("learner-entry-complete", complete);
+  for (const mode of ["text", "voice", "car"]) if (q("learner-entry-" + mode)) q("learner-entry-" + mode).disabled = !ready;
+  const title = q("learner-entry-topic");
+  if (title) { title.textContent = topic; title.hidden = !topic; }
+  if (q("learner-entry-status")) q("learner-entry-status").textContent = ready ? "" : "Connecting…";
+}
+
+async function startLearnerEntry(mode) {
+  if (!LAB_LEARNER || !labState.learnerEntryReady || labState.learnerEntryStarting
+    || !labState.accessVerified || !labState.verifiedUserId || labState.workspaceOwnerId !== labState.verifiedUserId
+    || !["text", "voice", "car"].includes(mode)) return false;
+  if (mode !== "text" && (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder)) {
+    q("learner-entry-status").textContent = "This browser cannot record audio. Choose Text to continue.";
+    return false;
+  }
+  labState.learnerEntryStarting = true;
+  const ownerId = labState.verifiedUserId, epoch = labState.authEpoch;
+  try {
+    // startClarification saves the run and its first immutable request before
+    // its first network wait. The click also owns microphone/audio permission.
+    const opening = startClarification(mode === "car" ? "voice" : mode);
+    if (!q("clarification-conversation").hidden && labState.clarification.runId) {
+      const state = labState.clarification;
+      if (state.pendingRequestKey || state.latestJobId || state.turns.some(turn => turn.role === "assistant")) sessionStorage.removeItem(LEARNER_LAUNCH_KEY);
+      setLearnerEntry(false, "", true);
+      if (mode === "car") { await enterMockCarMode(); renderMockCarMode(); }
+    }
+    await opening;
+    if (ownerId !== labState.verifiedUserId || epoch !== labState.authEpoch) return false;
+    publishLearnerRunSummaries();
+    return true;
+  } catch (error) {
+    if (labState.accessVerified && ownerId === labState.verifiedUserId && epoch === labState.authEpoch) {
+      if (labState.learnerEntryReady) q("learner-entry-status").textContent = "The conversation could not start. Choose a mode to try again.";
+      else { labState.clarification.runError = "The conversation could not start. Your topic is still saved."; renderMockLearnerShell(); }
+    }
+    return false;
+  } finally { labState.learnerEntryStarting = false; }
+}
+
 function readLearnerLaunch() {
   let packet;
   try { packet = JSON.parse(sessionStorage.getItem(LEARNER_LAUNCH_KEY) || "null"); }
   catch (_) { return null; }
   if (!packet || packet.ownerUserId !== labState.verifiedUserId || labState.workspaceOwnerId !== packet.ownerUserId) return null;
   if (packet.runId && !/^[A-Za-z0-9-]{8,128}$/.test(String(packet.runId))) return null;
-  return { ownerUserId:packet.ownerUserId, topic:String(packet.topic || "").trim().slice(0, 500), mode:packet.mode === "voice" ? "voice" : "text", runId:String(packet.runId || "") };
+  return { ownerUserId:packet.ownerUserId, topic:String(packet.topic || "").trim().slice(0, 500), runId:String(packet.runId || "") };
 }
 
 async function hydrateLearnerSavedRun(runId) {
@@ -186,6 +229,7 @@ async function openLearnerLesson() {
     if (labState.mockSetupActive) throw new Error("This saved lesson could not reconnect yet. Return Home and try again.");
     sessionStorage.removeItem(LEARNER_LAUNCH_KEY);
     labState.learnerLessonOpened = true;
+    setLearnerEntry(false, "", true);
     publishLearnerRunSummaries();
     return;
   }
@@ -199,6 +243,7 @@ async function openLearnerLesson() {
       if (labState.verifiedUserId !== ownerId) throw labAccountError("identity_changed");
       if (labState.mockSetupActive) throw new Error("This saved lesson could not reconnect yet. Return Home and try again.");
       labState.learnerLessonOpened = true;
+      setLearnerEntry(false, "", true);
       return;
     }
   }
@@ -211,11 +256,11 @@ async function openLearnerLesson() {
   if (packet?.topic) {
     q("clarification-topic").value = packet.topic;
     syncClarificationTopic("clarification-topic");
-    // Consume before the paid request; a reload must resume, never resubmit
-    // the original Home launch. startClarification saves its run first.
-    sessionStorage.removeItem(LEARNER_LAUNCH_KEY);
-    await startClarification(packet.mode);
-    publishLearnerRunSummaries();
+    // Keep the launch draft across a refresh until the learner chooses a mode.
+    // Home never chooses Text or sends a paid opening on the learner's behalf.
+    setLearnerEntry(true, packet.topic);
+  } else {
+    setLearnerEntry(false, "", true);
   }
 }
 
@@ -3676,6 +3721,7 @@ function lockLabAccount(message = "Sign in to your administrator account to open
   labState.busy = false;
   labState.createStarting = false;
   labState.learnerLessonOpened = false;
+  if (typeof LAB_LEARNER !== "undefined" && LAB_LEARNER) setLearnerEntry(false, "", status !== "checking");
   const shell = q("lab-shell"), gate = q("lab-gate");
   if (q("lab-workspace-home")) q("lab-workspace-home").hidden = true;
   if (q("lab-tool-select")) q("lab-tool-select").hidden = true;
@@ -7234,7 +7280,7 @@ async function retryPipelineMapFromExtraction(options = {}) {
 
     const terminalDiagnostic = currentMapJob
       ? pipelineMapAttemptDiagnostic(currentMapJob, labState.jobDetails.get(currentMapJob.id)) : null;
-    if (terminalDiagnostic?.errorType === "allowance_exhausted") {
+    if (terminalDiagnostic?.errorType === "allowance_exhausted" && options.automatic === true) {
       const message = "This month’s protected Lab testing allowance has been used. Retrying on another model cannot run until that server-owned allowance is available again; the frozen Clarification and attempt remain saved.";
       retryState.mapStartFailureRunId = artifact.runId;
       retryState.mapStartFailureJobId = currentMapJob.id;
@@ -7243,7 +7289,12 @@ async function retryPipelineMapFromExtraction(options = {}) {
       return false;
     }
 
-    const mapRoute = options.mapRoute || pipelineMapRetryRoute(artifact);
+    // A deliberate retry can use a renewed server allowance. A cached denial
+    // must not permanently lock this saved run, or change providers for quota.
+    const quotaSample = terminalDiagnostic?.errorType === "allowance_exhausted"
+      ? labState.jobDetails.get(currentMapJob.id)?.samples?.[0] : null;
+    const mapRoute = quotaSample ? { provider:quotaSample.provider, model:quotaSample.model }
+      : options.mapRoute || pipelineMapRetryRoute(artifact);
     if (!mapRoute?.provider || !mapRoute?.model) {
       const message = "Every configured Lesson Map model in this retry lineage has already been tried. The frozen Clarification and attempt history remain saved; configure another Map model before retrying again.";
       retryState.mapStartFailureRunId = artifact.runId;
@@ -10004,6 +10055,7 @@ function retryablePipelineLessonTurn(selection = selectedPipelineMapRecord()) {
 function lessonFailureExplanation(detail) {
   const types = (detail?.samples || []).map(sample => sample.error?.type || "");
   if (types.some(type => /uncertain/.test(type)) || detail?.job?.status === "uncertain") return "The previous request’s outcome is uncertain. Check its saved status before sending again.";
+  if (types.includes("allowance_exhausted")) return "The monthly testing allowance has been reached. Retrying cannot help until the allowance is renewed.";
   if (types.some(type => /rate_limit/.test(type))) return "The reply service is temporarily rate-limited.";
   if (types.some(type => /timeout/.test(type))) return "The reply service timed out.";
   if (types.some(type => /empty|truncated|incomplete|unusable|schema/.test(type))) return "The reply was empty, incomplete, or did not match the required format.";
@@ -11851,9 +11903,9 @@ function renderPipelineExtractionMapDialog(artifact = selectedPipelineArtifact()
       && (["starting", "needs-attention", "deferred"].includes(mapState.state) || mapState.supportNeedsAttention));
     retry.hidden = !retryable;
     const allowanceBlocked = mapState.diagnostic?.errorType === "allowance_exhausted";
-    retry.disabled = allowanceBlocked || labState.extraction.mapRetryBusy || labState.busy || labState.createStarting;
+    retry.disabled = labState.extraction.mapRetryBusy || labState.busy || labState.createStarting;
     const researchOnly = mapState.selection?.meta?.routeReady && !mapState.selection.meta.researchComplete;
-    retry.textContent = allowanceBlocked ? "Lab allowance unavailable"
+    retry.textContent = allowanceBlocked ? "Retry after allowance renewal"
       : labState.extraction.mapRetryBusy ? "Retrying…"
         : mapState.state === "deferred" && !mapState.job ? "Generate Lesson Map"
           : researchOnly ? "Retry missing research" : "Retry Lesson Map";
@@ -14551,7 +14603,9 @@ function mockLearnerStatus(stage, artifact, selection) {
     return { text:"Your saved reply could not be checked. Retry reconnects to the same lesson; it does not send another answer.", error:true, retry:"resume-read" };
   }
   if (stage === "clarification" && labState.clarification.runError) {
-    return { text:"Sorry—we’re having trouble getting a reply. Your conversation is still here.", error:true, retry:"clarification" };
+    const allowance = /allowance_exhausted|testing allowance/i.test(labState.clarification.runError);
+    return { text:allowance ? "The monthly testing allowance has been reached. Your conversation is saved; retry after the allowance is renewed."
+      : "Sorry—we’re having trouble getting a reply. Your conversation is still here.", error:true, retry:"clarification" };
   }
   if (stage === "extraction" && pipelineExtractionHandoffFailed(artifact, selection)) {
     return { text:labState.extraction.lessonHandoffFailureMessage || "Your request to begin is saved. Retry saving this conversation to open the lesson.", error:true, retry:"handoff" };
@@ -14565,7 +14619,7 @@ function mockLearnerStatus(stage, artifact, selection) {
       : "Your message is still here, but delivery was not confirmed. Retry will recover the same request without restarting.", error:true, retry:"pending-conversation" };
   }
   if (stage === "extraction" && labState.extraction.mapStartFailureRunId === artifact?.runId && !pipelineMapJob(artifact)) {
-    return { text:"Sorry—we’re having trouble preparing the lesson route. Your conversation is still here; view the Lesson Map progress for details.", error:true, retry:"" };
+    return { text:"Lesson preparation stopped. Your conversation is saved; retry preparation to continue.", error:true, retry:"map" };
   }
   if (stage === "extraction" && (labState.extraction.openingFailureMessage || labState.extraction.mapAwareFailureMessage)) {
     return { text:"Sorry—we’re having trouble continuing this conversation. Your earlier answers are still here.", error:true, retry:"conversation" };
@@ -14574,6 +14628,7 @@ function mockLearnerStatus(stage, artifact, selection) {
     const latest = pipelineExtractionJobs(artifact).at(-1);
     const detail = latest && labState.jobDetails.get(latest.id);
     if (latest && detail && !LAB_ACTIVE_JOB_STATES.has(latest.status) && !pipelineExtractionOutput(detail).output) {
+      if (detail.samples?.some(sample => sample.error?.type === "allowance_exhausted")) return { text:"The monthly testing allowance has been reached. Your conversation is saved; retry after the allowance is renewed.", error:true, retry:"conversation" };
       return { text:"Sorry—we didn’t receive a usable reply. Your conversation is still here.", error:true, retry:"conversation" };
     }
   }
@@ -14602,6 +14657,11 @@ function mockLearnerStatus(stage, artifact, selection) {
   }
   if (stage === "extraction" && artifact) {
     const mapState = pipelineExtractionMapViewState(artifact);
+    if (mapState.state === "needs-attention" || mapState.supportNeedsAttention) {
+      return { text:mapState.diagnostic?.errorType === "allowance_exhausted"
+        ? "Lesson preparation reached the monthly testing allowance. Your conversation is saved; retry after the allowance is renewed."
+        : "Lesson preparation stopped. Your conversation is saved; retry preparation to continue.", error:true, retry:labState.extraction.mapRetryBusy ? "" : "map" };
+    }
     if (["starting", "working", "loading", "route-ready"].includes(mapState.state)) {
       return { text:mapState.state === "route-ready" ? "Your route is ready. I’m preparing its first chapter while we keep talking." : "I’m preparing the lesson route while we keep talking.", error:false, retry:"" };
     }
@@ -14986,6 +15046,14 @@ async function retryMockLearnerAction(requestedAction = "") {
     return;
   }
   if (action === "clarification") { q("clarification-retry-model")?.click(); return; }
+  if (action === "map") {
+    if (labState.pipelineStage !== "extraction" || labState.extraction.mapRetryBusy) return;
+    const pending = retryPipelineMapFromExtraction();
+    renderMockLearnerShell();
+    try { await pending; }
+    finally { renderMockLearnerShell(); }
+    return;
+  }
   if (action === "handoff") {
     if (labState.extraction.lessonHandoffBusy || labState.extraction.saveBusy) return;
     const artifact = selectedPipelineArtifact();
@@ -17422,8 +17490,13 @@ async function runClarificationModel(timingId = "") {
   catch (error) {
     failMockTurnAudio(timingId, "clarification-request-invalid");
     const message = error.message || "The clarification request could not be prepared.";
+    state.runError = message;
+    state.retryableModelTurn = activeTurn;
+    setClarificationActivity(false);
     setMessage("clarification-message", message, "error");
     setMessage("clarification-backend-message", message, "error");
+    persistClarificationSettings();
+    renderMockLearnerShell();
     return;
   }
   if (state.recoveryTurn !== activeTurn || !Array.isArray(state.recoveryRoutes) || !state.recoveryRoutes.length) {
@@ -17482,8 +17555,11 @@ async function runClarificationModel(timingId = "") {
     state.pendingRequestKey = "";
     state.pendingRequestTurn = -1;
     state.runError = "This turn could not be saved on the device before sending.";
+    state.retryableModelTurn = activeTurn;
+    setClarificationActivity(false);
     failMockTurnAudio(timingId, "clarification-resume-storage-failed");
     setMessage("clarification-message", "The model was not called because this turn could not be saved safely. Free device storage, then send again.", "error");
+    renderMockLearnerShell();
     return;
   }
   setClarificationBusy(true, "running");
@@ -18157,6 +18233,12 @@ function bindClarificationEvents() {
     setMessage("clarification-prompt-message", saved ? "Saved only on this device. The server default will still win the next time Clarification opens." : "This browser could not save the prompt draft.", saved ? "ok" : "error");
   });
   q("clarification-prompt-save-shared").addEventListener("click", saveGlobalClarificationDefault);
+  for (const mode of ["text", "voice", "car"]) q("learner-entry-" + mode)?.addEventListener("click", () => { void startLearnerEntry(mode); });
+  q("clarification-car")?.addEventListener("click", async () => {
+    const opening = startClarification("voice");
+    await enterMockCarMode(); renderMockCarMode();
+    await opening;
+  });
   q("clarification-voice").addEventListener("click", () => startClarification("voice"));
   q("clarification-text").addEventListener("click", () => startClarification("text"));
   q("clarification-send").addEventListener("click", () => submitClarificationReply(q("clarification-reply").value));
@@ -18890,6 +18972,7 @@ async function boot() {
     await openLab();
   } catch (error) {
     setMessage("lab-gate-message", `${error.message || "The protected lab client did not load."} Check your connection and reload.`, "error");
+    if (LAB_LEARNER) setLearnerEntry(false, "", true);
   }
 }
 

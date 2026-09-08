@@ -1972,3 +1972,28 @@ body.mock-run.mock-car-active .mock-car-surface {
 .lesson-inline-citation a:focus-visible { outline:2px solid currentColor; outline-offset:2px; }
 .mock-chapter-list button[aria-current="step"] { color:#f4ece0; font-weight:600; }
 .mock-chapter-list button:disabled { opacity:.55; cursor:default; }
+
+/* The learner arrives on conversation chrome immediately, while the existing
+   server-owned account check runs. Only public empty UI exists before access. */
+.learner-route:not(.learner-entry-complete) #learner-entry-shell {
+  display:flex!important; position:fixed; inset:0; z-index:12;
+  width:100%; height:100%; height:100svh;
+}
+.learner-route:not(.learner-entry-complete) #lab-gate,
+.learner-route:not(.learner-entry-complete) #lab-shell { visibility:hidden; }
+.learner-route.learner-entry-complete #learner-entry-shell { display:none!important; }
+.learner-entry-conversation { flex:1; min-height:0; overflow:auto; padding:clamp(24px,7vh,72px) 20px 24px; }
+.learner-entry-choice { width:min(100%,620px); margin:0 auto; }
+.learner-entry-choice h3 { margin:0 0 10px; font:600 clamp(21px,4vw,28px)/1.25 system-ui,sans-serif; }
+.learner-entry-choice > p { color:#cabeae; font:16px/1.5 system-ui,sans-serif; }
+.learner-entry-topic { overflow-wrap:anywhere; padding:16px 0; border-bottom:1px solid #f4ece024; margin:0 0 26px; }
+.learner-entry-modes { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:24px; }
+.learner-entry-modes button { min-height:100px; padding:16px 10px; border:1px solid #f4ece040; border-radius:18px; background:#332c25; color:#f4ece0; text-align:left; cursor:pointer; }
+.learner-entry-modes button strong { display:block; font:600 18px/1.3 system-ui,sans-serif; margin-bottom:6px; }
+.learner-entry-modes button span { display:block; color:#cabeae; font:14px/1.35 system-ui,sans-serif; }
+.learner-entry-modes button:disabled { opacity:.55; cursor:wait; }
+.learner-entry-modes button:focus-visible { outline:3px solid #e2895a; outline-offset:3px; }
+.learner-entry-modes button:not(:disabled):hover { border-color:#eec7ab; background:#41362c; }
+#learner-entry-status { min-height:24px; margin-top:18px; }
+#learner-entry-shell .mock-learner-back { display:grid; place-items:center; text-decoration:none; }
+@media (max-width:380px) { .learner-entry-modes { gap:8px; } .learner-entry-modes button { padding:14px 8px; } }

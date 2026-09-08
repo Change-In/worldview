@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#241f1a">
 <title>Worldview — Model Lab</title>
 <script>if(new URLSearchParams(location.search).get("learner")==="1")document.documentElement.classList.add("learner-route");</script>
-<link rel="stylesheet" href="./lab.css?v=2.1.4">
+<link rel="stylesheet" href="./lab.css?v=2.1.5">
 </head>
 <body>
 <aside id="lab-connection-status" class="lab-connection-status" role="status" hidden>
@@ -28,6 +28,32 @@
     <div id="lab-health" class="lab-health" aria-live="polite">Locked</div>
   </div>
 </header>
+
+<section id="learner-entry-shell" class="mock-learner-shell" hidden aria-label="Worldview lesson conversation">
+  <header class="mock-learner-header">
+    <a class="mock-learner-back" href="../index.html" aria-label="Return to Home">←</a>
+    <h2>Worldview</h2>
+  </header>
+  <main class="learner-entry-conversation">
+    <div class="learner-entry-choice" aria-labelledby="learner-entry-title">
+      <p id="learner-entry-topic" class="learner-entry-topic" hidden></p>
+      <h3 id="learner-entry-title">How would you like to chat?</h3>
+      <p>You can switch at any time.</p>
+      <div class="learner-entry-modes" role="group" aria-label="Conversation mode">
+        <button id="learner-entry-text" type="button" disabled><strong>Text</strong><span>Read and type</span></button>
+        <button id="learner-entry-voice" type="button" disabled><strong>Voice</strong><span>Listen and talk</span></button>
+        <button id="learner-entry-car" type="button" disabled><strong>Car</strong><span>Larger voice controls</span></button>
+      </div>
+      <p id="learner-entry-status" role="status" aria-live="polite">Connecting…</p>
+    </div>
+  </main>
+  <footer class="mock-learner-composer">
+    <div class="mock-learner-text-controls">
+      <textarea rows="2" placeholder="Choose how to chat…" aria-label="Choose a mode before replying" disabled></textarea>
+      <button class="mock-learner-send" type="button" disabled>Send</button>
+    </div>
+  </footer>
+</section>
 
 <section id="lab-gate" class="lab-gate" data-state="checking" aria-labelledby="lab-gate-title">
   <div class="gate-orbit" aria-hidden="true"></div>
@@ -230,10 +256,11 @@
           <div id="clarification-mode-step" class="clarification-mode-step" hidden>
             <button id="clarification-mode-back" class="clarification-cancel" type="button">Back</button>
             <p class="eyebrow">How would you like to talk?</p>
-            <h3>Voice or text?</h3>
+            <h3>Text, Voice, or Car?</h3>
             <p>Voice opens the conversation and asks for microphone access immediately.</p>
           <div class="clarification-mode-grid">
             <button id="clarification-voice" class="clarification-mode" type="button"><strong>Voice</strong><span>Open the chat, allow the mic, then hold and begin after the tone.</span></button>
+            <button id="clarification-car" class="clarification-mode" type="button"><strong>Car</strong><span>Listen and reply with larger voice controls.</span></button>
             <button id="clarification-text" class="clarification-mode" type="button"><strong>Text</strong><span>Have the same conversation by typing.</span></button>
           </div>
           </div>
@@ -704,6 +731,6 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=2.1.4" defer></script>
+<script src="./lab.js?v=2.1.5" defer></script>
 </body>
 </html>
