@@ -754,6 +754,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .card.new-card button:disabled { opacity: 0.45; }
   .card.new-card .new-card-actions { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
   .card.new-card .new-card-actions #start-btn { flex: 1; max-width: 132px; }
+  #home-topic-mic { display:grid; place-items:center; flex:0 0 46px; width:46px; height:46px; border:1px solid var(--ink-soft); border-radius:50%; color:var(--ink); background:transparent; cursor:pointer; touch-action:manipulation; }
+  #home-topic-mic svg { width:23px; height:23px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; }
+  #home-topic-mic[aria-pressed="true"] { background:var(--accent-100); box-shadow:0 0 0 3px var(--accent-100); }
+  #home-topic-mic-status { min-height:1.4em; max-width:100%; margin:8px 0 0; font:12px/1.4 system-ui,sans-serif; text-align:center; color:var(--ink-soft); }
+  #home-topic-mic-cancel { min-height:36px; margin-top:4px; background:transparent; color:var(--ink); border:0; text-decoration:underline; }
+  #home-topic-mic-cancel[hidden] { display:none; }
   /* Folders lives on the Ask Anything card's bottom-right corner (moved off the
      old floating pill that made Explore feel cluttered). */
   #new-card-folders, #new-card-leave-folder {
@@ -2212,11 +2218,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1 · Sep 7";
+const BUILD = "v2.1.1 · Sep 7";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag:"v2.1.1", date:"Sep 7", changes:["New Home lessons open without waiting for old lesson history, with visible loading and retry feedback.","Ask Anything has a microphone: speak, review the topic, then Begin.","Removed the extra bottom View Lesson Map button from the main lesson conversation."] },
   { tag:"v2.1", date:"Sep 7", changes:["Begin on Home now opens the complete lesson sequence: Clarification, Lesson Map and Extraction, Tutor, then Quiz.","Continue your saved trial lessons from Home with the same conversation, research and recovery.","Approved testers use the shared lesson engine through their own account; Lab editing controls remain restricted.","Temporary account-check connection failures preserve the active lesson for retry.","Car audio offers Phone speaker and Phone receiver where the browser supports them; the old Off control is removed."] },
   { tag:"v1.2.13", date:"Sep 7", changes:["Mock Car opens for listening without waiting for microphone permission. Includes the new speaker control and playback recovery."] },
   { tag:"v1.2.12", date:"Sep 7", changes:["Mock Car: speaker button replaces the Car icon, with remembered spoken-reply control and immediate replay.", "Speaker state follows playback events; starting, interruptions and failures stay visible.", "Release idle microphone connections before replies return to media playback."] },
@@ -3278,6 +3285,7 @@ function switchLocalAccount(nextAccountId,ownedSeed = null) {
   return true;
 }
 function clearLocalAccountView() {
+  cancelHomeTopicCapture();
   if (stateAccountId) {
     try { localStorage.setItem(accountStateStorageKey(stateAccountId),JSON.stringify(state)); } catch (error) {}
   }
@@ -5322,6 +5330,7 @@ function toast(msg, ms = 3500) {
 // if anything crashes, say so on screen instead of silently showing a dead page
 window.addEventListener("error", e => { try { toast("App error: " + e.message, 8000); } catch (x) {} });
 function show(view) {
+  if (view !== "home") cancelHomeTopicCapture();
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
   $("view-" + view).classList.add("active");
 }
@@ -6198,9 +6207,15 @@ function syncStartButton() {
   /* The modal itself makes Home inert during learner questions. Do not disable
      the still-focused iPhone input while that modal is trying to paint; WebKit
      can otherwise collapse the keyboard and strand the fixed dialog offscreen. */
-  $("topic-input").disabled = atPilotLimit || startStatus.blocksInput;
+  $("topic-input").disabled = atPilotLimit || startStatus.blocksInput || Boolean(homeTopicCapture?.busy);
   $("start-btn").textContent = atPilotLimit ? "10/10 created" : startStatus.label || "Begin";
-  $("start-btn").disabled = atPilotLimit || startStatus.busy || !$("topic-input").value.trim();
+  $("start-btn").disabled = atPilotLimit || startStatus.busy || Boolean(homeTopicCapture?.busy) || !$("topic-input").value.trim();
+  const mic = $("home-topic-mic");
+  if (mic) {
+    mic.disabled = atPilotLimit || startStatus.blocksInput || ["finishing", "transcribing"].includes(homeTopicCapture?.phase);
+    mic.setAttribute("aria-pressed", String(homeTopicCapture?.phase === "recording"));
+    mic.setAttribute("aria-label", homeTopicCapture?.phase === "recording" ? "Stop topic recording" : homeTopicCapture?.phase === "opening" ? "Cancel microphone startup" : homeTopicCapture?.blob ? "Retry topic transcription" : "Speak your topic");
+  }
 }
 
 function syncDeveloperLauncherVisibility() {
@@ -6271,6 +6286,7 @@ function homeFolderAtPoint(card,x,y) {
   return "";
 }
 function renderHome() {
+  cancelHomeTopicCapture();
   if ($("home-archive-count")) $("home-archive-count").textContent = archivedLessons().length;
   syncDeveloperLauncherVisibility();
   const selectedLayerIndex = categoryLayerEntries().findIndex(entry => entry.key === wheel.layerCategory);
@@ -6312,8 +6328,11 @@ function renderHome() {
       <div class="card-cat">${insidePersonalCategory && !homeLearnerAccountAllowed() ? `ask &middot; filed in ${esc(layerName)}` : "ask anything"}${pilotLabel}</div>
       <input id="topic-input" type="text" autocomplete="off" autocapitalize="sentences" autocorrect="on" spellcheck="true" placeholder="${pilotAtLimit ? "Reopen a saved lesson" : "What are you curious about?"}" enterkeyhint="go"${pilotAtLimit || startStatus.blocksInput ? " disabled" : ""}>
       <div class="new-card-actions">
+        <button id="home-topic-mic" type="button" aria-label="Speak your topic" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg></button>
         <button id="start-btn" type="button"${startStatus.busy ? " disabled" : ""}>${pilotAtLimit ? "10/10 created" : startStatus.label || "Begin"}</button>
       </div>
+      <p id="home-topic-mic-status" role="status" aria-live="polite"></p>
+      <button id="home-topic-mic-cancel" type="button" hidden>Cancel recording</button>
       ${insidePersonalCategory
         ? `<button id="new-card-leave-folder" type="button" aria-label="Leave ${esc(layerName)} and show all lessons"><span>&#8592;</span> All lessons</button>`
         : `<button id="new-card-folders" type="button" aria-label="Browse folders and archive"><span aria-hidden="true">▱</span> Folders</button>`}
@@ -6388,6 +6407,8 @@ function renderHome() {
 
   if (!nc) return;
   $("start-btn").onclick = startLesson;
+  $("home-topic-mic").onclick = toggleHomeTopicCapture;
+  $("home-topic-mic-cancel").onclick = () => { cancelHomeTopicCapture(); syncStartButton(); };
   $("topic-input").onkeydown = e => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); startLesson(); }
   };
@@ -8041,6 +8062,107 @@ function openDirection(topic, mode = "voice") {
 // Home and the learner presentation exchange only an account-bound launch and
 // small display summaries. The durable engine remains the authority for phase,
 // conversation, research and progress; legacy lessons keep their own adapter.
+var homeTopicCapture = null;
+function cancelHomeTopicCapture() {
+  const capture = homeTopicCapture;
+  homeTopicCapture = null;
+  if (capture) {
+    clearTimeout(capture.timer);
+    capture.controller?.abort();
+    if (capture.recorder?.state === "recording") { try { capture.recorder.stop(); } catch (_) {} }
+    capture.stream?.getTracks().forEach(track => track.stop());
+  }
+  if ($("home-topic-mic-status")) $("home-topic-mic-status").textContent = "";
+  if ($("home-topic-mic-cancel")) $("home-topic-mic-cancel").hidden = true;
+}
+function homeTopicCaptureIsCurrent(capture) {
+  return homeTopicCapture === capture && capture.epoch === accountAuthEpoch && capture.owner === cloudAccount?.id && Boolean($("topic-input"));
+}
+function homeTopicCaptureStatus(capture, message) {
+  if (!homeTopicCaptureIsCurrent(capture)) return;
+  $("home-topic-mic-status").textContent = message;
+  $("home-topic-mic-cancel").hidden = false;
+  syncStartButton();
+}
+async function transcribeHomeTopic(capture) {
+  if (!homeTopicCaptureIsCurrent(capture) || !capture.blob?.size) return;
+  capture.phase = "transcribing"; capture.busy = true;
+  capture.controller = new AbortController();
+  homeTopicCaptureStatus(capture, "Transcribing your topic…");
+  const timeout = setTimeout(() => capture.controller.abort(), 25000);
+  try {
+    const params = new URLSearchParams({language:speechLanguageCode(), model:capture.model});
+    const response = await backendFetch("transcribe", {query:"?"+params.toString(), headers:{"content-type":capture.blob.type || "audio/webm","x-worldview-operation-id":capture.operationId},body:capture.blob,signal:capture.controller.signal});
+    if (!response.ok) throw new Error("transcription_failed");
+    const payload = await response.json();
+    if (!homeTopicCaptureIsCurrent(capture)) return;
+    const transcript = String(payload.text || payload.results?.channels?.[0]?.alternatives?.[0]?.transcript || "").trim();
+    if (!transcript) throw new Error("empty_transcript");
+    const input = $("topic-input");
+    input.value = [input.value.trim(), transcript].filter(Boolean).join(" ");
+    cancelHomeTopicCapture();
+    $("home-topic-mic-status").textContent = "Review your topic, then press Begin.";
+    syncStartButton();
+  } catch (_) {
+    if (homeTopicCaptureIsCurrent(capture)) {
+      capture.phase = "retry"; capture.busy = false;
+      homeTopicCaptureStatus(capture, "Recording kept. Tap the microphone to retry, or cancel and type your topic.");
+    }
+  } finally { clearTimeout(timeout); }
+}
+async function toggleHomeTopicCapture() {
+  const previous = homeTopicCapture;
+  if (previous?.phase === "recording") {
+    previous.phase = "finishing";
+    homeTopicCaptureStatus(previous,"Finishing recording…");
+    if (previous.recorder.state === "recording") {
+      try { previous.recorder.requestData?.(); } catch (_) {}
+      previous.recorder.stop();
+    }
+    return;
+  }
+  if (previous?.phase === "opening") { cancelHomeTopicCapture();syncStartButton();return; }
+  if (["finishing", "transcribing"].includes(previous?.phase)) return;
+  if (previous?.blob) { await transcribeHomeTopic(previous);return; }
+  if (!backendAccessEnabled() || !permanentAccountVerified()) { toast("Sign in with trial access to speak your topic.");return; }
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) { toast("Microphone recording is unavailable in this browser. You can still type your topic.");return; }
+  const capture = {owner:cloudAccount.id,epoch:accountAuthEpoch,phase:"opening",busy:true,operationId:uid(),model:selectedTranscriptionModel()};
+  homeTopicCapture = capture;
+  homeTopicCaptureStatus(capture,"Opening microphone… Tap again to cancel.");
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia(ownedMicrophoneConstraints());
+    if (!homeTopicCaptureIsCurrent(capture)) { stream.getTracks().forEach(track => track.stop());return; }
+    capture.stream = stream;
+    const mime = supportedVoiceRecordingMimes()[0];
+    const recorder = mime ? new MediaRecorder(stream,{mimeType:mime}) : new MediaRecorder(stream);
+    capture.recorder = recorder;
+    const chunks = [];
+    recorder.ondataavailable = event => { if (event.data?.size) chunks.push(event.data); };
+    recorder.onerror = () => { if (homeTopicCaptureIsCurrent(capture)) { cancelHomeTopicCapture();syncStartButton();toast("Recording stopped. Please try again or type your topic."); } };
+    recorder.onstop = () => {
+      clearTimeout(capture.timer);
+      stream.getTracks().forEach(track => track.stop());
+      if (!homeTopicCaptureIsCurrent(capture)) return;
+      capture.blob = new Blob(chunks,{type:recorder.mimeType || mime});
+      if (!capture.blob.size) { cancelHomeTopicCapture();syncStartButton();toast("No audio was recorded. Please try again.");return; }
+      void transcribeHomeTopic(capture);
+    };
+    recorder.start(250); capture.phase = "recording";
+    homeTopicCaptureStatus(capture,"Listening… Tap the microphone to finish.");
+    capture.timer = setTimeout(() => {
+      if (homeTopicCaptureIsCurrent(capture) && recorder.state === "recording") {
+        capture.phase = "finishing"; homeTopicCaptureStatus(capture,"Finishing recording…");
+        try { recorder.requestData?.(); } catch (_) {}
+        recorder.stop();
+      }
+    },60000);
+  } catch (_) {
+    if (homeTopicCaptureIsCurrent(capture)) { cancelHomeTopicCapture();syncStartButton();toast("Microphone could not open. Check permission or type your topic."); }
+  }
+}
+window.addEventListener("pagehide", cancelHomeTopicCapture);
+document.addEventListener("visibilitychange", () => { if (document.hidden) { cancelHomeTopicCapture();syncStartButton(); } });
+
 const HOME_LEARNER_LAUNCH_KEY = "worldview-learner-launch-v1";
 const HOME_LEARNER_RUNS_PREFIX = "worldview-learner-runs-v1:";
 let homeLearnerLaunchBusy = false;
@@ -8085,6 +8207,7 @@ function renderHomeLearnerRuns(carousel) {
   }
 }
 async function refreshHomeLearnerRuns() {
+  if (homeTopicCapture) return false;
   if (!homeLearnerAccountAllowed()) return false;
   const owner = cloudAccount.id, epoch = accountAuthEpoch;
   if (homeLearnerRefreshOwner === owner) return false;
@@ -8093,7 +8216,7 @@ async function refreshHomeLearnerRuns() {
     const response = await backendFetch("learner-jobs",{headers:{"content-type":"application/json"},body:JSON.stringify({action:"list_runs"}),signal:AbortSignal.timeout(12000)});
     if (!response.ok) { await response.body?.cancel();return false; }
     const payload = await response.json();
-    if (epoch !== accountAuthEpoch || cloudAccount?.id !== owner || !homeLearnerAccountAllowed()) return false;
+    if (epoch !== accountAuthEpoch || cloudAccount?.id !== owner || !homeLearnerAccountAllowed() || homeTopicCapture) return false;
     if (!Array.isArray(payload.runs)) return false;
     const before = JSON.stringify(homeLearnerRuns());
     const merged = normalizedHomeLearnerRuns([...homeLearnerRuns(),...payload.runs]);
@@ -8139,6 +8262,7 @@ async function openHomeLearnerRun({topic = "",runId = ""} = {}) {
 }
 
 async function startLesson() {
+  if (homeTopicCapture?.busy) return;
   // guards against a double-call: the native button "onclick" and the
   // coordinate-based tap resolution in wheelGestures can both fire for the
   // same tap depending on the browser's pointer-capture behavior

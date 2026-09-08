@@ -176,6 +176,7 @@ async function openLearnerLesson() {
   renderMockSetupPreviousRuns();
   publishLearnerRunSummaries();
   q("lab-shell").classList.add("learner-ready");
+  q("lab-gate").hidden = true;
   if (packet?.runId) {
     const row = await hydrateLearnerSavedRun(packet.runId);
     if (!row) throw new Error("This saved lesson is not ready on this device. Return Home and try opening it again.");
@@ -14581,7 +14582,7 @@ function renderMockLearnerShell() {
   retry.dataset.retry = status.retry;
   const mapProgress = q("mock-learner-map-progress");
   const mapState = mockLearnerMapState(stage, artifact);
-  mapProgress.hidden = !mapState;
+  mapProgress.hidden = !mapState || (typeof LAB_LEARNER !== "undefined" && LAB_LEARNER);
   mapProgress.disabled = !mapState || labState.extraction.mapRetryBusy;
   mapProgress.textContent = mapState?.state === "ready" ? "View Lesson Map" : "View Lesson Map progress";
   mapProgress.classList.toggle("is-error", mapState?.state === "needs-attention");
@@ -18107,7 +18108,7 @@ function activateTab(tab) {
 
 function initializeWorkspace() {
   if (!labState.preview && (!labState.accessVerified || !labAccountCanOpen())) return false;
-  q("lab-gate").hidden = true;
+  q("lab-gate").hidden = !(typeof LAB_LEARNER !== "undefined" && LAB_LEARNER);
   q("lab-shell").hidden = false;
   q("lab-shell").inert = false;
   q("lab-open-timing").disabled = false;
@@ -18239,6 +18240,40 @@ function openPreview() {
   openMapPreviewFixture();
 }
 
+async function prepareLabEntry(epoch, learner) {
+  const userId = labState.verifiedUserId;
+  let timer;
+  const prepare = async () => {
+    labState.accessVerified = true;
+    if (!initializeWorkspace()) throw labAccountError("admin_required");
+    if (learner) {
+      setMessage("lab-gate-message", "Preparing your lesson…");
+      await probeLearnerProviders();
+    } else await probeProviders();
+    assertLabRequestOwner(epoch, userId);
+    await loadGlobalClarificationDefault();
+    assertLabRequestOwner(epoch, userId);
+    // New topics have no history dependency. Loading every previous job and
+    // its details here made owner accounts wait on unrelated past lessons.
+    const launch = learner ? readLearnerLaunch() : null;
+    if (!(launch?.topic && !launch.runId)) {
+      await refreshJobs();
+      assertLabRequestOwner(epoch, userId);
+      if (!labState.mockSetupActive) await reconcileActiveClarificationResume();
+      assertLabRequestOwner(epoch, userId);
+      await refreshClarificationArtifacts();
+      assertLabRequestOwner(epoch, userId);
+    }
+    renderMockSetupPreviousRuns();
+  };
+  if (!learner) { await prepare(); return; }
+  try {
+    await Promise.race([prepare(), new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Lesson preparation took too long. Your topic is saved; check your connection and try again.")), 30000);
+    })]);
+  } finally { clearTimeout(timer); }
+}
+
 async function openLab() {
   if (labState.preview) { openPreview(); return; }
   if (labState.busy) return;
@@ -18254,20 +18289,8 @@ async function openLab() {
     // separate. This capability probe never calls a paid provider.
     if (!learner) await labFetch({ provider: "anthropic", probe: true });
     assertLabRequestOwner(epoch, userId);
-    labState.accessVerified = true;
-    if (!initializeWorkspace()) throw labAccountError("admin_required");
-    if (learner) await probeLearnerProviders();
-    else await probeProviders();
+    await prepareLabEntry(epoch, learner);
     assertLabRequestOwner(epoch, userId);
-    await loadGlobalClarificationDefault();
-    assertLabRequestOwner(epoch, userId);
-    await refreshJobs();
-    assertLabRequestOwner(epoch, userId);
-    if (!labState.mockSetupActive) await reconcileActiveClarificationResume();
-    assertLabRequestOwner(epoch, userId);
-    await refreshClarificationArtifacts();
-    assertLabRequestOwner(epoch, userId);
-    renderMockSetupPreviousRuns();
     setMessage("lab-gate-message", "");
     if (learner) await openLearnerLesson();
   } catch (error) {
