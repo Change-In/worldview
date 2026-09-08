@@ -10,6 +10,10 @@
 <link rel="stylesheet" href="./lab.css?v=2.1">
 </head>
 <body>
+<aside id="lab-connection-status" class="lab-connection-status" role="status" hidden>
+  Connection interrupted. Your lesson stays open; retry your recording or message when connected.
+  <button id="lab-connection-retry" type="button" class="button button-quiet">Reconnect</button>
+</aside>
 
 <header class="lab-topbar" id="lab-new-topbar">
   <a class="lab-back" href="../index.html" aria-label="Return to Worldview">←</a>
@@ -147,10 +151,15 @@
       <div class="mock-car-toolbar" role="group" aria-label="Conversation display">
         <button id="mock-car-text" class="mock-car-toolbar-button" type="button" aria-label="Leave Car mode and switch to Text"><span aria-hidden="true">Aa</span></button>
         <button id="mock-car-map" class="button button-quiet" type="button" aria-expanded="false" aria-controls="pipeline-extraction-map-dialog" hidden>Map</button>
-        <button id="mock-car-speaker" class="mock-car-toolbar-button mock-car-speaker" type="button" aria-label="Turn spoken replies on and hear the current reply" aria-pressed="false" aria-describedby="mock-car-speaker-status">
+        <button id="mock-car-speaker" class="mock-car-toolbar-button mock-car-speaker" type="button" aria-label="Choose Phone speaker or Phone receiver" aria-expanded="false" aria-controls="mock-car-output-choices" aria-describedby="mock-car-speaker-status">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path class="speaker-waves" d="M15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/><path class="speaker-muted" d="m15 9 6 6m0-6-6 6"/></svg>
           <span data-speaker-label aria-hidden="true">Speaker</span>
         </button>
+      </div>
+      <div id="mock-car-output-choices" class="mock-car-output-choices" role="group" aria-label="Phone audio output" hidden>
+        <button id="mock-car-output-speaker" class="button button-quiet" type="button" aria-pressed="false">Phone speaker</button>
+        <button id="mock-car-output-receiver" class="button button-quiet" type="button" aria-pressed="false">Phone receiver</button>
+        <p id="mock-car-output-note" role="status" aria-live="polite">Choose where you want to hear the reply.</p>
       </div>
       <p id="mock-car-status" class="mock-car-status" role="status" aria-live="polite">Hold, wait for the tone, then talk</p>
       <p id="mock-car-speaker-status" class="mock-car-speaker-status" role="status" aria-live="polite" hidden></p>

@@ -3663,6 +3663,7 @@ function clearVerifiedLabUser() {
 }
 
 function lockLabAccount(message = "Sign in to your administrator account to open the Model Lab.", status = "signed-out") {
+  if (q("lab-connection-status")) q("lab-connection-status").hidden = true;
   // Invalidate before touching the DOM or awaiting anything. A late response
   // from the outgoing account must not load a workspace or reopen this shell.
   labState.authEpoch += 1;
@@ -4063,6 +4064,7 @@ function assertLabRequestOwner(epoch, userId) {
 async function verifyLabAdminSession(forceRefresh = false) {
   if (!labState.client) throw new Error("The protected lab client did not load.");
   const epoch = labState.authEpoch;
+  const startingOwner = labState.verifiedUserId;
   if (labState.authVerification?.epoch === epoch) return labState.authVerification.promise;
   const controller = new AbortController();
   labState.requestControllers.add(controller);
@@ -4082,6 +4084,7 @@ async function verifyLabAdminSession(forceRefresh = false) {
     // Session user data is only a change hint. getUser and account_access are
     // the two server checks; local email, metadata, flags and codes grant nothing.
     labState.authSessionUserId = String(session.user?.id || "");
+    if (startingOwner && labState.authSessionUserId !== startingOwner) throw labAccountError("identity_changed");
     if (!forceRefresh && token === labState.verifiedAccessToken && labAccountCanOpen()
       && Date.now() - labState.verifiedRoleCheckedAt < LAB_ROLE_RECHECK_MS) return token;
     const verified = await labState.client.auth.getUser(token);
@@ -4112,6 +4115,7 @@ async function verifyLabAdminSession(forceRefresh = false) {
     switchToVerifiedLabUser(verifiedUserId);
     labState.verifiedAccessToken = token;
     labState.authSessionUserId = verifiedUserId;
+    if (q("lab-connection-status")) q("lab-connection-status").hidden = true;
     return token;
   })();
   const timeout = new Promise((_, reject) => {
@@ -4126,6 +4130,20 @@ async function verifyLabAdminSession(forceRefresh = false) {
   try { return await verification.promise; }
   catch (error) {
     if (epoch === labState.authEpoch) {
+      // A network failure is not a sign-out. Preserve the same owner's pending
+      // capture and conversation, but require fresh server checks before any
+      // subsequent protected request can be dispatched.
+      const transient = error?.type === "account_check_timeout" || error?.name === "TypeError"
+        || error?.name === "AuthRetryableFetchError" || error?.status === 408
+        || error?.status === 429 || error?.status >= 500;
+      if (transient && startingOwner && startingOwner === labState.verifiedUserId
+        && startingOwner === labState.authSessionUserId && labAccountCanOpen()) {
+        labState.verifiedAccessToken = "";
+        labState.verifiedRoleCheckedAt = 0;
+        const notice = q("lab-connection-status");
+        if (notice) notice.hidden = false;
+        throw labAccountError("account_check_timeout");
+      }
       const status = error?.type === "admin_required" ? "admin-required" : error?.type === "password_recovery_required" ? "recovery" : "signed-out";
       lockLabAccount(error.message || "The account could not be verified. Try again.", status);
     }
@@ -12459,9 +12477,9 @@ const LAB_VALID_SILENT_WAV = "data:audio/wav;base64,UklGRqQCAABXQVZFZm10IBAAAAAB
 
 function mockSpeakerState() {
   if (!labState.mockSpeaker) {
-    let enabled = true;
-    try { enabled = localStorage.getItem("worldview.mock.spokenReplies") !== "off"; } catch (_) { /* Keep the session choice when storage is unavailable. */ }
-    labState.mockSpeaker = { enabled, status:enabled ? "unverified" : "off", verified:false };
+    // Supersedes the mistaken persisted on/off interpretation. Never restore
+    // mute from it, nor a hardware route that has not been resolved this session.
+    labState.mockSpeaker = { enabled:true, status:"unverified", verified:false, route:"", sinkId:"", routeMessage:"", selecting:false };
   }
   return labState.mockSpeaker;
 }
@@ -12481,11 +12499,10 @@ function renderMockSpeakerButton() {
   const button = q("mock-car-speaker");
   if (!button) return;
   const state = mockSpeakerState();
-  const labels = { off:"Off", unverified:"Speaker", starting:"Starting", playing:"Playing", ready:"On", error:"Retry", interrupted:"Retry" };
-  const label = labels[state.status] || "Speaker";
+  const label = state.route === "receiver" ? "Receiver" : "Speaker";
   button.dataset.audioState = state.status;
-  button.setAttribute("aria-pressed", String(state.enabled && state.verified));
-  button.setAttribute("aria-label", state.status === "error" || state.status === "interrupted" ? "Retry speaker playback" : state.enabled && state.verified ? "Turn spoken replies off" : state.status === "starting" ? "Cancel speaker startup" : "Turn spoken replies on and hear the current reply");
+  button.setAttribute("aria-expanded", String(!q("mock-car-output-choices")?.hidden));
+  button.setAttribute("aria-label", "Choose Phone speaker or Phone receiver");
   button.setAttribute("aria-busy", String(state.status === "starting"));
   button.classList.toggle("is-active", state.enabled && state.verified);
   const recording = labState.pipelineStage === "clarification" ? labState.clarification : labState.extraction;
@@ -12493,29 +12510,83 @@ function renderMockSpeakerButton() {
   const caption = button.querySelector("[data-speaker-label]");
   if (caption) caption.textContent = label;
   const feedback = q("mock-car-speaker-status");
+  const choicesOpen = q("mock-car-output-choices")?.hidden === false;
+  const routeNote = q("mock-car-output-note");
+  if (routeNote) routeNote.textContent = state.routeMessage || "Choose where you want to hear the reply.";
   if (feedback) {
-    feedback.hidden = !["off", "starting", "error", "interrupted"].includes(state.status);
-    feedback.textContent = state.status === "off" ? "Spoken replies off" : state.status === "starting" ? "Starting audio…" : "Playback did not continue. Tap the speaker to retry.";
+    feedback.hidden = choicesOpen || (!state.routeMessage && !["starting", "playing", "error", "interrupted"].includes(state.status));
+    feedback.textContent = state.routeMessage || (state.status === "starting" ? "Starting audio…" : state.status === "playing" ? "Playing reply" : "Playback did not continue. Tap Repeat to retry.");
+  }
+  for (const route of ["speaker", "receiver"]) {
+    const choice = q(`mock-car-output-${route}`);
+    choice?.setAttribute("aria-pressed", String(state.route === route));
+    if (choice) choice.disabled = state.selecting || button.disabled;
   }
 }
 
 async function toggleMockCarSpeaker() {
   if (!labState.mockCar.active || q("mock-car-speaker")?.disabled) return;
+  const choices = q("mock-car-output-choices");
+  if (choices) choices.hidden = !choices.hidden;
+  renderMockSpeakerButton();
+}
+
+function mockOutputDeviceMatches(device, route) {
+  if (device.kind !== "audiooutput" || !device.deviceId || ["default", "communications"].includes(device.deviceId)) return false;
+  const label = String(device.label || "");
+  if (/bluetooth|airpods|headphone|headset|carplay|hdmi|display|usb/i.test(label)) return false;
+  return route === "receiver" ? /receiver|earpiece/i.test(label) : /speaker/i.test(label) && !/receiver|earpiece/i.test(label);
+}
+
+async function chooseMockPhoneOutput(route) {
+  if (!["speaker", "receiver"].includes(route) || !labState.mockCar.active || q("mock-car-speaker")?.disabled) return;
   const state = mockSpeakerState();
-  const disable = state.enabled && (state.verified || state.status === "starting");
-  state.enabled = !disable;
-  state.verified = false;
-  try { localStorage.setItem("worldview.mock.spokenReplies", disable ? "off" : "on"); } catch (_) { /* Session choice still applies. */ }
-  if (disable) {
+  if (state.selecting) return;
+  const epoch = labState.authEpoch;
+  state.selecting = true;
+  state.routeMessage = "Checking available phone audio…";
+  renderMockSpeakerButton();
+  try {
+    const audio = sharedMockVoiceAudio();
+    const devices = typeof audio.setSinkId === "function" && navigator.mediaDevices?.enumerateDevices
+      ? await navigator.mediaDevices.enumerateDevices() : [];
+    if (epoch !== labState.authEpoch || !labState.mockCar.active) return;
+    const output = devices.find(device => mockOutputDeviceMatches(device, route));
+    if (!output) {
+      // AudioSession playback is a category hint, never evidence of a selected
+      // physical speaker. No invented receiver/default device IDs.
+      if (route === "speaker" && !state.route) setPipelineExtractionAudioSession("playback");
+      state.routeMessage = route === "receiver"
+        ? "This browser does not expose the phone receiver. Audio output is still controlled by your phone."
+        : "This browser does not expose a separate phone speaker. Use your phone’s audio controls, then tap Repeat.";
+      return;
+    }
     stopClarificationSpeech();
     stopPipelineExtractionSpeech();
-    setMockSpeakerStatus("off");
-    renderMockCarMode();
-    return;
+    await audio.setSinkId(output.deviceId);
+    if (epoch !== labState.authEpoch || !labState.mockCar.active) return;
+    state.sinkId = output.deviceId;
+    state.route = route;
+    state.verified = false;
+    state.routeMessage = `${route === "receiver" ? "Receiver" : "Speaker"} selected. Tap Repeat to check.`;
+    q("mock-car-output-choices").hidden = true;
+  } catch (_) {
+    if (epoch === labState.authEpoch) state.routeMessage = "The audio output could not switch. Check your phone’s audio controls and try again.";
+  } finally {
+    state.selecting = false;
+    if (epoch === labState.authEpoch) renderMockSpeakerButton();
   }
-  setMockSpeakerStatus("starting");
-  if (!mockCarLastSpeechText()) { setMockSpeakerStatus("unverified"); return; }
-  await replayMockCarReply({ repeat:true });
+}
+
+async function applyMockPhoneOutput(audio, voiceToken) {
+  const state = mockSpeakerState();
+  if (!state.sinkId || labState.pipelineMode !== "mock") return;
+  try { await audio.setSinkId(state.sinkId); }
+  catch (_) {
+    state.routeMessage = "The selected phone output is unavailable. Choose an audio output again.";
+    setMockSpeakerStatus("error", voiceToken);
+    throw new Error(state.routeMessage);
+  }
 }
 
 function sharedMockVoiceAudio() {
@@ -12719,6 +12790,8 @@ function createMockSpeechStartGate(voiceToken, budgetMs = MOCK_SPEECH_FIRST_AUDI
 }
 
 async function playMockCloudSpeech(spoken, { state, playbackGeneration, owner, voiceToken, audio, timingId = "", errorMessage = "The generated voice could not play on this device." } = {}) {
+  await applyMockPhoneOutput(audio, voiceToken);
+  if (!mockVoicePlaybackIsCurrent(voiceToken)) return;
   if (labVoiceSettings().tts === "device") return playLabSpeechSynthesisFallback(spoken, state, playbackGeneration, null, owner, voiceToken, { timingId });
   const speechModel = labVoiceSettings().tts;
   const responseGate = createMockSpeechStartGate(voiceToken, MOCK_SPEECH_RESPONSE_BUDGET_MS);
@@ -12807,6 +12880,9 @@ function preferredMockDeviceVoice() {
 }
 
 function playLabSpeechSynthesisFallback(spoken, state, playbackGeneration, cloudError, owner, voiceToken, { timingId = "" } = {}) {
+  if (labState.pipelineMode === "mock" && mockSpeakerState().sinkId) {
+    return Promise.reject(new Error("Device speech cannot use the selected phone output. Retry the generated voice or use your phone’s audio controls."));
+  }
   if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") {
     return Promise.reject(cloudError || new Error("This device has no available speech playback route."));
   }
@@ -18203,6 +18279,9 @@ async function openLab() {
 
 function bindEvents() {
   q("lab-enter").addEventListener("click", openLab);
+  q("lab-connection-retry")?.addEventListener("click", async () => {
+    try { await accessToken(false); } catch (_) { /* Keep the same-owner recovery notice or the actual sign-out gate. */ }
+  });
   bindClarificationEvents();
   document.querySelectorAll("[data-load-prompt]").forEach((button) => button.addEventListener("click", () => resetPreset(button.dataset.loadPrompt)));
   document.querySelectorAll("[data-save-prompt]").forEach((button) => button.addEventListener("click", () => savePromptVersion(button.dataset.savePrompt)));
@@ -18338,6 +18417,7 @@ function bindEvents() {
   }
   q("mock-car-text")?.addEventListener("click", () => exitMockCarMode({ switchToText:true }));
   q("mock-car-speaker")?.addEventListener("click", () => { void toggleMockCarSpeaker(); });
+  for (const route of ["speaker", "receiver"]) q(`mock-car-output-${route}`)?.addEventListener("click", () => { void chooseMockPhoneOutput(route); });
   q("mock-car-replay")?.addEventListener("click", () => { void replayMockCarReply({ repeat:true }); });
   q("mock-car-stop-audio")?.addEventListener("click", () => { void replayMockCarReply(); });
   q("mock-car-map")?.addEventListener("click", () => { cancelMockCarCapture(); openPipelineExtractionMapDialog(); });
