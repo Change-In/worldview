@@ -2225,11 +2225,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.3 · Sep 8";
+const BUILD = "v2.1.4 · Sep 8";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag:"v2.1.4", date:"Sep 8", changes:["Try again checks the saved reply first and can recover a confirmed failure through another configured provider.","New lessons establish researched context before the first question; complete explanations stay intact.","New teaching replies can show clickable superscript citations beside supported claims. Replies with no sources have no circle.","The chapter dropdown returns at the top; revisit taught chapters without opening a lesson map."] },
   { tag:"v2.1.3", date:"Sep 8", changes:["Good to go now recognizes acceptance of the immediately preceding offer to begin the lesson.","Teaching replies have a source-count inspector: tap to open links, tap again to close, including a single source.","Replies with no saved citations say so; Tutor instructions require citations for factual premises inside questions too."] },
   { tag:"v2.1.2", date:"Sep 8", changes:["Simplified microphone controls and reserved space for Car status and connection recovery.","Returning from another app avoids automatic microphone requests unless permission is already granted.","Car connection recovery stays tappable; choosing an available audio output replays the current reply.","Main lessons hide all map controls and use Worldview loading without the Model Lab screen."] },
   { tag:"v2.1.1", date:"Sep 7", changes:["New Home lessons open without waiting for old lesson history, with visible loading and retry feedback.","Ask Anything has a microphone: speak, review the topic, then Begin.","Removed the extra bottom View Lesson Map button from the main lesson conversation."] },
