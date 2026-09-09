@@ -2225,11 +2225,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.8 · Sep 8";
+const BUILD = "v2.1.9 · Sep 8";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag:"v2.1.9", date:"Sep 8", changes:["New lessons show Start lesson; Continue and Reassess appear only for saved lessons.","Clarification starts with your curiosity, without unsolicited topic menus.","One clear add-anything question makes Yes and No easier to interpret.","Tutoring addresses each material guess before asking a deeper reasoning question.","Feedback and citations stay connected when moving to the next learning outcome."] },
   { tag:"v2.1.8", date:"Sep 8", changes:["Choose Text, Voice or Car, then Continue when reopening a lesson.","Toggle recording stays on when switching windows while the browser allows capture.","Voice playback keeps your selected provider, with a visible retry if audio fails.","Preparation recovery checks saved maps and research before generating again."] },
   { tag:"v2.1.7", date:"Sep 8", changes:["Opening questions let you choose the interests; suggestions come when you ask for them.","Extraction asks what you think without teaching new facts or turning guesses into knowledge.","Shorter, more natural offers to begin keep the existing phase rules.","Citation numbers stay inline beside the text they reference.","Tap Worldview to cycle Standard, Compact and Small text, keeping your reading position."] },
   { tag:"v2.1.6", date:"Sep 8", changes:["New lessons set the scene before the first question, with sourced context and clear prerequisites.","Tentative guesses stay unverified and never replace the lesson introduction.","Waiting stays visible through the handoff and saved reply delivery in Text, Voice and Car.","The chapter header shows the current chapter instead of a generic label."] },

@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#241f1a">
 <title>Worldview — Model Lab</title>
 <script>if(new URLSearchParams(location.search).get("learner")==="1")document.documentElement.classList.add("learner-route");</script>
-<link rel="stylesheet" href="./lab.css?v=2.1.8">
+<link rel="stylesheet" href="./lab.css?v=2.1.9">
 </head>
 <body>
 <aside id="lab-connection-status" class="lab-connection-status" role="status" hidden>
@@ -44,7 +44,7 @@
         <button id="learner-entry-voice" type="button" aria-pressed="false"><strong>Voice</strong><span>Listen and talk</span></button>
         <button id="learner-entry-car" type="button" aria-pressed="false"><strong>Car</strong><span>Larger voice controls</span></button>
       </div>
-      <div class="learner-entry-modes learner-entry-path" role="group" aria-label="Lesson path">
+      <div id="learner-entry-path" class="learner-entry-modes learner-entry-path" role="group" aria-label="Lesson path" hidden>
         <button type="button" aria-pressed="true"><strong>Continue</strong><span>Pick up where you left off</span></button>
         <button type="button" disabled><strong>Reassess</strong><span>In the works</span></button>
       </div>
@@ -53,7 +53,7 @@
   </main>
   <footer class="mock-learner-composer">
     <div class="learner-entry-actions">
-      <button id="learner-entry-continue" class="mock-learner-send" type="button" disabled>Continue</button>
+      <button id="learner-entry-continue" class="mock-learner-send" type="button" disabled>Start lesson</button>
     </div>
   </footer>
 </section>
@@ -735,6 +735,6 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=2.1.8" defer></script>
+<script src="./lab.js?v=2.1.9" defer></script>
 </body>
 </html>
