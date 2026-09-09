@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#241f1a">
 <title>Worldview — Model Lab</title>
 <script>if(new URLSearchParams(location.search).get("learner")==="1")document.documentElement.classList.add("learner-route");</script>
-<link rel="stylesheet" href="./lab.css?v=2.1.6">
+<link rel="stylesheet" href="./lab.css?v=2.1.7">
 </head>
 <body>
 <aside id="lab-connection-status" class="lab-connection-status" role="status" hidden>
@@ -130,7 +130,8 @@
     <section id="mock-learner-shell" class="mock-learner-shell" hidden aria-label="Worldview lesson conversation">
       <header id="mock-learner-header" class="mock-learner-header">
         <button id="mock-learner-back" class="mock-learner-back" type="button" aria-label="Leave this mock run" title="Return to the test workspace">←</button>
-        <h2>Worldview</h2>
+        <h2><button id="mock-learner-density" class="mock-learner-density" type="button" aria-label="Worldview. Text size: Standard. Activate for Compact." title="Change conversation text size">Worldview</button></h2>
+        <span id="mock-learner-density-status" class="sr-only" role="status" aria-live="polite"></span>
         <div class="mock-learner-header-actions">
           <button id="mock-learner-mode" class="mock-learner-tool" type="button" aria-label="Switch to Voice" title="Switch conversation mode">Voice</button>
           <button id="mock-learner-car" class="mock-learner-tool mock-car-entry" type="button" aria-label="Enter Car mode" title="Low-distraction Voice">
@@ -731,6 +732,6 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=2.1.6" defer></script>
+<script src="./lab.js?v=2.1.7" defer></script>
 </body>
 </html>

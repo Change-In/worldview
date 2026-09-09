@@ -1826,6 +1826,12 @@ body.mock-learner-shell-active #panel-pipeline { inset:auto; top:var(--lab-viewp
 .mock-learner-shell { color:#f4ece0; background:#241f1a; }
 .mock-learner-header { background:#332c25; border-color:#f4ece024; justify-content:flex-start; padding-left:68px; padding-right:110px; min-height:64px; }
 .mock-learner-header h2 { font:700 19px/1.2 system-ui,sans-serif; }
+.mock-learner-density { display:inline-flex; min-height:44px; padding:0; align-items:center; border:0; border-radius:6px; color:inherit; background:transparent; font:inherit; cursor:pointer; touch-action:manipulation; }
+.mock-learner-density:focus-visible { outline:2px solid #eec7ab; outline-offset:4px; }
+.mock-learner-shell[data-density="compact"] .mock-learner-transcript li { font-size:15.5px; line-height:1.5; padding:15px; margin-bottom:14px; }
+.mock-learner-shell[data-density="small"] .mock-learner-transcript li { font-size:14px; line-height:1.5; padding:12px; margin-bottom:10px; }
+.mock-learner-shell[data-density="compact"] .mock-learner-transcript li[data-role="user"],
+.mock-learner-shell[data-density="small"] .mock-learner-transcript li[data-role="user"] { padding-top:8px; padding-bottom:8px; }
 .mock-learner-back,.mock-learner-tool { color:#f4ece0; background:#f4ece008; border-color:#f4ece024; }
 .mock-learner-progress { min-height:0; padding:10px 20px; background:#241f1a; border-color:#f4ece018; overflow:visible; }
 .mock-learner-chapter { min-width:0; color:#b6a894!important; font:500 12px/1.4 system-ui,sans-serif; overflow-wrap:anywhere; }
@@ -1968,7 +1974,8 @@ body.mock-run.mock-car-active .mock-car-surface {
 
 .mock-response-sources { touch-action:pan-y; user-select:text; -webkit-user-select:text; }
 
-.lesson-inline-citation { font-size:.68em; line-height:0; vertical-align:super; }
+.lesson-cited-text { display:block; min-width:0; }
+.lesson-inline-citation { display:inline; font-size:.68em; line-height:0; vertical-align:super; white-space:nowrap; }
 .lesson-inline-citation a { color:#eec7ab; padding:4px; text-decoration:none; border-bottom:1px solid #eec7ab77; touch-action:pan-y; }
 .lesson-inline-citation a:focus-visible { outline:2px solid currentColor; outline-offset:2px; }
 .mock-chapter-list button[aria-current="step"] { color:#f4ece0; font-weight:600; }

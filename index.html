@@ -2225,11 +2225,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.6 · Sep 8";
+const BUILD = "v2.1.7 · Sep 8";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag:"v2.1.7", date:"Sep 8", changes:["Opening questions let you choose the interests; suggestions come when you ask for them.","Extraction asks what you think without teaching new facts or turning guesses into knowledge.","Shorter, more natural offers to begin keep the existing phase rules.","Citation numbers stay inline beside the text they reference.","Tap Worldview to cycle Standard, Compact and Small text, keeping your reading position."] },
   { tag:"v2.1.6", date:"Sep 8", changes:["New lessons set the scene before the first question, with sourced context and clear prerequisites.","Tentative guesses stay unverified and never replace the lesson introduction.","Waiting stays visible through the handoff and saved reply delivery in Text, Voice and Car.","The chapter header shows the current chapter instead of a generic label."] },
   { tag:"v2.1.5", date:"Sep 8", changes:["New topics open the conversation with a Text, Voice, or Car choice.","The Ask Anything microphone now responds to laptop and touch clicks; permission problems stay visible on the card.","Restored the testing allowance for full lessons and made allowance errors clear.","Retry interrupted preparation directly in the conversation, keeping your saved lesson."] },
   { tag:"v2.1.4", date:"Sep 8", changes:["Try again checks the saved reply first and can recover a confirmed failure through another configured provider.","New lessons establish researched context before the first question; complete explanations stay intact.","New teaching replies can show clickable superscript citations beside supported claims. Replies with no sources have no circle.","The chapter dropdown returns at the top; revisit taught chapters without opening a lesson map."] },
