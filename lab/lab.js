@@ -74,6 +74,7 @@ function leaveLearnerLesson() {
 
 function initializeLearnerPresentation() {
   if (!LAB_LEARNER) return;
+  labState.learnerEntryPending = true;
   document.documentElement.classList.add("learner-route");
   document.title = "Worldview — Lesson";
   labState.extraction.mapDialogOpen = false;
@@ -93,13 +94,23 @@ function setLearnerEntry(ready = false, topic = "", complete = false) {
   if (!LAB_LEARNER) return;
   labState.learnerEntryReady = ready;
   document.documentElement.classList.toggle("learner-entry-complete", complete);
-  for (const mode of ["text", "voice", "car"]) if (q("learner-entry-" + mode)) q("learner-entry-" + mode).disabled = !ready;
+  for (const mode of ["text", "voice", "car"]) {
+    const button = q("learner-entry-" + mode);
+    if (button) { button.disabled = Boolean(labState.learnerEntryStarting); button.setAttribute("aria-pressed", String(labState.learnerEntryMode === mode)); }
+  }
+  if (q("learner-entry-continue")) q("learner-entry-continue").disabled = !ready || !labState.learnerEntryMode || Boolean(labState.learnerEntryStarting);
   const title = q("learner-entry-topic");
   if (title) { title.textContent = topic; title.hidden = !topic; }
   if (q("learner-entry-status")) q("learner-entry-status").textContent = ready ? "" : "Connecting…";
 }
 
-async function startLearnerEntry(mode) {
+function selectLearnerEntryMode(mode) {
+  if (!["text", "voice", "car"].includes(mode) || labState.learnerEntryStarting) return;
+  labState.learnerEntryMode = mode;
+  setLearnerEntry(labState.learnerEntryReady, q("learner-entry-topic")?.textContent || "");
+}
+
+async function startLearnerEntry(mode = labState.learnerEntryMode) {
   if (!LAB_LEARNER || !labState.learnerEntryReady || labState.learnerEntryStarting
     || !labState.accessVerified || !labState.verifiedUserId || labState.workspaceOwnerId !== labState.verifiedUserId
     || !["text", "voice", "car"].includes(mode)) return false;
@@ -109,7 +120,28 @@ async function startLearnerEntry(mode) {
   }
   labState.learnerEntryStarting = true;
   const ownerId = labState.verifiedUserId, epoch = labState.authEpoch;
+  labState.learnerEntryPending = false;
+  for (const name of ["text", "voice", "car", "continue"]) if (q("learner-entry-" + name)) q("learner-entry-" + name).disabled = true;
   try {
+    if (labState.learnerEntryResume) {
+      const selected = labState.learnerEntryResume;
+      const conversationMode = mode === "car" ? "voice" : mode;
+      const row = { ...selected,
+        ...(selected.activeResume ? { activeResume:{ ...selected.activeResume, mode:conversationMode } } : {}),
+        ...(selected.resume ? { resume:{ ...selected.resume, conversationMode } } : {}) };
+      labState.clarification.mode = conversationMode;
+      labState.extraction.mode = conversationMode;
+      if (mode !== "text") void primeMockVoiceAudio();
+      await continueMockRunFromSetup(row);
+      assertLabRequestOwner(epoch, ownerId);
+      if (labState.mockSetupActive) throw new Error("Saved checkpoint unavailable");
+      labState.learnerEntryResume = null;
+      sessionStorage.removeItem(LEARNER_LAUNCH_KEY);
+      setLearnerEntry(false, "", true);
+      if (mode === "car") { await enterMockCarMode(); renderMockCarMode(); }
+      publishLearnerRunSummaries();
+      return true;
+    }
     // startClarification saves the run and its first immutable request before
     // its first network wait. The click also owns microphone/audio permission.
     const opening = startClarification(mode === "car" ? "voice" : mode);
@@ -129,7 +161,14 @@ async function startLearnerEntry(mode) {
       else { labState.clarification.runError = "The conversation could not start. Your topic is still saved."; renderMockLearnerShell(); }
     }
     return false;
-  } finally { labState.learnerEntryStarting = false; }
+  } finally {
+    labState.learnerEntryStarting = false;
+    if (labState.learnerEntryReady && ownerId === labState.verifiedUserId && epoch === labState.authEpoch) {
+      labState.learnerEntryPending = true;
+      for (const mode of ["text", "voice", "car"]) if (q("learner-entry-" + mode)) q("learner-entry-" + mode).disabled = false;
+      if (q("learner-entry-continue")) q("learner-entry-continue").disabled = !labState.learnerEntryMode;
+    }
+  }
 }
 
 function readLearnerLaunch() {
@@ -224,13 +263,10 @@ async function openLearnerLesson() {
   if (packet?.runId) {
     const row = await hydrateLearnerSavedRun(packet.runId);
     if (!row) throw new Error("This saved lesson is not ready on this device. Return Home and try opening it again.");
-    await continueMockRunFromSetup(row);
     if (labState.verifiedUserId !== ownerId) throw labAccountError("identity_changed");
-    if (labState.mockSetupActive) throw new Error("This saved lesson could not reconnect yet. Return Home and try again.");
-    sessionStorage.removeItem(LEARNER_LAUNCH_KEY);
+    labState.learnerEntryResume = row;
     labState.learnerLessonOpened = true;
-    setLearnerEntry(false, "", true);
-    publishLearnerRunSummaries();
+    setLearnerEntry(true, row.topic || row.artifact?.topic || row.activeResume?.topic || packet.topic);
     return;
   }
   // A refresh rejoins the exact saved phase. A Home topic packet explicitly
@@ -239,11 +275,10 @@ async function openLearnerLesson() {
     const runId = labState.pendingClarificationResume?.runId || labState.pendingMockResume?.runId || labState.pipelineSelectedRunId;
     const row = labState.workspaceRows.find(item => item.runId === runId);
     if (row) {
-      await continueMockRunFromSetup(row);
       if (labState.verifiedUserId !== ownerId) throw labAccountError("identity_changed");
-      if (labState.mockSetupActive) throw new Error("This saved lesson could not reconnect yet. Return Home and try again.");
+      labState.learnerEntryResume = row;
       labState.learnerLessonOpened = true;
-      setLearnerEntry(false, "", true);
+      setLearnerEntry(true, row.topic || row.artifact?.topic || row.activeResume?.topic || "Your saved lesson");
       return;
     }
   }
@@ -252,6 +287,7 @@ async function openLearnerLesson() {
   if (q("mock-setup-prompt")) delete q("mock-setup-prompt").dataset.loaded;
   renderMockSetup();
   launchNewMockRun();
+  labState.learnerEntryResume = null;
   labState.learnerLessonOpened = true;
   if (packet?.topic) {
     q("clarification-topic").value = packet.topic;
@@ -7259,7 +7295,25 @@ async function retryPipelineMapFromExtraction(options = {}) {
   retryState.mapRetryBusy = true;
   renderPipelineExtractionMapDialog(artifact);
   try {
+    // Retry reconciles durable work before spending on another generation.
+    try {
+      await refreshJobs();
+      if (!retryIsCurrent()) return false;
+      currentMapJob = pipelineMapJob(artifact);
+      if (currentMapJob) await refreshJob(currentMapJob.id);
+    } catch (_) {
+      if (retryIsCurrent()) setMessage("pipeline-extraction-output", "Saved lesson preparation could not be checked. Your conversation is kept; retry when connected. Nothing was regenerated.", "error");
+      return false;
+    }
+    if (!retryIsCurrent()) return false;
     const currentSelection = selectedPipelineMapRecord(artifact);
+    if (pipelineMapSelectionIsUsable(currentSelection) && currentSelection.meta?.researchComplete !== false) {
+      retryState.mapStartFailureRunId = "";
+      retryState.mapStartFailureJobId = "";
+      retryState.mapStartFailureMessage = "";
+      setMessage("pipeline-extraction-output", "Your saved lesson route and research are ready.", "ok");
+      return true;
+    }
     if (currentMapJob?.scenario?.pipelineStage === "map_planner" && pipelineMapSelectionHasRoute(currentSelection)
         && !currentSelection.meta?.researchComplete) {
       // The route already exists. Recover only missing evidence; replacing the
@@ -9322,7 +9376,8 @@ function pipelineExtractionMapViewState(artifact = selectedPipelineArtifact()) {
     : { summary:"The Lesson Map attempt ended without a usable route.", errorType:"" };
   const savedFailureForJob = labState.extraction.mapStartFailureRunId === artifact.runId
     && labState.extraction.mapStartFailureJobId === job.id;
-  if (savedFailureForJob) {
+  if (savedFailureForJob && !pipelineMapSelectionIsUsable(selection) && !LAB_ACTIVE_JOB_STATES.has(job.status)
+      && !(job.status === "completed" && !detail)) {
     return { state:"needs-attention", job, selection, detail, diagnostic,
       message:labState.extraction.mapStartFailureMessage || diagnostic.summary };
   }
@@ -10277,6 +10332,7 @@ async function continuePipelineLesson() {
 }
 
 function maybeSpeakPipelineLessonReply(job, output) {
+  if (labState.learnerEntryPending) return;
   const state = labState.extraction;
   if (labState.pipelineMode === "mock" && labState.pipelineStage === "lesson" && !q("panel-pipeline")?.hidden && job?.id && output?.assistantMessage) {
     markMockTurnFirstDisplay(job.id, state.mode);
@@ -10863,6 +10919,7 @@ function syncPipelineQuizSendControl() {
 }
 
 function maybeSpeakPipelineQuizReply(job, record) {
+  if (labState.learnerEntryPending) return;
   const state = labState.extraction;
   if (labState.pipelineMode === "mock" && labState.pipelineStage === "quiz" && !q("panel-pipeline")?.hidden && job?.id && record?.assistantMessage) {
     markMockTurnFirstDisplay(job.id, state.mode);
@@ -12401,6 +12458,7 @@ function releaseLabMicrophoneStream(state, expectedStream = null) {
 }
 
 async function prepareMockMicrophone() {
+  if (labState.learnerEntryPending) return;
   if (labState.pipelineMode !== "mock" || labState.preview || document.hidden || labState.extraction.mapDialogOpen || q("panel-pipeline")?.hidden) return;
   const stage = labState.pipelineStage;
   if (!["clarification", "extraction", "lesson", "quiz"].includes(stage)) return;
@@ -13124,6 +13182,7 @@ function playLabSpeechSynthesisFallback(spoken, state, playbackGeneration, cloud
 }
 
 async function playPipelineExtractionSpeech(text, { timingId = "" } = {}) {
+  if (labState.learnerEntryPending) return;
   const state = labState.extraction;
   const spoken = clip(stripLessonCitationMarkers(text), 2000);
   if (!spoken) return;
@@ -13153,12 +13212,11 @@ async function playPipelineExtractionSpeech(text, { timingId = "" } = {}) {
     abandonMockTurnTiming(timingId);
     return;
   }
-  try {
-    await playLabSpeechSynthesisFallback(spoken, state, playbackGeneration, cloudError, owner, voiceToken, { timingId });
-  } catch (error) {
-    failMockTurnAudio(timingId, "speech-failed");
-    throw error;
-  }
+  // Device speech is an explicit preference only. Cloud failure must remain
+  // visible and retryable instead of silently changing the selected voice.
+  failMockTurnAudio(timingId, "speech-failed");
+  finishMockVoicePlayback(voiceToken);
+  throw cloudError;
 }
 
 function stopPipelineExtractionSpeech() {
@@ -13655,6 +13713,7 @@ function cancelPipelineExtractionRecording(event) {
 }
 
 function maybeSpeakPipelineExtractionReply(job, output) {
+  if (labState.learnerEntryPending) return;
   const state = labState.extraction;
   if (labState.pipelineMode === "mock" && labState.pipelineStage === "extraction" && !q("panel-pipeline")?.hidden && job?.id && output?.assistantMessage) {
     markMockTurnFirstDisplay(job.id, state.mode);
@@ -13837,7 +13896,11 @@ function renderPipelineExtraction() {
 
 function mockCarConversationReady() {
   if (labState.pipelineMode !== "mock") return false;
-  if (labState.pipelineStage === "clarification") return Boolean(q("clarification-conversation") && !q("clarification-conversation").hidden && q("clarification-complete")?.hidden);
+  if (labState.pipelineStage === "clarification") {
+    const state = labState.clarification;
+    return Boolean(!state.finalized && (mockLearnerConversationActive() && !q("mock-learner-shell")?.hidden
+      || q("clarification-conversation") && !q("clarification-conversation").hidden && q("clarification-complete")?.hidden));
+  }
   const learnerShellReady = mockLearnerConversationActive() && !q("mock-learner-shell")?.hidden;
   // A learner's request to begin can remain pending while the route is being
   // prepared or repaired. The conversation is still visible during that wait,
@@ -13921,8 +13984,13 @@ function toggleMockRecording(event) {
 }
 
 function cancelBackgroundMockRecording() {
-  if (!document.hidden || labState.pipelineMode !== "mock") return;
+  if (labState.pipelineMode !== "mock") return;
   const state = labState.pipelineStage === "clarification" ? labState.clarification : labState.extraction;
+  if (!document.hidden) { renderMockLearnerShell(); renderMockRecordingControls(); return; }
+  // A latched recording belongs to the explicit switch, not window focus.
+  // Live muted tracks can recover; an ended track still flushes captured words
+  // through finishInterruptedLabCapture and requires review before sending.
+  if (state.recordingLatched) return;
   if (!state.recorder && !state.recordingPointerActive && !state.recordingPointerStartedAt && !state.recordingLatched) {
     releaseLabMicrophoneStream(state);
     state.mockMicWarm = false;
@@ -14730,6 +14798,9 @@ function mockLearnerStatus(stage, artifact, selection) {
   }
   if (stage === "extraction" && artifact) {
     const mapState = pipelineExtractionMapViewState(artifact);
+    if (mapState.state === "ready" && mapState.supportNeedsAttention) {
+      return { text:"Your lesson route is ready. Some source research needs a retry.", error:true, retry:labState.extraction.mapRetryBusy ? "" : "map" };
+    }
     if (mapState.state === "needs-attention" || mapState.supportNeedsAttention) {
       return { text:mapState.diagnostic?.errorType === "allowance_exhausted"
         ? "Lesson preparation reached the monthly testing allowance. Your conversation is saved; retry after the allowance is renewed."
@@ -17239,6 +17310,7 @@ function primeClarificationAudio() {
 }
 
 async function playClarificationSpeech(text, { timingId = "" } = {}) {
+  if (labState.learnerEntryPending) return;
   const state = labState.clarification;
   const spoken = clip(text, 2000);
   if (!spoken) return;
@@ -17268,12 +17340,11 @@ async function playClarificationSpeech(text, { timingId = "" } = {}) {
     abandonMockTurnTiming(timingId);
     return;
   }
-  try {
-    await playLabSpeechSynthesisFallback(spoken, state, playbackGeneration, cloudError, owner, voiceToken, { timingId });
-  } catch (error) {
-    failMockTurnAudio(timingId, "speech-failed");
-    throw error;
-  }
+  // Device speech is an explicit preference only. Cloud failure must remain
+  // visible and retryable instead of silently changing the selected voice.
+  failMockTurnAudio(timingId, "speech-failed");
+  finishMockVoicePlayback(voiceToken);
+  throw cloudError;
 }
 
 function stopClarificationSpeech() {
@@ -18367,7 +18438,8 @@ function bindClarificationEvents() {
     setMessage("clarification-prompt-message", saved ? "Saved only on this device. The server default will still win the next time Clarification opens." : "This browser could not save the prompt draft.", saved ? "ok" : "error");
   });
   q("clarification-prompt-save-shared").addEventListener("click", saveGlobalClarificationDefault);
-  for (const mode of ["text", "voice", "car"]) q("learner-entry-" + mode)?.addEventListener("click", () => { void startLearnerEntry(mode); });
+  for (const mode of ["text", "voice", "car"]) q("learner-entry-" + mode)?.addEventListener("click", () => selectLearnerEntryMode(mode));
+  q("learner-entry-continue")?.addEventListener("click", () => { void startLearnerEntry(); });
   q("clarification-car")?.addEventListener("click", async () => {
     const opening = startClarification("voice");
     await enterMockCarMode(); renderMockCarMode();
@@ -18588,7 +18660,7 @@ async function prepareLabEntry(epoch, learner) {
     if (!(launch?.topic && !launch.runId)) {
       await refreshJobs();
       assertLabRequestOwner(epoch, userId);
-      if (!labState.mockSetupActive) await reconcileActiveClarificationResume();
+      if (!learner && !labState.mockSetupActive) await reconcileActiveClarificationResume();
       assertLabRequestOwner(epoch, userId);
       await refreshClarificationArtifacts();
       assertLabRequestOwner(epoch, userId);
