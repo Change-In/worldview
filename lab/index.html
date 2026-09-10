@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#241f1a">
 <title>Worldview — Model Lab</title>
 <script>if(new URLSearchParams(location.search).get("learner")==="1")document.documentElement.classList.add("learner-route");</script>
-<link rel="stylesheet" href="./lab.css?v=2.1.9">
+<link rel="stylesheet" href="./lab.css?v=2.1.12">
 </head>
 <body>
 <aside id="lab-connection-status" class="lab-connection-status" role="status" hidden>
@@ -41,8 +41,10 @@
       <p>You can switch at any time.</p>
       <div class="learner-entry-modes" role="group" aria-label="Conversation mode">
         <button id="learner-entry-text" type="button" aria-pressed="false"><strong>Text</strong><span>Read and type</span></button>
-        <button id="learner-entry-voice" type="button" aria-pressed="false"><strong>Voice</strong><span>Listen and talk</span></button>
-        <button id="learner-entry-car" type="button" aria-pressed="false"><strong>Car</strong><span>Larger voice controls</span></button>
+        <div id="learner-entry-voice-group" class="learner-entry-voice-group" role="group" aria-label="Voice options">
+          <button id="learner-entry-voice" type="button" aria-pressed="false"><strong>Voice</strong><span>Listen and talk</span></button>
+          <button id="learner-entry-car" type="button" aria-pressed="false"><strong>Car</strong><span>Larger voice controls</span></button>
+        </div>
       </div>
       <div id="learner-entry-path" class="learner-entry-modes learner-entry-path" role="group" aria-label="Lesson path" hidden>
         <button type="button" aria-pressed="true"><strong>Continue</strong><span>Pick up where you left off</span></button>
@@ -71,6 +73,7 @@
 
 <main id="lab-shell" class="lab-shell" hidden>
   <section id="panel-pipeline" class="tab-panel is-active" role="region" aria-label="Lesson Pipeline" data-panel="pipeline">
+    <details class="conversation-time-panel"><summary>Conversation time &amp; voice trial</summary><p id="conversation-time-summary">Time is measured locally during a conversation.</p><a href="live-trial.html">Open GPT-Live 1 test</a><p>Separate paid experiment. Opening this page does not start a microphone or a session.</p></details>
     <div class="pipeline-mode-bar" aria-label="Model Lab mode">
       <div><p class="eyebrow">Model Lab</p><strong>Test workspace</strong></div>
       <div class="pipeline-mode-options" role="group" aria-label="Model Lab mode">
@@ -735,6 +738,7 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=2.1.9" defer></script>
+<script src="./lab.js?v=2.1.12" defer></script>
+<script src="./conversation-clock.js?v=2.1.12" defer></script>
 </body>
 </html>

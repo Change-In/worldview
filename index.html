@@ -2196,11 +2196,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.11 · Sep 10";
+const BUILD = "v2.1.12 · Sep 10";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  {"tag":"v2.1.12","date":"Sep 10","changes":["Car is an individual option inside Voice when entering a new or saved lesson.","Extraction first invites an optional impression; no opinion is a valid answer.","Knowledge questions move from broad to specific, with basic context when needed.","Choose Done whenever you are ready; completed topic coverage can move into the lesson.","Tutoring teaches missing foundations before asking you to reason from them.","Developer Lab includes conversation time and a separate, deliberate 90-second paid GPT Live test."]},
   { tag:"v2.1.11", date:"Sep 10", changes:["Removed the outdated old-address notice. Account saving and recovery warnings remain available."] },
   { tag:"v2.1.9", date:"Sep 8", changes:["New lessons show Start lesson; Continue and Reassess appear only for saved lessons.","Clarification starts with your curiosity, without unsolicited topic menus.","One clear add-anything question makes Yes and No easier to interpret.","Tutoring addresses each material guess before asking a deeper reasoning question.","Feedback and citations stay connected when moving to the next learning outcome."] },
   { tag:"v2.1.8", date:"Sep 8", changes:["Choose Text, Voice or Car, then Continue when reopening a lesson.","Toggle recording stays on when switching windows while the browser allows capture.","Voice playback keeps your selected provider, with a visible retry if audio fails.","Preparation recovery checks saved maps and research before generating again."] },
@@ -16693,3 +16694,4 @@ window.addEventListener("blur", () => {
 </script>
 </body>
 </html>
+

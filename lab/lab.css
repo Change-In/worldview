@@ -1995,7 +1995,7 @@ body.mock-run.mock-car-active .mock-car-surface {
 .learner-entry-choice h3 { margin:0 0 10px; font:600 clamp(21px,4vw,28px)/1.25 system-ui,sans-serif; }
 .learner-entry-choice > p { color:#cabeae; font:16px/1.5 system-ui,sans-serif; }
 .learner-entry-topic { overflow-wrap:anywhere; padding:16px 0; border-bottom:1px solid #f4ece024; margin:0 0 26px; }
-.learner-entry-modes { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:24px; }
+.learner-entry-modes { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:24px; }
 .learner-entry-modes button { min-height:100px; padding:16px 10px; border:1px solid #f4ece040; border-radius:18px; background:#332c25; color:#f4ece0; text-align:left; cursor:pointer; }
 .learner-entry-modes button strong { display:block; font:600 18px/1.3 system-ui,sans-serif; margin-bottom:6px; }
 .learner-entry-modes button span { display:block; color:#cabeae; font:14px/1.35 system-ui,sans-serif; }
@@ -2011,3 +2011,16 @@ body.mock-run.mock-car-active .mock-car-surface {
 #learner-entry-status { min-height:24px; margin-top:18px; }
 #learner-entry-shell .mock-learner-back { display:grid; place-items:center; text-decoration:none; }
 @media (max-width:380px) { .learner-entry-modes { gap:8px; } .learner-entry-modes button { padding:14px 8px; } }
+
+/* Car is an independently selectable option within the Voice card. */
+.learner-entry-voice-group { padding:6px; border:1px solid #f4ece040; border-radius:18px; background:#332c25; display:grid; gap:6px; }
+.learner-entry-voice-group.is-selected { border-color:#eda06b; }
+.learner-entry-voice-group button { width:100%; min-height:84px; border-color:transparent; border-radius:12px; padding:12px; }
+.learner-entry-voice-group #learner-entry-car { min-height:64px; border-color:#f4ece024; background:#29231e; }
+.learner-entry-voice-group #learner-entry-car[aria-pressed="true"] { background:#49372b; border-color:#eda06b; }
+.learner-entry-voice-group #learner-entry-car strong { font-size:15px; margin-bottom:3px; }
+#learner-entry-text { align-self:stretch; }
+
+.conversation-time-panel { margin:16px 0; padding:16px; border:1px solid var(--line,#d0c5b4); border-radius:14px; }
+.conversation-time-panel p { max-width:70ch; line-height:1.5; }
+.learner-route .conversation-time-panel { display:none; }
