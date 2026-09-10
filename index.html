@@ -99,24 +99,6 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #file-warning b { text-decoration: underline; }
   #fw-x { position: absolute; right: 12px; top: calc(env(safe-area-inset-top) + 8px); cursor: pointer; opacity: 0.85; }
 
-  /* An installed PWA keeps the origin it was installed from. Never move it
-     silently: browser storage and the authenticated session do not follow. */
-  #origin-warning {
-    position:fixed;z-index:240;bottom:max(10px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);
-    width:min(680px,calc(100% - 24px));display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;
-    padding:13px 14px;border:1.5px solid var(--line);border-radius:15px;background:var(--card);
-    color:var(--ink);box-shadow:var(--shadow-lg);font-size:12px;line-height:1.45;
-  }
-  #origin-warning[hidden] { display:none; }
-  #origin-warning strong { display:block;font-size:13px;margin-bottom:2px; }
-  .origin-warning-actions { display:flex;align-items:center;gap:7px; }
-  .origin-warning-actions a,.origin-warning-actions button {
-    min-height:38px;padding:8px 11px;border-radius:999px;font:700 11px/1 system-ui,sans-serif;white-space:nowrap;
-  }
-  .origin-warning-actions a { display:inline-flex;align-items:center;background:var(--accent);color:#fff;text-decoration:none; }
-  .origin-warning-actions button { border:1px solid var(--line);background:transparent;color:var(--ink-soft); }
-  @media(max-width:560px){#origin-warning{grid-template-columns:1fr}.origin-warning-actions{justify-content:flex-start;flex-wrap:wrap}}
-
   /* Account recovery is deliberately visible and persistent. An offline cache
      can be read, but no lesson/Note edit is allowed until the server identity
      is verified; an unowned pre-v69 library needs an explicit Import or Start
@@ -1664,17 +1646,6 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   <span id="fw-x" title="Dismiss">&#10005;</span>
 </div>
 
-<div id="origin-warning" role="alert" hidden>
-  <div>
-    <strong>This Home Screen copy uses an old app address.</strong>
-    Before moving, open Profile here and confirm your lessons are saved to your account. Then open the current app, confirm the same library, and only then remove this icon.
-  </div>
-  <div class="origin-warning-actions">
-    <a id="origin-warning-open" href="#" target="_blank" rel="noopener">Open current app</a>
-    <button id="origin-warning-later" type="button">Not yet</button>
-  </div>
-</div>
-
 <dialog id="account-dialog" aria-labelledby="account-dialog-title" aria-describedby="account-dialog-copy">
   <section class="account-dialog-card">
     <div class="account-topbar"><button id="password-account-back" type="button" aria-label="Back" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6M8 12h12"/></svg></button><div class="intro-wordmark">Worldview</div></div>
@@ -2225,11 +2196,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.9 · Sep 8";
+const BUILD = "v2.1.11 · Sep 10";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag:"v2.1.11", date:"Sep 10", changes:["Removed the outdated old-address notice. Account saving and recovery warnings remain available."] },
   { tag:"v2.1.9", date:"Sep 8", changes:["New lessons show Start lesson; Continue and Reassess appear only for saved lessons.","Clarification starts with your curiosity, without unsolicited topic menus.","One clear add-anything question makes Yes and No easier to interpret.","Tutoring addresses each material guess before asking a deeper reasoning question.","Feedback and citations stay connected when moving to the next learning outcome."] },
   { tag:"v2.1.8", date:"Sep 8", changes:["Choose Text, Voice or Car, then Continue when reopening a lesson.","Toggle recording stays on when switching windows while the browser allows capture.","Voice playback keeps your selected provider, with a visible retry if audio fails.","Preparation recovery checks saved maps and research before generating again."] },
   { tag:"v2.1.7", date:"Sep 8", changes:["Opening questions let you choose the interests; suggestions come when you ask for them.","Extraction asks what you think without teaching new facts or turning guesses into knowledge.","Shorter, more natural offers to begin keep the existing phase rules.","Citation numbers stay inline beside the text they reference.","Tap Worldview to cycle Standard, Compact and Small text, keeping your reading position."] },
@@ -16639,25 +16611,12 @@ function consumeLabLessonHandoff() {
   setTimeout(() => toast("Your Lab pick is ready. Tap Begin to build the real lesson and add it to your library.",6200),240);
 }
 
-const WORLDVIEW_CURRENT_PUBLIC_URL = "https://worldview.cristianjperezb.workers.dev/";
-const WORLDVIEW_CURRENT_PUBLIC_HOST = "worldview.cristianjperezb.workers.dev";
-function showRetiredOriginWarning() {
-  const hostname = location.hostname.toLowerCase();
-  if (!/^https?:$/.test(location.protocol) || hostname === WORLDVIEW_CURRENT_PUBLIC_HOST
-      || hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]") return;
-  const warning = $("origin-warning"), link = $("origin-warning-open"), later = $("origin-warning-later");
-  link.href = WORLDVIEW_CURRENT_PUBLIC_URL;
-  warning.hidden = false;
-  later.onclick = () => { warning.hidden = true; };
-}
-
 /* ================= boot ================= */
 // warn if opened as a raw file — that's why the mic keeps prompting in voice mode
 if (location.protocol === "file:") {
   $("file-warning").style.display = "block";
   $("fw-x").onclick = () => { $("file-warning").style.display = "none"; };
 }
-showRetiredOriginWarning();
 updateCardSize();
 wheel.categoryOverview = false;
 renderHome();
