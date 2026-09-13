@@ -2186,11 +2186,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.23 · Sep 13";
+const BUILD = "v2.1.24 · Sep 13";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag:"v2.1.24", date:"Sep 13", changes:["Extraction establishes the world, foundations and connections before specific knowledge and Lesson entry.","Context uses plain descriptions and spatial relationships without unnecessary measurements or unsupported claims."] },
   { tag:"v2.1.23", date:"Sep 13", changes:["Models has separate company and model menus, feature presets and quieter price details.","Owners can select GPT Live for real lesson conversations, with explicit 90-second paid starts.","Live answers are reviewed before sending through the normal lesson and understanding checks."] },
 
   {tag:"v2.1.22",date:"Sep 13",changes:["Clarification answers recognition briefly and confirms learning interest before scope.","Extraction asks each relevant foundation separately before supplying it.","Unconfirmed message delivery reconnects automatically using the same saved request."]},
