@@ -3782,6 +3782,7 @@ function switchToVerifiedLabUser(userId) {
 }
 
 function clearVerifiedLabUser() {
+  document.documentElement.classList.remove("owner-map-access");
   stopSpeechComparison();
   clearTimeout(workspaceSaveTimer);
   if (labState.workspaceLoaded && labState.workspaceOwnerId) persistWorkspace();
@@ -3800,6 +3801,7 @@ function clearVerifiedLabUser() {
 }
 
 function lockLabAccount(message = "Sign in to your administrator account to open the Model Lab.", status = "signed-out") {
+  document.documentElement.classList.remove("owner-map-access");
   if (q("lab-connection-status")) q("lab-connection-status").hidden = true;
   // Invalidate before touching the DOM or awaiting anything. A late response
   // from the outgoing account must not load a workspace or reopen this shell.
@@ -12036,7 +12038,27 @@ function renderMissingResearchStatus(rows) {
   return section;
 }
 
+function pipelineLessonMapAccessAllowed() {
+  if (!(typeof LAB_LEARNER !== "undefined" && LAB_LEARNER)) return true;
+  return Boolean(labState.accessVerified && labState.verifiedAdmin
+    && labState.verifiedRole?.access_tier === "admin"
+    && labState.verifiedUserId
+    && labState.verifiedRoleUserId === labState.verifiedUserId
+    && labState.workspaceOwnerId === labState.verifiedUserId
+    && labAccountCanOpen());
+}
+
+function syncPipelineLessonMapAccess() {
+  const allowed = pipelineLessonMapAccessAllowed();
+  document.documentElement.classList.toggle("owner-map-access", allowed);
+  return allowed;
+}
+
 function renderPipelineExtractionMapDialog(artifact = selectedPipelineArtifact()) {
+  if (!syncPipelineLessonMapAccess()) {
+    if (labState.extraction.mapDialogOpen) closePipelineExtractionMapDialog({ restoreFocus:false });
+    return;
+  }
   const dialog = q("pipeline-extraction-map-dialog");
   const status = q("pipeline-extraction-map-dialog-status");
   const content = q("pipeline-extraction-map-dialog-content");
@@ -12127,7 +12149,7 @@ function renderPipelineExtractionMapDialog(artifact = selectedPipelineArtifact()
 }
 
 function openPipelineExtractionMapDialog() {
-  if (typeof LAB_LEARNER !== "undefined" && LAB_LEARNER) return;
+  if (!syncPipelineLessonMapAccess()) return;
   const dialog = q("pipeline-extraction-map-dialog");
   const progress = !q("mock-learner-map-progress")?.hidden ? q("mock-learner-map-progress") : q("pipeline-extraction-progress");
   if (!dialog || !progress || progress.disabled) return;
@@ -14258,7 +14280,7 @@ function renderMockCarMode() {
   const stopAudio = q("mock-car-stop-audio");
   if (stopAudio) stopAudio.hidden = !active || derived.status !== "speaking";
   const map = q("mock-car-map");
-  if (map) { map.hidden = !active || !["extraction", "lesson", "quiz"].includes(labState.pipelineStage); map.setAttribute("aria-expanded", String(labState.extraction.mapDialogOpen)); }
+  if (map) { map.hidden = !active || !syncPipelineLessonMapAccess() || !["extraction", "lesson", "quiz"].includes(labState.pipelineStage); map.setAttribute("aria-expanded", String(labState.extraction.mapDialogOpen)); }
   const retry = q("mock-car-retry");
   if (retry) { retry.hidden = !active || !recovery?.retry; retry.disabled = labState.mockCar.retryBusy === true; }
   renderMockRecordingControls();
@@ -14906,6 +14928,7 @@ function mockLearnerMapState(stage, artifact) {
 }
 
 function renderMockLearnerShell() {
+  const mapAccessAllowed = syncPipelineLessonMapAccess();
   const shell = q("mock-learner-shell");
   if (!shell) return;
   const stage = MOCK_LEARNER_STAGES.includes(labState.pipelineStage) ? labState.pipelineStage : "clarification";
@@ -14965,7 +14988,7 @@ function renderMockLearnerShell() {
   retry.textContent = status.retry === "lesson-status" ? "Check reply" : "Try again";
   const mapProgress = q("mock-learner-map-progress");
   const mapState = mockLearnerMapState(stage, artifact);
-  mapProgress.hidden = !mapState || (typeof LAB_LEARNER !== "undefined" && LAB_LEARNER);
+  mapProgress.hidden = !mapState || !mapAccessAllowed;
   mapProgress.disabled = !mapState || labState.extraction.mapRetryBusy;
   mapProgress.textContent = mapState?.state === "ready" ? "View Lesson Map" : "View Lesson Map progress";
   mapProgress.classList.toggle("is-error", mapState?.state === "needs-attention");
