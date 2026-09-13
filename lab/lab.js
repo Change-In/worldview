@@ -14059,12 +14059,15 @@ function renderMockRecordingControls() {
   const actualListening = recording && state.recordingReadyForSpeech === true && !finishing;
   const arming = !actualListening && !finishing && (latched || holdActive);
   const captureState = actualListening ? "listening" : arming ? "arming" : finishing ? "transcribing" : "idle";
+  // The switch supplies its own cue; only an ongoing hold lights the conversation.
+  const holding = !latched && Boolean(state.recordingPointerActive || state.recordingPointerStartedAt);
+  const holdCaptureState = holding && !finishing ? captureState : "idle";
   for (const id of ["mock-learner-shell","mock-car-surface"]) {
-    const surface = q(id); if (surface) surface.dataset.captureState = state.mode === "voice" ? captureState : "idle";
+    const surface = q(id); if (surface) surface.dataset.captureState = state.mode === "voice" ? holdCaptureState : "idle";
   }
   const badge = q("mock-voice-cue");
   if (badge) {
-    badge.hidden = state.mode !== "voice" || captureState === "idle";
+    badge.hidden = state.mode !== "voice" || holdCaptureState === "idle";
     const text = q("mock-voice-cue-text");
     if (text) text.textContent = actualListening ? "Listening" : arming ? "Opening microphone…" : "Transcribing…";
   }
