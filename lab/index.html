@@ -25,7 +25,7 @@
   root.dataset.learnerEntryKind = ["saved", "new"].includes(kind) ? kind : "unknown";
 })();
 </script>
-<link rel="stylesheet" href="./lab.css?v=2.1.14">
+<link rel="stylesheet" href="./lab.css?v=2.1.15">
 </head>
 <body>
 <aside id="lab-connection-status" class="lab-connection-status" role="status" hidden>
@@ -209,6 +209,7 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
     <section id="mock-car-surface" class="mock-car-surface" hidden role="dialog" aria-modal="true" aria-label="Low-distraction voice controls">
       <div class="mock-car-toolbar" role="group" aria-label="Conversation display">
         <button id="mock-car-text" class="mock-car-toolbar-button" type="button" aria-label="Leave Car mode and switch to Text"><span aria-hidden="true">Aa</span></button>
+        <div id="mock-car-chapters" class="mock-car-chapters" hidden aria-label="Lesson chapters"></div>
         <button id="mock-car-map" class="button button-quiet" type="button" aria-expanded="false" aria-controls="pipeline-extraction-map-dialog" hidden>Map</button>
         <button id="mock-car-speaker" class="mock-car-toolbar-button mock-car-speaker" type="button" aria-label="Choose Phone speaker or Phone receiver" aria-expanded="false" aria-controls="mock-car-output-choices" aria-describedby="mock-car-speaker-status">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path class="speaker-waves" d="M15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/><path class="speaker-muted" d="m15 9 6 6m0-6-6 6"/></svg>
@@ -418,7 +419,9 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
         <div class="map-workspace">
           <section id="map-learner-panel" class="lab-card map-learner-panel" role="tabpanel" aria-labelledby="map-view-learner">
             <section class="map-run-library" aria-labelledby="pipeline-map-runs-title">
-              <div class="map-run-library-head"><div><p class="eyebrow">Saved output</p><h3 id="pipeline-map-runs-title">Saved roadmaps</h3></div><span id="pipeline-map-runs-count" class="rate-note">0 runs</span></div>
+              <div class="map-run-library-head"><div><p class="eyebrow">Saved output</p><h3 id="pipeline-map-runs-title">Saved lesson maps</h3></div><span id="pipeline-map-runs-count" class="rate-note">0 runs</span></div>
+              <p class="rate-note">Maps from Home and the Lab, saved to this account.</p>
+              <button id="pipeline-map-refresh" class="button button-quiet" type="button">Refresh maps</button>
               <div id="pipeline-map-runs" class="map-run-list"></div>
             </section>
             <div class="map-learner-content">
@@ -764,7 +767,7 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=2.1.14" defer></script>
+<script src="./lab.js?v=2.1.15" defer></script>
 <script src="./conversation-clock.js?v=2.1.12" defer></script>
 </body>
 </html>

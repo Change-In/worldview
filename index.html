@@ -2196,11 +2196,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.14 · Sep 12";
+const BUILD = "v2.1.15 · Sep 12";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  {"tag":"v2.1.15","date":"Sep 12","changes":["Lesson cards have a Lesson Map button again, opening saved work before you choose Text or Voice.","The Lab lists saved maps from Home and Lab lessons together, with a refresh control and their actual status.","Tutor shows a chapter dropdown in Text, Voice and Car. Browse upcoming chapters without advancing your lesson."]},
   {"tag":"v2.1.14","date":"Sep 12","changes":["Saved lessons show Continue and Reassess alongside the chat modes immediately.","Fresh lessons keep Start lesson; account checks still finish before a lesson opens."]},
   { tag:"v2.1.13", date:"Sep 12", changes:["The owner can open the current Lesson Map from Text, Voice or Car while staying in the lesson conversation."] },
   {"tag":"v2.1.12","date":"Sep 10","changes":["Car is an individual option inside Voice when entering a new or saved lesson.","Extraction first invites an optional impression; no opinion is a valid answer.","Knowledge questions move from broad to specific, with basic context when needed.","Choose Done whenever you are ready; completed topic coverage can move into the lesson.","Tutoring teaches missing foundations before asking you to reason from them.","Developer Lab includes conversation time and a separate, deliberate 90-second paid GPT Live test."]},
@@ -8215,6 +8216,17 @@ function renderHomeLearnerRuns(carousel) {
     const stage = {clarification:"Your direction",map:"Lesson Map",extraction:"Your starting point",lesson:"Lesson",quiz:"Quiz",complete:"Completed"}[run.phase];
     card.setAttribute("aria-label",`${run.title}. ${stage}. Tap to continue.`);
     card.innerHTML = `<div class="card-cat">${esc(stage)}</div><div class="card-title serif ${cardTitleSizeClass(run.title)}">${cardTitleHtml(run.title)}</div><div class="card-hint">tap to continue</div>`;
+    const mapButton = document.createElement("button");
+    mapButton.type = "button";
+    mapButton.className = "lesson-path-button card-path-button";
+    mapButton.setAttribute("aria-label", "Open lesson map for " + run.title);
+    mapButton.title = "Lesson map";
+    mapButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6v4m10-4v4M7 10h10M12 10v5"/><circle cx="7" cy="4" r="2"/><circle cx="17" cy="4" r="2"/><circle cx="12" cy="18" r="2"/></svg>';
+    mapButton.addEventListener("pointerdown", event => { wheel.methodInteracting = true; event.stopPropagation(); });
+    mapButton.addEventListener("pointerup", event => { event.stopPropagation(); setTimeout(() => { wheel.methodInteracting = false; }, 0); });
+    mapButton.addEventListener("pointercancel", () => { wheel.methodInteracting = false; });
+    mapButton.onclick = event => { event.stopPropagation(); openLessonPath(card.dataset.id); };
+    card.appendChild(mapButton);
     carousel.appendChild(card);wheel.cards.push(card);wheel.ids.push(card.dataset.id);
   }
 }
@@ -8246,7 +8258,7 @@ async function refreshHomeLearnerRuns() {
   } catch (_) { return false; }
   finally { if (homeLearnerRefreshOwner === owner) homeLearnerRefreshOwner = ""; }
 }
-async function openHomeLearnerRun({topic = "",runId = ""} = {}) {
+async function openHomeLearnerRun({topic = "",runId = "",view = ""} = {}) {
   if (homeLearnerLaunchBusy) return false;
   topic = String(topic).trim();runId = String(runId);
   if (runId ? !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(runId) : !topic) return false;
@@ -8262,7 +8274,7 @@ async function openHomeLearnerRun({topic = "",runId = ""} = {}) {
       toast("Sign in with your approved tester account to begin. If you have just joined, your tester access needs to be enabled.",6500);return false;
     }
     const owner = cloudAccount.id;
-    const packet = {ownerUserId:owner,topic,...(runId ? {runId} : {})};
+    const packet = {ownerUserId:owner,topic,...(runId ? {runId} : {}),...(runId && view === "map" ? {view:"map"} : {})};
     const serialized = JSON.stringify(packet);
     sessionStorage.setItem(HOME_LEARNER_LAUNCH_KEY,serialized);
     if (sessionStorage.getItem(HOME_LEARNER_LAUNCH_KEY) !== serialized) throw new Error("launch_storage_unavailable");
@@ -10050,6 +10062,7 @@ function renderLessonPath(lesson) {
   });
 }
 function openLessonPath(id = currentLessonId) {
+  if (String(id || "").startsWith("learner:")) return openHomeLearnerRun({runId:String(id).slice(8),view:"map"});
   const lesson = getLesson(id);
   if (!lesson) { toast("Open or create a lesson first."); return; }
   closeConversationHistory();

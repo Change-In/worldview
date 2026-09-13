@@ -190,7 +190,7 @@ function readLearnerLaunch() {
   catch (_) { return null; }
   if (!packet || packet.ownerUserId !== labState.verifiedUserId || labState.workspaceOwnerId !== packet.ownerUserId) return null;
   if (packet.runId && !/^[A-Za-z0-9-]{8,128}$/.test(String(packet.runId))) return null;
-  return { ownerUserId:packet.ownerUserId, topic:String(packet.topic || "").trim().slice(0, 500), runId:String(packet.runId || "") };
+  return { ownerUserId:packet.ownerUserId, topic:String(packet.topic || "").trim().slice(0, 500), runId:String(packet.runId || ""), view:packet.runId && packet.view === "map" ? "map" : "" };
 }
 
 async function hydrateLearnerSavedRun(runId) {
@@ -266,6 +266,27 @@ async function hydrateLearnerSavedRun(runId) {
   return { runId, topic:scenario.topic, kind:"active", activeResume, updatedAt:job.createdAt };
 }
 
+// Read existing saved work without choosing audio or entering a conversation.
+async function openLearnerSavedMap(row) {
+  const ownerId = labState.verifiedUserId, epoch = labState.authEpoch;
+  const artifact = row.artifact || labState.clarificationArtifacts.find(item => item.runId === row.runId);
+  labState.pipelineSelectedRunId = row.runId;
+  const jobs = pipelineMapJobs(artifact);
+  const job = jobs.find(item => item.id === row.resume?.mapJobId) || jobs[0];
+  labState.pipelineSelectedMapJobId = job?.id || "";
+  labState.pipelineSelectedMapRecordId = job && row.resume && job.id === row.resume.mapJobId ? row.resume.mapRecordId || "" : "";
+  openPipelineExtractionMapDialog({ savedOnly:true });
+  if (!artifact) {
+    q("pipeline-extraction-map-dialog-status").textContent = "Your lesson map will appear here after you finish choosing the lesson's direction.";
+    q("pipeline-extraction-map-dialog-content").replaceChildren();
+    return;
+  }
+  const savedJobs = pipelineMapWorkflowJobs(artifact).filter(item => item.id === job?.id || item.scenario?.plannerJobId === job?.id);
+  await Promise.allSettled(savedJobs.map(item => refreshJob(item.id)));
+  assertLabRequestOwner(epoch, ownerId);
+  if (labState.extraction.mapDialogOpen) renderPipelineExtractionMapDialog(artifact);
+}
+
 async function openLearnerLesson() {
   const ownerId = labState.verifiedUserId;
   const packet = readLearnerLaunch();
@@ -280,6 +301,7 @@ async function openLearnerLesson() {
     labState.learnerEntryResume = row;
     labState.learnerLessonOpened = true;
     setLearnerEntry(true, row.topic || row.artifact?.topic || row.activeResume?.topic || packet.topic);
+    if (packet.view === "map") await openLearnerSavedMap(row);
     return;
   }
   // A refresh rejoins the exact saved phase. A Home topic packet explicitly
@@ -3785,7 +3807,7 @@ function switchToVerifiedLabUser(userId) {
 }
 
 function clearVerifiedLabUser() {
-  document.documentElement.classList.remove("owner-map-access");
+  closePipelineExtractionMapDialog({ restoreFocus:false });
   stopSpeechComparison();
   clearTimeout(workspaceSaveTimer);
   if (labState.workspaceLoaded && labState.workspaceOwnerId) persistWorkspace();
@@ -3804,7 +3826,7 @@ function clearVerifiedLabUser() {
 }
 
 function lockLabAccount(message = "Sign in to your administrator account to open the Model Lab.", status = "signed-out") {
-  document.documentElement.classList.remove("owner-map-access");
+  closePipelineExtractionMapDialog({ restoreFocus:false });
   if (q("lab-connection-status")) q("lab-connection-status").hidden = true;
   // Invalidate before touching the DOM or awaiting anything. A late response
   // from the outgoing account must not load a workspace or reopen this shell.
@@ -8206,6 +8228,7 @@ async function retryPipelineMapChapterResearch(plannerJob, artifact = selectedPi
 }
 
 async function ensurePipelineMapChapterResearch(plannerJob, artifact = selectedPipelineArtifact(), { retryMissing = false } = {}) {
+  if (labState.learnerEntryPending) return false;
   const starting = labState.mapResearchStarting;
   if (!plannerJob || plannerJob.scenario?.pipelineStage !== "map_planner" || plannerJob.status !== "completed"
       || !artifact || plannerJob.scenario?.pipelineRunId !== artifact.runId || labState.preview
@@ -8640,8 +8663,8 @@ function renderPipelineRoadmap(record, artifact, { includeStart = true, mapOverr
   return { card, map, meta };
 }
 
-function pipelineMapRunState(job) {
-  const selection = pipelineMapWorkflowSelection(selectedPipelineArtifact(), job);
+function pipelineMapRunState(job, artifact = selectedPipelineArtifact()) {
+  const selection = pipelineMapWorkflowSelection(artifact, job);
   if (selection?.meta?.workflowState === "ready") return { label:"Ready", className:"is-ready" };
   if (selection?.meta?.workflowState === "teaching-ready") return { label:"Ready · researching", className:"is-ready" };
   if (selection?.meta?.workflowState === "route-ready") return { label:"Route ready", className:"is-review" };
@@ -8649,11 +8672,11 @@ function pipelineMapRunState(job) {
   if (selection?.meta?.workflowState === "needs-attention") return { label:"Needs attention", className:"is-failed" };
   const records = pipelineMapOutputRecords(labState.jobDetails.get(job.id), job);
   const incomplete = records.some((record) => {
-    const map = parsePipelineMapOutput(record.text, selectedPipelineArtifact());
+    const map = parsePipelineMapOutput(record.text, artifact);
     return pipelineMapRecordMeta(record, map).incomplete;
   });
   const needsReview = records.some((record) => {
-    const map = parsePipelineMapOutput(record.text, selectedPipelineArtifact());
+    const map = parsePipelineMapOutput(record.text, artifact);
     return pipelineMapRecordMeta(record, map).needsReview;
   });
   if (LAB_ACTIVE_JOB_STATES.has(job.status)) return { label:"Planning", className:"" };
@@ -8663,12 +8686,18 @@ function pipelineMapRunState(job) {
   if (records.length && incomplete) return { label:"Incomplete", className:"is-incomplete" };
   if (records.length && needsReview) return { label:"Review", className:"is-review" };
   if (job.status === "completed" && records.length) return { label:"Ready", className:"is-ready" };
+  if (job.status === "completed" && !labState.jobDetails.has(job.id)) return { label:"Saved · open to inspect", className:"" };
   if (job.status === "completed") return { label:"Needs attention", className:"is-failed" };
   return { label:job.status.replaceAll("_", " "), className:"" };
 }
 
 function selectPipelineMapJob(jobId, options = {}) {
-  const artifact = selectedPipelineArtifact();
+  let artifact = selectedPipelineArtifact();
+  const savedJob = labState.jobs.find(item => item.id === jobId && item.component === "lesson" && ["map", "map_planner"].includes(item.scenario?.pipelineStage));
+  if (!LAB_LEARNER && savedJob && artifact?.runId !== savedJob.scenario.pipelineRunId) {
+    selectPipelineRun(savedJob.scenario.pipelineRunId);
+    artifact = selectedPipelineArtifact();
+  }
   const job = pipelineMapJobs(artifact).find((item) => item.id === jobId);
   if (!job) return;
   labState.pipelineSelectedMapJobId = job.id;
@@ -8726,29 +8755,35 @@ function renderPipelineMapRuns(artifact = selectedPipelineArtifact()) {
   const count = q("pipeline-map-runs-count");
   if (!root || !count) return;
   root.replaceChildren();
-  const jobs = pipelineMapJobs(artifact);
-  const readyCount = jobs.filter((job) => pipelineMapRunState(job).label === "Ready").length;
+  const jobs = LAB_LEARNER ? pipelineMapJobs(artifact) : labState.jobs
+    .filter(job => job.component === "lesson" && ["map", "map_planner"].includes(job.scenario?.pipelineStage))
+    .sort((a,b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0));
+  const artifactFor = job => labState.clarificationArtifacts.find(item => item.runId === job.scenario?.pipelineRunId);
+  const readyCount = jobs.filter((job) => pipelineMapRunState(job, artifactFor(job)).label === "Ready").length;
   count.textContent = jobs.length ? `${readyCount} ready · ${jobs.length} total` : "0 runs";
   if (!jobs.length) {
-    root.append(element("p", { className:"map-run-empty", text:"No roadmap runs yet. Generate one from the clarification shown above." }));
+    root.append(element("p", { className:"map-run-empty", text:"No saved lesson maps yet. Maps generated from Home or the Lab appear here for this account." }));
     return;
   }
   for (const job of jobs) {
     const selected = pipelineMapJob(artifact)?.id === job.id;
-    const state = pipelineMapRunState(job);
+    const sourceArtifact = artifactFor(job);
+    const state = pipelineMapRunState(job, sourceArtifact);
     const total = Math.max(1, job.totalSamples || 1);
     const settled = Math.min(total, (job.completedSamples || 0) + (job.failedSamples || 0) + (job.uncertainSamples || 0));
     const row = element("article", { className:`map-run-row${selected ? " is-selected" : ""}` });
     const open = element("button", { className:"map-run-open", type:"button", attrs:{ "aria-pressed":String(selected) } });
     const copy = element("span", { className:"map-run-copy" });
     copy.append(
-      element("strong", { text:`${clip(artifact?.topic || "Lesson", 80)} roadmap` }),
+      element("strong", { text:`${clip(sourceArtifact?.topic || job.scenario?.topic || "Lesson", 80)} roadmap` }),
       element("small", { text:`${prettyDate(job.createdAt)} · ${settled}/${total} model result${total === 1 ? "" : "s"} · ${String(job.id || "run").slice(-8)}` }),
     );
     open.append(copy, element("span", { className:`map-run-status ${state.className}`.trim(), text:state.label }));
+    open.disabled = !sourceArtifact;
+    if (!sourceArtifact) copy.append(element("small", {text:"Saved map found · refresh to load its lesson direction"}));
     open.addEventListener("click", () => selectPipelineMapJob(job.id));
     row.append(open);
-    if (!LAB_ACTIVE_JOB_STATES.has(job.status)) {
+    if (selected && !LAB_ACTIVE_JOB_STATES.has(job.status)) {
       const deleting = labState.mapDeletingJobs.has(job.id);
       const remove = element("button", { className:"map-run-delete", type:"button", text:deleting ? "…" : "×", attrs:{ "aria-label":`Delete roadmap from ${prettyDate(job.createdAt)}`, title:"Delete roadmap run" } });
       remove.disabled = deleting;
@@ -12041,27 +12076,7 @@ function renderMissingResearchStatus(rows) {
   return section;
 }
 
-function pipelineLessonMapAccessAllowed() {
-  if (!(typeof LAB_LEARNER !== "undefined" && LAB_LEARNER)) return true;
-  return Boolean(labState.accessVerified && labState.verifiedAdmin
-    && labState.verifiedRole?.access_tier === "admin"
-    && labState.verifiedUserId
-    && labState.verifiedRoleUserId === labState.verifiedUserId
-    && labState.workspaceOwnerId === labState.verifiedUserId
-    && labAccountCanOpen());
-}
-
-function syncPipelineLessonMapAccess() {
-  const allowed = pipelineLessonMapAccessAllowed();
-  document.documentElement.classList.toggle("owner-map-access", allowed);
-  return allowed;
-}
-
 function renderPipelineExtractionMapDialog(artifact = selectedPipelineArtifact()) {
-  if (!syncPipelineLessonMapAccess()) {
-    if (labState.extraction.mapDialogOpen) closePipelineExtractionMapDialog({ restoreFocus:false });
-    return;
-  }
   const dialog = q("pipeline-extraction-map-dialog");
   const status = q("pipeline-extraction-map-dialog-status");
   const content = q("pipeline-extraction-map-dialog-content");
@@ -12072,7 +12087,7 @@ function renderPipelineExtractionMapDialog(artifact = selectedPipelineArtifact()
   const mapState = pipelineExtractionMapViewState(artifact);
   status.textContent = mapState.message;
   if (retry) {
-    const retryable = Boolean(artifact && !labState.preview
+    const retryable = Boolean(artifact && !labState.preview && !labState.extraction.mapDialogSavedOnly
       && (["starting", "needs-attention", "deferred"].includes(mapState.state) || mapState.supportNeedsAttention));
     retry.hidden = !retryable;
     const allowanceBlocked = mapState.diagnostic?.errorType === "allowance_exhausted";
@@ -12083,7 +12098,7 @@ function renderPipelineExtractionMapDialog(artifact = selectedPipelineArtifact()
         : mapState.state === "deferred" && !mapState.job ? "Generate Lesson Map"
           : researchOnly ? "Retry missing research" : "Retry Lesson Map";
   }
-  const attemptHistory = typeof pipelineMapAttemptHistory === "function"
+  const attemptHistory = (typeof LAB_LEARNER === "undefined" || !LAB_LEARNER) && typeof pipelineMapAttemptHistory === "function"
     ? pipelineMapAttemptHistory(artifact, mapState.job) : [];
   for (const attempt of attemptHistory) {
     const attemptJob = pipelineMapJobs(artifact).find((job) => job.id === attempt.jobId);
@@ -12115,8 +12130,8 @@ function renderPipelineExtractionMapDialog(artifact = selectedPipelineArtifact()
     const researchNotice = renderMissingResearchStatus(researchStatus);
     if (researchNotice) content.append(researchNotice);
     const organization = renderExtractionOrganizationPreview(artifact, mapState.selection);
-    if (organization) content.append(organization);
-    content.append(renderMapResearchSpend(artifact));
+    if (organization && !labState.extraction.mapDialogSavedOnly) content.append(organization);
+    if (typeof LAB_LEARNER === "undefined" || !LAB_LEARNER) content.append(renderMapResearchSpend(artifact));
   } else {
     content.append(element("div", { className:"extraction-map-dialog-placeholder", text:mapState.message }));
   }
@@ -12151,11 +12166,26 @@ function renderPipelineExtractionMapDialog(artifact = selectedPipelineArtifact()
   content.scrollTop = previousScrollTop;
 }
 
-function openPipelineExtractionMapDialog() {
-  if (!syncPipelineLessonMapAccess()) return;
+// This restores map inspection for approved learners using their own saved data.
+// The Lab and learner gateways retain their existing server-side access rules.
+function pipelineLessonMapAccessAllowed() {
+  if (labState.preview) return true;
+  if (!(typeof LAB_LEARNER !== "undefined" && LAB_LEARNER)) return true;
+  return Boolean(labState.accessVerified && labState.verifiedUserId
+    && labState.verifiedRoleUserId === labState.verifiedUserId
+    && labState.workspaceOwnerId === labState.verifiedUserId && labAccountCanOpen());
+}
+
+function openPipelineExtractionMapDialog({ savedOnly = false } = {}) {
+  if (!pipelineLessonMapAccessAllowed()) return;
   const dialog = q("pipeline-extraction-map-dialog");
   const progress = !q("mock-learner-map-progress")?.hidden ? q("mock-learner-map-progress") : q("pipeline-extraction-progress");
-  if (!dialog || !progress || progress.disabled) return;
+  if (!dialog || (!savedOnly && (!progress || progress.disabled))) return;
+  labState.extraction.mapDialogSavedOnly = savedOnly;
+  if (savedOnly) {
+    labState.extraction.mapDialogParent = dialog.parentElement;
+    q("learner-entry-shell").append(dialog);
+  }
   cancelMockLearnerScrollMotion();
   labState.extraction.mapDialogReturnFocus = document.activeElement || progress;
   labState.extraction.mapDialogOpen = true;
@@ -12173,7 +12203,11 @@ function closePipelineExtractionMapDialog({ restoreFocus = true } = {}) {
   const returnFocus = labState.extraction.mapDialogReturnFocus;
   labState.extraction.mapDialogOpen = false;
   labState.extraction.mapDialogReturnFocus = null;
-  if (dialog) dialog.hidden = true;
+  if (dialog) {
+    dialog.hidden = true;
+    labState.extraction.mapDialogParent?.append(dialog);
+    labState.extraction.mapDialogParent = null;
+  }
   if (progress) progress.setAttribute("aria-expanded", "false");
   q("mock-learner-map-progress")?.setAttribute("aria-expanded", "false");
   if (labState.mockCar.active) { setMockCarIsolation(false); renderMockCarMode(); }
@@ -14282,8 +14316,10 @@ function renderMockCarMode() {
   }
   const stopAudio = q("mock-car-stop-audio");
   if (stopAudio) stopAudio.hidden = !active || derived.status !== "speaking";
+  const chapterSelection = active ? selectedPipelineMapRecord() : null;
+  renderMockChapterMenu(chapterSelection, active ? labState.pipelineStage : "clarification", mockLearnerLessonChapterState(chapterSelection), "mock-car-chapters");
   const map = q("mock-car-map");
-  if (map) { map.hidden = !active || !syncPipelineLessonMapAccess() || !["extraction", "lesson", "quiz"].includes(labState.pipelineStage); map.setAttribute("aria-expanded", String(labState.extraction.mapDialogOpen)); }
+  if (map) { map.hidden = !active || !q("mock-car-chapters")?.hidden || !["extraction", "lesson", "quiz"].includes(labState.pipelineStage); map.setAttribute("aria-expanded", String(labState.extraction.mapDialogOpen)); }
   const retry = q("mock-car-retry");
   if (retry) { retry.hidden = !active || !recovery?.retry; retry.disabled = labState.mockCar.retryBusy === true; }
   renderMockRecordingControls();
@@ -14689,8 +14725,8 @@ function renderMockResponseSources(sources) {
   return details;
 }
 
-function renderMockChapterMenu(selection, stage, chapterState) {
-  const root = q("mock-learner-progress");
+function renderMockChapterMenu(selection, stage, chapterState, rootId = "mock-learner-progress") {
+  const root = q(rootId);
   if (!root) return;
   const chapters = selection?.map?.chapters || [];
   root.hidden = !chapters.length || !["extraction","lesson","quiz"].includes(stage) || (stage === "extraction" && chapterState.currentIndex < 0);
@@ -14698,21 +14734,23 @@ function renderMockChapterMenu(selection, stage, chapterState) {
   const current = chapterState.currentIndex;
   const key = JSON.stringify([selection.artifact?.runId,selection.fingerprint,stage,current,chapterState.completedIndexes,chapters.map((chapter) => [chapter.id,chapter.title]),[...(q("mock-learner-transcript")?.children || [])].map(item => item.dataset.chapterId)]);
   if (root.dataset.chapterKey === key) return;
+  const wasOpen = Boolean(root.querySelector("details")?.open);
   const details = element("details", { className:"mock-chapter-menu" });
+  details.open = wasOpen;
   const title = current >= 0 && chapters[current] ? `${current + 1}. ${chapters[current].title}` : "Lesson review";
   const summary = element("summary", { attrs:{ "aria-label":`${title}. Browse chapters` } });
-  summary.append(element("span", { text:title }), element("span", { className:"mock-chapter-chevron", attrs:{ "aria-hidden":"true" } }));
+  summary.append(element("span", { text:`Chapters · ${title}` }), element("span", { className:"mock-chapter-chevron", attrs:{ "aria-hidden":"true" } }));
   const list = element("nav", { className:"mock-chapter-list", attrs:{ "aria-label":"Browse lesson chapters" } });
   chapters.forEach((chapter,index) => {
     const id = chapter.id || `chapter_${index + 1}`;
     const button = element("button", { text:`${index + 1}. ${chapter.title}`, attrs:{ type:"button", "data-chapter-id":id } });
     if (index === current) button.setAttribute("aria-current", "step");
     const visited = [...(q("mock-learner-transcript")?.children || [])].some(item => item.dataset.chapterId === id);
-    if (LAB_LEARNER && !visited) { button.disabled = true; button.textContent += " · Upcoming"; }
+    if (!visited && index !== current) button.textContent += " · Upcoming";
     button.addEventListener("click", () => {
       details.open = false;
       const turn = [...q("mock-learner-transcript").children].find((item) => item.dataset.chapterId === id);
-      if (turn) { cancelMockLearnerScrollMotion(); turn.scrollIntoView({ block:"start", behavior:"smooth" }); turn.tabIndex = -1; turn.focus({ preventScroll:true }); return; }
+      if (turn && rootId !== "mock-car-chapters") { cancelMockLearnerScrollMotion(); turn.scrollIntoView({ block:"start", behavior:"smooth" }); turn.tabIndex = -1; turn.focus({ preventScroll:true }); return; }
       openPipelineExtractionMapDialog();
       labState.extraction.mapDialogReturnFocus = summary;
       requestAnimationFrame(() => {
@@ -14931,7 +14969,6 @@ function mockLearnerMapState(stage, artifact) {
 }
 
 function renderMockLearnerShell() {
-  const mapAccessAllowed = syncPipelineLessonMapAccess();
   const shell = q("mock-learner-shell");
   if (!shell) return;
   const stage = MOCK_LEARNER_STAGES.includes(labState.pipelineStage) ? labState.pipelineStage : "clarification";
@@ -14991,7 +15028,7 @@ function renderMockLearnerShell() {
   retry.textContent = status.retry === "lesson-status" ? "Check reply" : "Try again";
   const mapProgress = q("mock-learner-map-progress");
   const mapState = mockLearnerMapState(stage, artifact);
-  mapProgress.hidden = !mapState || !mapAccessAllowed;
+  mapProgress.hidden = !mapState;
   mapProgress.disabled = !mapState || labState.extraction.mapRetryBusy;
   mapProgress.textContent = mapState?.state === "ready" ? "View Lesson Map" : "View Lesson Map progress";
   mapProgress.classList.toggle("is-error", mapState?.state === "needs-attention");
@@ -19176,6 +19213,12 @@ function bindEvents() {
   q("speech-run").addEventListener("click", runSpeechComparison);
   q("speech-stop").addEventListener("click", stopSpeechComparison);
   q("jobs-refresh").addEventListener("click", refreshJobs);
+  q("pipeline-map-refresh")?.addEventListener("click", async () => {
+    const button = q("pipeline-map-refresh");
+    button.disabled = true;
+    try { await refreshJobs(); await refreshClarificationArtifacts(); renderPipelineMapOutput(); }
+    finally { button.disabled = false; }
+  });
   q("latency-clear").addEventListener("click", clearLatencyMetrics);
   ["latency-component", "latency-provider", "latency-model"].forEach((id) => q(id).addEventListener("change", renderLatencyDashboard));
   q("export-results").addEventListener("click", downloadJson);
