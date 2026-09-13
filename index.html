@@ -2196,11 +2196,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.16 · Sep 12";
+const BUILD = "v2.1.17 · Sep 12";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag:"v2.1.17", date:"Sep 12", changes:["Missing Lesson Map research starts automatically when an active lesson opens or resumes, including during Tutor.","Unconfirmed research delivery recovers the same saved request without duplicating completed research."] },
   { tag:"v2.1.16", date:"Sep 12", changes:["The first tap outside an open chapter menu only closes it, without starting a recording or activating another control."] },
   {"tag":"v2.1.15","date":"Sep 12","changes":["Lesson cards have a Lesson Map button again, opening saved work before you choose Text or Voice.","The Lab lists saved maps from Home and Lab lessons together, with a refresh control and their actual status.","Tutor shows a chapter dropdown in Text, Voice and Car. Browse upcoming chapters without advancing your lesson."]},
   {"tag":"v2.1.14","date":"Sep 12","changes":["Saved lessons show Continue and Reassess alongside the chat modes immediately.","Fresh lessons keep Start lesson; account checks still finish before a lesson opens."]},

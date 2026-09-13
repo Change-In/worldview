@@ -8227,6 +8227,16 @@ async function retryPipelineMapChapterResearch(plannerJob, artifact = selectedPi
   return ensurePipelineMapChapterResearch(plannerJob, artifact, { retryMissing:true });
 }
 
+function ensureSelectedPipelineMapResearch(selection = selectedPipelineMapRecord()) {
+  // Cached detail can hydrate before Continue. Reconcile again in active views.
+  if (labState.learnerEntryPending || labState.mockSetupActive || labState.preview
+    || !selection?.artifact || selection.job?.scenario?.pipelineStage !== "map_planner"
+    || selection.meta?.researchComplete === true) return;
+  void ensurePipelineMapChapterResearch(selection.job, selection.artifact).catch((error) => {
+    logFlow(`Research reconciliation failed: ${clip(error.message, 120)}`, "map workflow");
+  });
+}
+
 async function ensurePipelineMapChapterResearch(plannerJob, artifact = selectedPipelineArtifact(), { retryMissing = false } = {}) {
   if (labState.learnerEntryPending) return false;
   const starting = labState.mapResearchStarting;
@@ -8260,7 +8270,7 @@ async function ensurePipelineMapChapterResearch(plannerJob, artifact = selectedP
       if (pipelineMapSupportCoverage({ chapters:[{ outcomes:[state.chapter.outcomes.find((item) => item.id === outcome.id)] }] }).complete) continue;
       const pending = pendingPipelineMapResearchCreate(plannerJob.id, planFingerprint, chapter.id, outcome.id);
       if (pending) {
-        if (retryMissing && !pendingIds.has(pending.id)) { requests.push({ pending }); pendingIds.add(pending.id); }
+        if ((retryMissing || !labState.mapResearchCreateFailures?.has(pipelineMapResearchRequestKey(pending.request))) && !pendingIds.has(pending.id)) { requests.push({ pending }); pendingIds.add(pending.id); }
         continue;
       }
       const candidates = state.candidates.filter((job) => !job.scenario?.researchOutcomeIds?.length || job.scenario.researchOutcomeIds.includes(outcome.id));
@@ -8823,6 +8833,7 @@ function renderPipelineMapOutput() {
     return;
   }
   const workflowSelection = job.scenario?.pipelineStage === "map_planner" ? selectedPipelineMapRecord(artifact) : null;
+  ensureSelectedPipelineMapResearch(workflowSelection);
   const displayRecords = workflowSelection?.record ? [workflowSelection.record] : records;
   const renderedRecords = displayRecords.map((record, index) => ({ record, recordKey:cleanMapText(record.id, 120) || `result-${index}`, ...renderPipelineRoadmap(record, artifact, workflowSelection ? { mapOverride:workflowSelection.map, metaOverride:workflowSelection.meta } : {}) }));
   const incompleteCount = renderedRecords.filter((item) => item.meta.incomplete).length;
@@ -9466,6 +9477,7 @@ function pipelineExtractionMapViewState(artifact = selectedPipelineArtifact()) {
   }
   const usable = pipelineMapSelectionIsUsable(selection);
   if (usable) {
+    ensureSelectedPipelineMapResearch(selection);
     const complete = selection?.meta?.researchComplete !== false;
     const supportNeedsAttention = selection?.meta?.workflowState === "needs-attention";
     return { state:"ready", job, selection, detail, supportNeedsAttention, message:complete
@@ -10099,6 +10111,7 @@ function lessonOpeningInstruction(evidenceStatus) {
 async function createPipelineLessonTurn(action, answer = "", targetOutcomeIndex = null, options = {}) {
   const timingId = options.timingId || "";
   const selection = selectedPipelineMapRecord();
+  ensureSelectedPipelineMapResearch(selection);
   if (!labTutorReadiness(selection).ready) { setMessage("pipeline-lesson-output", labTutorReadiness(selection).note, "error"); abandonMockTurnTiming(timingId); return; }
   if (!pipelineMapSelectionIsUsable(selection)) {
     setMessage("pipeline-lesson-output", "Choose a completed structured roadmap before starting the guided Lesson.", "error");
@@ -10501,6 +10514,7 @@ function renderPipelineLesson() {
   q("pipeline-lesson-raw").textContent = "";
   q("pipeline-lesson-packet").textContent = "";
   const selection = selectedPipelineMapRecord();
+  ensureSelectedPipelineMapResearch(selection);
   if (!pipelineMapSelectionIsUsable(selection)) {
     start.disabled = true; input.disabled = true; send.hidden = true;
     setStatus(!selection ? "Choose a completed saved roadmap in Lesson Map first." : selection.job?.status !== "completed" ? "This Lesson Map job did not complete, so it cannot start a guided Lesson." : selection.meta.incomplete ? "This selected roadmap is incomplete, so it cannot start a guided Lesson." : "Review this older roadmap before using it for a guided Lesson.");
