@@ -12435,7 +12435,7 @@ function startLabPcmFallbackCapture(stream) {
     const maxFrames = capture.sampleRate * LAB_PCM_FALLBACK_MAX_SECONDS;
     processor.onaudioprocess = (event) => {
       if (!capture.active) return;
-      if (capture.frames >= maxFrames) { capture.onPreviewEnd?.(); capture.onPreviewEnd = null; return; }
+      if (capture.frames >= maxFrames) { capture.onLevelEnd?.(); capture.onLevelEnd = null; return; }
       const input = event.inputBuffer?.getChannelData?.(0);
       if (!input?.length) return;
       const length = Math.min(input.length, maxFrames - capture.frames);
@@ -12447,7 +12447,7 @@ function startLabPcmFallbackCapture(stream) {
       }
       capture.chunks.push(pcm);
       capture.frames += length;
-      try { capture.onPreviewPcm?.(pcm); } catch (_) { /* Preview never interrupts the full recording. */ }
+      try { capture.onLevelPcm?.(pcm); } catch (_) { /* The local meter never interrupts the full recording. */ }
     };
     source.connect(processor);
     processor.connect(sink);
@@ -12462,9 +12462,9 @@ function startLabPcmFallbackCapture(stream) {
 function finishLabPcmFallbackCapture(capture, keepAudio = true) {
   if (!capture) return null;
   capture.active = false;
-  capture.onPreviewPcm = null;
-  capture.onPreviewEnd = null;
-  globalThis.WorldviewLiveCaptions?.stop();
+  capture.onLevelPcm = null;
+  capture.onLevelEnd = null;
+  q("mock-learner-shell")?.style?.setProperty("--voice-level", "0");
   if (capture.processor) capture.processor.onaudioprocess = null;
   try { capture.source?.disconnect(); } catch (_) { /* Already disconnected. */ }
   try { capture.processor?.disconnect(); } catch (_) { /* Already disconnected. */ }
@@ -12556,7 +12556,7 @@ function releaseLabRecordingCueContext() {
 
 function invalidateLabCapture(state, expectedStream = null) {
   if (expectedStream && state.activeCaptureStream && state.activeCaptureStream !== expectedStream) return;
-  globalThis.WorldviewLiveCaptions?.stop();
+  q("mock-learner-shell")?.style?.setProperty("--voice-level", "0");
   state.recordingLatched = false;
   state.recordingReadyForSpeech = false;
   state.captureToken = makeId();
@@ -13748,7 +13748,7 @@ async function startPipelineExtractionRecording(event, options = {}) {
           && state.recordingPointerActive
           && state.recordingPointerId === capturePointerId;
         if (!isCurrent()) return;
-        startMockLiveCaptions(state, recorder, isCurrent);
+        startMockVoiceMeter(state, recorder, isCurrent);
         capturePtt?.classList.add("is-listening");
         q("mock-car-ptt")?.classList.add("is-listening");
         setMessage(captureStatusId, "Recorder ready… wait for the tone.");
@@ -14038,17 +14038,22 @@ function mockRecordingControlState() {
   return { state, latched, ready, blocked:Boolean(blocked), holdActive, listening, derived };
 }
 
-function startMockLiveCaptions(state, recorder, isCurrent) {
+function startMockVoiceMeter(state, recorder, isCurrent) {
+  const pcm = recorder?.wvPcmCapture;
+  const shell = q("mock-learner-shell");
+  shell?.style?.setProperty("--voice-level", "0");
+  if (!pcm || state.recordingLatched || labState.mockCar.active) return;
   const epoch = labState.authEpoch;
   const owner = labState.verifiedUserId;
   const stage = labState.pipelineStage;
-  globalThis.WorldviewLiveCaptions?.begin({
-    pcm:recorder?.wvPcmCapture, model:labVoiceSettings().stt,
-    preview:labState.preview || labState.pipelineMode !== "mock", car:labState.mockCar.active,
-    isCurrent:() => isCurrent() && state.mode === "voice" && labState.authEpoch === epoch && labState.verifiedUserId === owner && labState.pipelineStage === stage,
-    getToken:() => accessToken(false),
-    url:SUPABASE_URL.replace(/^https:/,"wss:") + "/functions/v1/transcribe-live",
-  });
+  // Local loudness only: this never transcribes or sends microphone samples.
+  pcm.onLevelPcm = samples => {
+    if (!isCurrent() || !pcm.active || state.mode !== "voice" || labState.authEpoch !== epoch || labState.verifiedUserId !== owner || labState.pipelineStage !== stage) return;
+    let energy = 0;
+    for (const sample of samples) energy += (sample / 32768) ** 2;
+    shell?.style?.setProperty("--voice-level", String(samples.length ? Math.min(1, Math.sqrt(energy / samples.length) * 7) : 0));
+  };
+  pcm.onLevelEnd = () => shell?.style?.setProperty("--voice-level", "0");
 }
 
 function renderMockRecordingControls() {
@@ -14071,8 +14076,6 @@ function renderMockRecordingControls() {
     const text = q("mock-voice-cue-text");
     if (text) text.textContent = actualListening ? "Listening" : arming ? "Opening microphone…" : "Transcribing…";
   }
-  const captionsToggle = q("mock-live-words-toggle");
-  if (captionsToggle) captionsToggle.disabled = recording || arming || finishing;
   const label = latched ? (listening ? "Tap to send" : (capturing ? "Stop recording" : "Cancel start")) : holdActive ? (actualListening ? "Recording" : "Opening…") : "Tap to record";
   for (const [id, car] of [["mock-learner-recording-toggle", false], ["mock-car-recording-toggle", true]]) {
     const toggle = q(id);
@@ -18440,7 +18443,7 @@ function startClarificationRecording(event, options = {}) {
           && state.recordingPointerId === capturePointerId
           && state.recordingPointerStartedAt === capturePointerStartedAt;
         if (!isCurrent()) return;
-        startMockLiveCaptions(state, recorder, isCurrent);
+        startMockVoiceMeter(state, recorder, isCurrent);
         q("clarification-surface")?.classList.add("is-listening");
         q("mock-car-ptt")?.classList.add("is-listening");
         setMessage("clarification-message", "Recorder ready… wait for the tone.");

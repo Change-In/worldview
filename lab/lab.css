@@ -2036,7 +2036,7 @@ body.mock-run.mock-car-active .mock-car-surface {
 .learner-route[data-learner-entry-kind="unknown"] .learner-entry-actions { visibility:hidden; }
 
 
-/* Visible feedback belongs to the conversation, for both hold and switch. */
+/* Held recording lights the conversation; the switch supplies its own cue. */
 .mock-learner-conversation { position:relative; isolation:isolate; }
 .mock-learner-shell[data-capture-state="listening"] .mock-learner-conversation { box-shadow:inset 0 0 0 4px #e2895a; background:var(--wv-selected); }
 .mock-learner-shell[data-capture-state="arming"] .mock-learner-conversation { box-shadow:inset 0 0 0 3px #d8bd79; }
@@ -2046,15 +2046,10 @@ body.mock-run.mock-car-active .mock-car-surface {
 [data-capture-state="transcribing"] .mock-voice-cue { background:var(--wv-accent); }
 .mock-voice-meter { width:38px; height:8px; overflow:hidden; border-radius:4px; background:color-mix(in srgb, var(--wv-surface) 20%, transparent); }
 .mock-voice-meter i { display:block; width:100%; height:100%; background:var(--wv-surface); transform:scaleX(var(--voice-level,0)); transform-origin:left; }
-.mock-live-words-panel { position:absolute; z-index:3; bottom:12px; left:14px; right:48px; max-height:35%; padding:12px 16px; border:1px solid #e2895a; border-radius:16px; background:color-mix(in srgb, var(--wv-surface) 96%, transparent); color:var(--wv-text); pointer-events:none; }
-#mock-live-words-note { margin:0 0 5px; color:var(--wv-accent); font:500 12px/1.4 system-ui,sans-serif; }
-#mock-live-words { margin:0; max-height:4.5em; overflow:hidden; overflow-wrap:anywhere; font:400 17px/1.5 system-ui,sans-serif; }
-#mock-live-words:empty { display:none; }
 .mock-learner-shell .mock-recording-toggle[data-capture-state="listening"] { opacity:1; border-color:#e2895a; }
 .mock-learner-shell .mock-recording-toggle[data-capture-state="listening"] .mock-recording-lever { background:#e2895a; }
 .mock-learner-shell .mock-recording-toggle[data-capture-state="arming"] .mock-recording-lever { background:#d8bd79; }
-#mock-live-words-toggle[aria-pressed="false"] { color:var(--wv-muted); text-decoration:line-through; }
 .mock-learner-voice-controls > .text-button { margin:4px 6px; min-height:32px; }
 .mock-car-surface[data-capture-state="listening"] { box-shadow:inset 0 0 0 5px #e2895a; }
 .mock-car-surface[data-capture-state="arming"] { box-shadow:inset 0 0 0 3px #d8bd79; }
-@media(max-height:500px) { .mock-voice-cue { top:5px; padding:5px 12px; font-size:13px; } .mock-live-words-panel { bottom:5px; padding:7px 12px; max-height:42%; } #mock-live-words { max-height:3em; font-size:15px; } }
+@media(max-height:500px) { .mock-voice-cue { top:5px; padding:5px 12px; font-size:13px; } }

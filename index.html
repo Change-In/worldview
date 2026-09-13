@@ -2184,11 +2184,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.20 · Sep 13";
+const BUILD = "v2.1.21 · Sep 13";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  {"tag":"v2.1.21","date":"Sep 13","changes":["Removed live transcription previews so changing words do not distract you while speaking. Your answer is transcribed after you send; hold-to-talk lighting remains."]},
   { tag:"v2.1.20", date:"Sep 13", changes:["Switch light or dark mode from the bottom-right sun/moon, including sign-in and lessons.","Models sits above Settings.","The old introduction is retired; start a lesson from Home.","Corner exits use X buttons. Worldview currently supports English."] },
   {"tag":"v2.1.19","date":"Sep 13","changes":["The screen lights up only while you hold to talk. The recording switch uses its own color cue; live words stay available."]},
   {"tag":"v2.1.18","date":"Sep 12","changes":["Holding the conversation and using the switch share a clear Listening color and microphone cue.","Live words preview your speech during Voice recording; the complete recording still supplies your submitted answer.","Microphone access begins with Record, without extra requests on entry or return."]},
