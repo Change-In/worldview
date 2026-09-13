@@ -2034,3 +2034,27 @@ body.mock-run.mock-car-active .mock-car-surface {
 /* A direct entry without Home context reveals all choices together once classified. */
 .learner-route[data-learner-entry-kind="unknown"] .learner-entry-choice > :not(#learner-entry-status),
 .learner-route[data-learner-entry-kind="unknown"] .learner-entry-actions { visibility:hidden; }
+
+
+/* Visible feedback belongs to the conversation, for both hold and switch. */
+.mock-learner-conversation { position:relative; isolation:isolate; }
+.mock-learner-shell[data-capture-state="listening"] .mock-learner-conversation { box-shadow:inset 0 0 0 4px #e2895a; background:#38291f; }
+.mock-learner-shell[data-capture-state="arming"] .mock-learner-conversation { box-shadow:inset 0 0 0 3px #d8bd79; }
+.mock-voice-cue { position:absolute; z-index:3; top:10px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:9px; padding:9px 15px; border-radius:24px; white-space:nowrap; background:#e2895a; color:#241f1a; font:650 15px/1.3 system-ui,sans-serif; pointer-events:none; }
+.mock-voice-dot { width:9px; height:9px; border-radius:50%; background:currentColor; }
+[data-capture-state="arming"] .mock-voice-cue { background:#d8bd79; }
+[data-capture-state="transcribing"] .mock-voice-cue { background:#eec7ab; }
+.mock-voice-meter { width:38px; height:8px; overflow:hidden; border-radius:4px; background:#241f1a33; }
+.mock-voice-meter i { display:block; width:100%; height:100%; background:#241f1a; transform:scaleX(var(--voice-level,0)); transform-origin:left; }
+.mock-live-words-panel { position:absolute; z-index:3; bottom:12px; left:14px; right:48px; max-height:35%; padding:12px 16px; border:1px solid #e2895a; border-radius:16px; background:#241f1af5; color:#f4ece0; pointer-events:none; }
+#mock-live-words-note { margin:0 0 5px; color:#eec7ab; font:500 12px/1.4 system-ui,sans-serif; }
+#mock-live-words { margin:0; max-height:4.5em; overflow:hidden; overflow-wrap:anywhere; font:400 17px/1.5 system-ui,sans-serif; }
+#mock-live-words:empty { display:none; }
+.mock-learner-shell .mock-recording-toggle[data-capture-state="listening"] { opacity:1; border-color:#e2895a; }
+.mock-learner-shell .mock-recording-toggle[data-capture-state="listening"] .mock-recording-lever { background:#e2895a; }
+.mock-learner-shell .mock-recording-toggle[data-capture-state="arming"] .mock-recording-lever { background:#d8bd79; }
+#mock-live-words-toggle[aria-pressed="false"] { color:#b6a894; text-decoration:line-through; }
+.mock-learner-voice-controls > .text-button { margin:4px 6px; min-height:32px; }
+.mock-car-surface[data-capture-state="listening"] { box-shadow:inset 0 0 0 5px #e2895a; }
+.mock-car-surface[data-capture-state="arming"] { box-shadow:inset 0 0 0 3px #d8bd79; }
+@media(max-height:500px) { .mock-voice-cue { top:5px; padding:5px 12px; font-size:13px; } .mock-live-words-panel { bottom:5px; padding:7px 12px; max-height:42%; } #mock-live-words { max-height:3em; font-size:15px; } }

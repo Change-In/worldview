@@ -25,7 +25,7 @@
   root.dataset.learnerEntryKind = ["saved", "new"].includes(kind) ? kind : "unknown";
 })();
 </script>
-<link rel="stylesheet" href="./lab.css?v=2.1.17">
+<link rel="stylesheet" href="./lab.css?v=2.1.18">
 </head>
 <body>
 <aside id="lab-connection-status" class="lab-connection-status" role="status" hidden>
@@ -173,6 +173,8 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
       </header>
       <div id="mock-learner-progress" class="mock-learner-progress" hidden aria-label="Lesson chapters"></div>
       <main class="mock-learner-conversation">
+        <div id="mock-voice-cue" class="mock-voice-cue" role="status" hidden><span class="mock-voice-dot" aria-hidden="true"></span><span id="mock-voice-cue-text">Listening</span><span class="mock-voice-meter" aria-hidden="true"><i></i></span></div>
+        <div id="mock-live-words-panel" class="mock-live-words-panel" hidden><p id="mock-live-words-note"></p><p id="mock-live-words" aria-label="Live transcription preview" aria-live="off"></p></div>
         <ol id="mock-learner-transcript" class="mock-learner-transcript" aria-live="polite"></ol>
         <div id="mock-learner-scroll" class="mock-learner-scroll" role="scrollbar" tabindex="0" aria-label="Conversation scroll wheel" aria-controls="mock-learner-transcript" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" title="Roll down for newer messages; up for earlier ones" hidden><span class="mock-learner-wheel" aria-hidden="true"></span></div>
         <div id="mock-learner-waiting" class="mock-learner-waiting" hidden aria-hidden="true"><span></span><span></span><span></span></div>
@@ -190,6 +192,7 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
             <button id="mock-learner-ptt" class="mock-learner-ptt" type="button">Hold to talk</button>
             <button id="mock-learner-recording-toggle" class="mock-recording-toggle" type="button" role="switch" aria-label="Tap recording" aria-checked="false" aria-describedby="mock-learner-recording-status"><span class="mock-recording-lever" aria-hidden="true"></span><span data-recording-label>Tap to record</span></button>
           </div>
+          <button id="mock-live-words-toggle" class="text-button" type="button" aria-pressed="true" title="Show a live preview while recording">Live words</button>
           <button id="mock-learner-hear" class="text-button" type="button" hidden>Hear reply</button>
         </div>
         <div class="mock-learner-utilities">
@@ -767,7 +770,9 @@ A learner message ending [input_mode:speech] came from speech-to-text. Silently 
 Use the saved briefing as grounding. Search only for a new, recent, or explicitly requested fact the briefing does not cover. With no briefing, ask a diagnostic question first instead of searching. Never invent facts or read URLs aloud.`;
 
 </script>
-<script src="./lab.js?v=2.1.17" defer></script>
+<script src="./live-captions.js?v=2.1.18" defer></script>
+<script src="./lab.js?v=2.1.18" defer></script>
 <script src="./conversation-clock.js?v=2.1.12" defer></script>
 </body>
 </html>
+
