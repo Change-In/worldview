@@ -2024,3 +2024,7 @@ body.mock-run.mock-car-active .mock-car-surface {
 .conversation-time-panel { margin:16px 0; padding:16px; border:1px solid var(--line,#d0c5b4); border-radius:14px; }
 .conversation-time-panel p { max-width:70ch; line-height:1.5; }
 .learner-route .conversation-time-panel { display:none; }
+
+/* A direct entry without Home context reveals all choices together once classified. */
+.learner-route[data-learner-entry-kind="unknown"] .learner-entry-choice > :not(#learner-entry-status),
+.learner-route[data-learner-entry-kind="unknown"] .learner-entry-actions { visibility:hidden; }

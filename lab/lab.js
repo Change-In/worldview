@@ -100,9 +100,12 @@ function setLearnerEntry(ready = false, topic = "", complete = false) {
     if (button) { button.disabled = Boolean(labState.learnerEntryStarting); button.setAttribute("aria-pressed", String(labState.learnerEntryMode === mode)); }
   }
   q("learner-entry-voice-group")?.classList.toggle("is-selected", ["voice", "car"].includes(labState.learnerEntryMode));
-  // Reassessment only makes sense once an owned saved checkpoint has resolved.
-  // Keep it out of fresh-topic entry and the initial account/history wait.
-  const resuming = ready && !complete && Boolean(labState.learnerEntryResume?.runId);
+  // Home already knows whether the learner chose a saved lesson. Display only
+  // generic choices during verification; the hint never supplies a checkpoint.
+  const root = document.documentElement;
+  if (complete) root.dataset.learnerEntryKind = "unknown";
+  else if (ready) root.dataset.learnerEntryKind = labState.learnerEntryResume?.runId ? "saved" : "new";
+  const resuming = !complete && root.dataset.learnerEntryKind === "saved";
   if (q("learner-entry-path")) q("learner-entry-path").hidden = !resuming;
   const continueButton = q("learner-entry-continue");
   if (continueButton) {
