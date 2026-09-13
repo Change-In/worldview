@@ -18977,9 +18977,41 @@ function bindEvents() {
     if (event.isPrimary === false) { cancelMockCarCapture(); return; }
     start(event);
   };
-  document.addEventListener("pointerdown", (event) => {
-    for (const menu of document.querySelectorAll(".mock-response-sources[open], .mock-chapter-menu[open]")) if (!menu.contains(event.target)) menu.open = false;
-  }, { capture:true });
+  // An outside press belongs to the open chapter menu, including its release
+  // and compatibility click. Do not let it reach push-to-talk or another control.
+  const dismissedChapterPointers = new Set();
+  let dismissedChapterClick = null;
+  const consumeChapterDismissal = (event) => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  window.addEventListener("pointerdown", (event) => {
+    dismissedChapterClick = null;
+    let dismissedChapter = false;
+    for (const menu of document.querySelectorAll(".mock-response-sources[open], .mock-chapter-menu[open]")) {
+      if (menu.contains(event.target)) continue;
+      if (menu.matches(".mock-chapter-menu")) dismissedChapter = true;
+      menu.open = false;
+    }
+    if (!dismissedChapter) return;
+    dismissedChapterPointers.add(event.pointerId);
+    dismissedChapterClick = event.pointerId;
+    consumeChapterDismissal(event);
+  }, { capture:true, passive:false });
+  for (const type of ["pointermove", "pointerup", "pointercancel"]) {
+    window.addEventListener(type, (event) => {
+      if (!dismissedChapterPointers.has(event.pointerId)) return;
+      if (type !== "pointermove") dismissedChapterPointers.delete(event.pointerId);
+      if (type === "pointercancel") dismissedChapterClick = null;
+      consumeChapterDismissal(event);
+    }, { capture:true, passive:false });
+  }
+  window.addEventListener("click", (event) => {
+    if (dismissedChapterClick === null || event.detail === 0) return;
+    if (typeof event.pointerId === "number" && event.pointerId !== dismissedChapterClick) return;
+    dismissedChapterClick = null;
+    consumeChapterDismissal(event);
+  }, { capture:true, passive:false });
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     for (const menu of document.querySelectorAll(".mock-response-sources[open], .mock-chapter-menu[open]")) { menu.open = false; menu.querySelector("summary")?.focus(); }
