@@ -1637,8 +1637,11 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .lesson-options-button{left:8px;top:8px;width:44px;height:44px;padding:0}
   #home-archive-entry{margin-bottom:calc(env(safe-area-inset-bottom) + 60px)}
 </style>
+<link rel="stylesheet" href="appearance.css?v=2.1.20">
+<script src="appearance.js?v=2.1.20"></script>
 </head>
 <body>
+<button id="theme-toggle" type="button" aria-label="Toggle appearance"><svg id="theme-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"></svg></button>
 
 <div id="file-warning">
   &#9888; This copy was opened as a <b>file</b>, so it has no stable site identity and microphone permission may repeat.
@@ -1693,12 +1696,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   <section class="intro-card">
     <div class="intro-wordmark">Worldview</div>
     <h2 id="intro-title">Learn everything.</h2>
-    <p>Type anything you&rsquo;re curious about.</p>
+    <p>Explore your next question from Home.</p>
     <p id="intro-account-connected" hidden></p>
-    <form id="intro-question" class="intro-question">
-      <input id="intro-topic" type="text" placeholder="What are you curious about?" autocomplete="off" enterkeyhint="go" aria-label="What are you curious about?">
-      <button id="intro-start" type="submit" disabled>Begin</button>
-    </form>
     <button id="intro-install" type="button" hidden>Add to Home Screen</button>
     <button id="intro-skip" type="button">Explore</button>
   </section>
@@ -1870,7 +1869,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
         <div id="source-carousel-wrap">
           <div id="source-carousel" aria-label="Source lessons">
             <article id="source-panel" class="source-create-card">
-              <button id="source-close" type="button" aria-label="Back to questions">&#8593;</button>
+              <button id="source-close" type="button" aria-label="Close source entry">&times;</button>
               <h3 id="source-title">Add a source</h3>
               <input id="source-url" type="url" inputmode="url" autocomplete="url" aria-label="Webpage link" placeholder="Paste a webpage link">
               <div class="source-input-divider"><span>or</span></div>
@@ -1948,7 +1947,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <!-- ============ CHAT ============ -->
 <div id="view-chat" class="view">
   <div id="chat-header">
-    <button id="chat-back">&#8249;</button>
+    <button id="chat-back" type="button" aria-label="Close lesson">&times;</button>
     <div style="flex:1;min-width:0">
       <div id="chat-parent-link"></div>
       <div id="chat-title"></div>
@@ -1982,7 +1981,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <!-- ============ NOTES ============ -->
 <div id="view-notes" class="view">
   <div class="view-header">
-    <button id="notes-back">&#8592;</button>
+    <button id="notes-back" type="button" aria-label="Close Notes">&times;</button>
     <h2 class="serif">Notes</h2>
   </div>
   <div id="notes-body">
@@ -1997,7 +1996,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <!-- ============ WHAT'S NEW ============ -->
 <div id="view-whatsnew" class="view">
   <div class="view-header">
-    <button id="whatsnew-back">&#8592;</button>
+    <button id="whatsnew-back" type="button" aria-label="Close What’s New">&times;</button>
     <h2 class="serif">What&rsquo;s New</h2>
   </div>
   <div id="whatsnew-body"></div>
@@ -2034,7 +2033,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <!-- ============ Voice mode ============ -->
 <div id="voice-overlay" tabindex="-1" aria-label="Spoken lesson">
   <div id="voice-topbar">
-    <button id="voice-close" aria-label="Return to main menu">&#8592;</button>
+    <button id="voice-close" aria-label="Close voice lesson">&times;</button>
     <div id="voice-heading"><div id="voice-title"></div><div id="voice-checkpoint"></div><div id="voice-model-switch" class="conversation-model-switch" aria-label="Developer tutor model"></div></div>
     <div id="voice-top-actions">
       <button id="voice-speaker-button" class="voice-speaker-button" type="button" aria-pressed="true" aria-label="Speakerphone" title="Speakerphone">
@@ -2142,19 +2141,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       <option value="dark">Dark</option>
     </select>
     <label>Spoken language</label>
-    <select id="set-speechlanguage">
-      <option value="en">English</option>
-      <option value="es">Spanish</option>
-      <option value="fr">French</option>
-      <option value="de">German</option>
-      <option value="pt">Portuguese</option>
-      <option value="it">Italian</option>
-      <option value="nl">Dutch</option>
-      <option value="sv">Swedish</option>
-      <option value="no">Norwegian</option>
-      <option value="da">Danish</option>
-    </select>
-    <div class="hint">Voice transcription assumes this language instead of trying to guess from a short answer.</div>
+    <select id="set-speechlanguage" disabled><option value="en">English</option></select>
+    <div class="hint">Worldview currently supports English.</div>
     <label>Voice + transcription key (Cartesia)</label>
     <input id="set-cartkey" class="secret-input" type="text" placeholder="sk_car_..." autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore disabled>
     <div class="hint">Used for spoken replies and reliable tap-to-talk or Space-key transcription. Keep this key private; a shared tester build needs a small protected token service instead.</div>
@@ -2196,11 +2184,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.19 · Sep 13";
+const BUILD = "v2.1.20 · Sep 13";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag:"v2.1.20", date:"Sep 13", changes:["Switch light or dark mode from the bottom-right sun/moon, including sign-in and lessons.","Models sits above Settings.","The old introduction is retired; start a lesson from Home.","Corner exits use X buttons. Worldview currently supports English."] },
   {"tag":"v2.1.19","date":"Sep 13","changes":["The screen lights up only while you hold to talk. The recording switch uses its own color cue; live words stay available."]},
   {"tag":"v2.1.18","date":"Sep 12","changes":["Holding the conversation and using the switch share a clear Listening color and microphone cue.","Live words preview your speech during Voice recording; the complete recording still supplies your submitted answer.","Microphone access begins with Record, without extra requests on entry or return."]},
   { tag:"v2.1.17", date:"Sep 12", changes:["Missing Lesson Map research starts automatically when an active lesson opens or resumes, including during Tutor.","Unconfirmed research delivery recovers the same saved request without duplicating completed research."] },
@@ -3340,10 +3329,10 @@ const THEME_ICON_SUN = '<circle cx="12" cy="12" r="4.2"/><path d="M12 3v2M12 19v
 const THEME_ICON_MOON = '<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>';
 function setAppearance(theme) {
   if(theme!=="light" && theme!=="dark")return;
-  state.theme=theme;if($("set-theme"))$("set-theme").value=theme;applyTheme();save();
+  window.WorldviewAppearance.set(theme);state.theme=theme;if($("set-theme"))$("set-theme").value=theme;applyTheme();save();
 }
 function applyTheme() {
-  const theme = ["system","light","dark"].includes(state.theme) ? state.theme : "system";
+  const theme = window.WorldviewAppearance.choice(state.theme);
   document.documentElement.dataset.theme = theme;
   const dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme:dark)").matches);
   document.querySelectorAll("[data-theme-choice]").forEach(button => button.setAttribute("aria-pressed",String(button.dataset.themeChoice === (dark ? "dark" : "light"))));
@@ -3354,6 +3343,7 @@ function applyTheme() {
   const toggle = document.getElementById("theme-toggle");
   if (toggle) toggle.setAttribute("aria-pressed", dark ? "true" : "false");
 }
+window.addEventListener("worldview-appearance", event => { state.theme=event.detail; if($("set-theme"))$("set-theme").value=event.detail; applyTheme(); });
 applyTheme();
 // if config.js supplies a key and none is saved yet, use it — skips the Settings prompt entirely
 if (!state.apiKey && typeof window.WORLDVIEW_API_KEY === "string" && window.WORLDVIEW_API_KEY) {
@@ -4383,7 +4373,7 @@ document.getElementById("account-guard-fresh").onclick = () => completeLegacyRec
 const ACCOUNT_MUTATING_CONTROL_SELECTOR = [
   "#start-btn","#intro-topic","#intro-start","#note-input","#note-add",".note-x",".note-start",
   "#chat-input","#chat-send","#chat-mic","#chat-mode-toggle","#voice-mode-toggle","#voice-status","#lesson-entry-voice","#category-name-input","#category-create",
-  ".organizer-category-main",".organizer-category-delete","#import-btn","#import-file","#settings-save","#theme-toggle",
+  ".organizer-category-main",".organizer-category-delete","#import-btn","#import-file","#settings-save",
   "#set-theme","#set-model","#set-thinking","#set-ttsprovider","#set-speechlanguage","#set-voicedefault","#voice-timing-clear"
 ].join(",");
 function blockGuardedAccountEvent(event) {
@@ -12268,12 +12258,9 @@ function voiceSupported() {
   return FULL_VOICE_MODE_ENABLED && (ownedVoiceCaptureSupported() || !!SR) &&
     ("speechSynthesis" in window || backendAccessEnabled() || !!state.cartKey || !!state.elKey);
 }
-const SPEECH_LOCALES = {
-  en:"en-US", es:"es-ES", fr:"fr-FR", de:"de-DE", pt:"pt-BR",
-  it:"it-IT", nl:"nl-NL", sv:"sv-SE", no:"nb-NO", da:"da-DK",
-};
+const SPEECH_LOCALES = { en:"en-US" };
 function speechLanguageCode() {
-  return Object.prototype.hasOwnProperty.call(SPEECH_LOCALES, state.speechLanguage) ? state.speechLanguage : "en";
+  return "en";
 }
 function speechRecognitionLocale() {
   return SPEECH_LOCALES[speechLanguageCode()] || "en-US";
@@ -15480,7 +15467,7 @@ function organizeSettingsPanel() {
   if (panel.dataset.organized) return;
   panel.dataset.organized = "true";
   const heading = panel.querySelector("h3");
-  const dismiss = document.createElement("button"); dismiss.id = "settings-dismiss";dismiss.type = "button";dismiss.textContent = "←";dismiss.setAttribute("aria-label","Back");dismiss.onclick = () => closeSettings(true,true);panel.prepend(dismiss);
+  const dismiss = document.createElement("button"); dismiss.id = "settings-dismiss";dismiss.type = "button";dismiss.textContent = "×";dismiss.setAttribute("aria-label","Close Settings");dismiss.onclick = () => closeSettings(true,true);panel.prepend(dismiss);
   const intro = document.createElement("p"); intro.className = "settings-intro"; intro.textContent = "Your learning, your space.";
   heading.after(intro);
   function group(title, nodes, open = false, flat = false) {
@@ -15500,6 +15487,7 @@ function organizeSettingsPanel() {
   if (developerToggle) { developerToggle.className = "settings-check"; developerToggle.hidden = !(state.developerUnlocked && state.developerMode); }
   const speechLanguageHint = $("set-speechlanguage") && $("set-speechlanguage").nextElementSibling;
   if (speechLanguageHint) speechLanguageHint.remove();
+  speechLanguage.forEach(node => {if(node) node.hidden=true;});
   theme.forEach(node => {if(node) node.hidden=true;});
   const appearance=document.createElement("section");appearance.id="settings-appearance";
   appearance.innerHTML='<h4>Appearance</h4><div class="theme-choices" role="group" aria-label="Appearance"><button type="button" data-theme-choice="light">☀ Light</button><button type="button" data-theme-choice="dark">☾ Dark</button></div>';
@@ -15712,6 +15700,8 @@ function renderPasswordAccount() {
   $("account-avatar").textContent = (cloudAccount?.email || "")[0] || "";
   $("password-account-back").hidden = checking || accountRecoveryRequired() || (["signin","verify"].includes(mode) && accountEntryNeeded());
   $("password-account-back").disabled = passwordAccountBusy;
+  $("password-account-back").setAttribute("aria-label",manage ? "Close account" : "Back");
+  $("password-account-back").querySelector("path").setAttribute("d",manage ? "M6 6l12 12M18 6 6 18" : "m14 6-6 6 6 6M8 12h12");
   $("password-account-form").hidden = manage || checking;
   $("account-dialog-title").textContent = checking ? "Checking your account…" : update ? (accountRecoveryRequired() ? "Set your password" : "Change password") : upgrade ? "Keep your existing library" : verify ? "Check your email" : reset ? "Reset your password" : signup ? "Create account" : manage ? "Your account" : "Sign in";
   $("account-dialog-copy").textContent = checking ? "Restoring your secure session."
@@ -16291,7 +16281,7 @@ function applySettings() {
   state.model = $("set-model").value;
   state.tutorThinking = $("set-thinking").value || "fast";
   state.theme = $("set-theme").value || "system";
-  state.speechLanguage = $("set-speechlanguage").value || "en";
+  state.speechLanguage = "en";
   state.voiceDefault = $("set-voicedefault").checked;
   // Production is always learner-facing. Developer controls are available
   // only from an explicit ?developer=1 owner link and never from Settings.
@@ -16504,6 +16494,7 @@ async function enableMicrophoneFromPrimer() {
 }
 
 function setIntroOpen(open,remember = false) {
+  open = false; // Retired introduction; never interrupt account entry or Home.
   if (open && backendClient && (!permanentAccountVerified() || accountRecoveryRequired())) { openPasswordAccount();return; }
   const intro = $("intro-demo");
   if (!open && document.activeElement && intro.contains(document.activeElement)) {
@@ -16531,26 +16522,6 @@ function finishIntro(openQuestion = false) {
   setIntroOpen(false,true);
   if (openQuestion) { renderHome();show("home");wheel.pos=1;layoutWheel(false); }
 }
-async function startIntroLesson() {
-  const input = $("intro-topic");
-  const topic = input.value.trim();
-  if (!topic || startIntroLesson.running) return;
-  const introOwner = cloudAccount?.id || "", introEpoch = accountAuthEpoch;
-  startIntroLesson.running = true;
-  $("intro-start").disabled = true;
-  setIntroOpen(false,true);
-  try {
-    const started = await openHomeLearnerRun({topic});
-    if (introEpoch !== accountAuthEpoch || cloudAccount?.id !== introOwner) { input.value = "";return; }
-    if (!started) setIntroOpen(true,false);
-    else input.value = "";
-  } finally {
-    startIntroLesson.running = false;
-    $("intro-start").disabled = !input.value.trim();
-  }
-}
-$("intro-question").addEventListener("submit",event => { event.preventDefault();startIntroLesson(); });
-$("intro-topic").addEventListener("input",event => { $("intro-start").disabled = !event.target.value.trim(); });
 $("intro-install").onclick = async () => {
   if (deferredInstallPrompt) {
     deferredInstallPrompt.prompt();
@@ -16572,13 +16543,8 @@ $("mic-primer").addEventListener("keydown",event => { if (event.key === "Escape"
 let initialIdentityRestored = !backendClient;
 let automaticIntroTimer = 0;
 function automaticIntroductionNeeded() {
-  if (!initialIdentityRestored || accountTransitionInProgress || accountEntryNeeded()
-      || accountIdentityHeldForRetry() || accountCacheReadOnly) return false;
-  if (backendClient && (!accountOwnershipResolved || !identityMutationReady || cloudHydrating
-      || identityRestoreStatus !== "verified" || !cloudAccount?.id || stateAccountId !== cloudAccount.id)) return false;
-  // Owner Lab work is deliberately outside the learner's Home library. An
-  // empty Home library must not make a returning verified owner a new visitor.
-  return !ownerToolsAvailable() && !state.introSeenVersion && !hasLearnerLibrary(state);
+  // Retired until the introduction is redesigned. Home owns lesson entry.
+  return false;
 }
 function scheduleAutomaticIntroduction() {
   clearTimeout(automaticIntroTimer);automaticIntroTimer = 0;

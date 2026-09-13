@@ -1,0 +1,44 @@
+:root {
+  --wv-surface:#241f1a; --wv-text:#f4ece0; --wv-muted:#cabeae;
+  --wv-accent:#eec7ab; --wv-card:#332c25; --wv-hover:#41362c; --wv-selected:#49372b;
+}
+:root[data-appearance="light"] {
+  --wv-surface:#f8f4ec; --wv-text:#2c241c; --wv-muted:#65594b;
+  --wv-accent:#854220; --wv-card:#fffdf8; --wv-hover:#f0e6d9; --wv-selected:#eddbc5;
+  --lab-void:#f8f4ec; --lab-ink:#2c241c; --lab-muted:#65594b;
+  --lab-line:#2c241c33; --lab-card:#fffdf8; --lab-card-strong:#eee4d8;
+  --lab-violet:#6449bd; --lab-mint:#286b58; --lab-coral:#984422; --lab-sun:#795a10;
+}
+:root[data-appearance="light"] body { background:var(--wv-surface); }
+:root[data-appearance="light"] .gate-card,
+:root[data-appearance="light"] .lab-card,
+:root[data-appearance="light"] .lab-hero,
+:root[data-appearance="light"] .lab-tabs { background:var(--wv-card); border-color:var(--lab-line); }
+#password-account-back[hidden] { display:none; }
+#theme-toggle {
+  position:fixed; left:auto; right:max(12px,env(safe-area-inset-right));
+  bottom:calc(env(safe-area-inset-bottom) + 12px); z-index:20000;
+  display:grid; place-items:center; width:46px; height:46px; padding:10px;
+  border:1px solid var(--wv-muted); border-radius:50%; background:var(--wv-surface);
+  color:var(--wv-text); box-shadow:0 2px 9px #0002; cursor:pointer; touch-action:manipulation;
+}
+#theme-toggle svg { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+#theme-toggle:focus-visible { outline:3px solid var(--wv-accent); outline-offset:3px; }
+#models-button { position:fixed; left:10px; right:auto; bottom:calc(env(safe-area-inset-bottom) + 68px); min-height:44px; }
+.rail-settings { position:fixed; left:10px; bottom:calc(env(safe-area-inset-bottom) + 12px); min-height:44px; }
+.learner-entry-actions { padding-right:70px; }
+.mock-learner-shell .mock-learner-text-controls { padding-right:70px; }
+.mock-learner-voice-controls, .mock-learner-utilities { padding-right:60px; }
+.mock-learner-send { color:#241f1a; }
+.mock-learner-header h2 { color:var(--wv-text); }
+.mock-learner-voice-controls p, .mock-learner-source-panel p,
+.learner-route #lab-gate-message { color:var(--wv-muted); }
+.mock-car-surface .mock-recording-toggle { color:var(--wv-text); background:var(--wv-card); }
+#mock-car-text, #mock-car-speaker:not(.is-active) { color:var(--wv-text); }
+#chat-input-row { padding-right:70px; }
+#settings-save, #version-close, #models-close { max-width:calc(100% - 62px); }
+:root[data-appearance="light"] .mock-chapter-menu > summary { color:var(--wv-muted); }
+.mock-car-surface { padding-bottom:calc(env(safe-area-inset-bottom) + 72px)!important; }
+#intro-replay { display:none!important; }
+#set-speechlanguage, #set-speechlanguage + .hint { display:none; }
+#settings [hidden] { display:none!important; }

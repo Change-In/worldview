@@ -25,16 +25,19 @@
   root.dataset.learnerEntryKind = ["saved", "new"].includes(kind) ? kind : "unknown";
 })();
 </script>
-<link rel="stylesheet" href="./lab.css?v=2.1.18">
+<link rel="stylesheet" href="./lab.css?v=2.1.20">
+<link rel="stylesheet" href="../appearance.css?v=2.1.20">
+<script src="../appearance.js?v=2.1.20"></script>
 </head>
 <body>
+<button id="theme-toggle" type="button" aria-label="Toggle appearance"><svg id="theme-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"></svg></button>
 <aside id="lab-connection-status" class="lab-connection-status" role="status" hidden>
   <span>Connection paused. Your lesson is kept.</span>
   <button id="lab-connection-retry" type="button" class="button button-quiet">Reconnect</button>
 </aside>
 
 <header class="lab-topbar" id="lab-new-topbar">
-  <a class="lab-back" href="../index.html" aria-label="Return to Worldview">←</a>
+  <a class="lab-back" href="../index.html" aria-label="Return to Worldview">×</a>
   <div>
     <p class="eyebrow">Worldview</p>
     <h1>Model Lab</h1>
@@ -49,7 +52,7 @@
 
 <section id="learner-entry-shell" class="mock-learner-shell" hidden aria-label="Worldview lesson conversation">
   <header class="mock-learner-header">
-    <a class="mock-learner-back" href="../index.html" aria-label="Return to Home">←</a>
+    <a class="mock-learner-back" href="../index.html" aria-label="Return to Home">×</a>
     <h2>Worldview</h2>
   </header>
   <main class="learner-entry-conversation">
@@ -161,7 +164,7 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
     <button id="pipeline-learner-exit" class="pipeline-learner-exit" type="button" hidden aria-label="Exit Mock Run and return to Lab controls" title="Return to the test workspace. Your durable run stays saved.">←</button>
     <section id="mock-learner-shell" class="mock-learner-shell" hidden aria-label="Worldview lesson conversation">
       <header id="mock-learner-header" class="mock-learner-header">
-        <button id="mock-learner-back" class="mock-learner-back" type="button" aria-label="Leave this mock run" title="Return to the test workspace">←</button>
+        <button id="mock-learner-back" class="mock-learner-back" type="button" aria-label="Leave this mock run" title="Return to the test workspace">×</button>
         <h2><button id="mock-learner-density" class="mock-learner-density" type="button" aria-label="Worldview. Text size: Standard. Activate for Compact." title="Change conversation text size">Worldview</button></h2>
         <span id="mock-learner-density-status" class="sr-only" role="status" aria-live="polite"></span>
         <div class="mock-learner-header-actions">
@@ -671,7 +674,7 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
         <input id="stt-file" type="file" accept="audio/*,.m4a,.ogg,.webm,.wav,.mp3">
         <p id="stt-file-name" class="file-note">No file selected.</p>
         <label for="stt-language">Language</label>
-        <select id="stt-language"><option value="en">English</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option><option value="pt">Portuguese</option><option value="it">Italian</option><option value="nl">Dutch</option><option value="sv">Swedish</option><option value="no">Norwegian</option><option value="da">Danish</option></select>
+        <select id="stt-language" disabled><option value="en">English</option></select>
         <p class="privacy-note">The selected file is sent only to the chosen transcription routes. It is not stored by this page or included in the JSON export.</p>
       </section>
       <section class="lab-card lane-card">
