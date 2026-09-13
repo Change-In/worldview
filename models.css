@@ -1,0 +1,18 @@
+#models-sheet .version-panel{max-width:620px;display:flex;flex-direction:column;overflow:hidden}
+#models-list{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.models-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-shrink:0;margin-bottom:6px}
+#models-sheet #models-close{width:38px;height:38px;min-height:38px;margin:0;padding:0;font:24px/1 system-ui;border-radius:10px;flex-shrink:0}
+#models-sheet .version-now{flex-shrink:0}
+.model-setting{border-top:1px solid var(--line);padding:15px 0}
+.model-setting-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:7px}
+.model-feature{font:600 15px/1.4 system-ui;color:var(--ink);background:none;border:0;padding:5px 0;min-height:36px;text-align:left;cursor:pointer}
+.model-badge{font:500 10px/1.4 system-ui;color:var(--ink-soft);white-space:nowrap}.model-badge.is-live{color:var(--accent)}
+.model-setting-controls{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.35fr);gap:8px}
+.model-setting select,.model-custom input,.model-custom button{min-width:0;width:100%;min-height:44px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);padding:9px;font:14px system-ui}
+.model-rate,.models-note,.models-status,.model-price-details,.model-live-note{font:12px/1.5 system-ui;color:var(--ink-soft)}
+.model-rate{margin:8px 0 3px;font-variant-numeric:tabular-nums}.model-price-details summary{cursor:pointer;font-size:11px;min-height:28px;padding:5px 0}.model-price-details p{margin:5px 0;line-height:1.6}.model-price-details a{color:var(--accent)}
+.model-live-note{margin:8px 0;border-left:2px solid var(--accent);padding-left:10px}.models-more>summary{font:600 13px system-ui;cursor:pointer;padding:18px 0;min-height:44px;border-top:1px solid var(--line);color:var(--ink)}
+.model-presets{display:flex;gap:6px;flex-wrap:wrap;padding:4px 0 12px}.model-presets button{flex:1;min-height:44px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:9px 12px;font:13px system-ui;cursor:pointer}
+.model-presets[hidden],.model-custom[hidden],.model-live-note[hidden]{display:none}.model-custom{display:flex;gap:8px;margin-top:8px}.model-custom button{width:auto;white-space:nowrap}.models-status{min-height:18px;margin:8px 0 0}
+#models-list :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:360px){.model-setting-controls{grid-template-columns:minmax(0,1fr)}.model-badge{font-size:9px}}

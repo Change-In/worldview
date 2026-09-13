@@ -1637,6 +1637,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .lesson-options-button{left:8px;top:8px;width:44px;height:44px;padding:0}
   #home-archive-entry{margin-bottom:calc(env(safe-area-inset-bottom) + 60px)}
 </style>
+<link rel="stylesheet" href="models.css?v=2.1.23">
 <link rel="stylesheet" href="appearance.css?v=2.1.20">
 <script src="appearance.js?v=2.1.20"></script>
 </head>
@@ -1819,10 +1820,10 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 
   <div id="models-sheet" aria-hidden="true">
     <div class="version-panel" role="dialog" aria-label="Models">
-      <h2>Models</h2>
-      <p class="version-now">The learner-facing path, in order. Open a model row to compare its available choices.</p>
+      <div class="models-heading"><h2>Models</h2><button id="models-close" type="button" class="version-close" aria-label="Close Models">×</button></div>
+      <p class="version-now">Your lesson, your model choices.</p>
       <div id="models-list"></div>
-      <button id="models-close" type="button" class="version-close">Close</button>
+
     </div>
   </div>
 
@@ -2180,15 +2181,18 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <script src="config.js"></script>
 <!-- optional: data.js is a shared lessons file — auto-loaded so browsers/devices stay in sync -->
 <script src="data.js"></script>
+<script src="models.js?v=2.1.23"></script>
 <script>
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.22 · Sep 13";
+const BUILD = "v2.1.23 · Sep 13";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag:"v2.1.23", date:"Sep 13", changes:["Models has separate company and model menus, feature presets and quieter price details.","Owners can select GPT Live for real lesson conversations, with explicit 90-second paid starts.","Live answers are reviewed before sending through the normal lesson and understanding checks."] },
+
   {tag:"v2.1.22",date:"Sep 13",changes:["Clarification answers recognition briefly and confirms learning interest before scope.","Extraction asks each relevant foundation separately before supplying it.","Unconfirmed message delivery reconnects automatically using the same saved request."]},
   {"tag":"v2.1.21","date":"Sep 13","changes":["Removed live transcription previews so changing words do not distract you while speaking. Your answer is transcribed after you send; hold-to-talk lighting remains."]},
   { tag:"v2.1.20", date:"Sep 13", changes:["Switch light or dark mode from the bottom-right sun/moon, including sign-in and lessons.","Models sits above Settings.","The old introduction is retired; start a lesson from Home.","Corner exits use X buttons. Worldview currently supports English."] },
@@ -6214,8 +6218,8 @@ function syncDeveloperLauncherVisibility() {
   if (!admin) state.developerMode = false;
   if (launcher) launcher.hidden = !admin;
   const modelsButton = $("models-button");
-  if (modelsButton) modelsButton.hidden = !state.developerMode;
-  if (!state.developerMode && $("models-sheet")) {
+  if (modelsButton) modelsButton.hidden = !aiAvailable();
+  if (!aiAvailable() && $("models-sheet")) {
     $("models-sheet").classList.remove("open");
     $("models-sheet").setAttribute("aria-hidden","true");
   }
@@ -10446,45 +10450,13 @@ const DEVELOPER_TUTOR_MODELS = TUTOR_MODELS.map(model => ({ key:model.key, label
    currently the learner's to make. Chosen before a lesson starts — a lesson
    pins its tutor at creation, so this sets what the NEXT one uses. */
 function renderModelsSheet() {
-  const host = $("models-list");
-  if (!host) return;
-  const current = TUTOR_MODELS.some(model => model.key === state.model) ? state.model : "claude-sonnet-5";
-  const tutorButtons = selectableTutorModels().map(model =>
-    `<button type="button" data-tutor-model="${attr(model.key)}" class="${model.key === current ? "active" : ""}" aria-pressed="${model.key === current}">`
-    + `${esc(model.label)}<span class="tm-sub">${esc(model.sub)}</span></button>`).join("");
-  const chosen = (list, current, attribute) => list.map(model =>
-    `<button type="button" data-${attribute}="${attr(model.key)}" class="${model.key === current ? "active" : ""}" aria-pressed="${model.key === current}">`
-    + `${esc(model.label)}<span class="tm-sub">${esc(model.sub)}</span></button>`).join("");
-  // collapsed by default — the label and the current choice are all that shows
-  const role = (title, now, buttons) =>
-    `<details class="role"><summary><span>${esc(title)}</span><b>${esc(now)}</b></summary>`
-    + `<div class="tutor-model-picker">${buttons}</div></details>`;
-  const describedRole = (title, now, copy) =>
-    `<details class="role"><summary><span>${esc(title)}</span><b>${esc(now)}</b></summary>`
-    + `<p class="role-copy">${esc(copy)}</p></details>`;
-  const nameOf = (list, key) => { const found = list.find(model => model.key === key); return found ? found.label + " " + found.sub : key; };
-  const planner = state.plannerModel || "claude-opus-4-8";
-  const speech = state.ttsProvider === "device" ? "device" : "deepgram";
-  const transcriptionModels = selectableTranscriptionModels();
-  const transcription = transcriptionModels.some(model => model.key === state.sttModel) ? state.sttModel : "deepgram-nova-3";
-  host.innerHTML = `<p class="workflow-note">Question Map → Lesson Lab → Transcription → Tutor → Speech. Each stage feeds the next one.</p>`
-    + role("1 · Question Map", nameOf(PLANNER_MODELS, planner), chosen(PLANNER_MODELS, planner, "planner-model"))
-    + describedRole("2 · Lesson Lab", "checkpoint missions", "Builds one bounded teaching mission from the approved question map. It does not add another paid model call in the current build.")
-    + role("3 · Transcription", nameOf(TRANSCRIPTION_MODELS, transcription), chosen(transcriptionModels, transcription, "transcription-model"))
-    + role("4 · Tutor", nameOf(TUTOR_MODELS, current), tutorButtons)
-    + role("5 · Speech", nameOf(SPEECH_MODELS, speech), chosen(SPEECH_MODELS, speech, "speech-model"));
-  host.querySelectorAll("[data-tutor-model]").forEach(button => {
-    button.onclick = () => { state.model = button.dataset.tutorModel; save(); renderModelsSheet(); renderConversationModelSwitches(); if ($("set-model")) $("set-model").value = state.model; };
-  });
-  host.querySelectorAll("[data-planner-model]").forEach(button => {
-    button.onclick = () => { state.plannerModel = button.dataset.plannerModel; save(); renderModelsSheet(); };
-  });
-  host.querySelectorAll("[data-transcription-model]").forEach(button => {
-    button.onclick = () => { state.sttModel = button.dataset.transcriptionModel; save(); renderModelsSheet(); };
-  });
-  host.querySelectorAll("[data-speech-model]").forEach(button => {
-    button.onclick = () => { state.ttsProvider = button.dataset.speechModel === "device" ? "device" : "deepgram"; save(); renderModelsSheet(); };
-  });
+ const host = $("models-list");
+ if (!host) return;
+ window.WorldviewModels.render(host, {admin:ownerToolsAvailable(),onVoice:(kind,model)=>{
+  if(kind === "stt") state.sttModel=model;
+  else {state.ttsProvider=model === "device" ? "device" : "deepgram"; if(model !== "device")state.deepgramModel=model;}
+  save();
+ }});
 }
 function renderConversationModelSwitches() {
   ["chat-model-switch","voice-model-switch"].forEach(id => {
@@ -16341,13 +16313,13 @@ if ($("version-sheet")) {
 }
 if ($("version-sheet")) $("version-sheet").addEventListener("click", event => { if (event.target === $("version-sheet")) closeVersionSheet(); });
 if ($("models-button")) $("models-button").addEventListener("click", () => {
-  if (!ownerToolsAvailable()) return;
+  if (!aiAvailable()) return;
   renderModelsSheet();
   $("models-sheet").classList.add("open");
   $("models-sheet").setAttribute("aria-hidden","false");
 });
 if ($("open-models")) $("open-models").addEventListener("click", () => {
-  if (!ownerToolsAvailable()) return;
+  if (!aiAvailable()) return;
   renderModelsSheet();
   $("models-sheet").classList.add("open");
   $("models-sheet").setAttribute("aria-hidden","false");
@@ -16681,5 +16653,3 @@ window.addEventListener("blur", () => {
 </script>
 </body>
 </html>
-
-
