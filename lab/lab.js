@@ -1547,6 +1547,7 @@ function loadWorkspace(ownerId = labState.workspaceOwnerId) {
       .map(sanitizePendingConversationCreate)
       .filter((item) => item?.ownerUserId === ownerId)
       .slice(0, LAB_MAX_PENDING_CREATES);
+    scheduleConversationDeliveryRecovery();
     labState.extractionArtifacts = (Array.isArray(stored?.deviceExtractionArtifacts) ? stored.deviceExtractionArtifacts : [])
       .map(sanitizeDeviceExtractionArtifact)
       .filter(Boolean)
