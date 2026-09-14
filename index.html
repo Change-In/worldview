@@ -5758,7 +5758,620 @@ async function streamChat(system, messages, onText, onSearch, modelOverride, max
     model, max_tokens: maxTokens || 768, stream: true, system, messages,
   };
   const serverTools = [];
-  if (requesions-button" aria-label="Lesson options" title="Lesson options">•••</button>
+  if (requestPolicy.allowSearch) serverTools.push(searchToolFor(model));
+  if (requestPolicy.fetchUrl) {
+    const fetchTool = fetchToolForUrl(requestPolicy.fetchUrl);
+    if (fetchTool) serverTools.push(fetchTool);
+    payload.source_fetch_url = safeHttpUrl(requestPolicy.fetchUrl);
+  }
+  if (serverTools.length) payload.tools = serverTools;
+  if (requestPolicy.cache !== false) payload.cache_control = { type:"ephemeral" };
+  if (requestPolicy.effort && model !== "claude-haiku-4-5") payload.output_config = { effort:requestPolicy.effort };
+  if (requestPolicy.thinking === "disabled" && model === "claude-sonnet-5") payload.thinking = { type:"disabled" };
+  let res;
+  try {
+    res = await anthropicRequest(payload,requestPolicy.signal || null,requestPolicy.lessonId || "");
+  } catch (error) {
+    throw normalizeClaudeError(error);
+  }
+  if (!res.ok) throw await responseError(res);
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "", full = "", stopReason = "", messageStopSeen = false;
+  const usage = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0, searches: 0 };
+  const sources = []; // pages the model actually consulted, saved with the reply
+  const fetchedSources = []; // exact pages successfully read through web_fetch
+  const citedTextBlocks = new Map();
+  const citationDocumentRefs = [];
+  (messages || []).forEach(message => {
+    (Array.isArray(message && message.content) ? message.content : []).forEach(part => {
+      if (part && part.type === "document") citationDocumentRefs.push("");
+    });
+  });
+  for (;;) {
+    let packet;
+    try { packet = await reader.read(); }
+    catch (rawError) {
+      const error = normalizeClaudeError(rawError);
+      error.partialText = full;
+      throw error;
+    }
+    const { done, value } = packet;
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n\n")) >= 0) {
+      const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+      for (const line of chunk.split("\n")) {
+        if (!line.startsWith("data: ")) continue;
+        let ev; try { ev = JSON.parse(line.slice(6)); } catch (e) { continue; }
+        if (ev.type === "content_block_start" && ev.content_block && ev.content_block.type === "text") {
+          const initial = String(ev.content_block.text || "");
+          const block = {
+            text:initial,
+            citations:Array.isArray(ev.content_block.citations) ? ev.content_block.citations.slice() : [],
+          };
+          citedTextBlocks.set(Number(ev.index) || 0,block);
+          if (initial) {
+            full += initial;
+            if (onText) onText(full);
+          }
+        } else if (ev.type === "content_block_delta" && ev.delta && ev.delta.type === "text_delta") {
+          const text = String(ev.delta.text || "");
+          full += text;
+          const block = citedTextBlocks.get(Number(ev.index) || 0);
+          if (block) block.text += text;
+          if (onText) onText(full);
+        } else if (ev.type === "content_block_delta" && ev.delta && ev.delta.type === "citations_delta") {
+          const block = citedTextBlocks.get(Number(ev.index) || 0);
+          if (block && ev.delta.citation) block.citations.push(ev.delta.citation);
+        } else if (ev.type === "content_block_start" && ev.content_block && ev.content_block.type === "server_tool_use") {
+          if (ev.content_block.name === "web_search") {
+            usage.searches++;
+            if (onSearch) onSearch(usage.searches);
+          }
+        } else if (ev.type === "content_block_start" && ev.content_block &&
+                   ev.content_block.type === "web_search_tool_result" && Array.isArray(ev.content_block.content)) {
+          for (const r of ev.content_block.content) {
+            if (r && r.url && !sources.some(s => s.url === r.url)) sources.push({ title: r.title || r.url, url: r.url });
+          }
+        } else if (ev.type === "content_block_start" && ev.content_block &&
+                   ev.content_block.type === "web_fetch_tool_result") {
+          const fetched = ev.content_block.content && ev.content_block.content.type === "web_fetch_result"
+            ? ev.content_block.content : null;
+          if (fetched && fetched.url) {
+            const title = fetched.content && fetched.content.title || fetched.url;
+            if (!sources.some(source => source.url === fetched.url)) sources.push({title,url:fetched.url});
+            if (!fetchedSources.some(source => source.url === fetched.url)) fetchedSources.push({title,url:fetched.url});
+            citationDocumentRefs.push(fetched.url);
+          }
+        } else if (ev.type === "message_start" && ev.message && ev.message.usage) {
+          const u = ev.message.usage;
+          usage.input = u.input_tokens || 0;
+          usage.cacheWrite = u.cache_creation_input_tokens || 0;
+          usage.cacheRead = u.cache_read_input_tokens || 0;
+        } else if (ev.type === "message_delta") {
+          if (ev.usage) usage.output = ev.usage.output_tokens || 0;
+          stopReason = ev.delta && ev.delta.stop_reason || stopReason;
+        } else if (ev.type === "message_stop") {
+          messageStopSeen = true;
+        } else if (ev.type === "error") {
+          throw claudeError(ev.error && ev.error.message || "stream error", {
+            status: ev.error && ev.error.type === "overloaded_error" ? 529 : 0,
+            type: ev.error && ev.error.type,
+            partialText: full,
+          });
+        }
+      }
+    }
+  }
+  // The caller decides whether the terminal result satisfies its output
+  // contract. Conversational callers buffer until this stop reason is known,
+  // so a partial stream is never committed or spoken as a finished reply.
+  const citations = [...citedTextBlocks.values()].flatMap(block =>
+    block.citations.map(citation => ({
+      type:String(citation && citation.type || ""),
+      text:String(block.text || "").trim(),
+      citedText:String(citation && citation.cited_text || "").trim(),
+      url:String(citation && (citation.url || citation.source)
+        || citationDocumentRefs[Number(citation && citation.document_index)] || ""),
+      source:String(citation && citation.source || ""),
+      title:String(citation && (citation.title || citation.document_title) || ""),
+    }))
+  ).filter(citation => citation.text || citation.citedText);
+  return {
+    text:full,usage,sources,fetchedSources,citations,stopReason,
+    complete:messageStopSeen && stopReason === "end_turn",truncated:stopReason === "max_tokens",
+  };
+}
+
+/* ---- cost tracking ($/MTok input, output) ---- */
+const SONNET5_PROMO_END = Date.UTC(2026,8,1); // published rate changes Sep 1, 2026
+const PRICES = {
+  "claude-opus-4-8":  [5, 25],
+  "claude-sonnet-5":  Date.now() < SONNET5_PROMO_END ? [2, 10] : [3, 15],
+  "claude-haiku-4-5": [1, 5],
+  "gemini-2.5-flash": [0.3, 2.5],
+  "gpt-5.6-luna": [2, 8],
+  "gpt-5.6-terra": [2, 8],
+};
+function addCost(lesson, model, usage, purpose = "tutor_turn") {
+  if (!lesson || !usage) return;
+  const p = PRICES[model] || [3, 15];
+  const previousCost = lesson.cost || 0;
+  lesson.cost = (lesson.cost || 0)
+    + (usage.input * p[0]
+       + (usage.cacheWrite || 0) * p[0] * 1.25   // cache writes cost 1.25x
+       + (usage.cacheRead || 0) * p[0] * 0.1     // cache reads cost 0.1x — the savings
+       + usage.output * p[1]) / 1e6
+    + (usage.searches || 0) * 0.01;              // web search: $10 per 1000 searches
+  const requestCost = Math.max(0,(lesson.cost || 0) - previousCost);
+  if (!Array.isArray(lesson.requestLedger)) lesson.requestLedger = [];
+  lesson.requestLedger.push({ at:Date.now(),purpose,model,input:Number(usage.input)||0,cacheWrite:Number(usage.cacheWrite)||0,cacheRead:Number(usage.cacheRead)||0,output:Number(usage.output)||0,costUsd:requestCost });
+  if (lesson.requestLedger.length > 80) lesson.requestLedger.splice(0,lesson.requestLedger.length - 80);
+  trackLessonMetric(lesson,{ bucket:"tutor", model, purpose, costUsd:requestCost, apiCall:true });
+}
+function trackLessonMetric(lesson, metric = {}) {
+  if (!lesson || !backendAccessEnabled()) return;
+  const body = {
+    lessonId:lesson.id, lessonTitle:lesson.title || lesson.topic || "",
+    eventId:metric.eventId || uid(), bucket:metric.bucket || "lifecycle",
+    model:[metric.model,metric.purpose].filter(Boolean).join(" · "), costUsd:Number(metric.costUsd) || 0,
+    apiCall:!!metric.apiCall,
+  };
+  if (typeof metric.complete === "boolean") body.complete = metric.complete;
+  if (Number.isFinite(Number(metric.masteryScore))) body.masteryScore = Number(metric.masteryScore);
+  backendFetch("lesson-metrics",{ headers:{"content-type":"application/json"}, body:JSON.stringify(body) })
+    .catch(error => console.warn("Lesson metric was not recorded",error));
+}
+function pilotLessonSlotId(lesson) {
+  return String(lesson && lesson.id || "").trim().slice(0,160);
+}
+function paidPilotLessonLimitApplies() {
+  return !!(backendAccessEnabled() && backendEntitlementRecord?.access_tier === "paid");
+}
+function pilotLessonError(result, fallback = "lesson_allowance_unavailable") {
+  const type = String(result?.reason || fallback);
+  const status = type === "lesson_limit_reached" ? 409
+    : type === "spend_disabled" ? 503
+    : type.startsWith("access_") ? 403 : 409;
+  return claudeError(`The lesson allowance could not be verified: ${type}.`,{status,type});
+}
+function pilotRpcRequest(name, args, signal = null) {
+  let request = backendClient.rpc(name,args);
+  if (signal && request && typeof request.abortSignal === "function") request = request.abortSignal(signal);
+  return request;
+}
+async function refreshPilotLessonAllowance(options = {}) {
+  if (!paidPilotLessonLimitApplies()) return {allowed:true,limited:false};
+  if (!options.signal && options.deadline !== false) {
+    return withLessonStartDeadline(
+      signal => refreshPilotLessonAllowance({signal,deadline:false}),
+      LESSON_ALLOWANCE_TIMEOUT_MS,"Lesson allowance check","lesson_allowance_unavailable"
+    );
+  }
+  const result = await pilotRpcRequest("get_worldview_lesson_allowance",undefined,options.signal);
+  if (result.error) throw Object.assign(new Error(result.error.message || "The lesson allowance is unavailable."),{type:"lesson_allowance_unavailable"});
+  if (!result.data?.allowed) throw pilotLessonError(result.data);
+  backendPilotLessonsUsed = Number(result.data.used) || 0;
+  backendPilotLessonsRemaining = Math.max(0,Number(result.data.remaining) || 0);
+  backendPilotRegisteredLessonIds = new Set(Array.isArray(result.data.registered_lesson_ids) ? result.data.registered_lesson_ids.map(String) : []);
+  if (Number.isFinite(Number(result.data.limit)) && backendEntitlementRecord) backendEntitlementRecord.lesson_limit = Number(result.data.limit);
+  updateCloudAccountUI();
+  return result.data;
+}
+async function claimPilotLessonSlot(lesson, options = {}) {
+  if (!lesson || !paidPilotLessonLimitApplies()) return {allowed:true,limited:false};
+  const lessonId = pilotLessonSlotId(lesson);
+  const grantStartedAt = String(backendEntitlementRecord?.granted_at || "");
+  if (!lessonId) throw claudeError("This lesson has no stable allowance id.", {status:409,type:"lesson_required"});
+  if (backendPilotRegisteredLessonIds.has(lessonId)) {
+    lesson.pilotSlotConfirmed = true;
+    lesson.pilotGrantStartedAt = grantStartedAt;
+    delete lesson.pilotSlotPending;
+    delete lesson.pilotSlotError;
+    saveLocalOnly();
+    return {allowed:true,limited:true,existing:true,used:backendPilotLessonsUsed,remaining:backendPilotLessonsRemaining,limit:backendEntitlementRecord?.lesson_limit};
+  }
+  if (lesson.pilotSlotConfirmed && String(lesson.pilotGrantStartedAt || "") === grantStartedAt) {
+    return {allowed:true,limited:true,used:backendPilotLessonsUsed,remaining:backendPilotLessonsRemaining,limit:backendEntitlementRecord?.lesson_limit};
+  }
+  if (!options.signal && options.deadline !== false) {
+    return withLessonStartDeadline(
+      signal => claimPilotLessonSlot(lesson,{signal,deadline:false}),
+      LESSON_SLOT_CLAIM_TIMEOUT_MS,"Lesson save","lesson_allowance_unavailable"
+    );
+  }
+  if (!lesson.creationRequestKey) {
+    lesson.creationRequestKey = (crypto.randomUUID ? crypto.randomUUID() : `${uid()}-${uid()}`).slice(0,200);
+    saveLocalOnly();
+  }
+  return runPilotCloudMutation(async () => {
+    const response = await pilotRpcRequest("create_worldview_lesson",{
+      p_request_key:lesson.creationRequestKey,
+      p_lesson_id:lessonId,
+      p_initial_lesson:sanitizedCloudLesson(lesson),
+      p_client_updated_at:Number(state.libraryUpdatedAt) || Date.now(),
+    },options.signal);
+    if (response.error) throw Object.assign(new Error(response.error.message || "The lesson allowance is unavailable."),{type:"lesson_allowance_unavailable"});
+    const result = response.data;
+    if (result?.reason === "lesson_id_reused") {
+      await refreshPilotLessonAllowance({signal:options.signal,deadline:false});
+      if (backendPilotRegisteredLessonIds.has(lessonId)) return claimPilotLessonSlot(lesson,{signal:options.signal,deadline:false});
+    }
+    if (!result?.allowed) throw pilotLessonError(result);
+    lesson.pilotSlotConfirmed = true;
+    lesson.pilotGrantStartedAt = grantStartedAt;
+    delete lesson.pilotSlotPending;
+    if (Number.isFinite(Number(result?.used))) backendPilotLessonsUsed = Number(result.used);
+    if (Number.isFinite(Number(result?.remaining))) backendPilotLessonsRemaining = Math.max(0,Number(result.remaining));
+    backendPilotRegisteredLessonIds.add(lessonId);
+    if (Number.isFinite(Number(result?.limit)) && backendEntitlementRecord) backendEntitlementRecord.lesson_limit = Number(result.limit);
+    cloudRemoteBaseline = "row";
+    cloudRemoteRevision = Number(result?.server_revision) || cloudRemoteRevision;
+    if (result?.snapshot && typeof result.snapshot === "object") cloudSyncedFingerprint = cloudSnapshotFingerprint(result.snapshot);
+    updateCloudAccountUI();
+    saveLocalOnly();
+    return result;
+  },{signal:options.signal});
+}
+function addServiceCost(lesson,bucket,costUsd,model,eventId) {
+  if (!lesson || !Number.isFinite(costUsd) || costUsd < 0) return;
+  lesson.cost = (lesson.cost || 0) + costUsd;
+  trackLessonMetric(lesson,{ eventId:eventId || uid(), bucket, model, costUsd, apiCall:true });
+}
+function fmtCost(c) {
+  if (!c) return "";
+  return c < 0.005 ? "&lt;1&cent;" : c < 1 ? Math.round(c * 100) + "&cent;" : "$" + c.toFixed(2);
+}
+function updateCostLabel(lesson) {
+  $("chat-cost").innerHTML = lesson && lesson.cost ? "&asymp;" + fmtCost(lesson.cost) : "";
+}
+
+// Structured JSON helper. Most background metadata stays on Haiku; callers
+// can explicitly choose a stronger model for work where structure quality is
+// the product, such as the lesson dependency graph.
+async function jsonCall(system, userText, schema, maxTokens = 512, costLesson = null, model = "claude-haiku-4-5", effort = "", purpose = "background", signal = null) {
+  /* Anthropic enforces the schema natively. Other providers go through the
+     lab-tutor route and are ASKED for the same JSON, which they may get wrong —
+     so a failure here falls straight back to the Anthropic default rather than
+     taking a lesson down with it. Lesson creation is the one path that must not
+     depend on an experiment. */
+  if (PLANNER_MODELS.some(entry => entry.key === model && entry.provider !== "anthropic")) {
+    let result = null;
+    try {
+      const instruction = system + "\n\nReply with JSON only — no prose, no code fence — matching exactly this JSON Schema:\n" + JSON.stringify(schema);
+      result = await altProviderChat(model, instruction, [{ role:"user", content:userText }], null, maxTokens,signal,pilotLessonSlotId(costLesson));
+      if (costLesson && result.usage) { addCost(costLesson, model, result.usage, purpose); save(); }
+      const cleaned = String(result.text || "").replace(/^```(?:json)?\s*/i,"").replace(/```\s*$/,"").trim();
+      const parsed = JSON.parse(cleaned);
+      if (parsed && typeof parsed === "object") Object.defineProperty(parsed,"__worldviewModelVersion",{value:model,enumerable:false});
+      return parsed;
+    } catch (error) {
+      if (signal && signal.aborted) throw error;
+      console.warn("Planner fell back to Claude:", error && error.message);
+      model = "claude-opus-4-8";
+    }
+  }
+  const outputConfig = { format: { type: "json_schema", schema } };
+  if (effort && model !== "claude-haiku-4-5") outputConfig.effort = effort;
+  const res = await anthropicRequest({
+    model, max_tokens: maxTokens, system,
+    messages: [{ role: "user", content: userText }],
+    output_config: outputConfig,
+  },signal,pilotLessonSlotId(costLesson));
+  if (!res.ok) throw await responseError(res);
+  const data = await res.json();
+  if (costLesson && data.usage) {
+    addCost(costLesson, model, { input: data.usage.input_tokens, output: data.usage.output_tokens },purpose);
+    save();
+  }
+  if (data.stop_reason === "max_tokens") throw new Error("The structured response was cut off before it was complete.");
+  const text = (data.content.find(b => b.type === "text") || {}).text || "{}";
+  const parsed = JSON.parse(text);
+  if (parsed && typeof parsed === "object") Object.defineProperty(parsed,"__worldviewModelVersion",{value:model,enumerable:false});
+  return parsed;
+}
+
+/* ================= Home / circular wheel ================= */
+const wheel = { pos: 1, cards: [], ids: [], renderedIndices: new Set(), cardW: 262, layerCategory: null, layerIndex: 0, previewLayerIndex: null, categoryOverview: false, categorySelecting: false, methodInteracting: false };
+
+function lessonCategory(lesson) {
+  return String((lesson && lesson.category) || "Unsorted").trim() || "Unsorted";
+}
+function categoriesForSection(section) {
+  return state.customCategories.filter(category => categorySection(category) === section);
+}
+
+function categoryLayerEntries() {
+  return [{key:null,label:"All lessons",kind:"recent"}, ...categoriesForSection("explore").map(category => ({key:"custom:"+category.id,label:category.name,kind:"custom",id:category.id}))];
+}
+function categoryLayers() { return categoryLayerEntries().map(entry => entry.label); }
+function lessonMatchesLayer(lesson,layerKey = wheel.layerCategory) {
+  if (!layerKey) return true;
+  if (layerKey.startsWith("custom:")) return (lesson.customCategoryIds || []).includes(layerKey.slice(7));
+  if (layerKey.startsWith("topic:")) return lessonCategory(lesson).toLocaleLowerCase() === layerKey.slice(6);
+  return lessonCategory(lesson).toLocaleLowerCase() === String(layerKey).toLocaleLowerCase();
+}
+function applyCategoryKey(key,animate = true) {
+  const index = categoryLayerEntries().findIndex(entry => entry.key === key);
+  applyCategoryLayer(index < 0 ? 0 : index,animate);
+}
+
+function renderMobileCategoryMenu() {
+  const layers = categoryLayers();
+  const current = Math.max(0, Math.min(wheel.layerIndex, layers.length - 1));
+  $("mobile-category-button").textContent = layers[current] || "Most recent";
+  const options = $("mobile-category-options");
+  const signature = JSON.stringify([layers,current]);
+  if (options.dataset.signature === signature) return;
+  options.dataset.signature = signature;
+  options.innerHTML = layers.map((label,index) => `<button type="button" class="mobile-category-option${index === current ? " active" : ""}" data-layer-index="${index}">${esc(label)}</button>`).join("");
+  options.querySelectorAll(".mobile-category-option").forEach(button => {
+    button.onclick = () => { applyCategoryLayer(Number(button.dataset.layerIndex)); closeMobileCategoryMenu(); };
+  });
+}
+function openMobileCategoryMenu() { renderMobileCategoryMenu(); $("mobile-category-sheet").classList.add("open"); }
+function closeMobileCategoryMenu() { $("mobile-category-sheet").classList.remove("open"); }
+$("mobile-category-button").onclick = openMobileCategoryMenu;
+$("mobile-category-sheet").onclick = event => { if (event.target === $("mobile-category-sheet")) closeMobileCategoryMenu(); };
+
+function applyCategoryLayer(index, animate = true) {
+  const entries = categoryLayerEntries();
+  const layers = entries.map(entry => entry.label);
+  const oldIndex = wheel.layerIndex;
+  const oldPosition = wheel.pos;
+  wheel.layerIndex = ((index % layers.length) + layers.length) % layers.length;
+  wheel.layerCategory = entries[wheel.layerIndex].key;
+  wheel.previewLayerIndex = null;
+  wheel.categorySelecting = false;
+  $("lesson-layer-guide").style.setProperty("--category-angle", "0deg");
+  renderHome();
+  wheel.pos = Math.max(0, Math.min(oldPosition, wheel.cards.length - 1));
+  layoutWheel(animate);
+  if (animate && oldIndex !== wheel.layerIndex) {
+    const carousel = $("carousel");
+    const forward = ((wheel.layerIndex - oldIndex + layers.length) % layers.length) <= layers.length / 2;
+    carousel.classList.remove("layer-enter-up", "layer-enter-down");
+    void carousel.offsetWidth;
+    carousel.classList.add(forward ? "layer-enter-up" : "layer-enter-down");
+  }
+}
+
+function cycleCategoryLayer(direction) { applyCategoryLayer(wheel.layerIndex + direction); }
+
+function updateLayerGuide() { $("lesson-layer-guide").hidden = true; }
+
+/* Keep the phone cards generous, but do not enlarge them into tablet-sized
+   objects on a laptop. Wide screens use their extra room as breathing space. */
+function updateCardSize() {
+  const mobile = innerWidth <= 700;
+  const laptop = innerWidth >= 900;
+  const minScale = mobile ? 0.68 : 0.58;
+  const maxScale = mobile ? 1.20 : 1.35;
+  const scale = boundedCardScale(state.cardScale,mobile);
+  if (state.cardScale !== scale) state.cardScale = scale;
+  const wrapHeight = $("carousel-wrap")?.clientHeight || innerHeight * 0.72;
+  const widthFactor = mobile ? 0.66 : laptop ? 0.24 : 0.30;
+  const widthBase = Math.min(Math.max(innerWidth * widthFactor, laptop ? 220 : 240), laptop ? 350 : 430);
+  // Choose the base size from both viewport axes, then preserve one aspect
+  // ratio at every zoom level. The old independent height cap distorted cards.
+  const heightBase = Math.max(190, Math.max(250, wrapHeight - 52) / 1.22);
+  const baseW = Math.min(widthBase, heightBase);
+  const w = Math.round(baseW * scale);
+  const h = Math.round(w * 1.22);
+  wheel.cardW = w;
+  document.documentElement.style.setProperty("--cardW", w + "px");
+  document.documentElement.style.setProperty("--cardH", h + "px");
+  const categoryH = Math.round(h * (mobile ? .54 : .58));
+  document.documentElement.style.setProperty("--categoryH", categoryH + "px");
+  document.documentElement.style.setProperty("--categoryHalf", Math.round(categoryH / 2) + "px");
+  document.documentElement.style.setProperty("--carouselPerspective", Math.round(Math.max(700, w * 4.2)) + "px");
+}
+window.addEventListener("resize", () => { updateCardSize(); layoutWheel(false); });
+
+function relativeTime(timestamp) {
+  if (!timestamp) return "recently";
+  const elapsed = Math.max(0, Date.now() - timestamp);
+  const minute = 60 * 1000, hour = 60 * minute, day = 24 * hour;
+  if (elapsed < minute) return "just now";
+  if (elapsed < hour) return Math.floor(elapsed / minute) + "m ago";
+  if (elapsed < day) return Math.floor(elapsed / hour) + "h ago";
+  if (elapsed < 7 * day) return Math.floor(elapsed / day) + "d ago";
+  return new Date(timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function lessonExchangeCount(lesson) {
+  return Math.ceil((lesson.messages || []).filter(message => !message.synthetic).length / 2);
+}
+function masteryColor(score) {
+  const value = Math.max(0, Math.min(1, Number(score) || 0));
+  return `hsl(${Math.round(5 + value * 125)} 58% 43%)`;
+}
+function masteryDotHTML(lesson) {
+  if (!Number.isFinite(Number(lesson.masteryScore))) return "";
+  const percent = Math.round(Math.max(0, Math.min(1, Number(lesson.masteryScore))) * 100);
+  return `<span class="lesson-mastery-dot" style="--mastery-color:${masteryColor(lesson.masteryScore)}" title="Understanding estimate: ${percent}%" aria-label="Understanding estimate: ${percent}%"></span>`;
+}
+
+function syncStartButton() {
+  if (!$("start-btn") || !$("topic-input")) return;
+  const atPilotLimit = paidPilotLessonLimitApplies() && backendPilotLessonsRemaining != null
+    && Number.isFinite(Number(backendPilotLessonsRemaining))
+    && Number(backendPilotLessonsRemaining) <= 0;
+  const startStatus = lessonStartHomeStatus();
+  /* The modal itself makes Home inert during learner questions. Do not disable
+     the still-focused iPhone input while that modal is trying to paint; WebKit
+     can otherwise collapse the keyboard and strand the fixed dialog offscreen. */
+  $("topic-input").disabled = atPilotLimit || startStatus.blocksInput || Boolean(homeTopicCapture?.busy);
+  $("start-btn").textContent = atPilotLimit ? "10/10 created" : startStatus.label || "Begin";
+  $("start-btn").disabled = atPilotLimit || startStatus.busy || Boolean(homeTopicCapture?.busy) || !$("topic-input").value.trim();
+  const mic = $("home-topic-mic");
+  if (mic) {
+    mic.dataset.captureState = homeTopicCapture?.phase || "idle";
+    mic.setAttribute("aria-busy", String(["opening", "finishing", "transcribing"].includes(homeTopicCapture?.phase)));
+    mic.disabled = atPilotLimit || startStatus.blocksInput || ["finishing", "transcribing"].includes(homeTopicCapture?.phase);
+    mic.setAttribute("aria-pressed", String(homeTopicCapture?.phase === "recording"));
+    mic.setAttribute("aria-label", homeTopicCapture?.phase === "recording" ? "Stop topic recording" : homeTopicCapture?.phase === "opening" ? "Cancel microphone startup" : homeTopicCapture?.blob ? "Retry topic transcription" : "Speak your topic");
+  }
+}
+
+function syncDeveloperLauncherVisibility() {
+  const launcher = $("developer-lab-launcher");
+  const admin = ownerToolsAvailable();
+  state.developerUnlocked = admin;
+  if (!admin) state.developerMode = false;
+  if (launcher) launcher.hidden = !admin;
+  const modelsButton = $("models-button");
+  if (modelsButton) modelsButton.hidden = !aiAvailable();
+  // A return-to-window check temporarily disables actions; it is not a
+  // navigation request or proof that access was revoked. Wait for a resolved
+  // result before dismissing the panel. Identity changes clear it separately.
+  const accessResolved = identityRestoreStatus === "verified" && accountOwnershipResolved
+    && entitlementAccountId === cloudAccount?.id && !accountCacheReadOnly;
+  if (!aiAvailable() && (accessResolved || identityRestoreStatus === "signed-out"
+      || accountRecoveryRequired() || accountSignoutPending()) && $("models-sheet")) {
+    $("models-sheet").classList.remove("open");
+    $("models-sheet").setAttribute("aria-hidden","true");
+  }
+}
+
+function recentLessonOrder(lessons) {
+  const stamp = lesson => { const value = lesson.updatedAt || lesson.createdAt;return Number(value) || Date.parse(value) || 0; };
+  return [...lessons].reverse().sort((a,b) => stamp(b)-stamp(a));
+}
+const homeFolderScrollPositions = new Map();
+function renderHomeFolderCarousel(carousel) {
+  const categories = categoriesForSection("explore");
+  if (wheel.layerCategory || !categories.length) return;
+  const accountKey = String(stateAccountId || "local");
+  const card = document.createElement("div");
+  card.className = "card folder-carousel-card";
+  card.dataset.kind = "folder-carousel";
+  const list = document.createElement("div");
+  list.className = "folder-carousel-list";
+  list.setAttribute("role","group");
+  list.setAttribute("aria-label","Folders. Scroll vertically to browse.");
+  categories.forEach(category => {
+    const count = state.lessons.filter(lesson => !isSourceLesson(lesson) && !lessonIsArchived(lesson) && (lesson.customCategoryIds || []).includes(category.id)).length;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "folder-carousel-item";
+    button.dataset.categoryKey = `custom:${category.id}`;
+    button.setAttribute("aria-label",`${category.name}, ${count} lesson${count === 1 ? "" : "s"}. Open folder.`);
+    button.innerHTML = `<span class="folder-carousel-label">folder</span><strong>${esc(category.name)}</strong><span>${count} lesson${count === 1 ? "" : "s"}</span>`;
+    // Pointer taps use the shared measured-rectangle resolver. Keep native
+    // keyboard/assistive clicks available without double-opening a folder.
+    button.onclick = event => { if (event.detail === 0) applyCategoryKey(button.dataset.categoryKey); };
+    list.appendChild(button);
+  });
+  list.addEventListener("scroll",() => { homeFolderScrollPositions.set(accountKey,list.scrollTop); },{passive:true});
+  list.addEventListener("keydown",event => {
+    if (!["ArrowDown","ArrowUp","Home","End"].includes(event.key)) return;
+    const buttons = [...list.querySelectorAll(".folder-carousel-item")];
+    const current = buttons.indexOf(document.activeElement);
+    const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1
+      : Math.max(0,Math.min(buttons.length - 1,current + (event.key === "ArrowDown" ? 1 : -1)));
+    event.preventDefault();buttons[next]?.focus({preventScroll:true});
+    const selected = buttons[next];
+    if (selected) list.scrollTop = selected.offsetTop - (list.clientHeight - selected.offsetHeight) / 2;
+  });
+  card.appendChild(list);carousel.appendChild(card);
+  wheel.cards.push(card);wheel.ids.push(null);
+  list.scrollTop = homeFolderScrollPositions.get(accountKey) || 0;
+}
+function homeFolderAtPoint(card,x,y) {
+  const viewport = card.querySelector(".folder-carousel-list")?.getBoundingClientRect();
+  if (!viewport || x < viewport.left || x > viewport.right || y < viewport.top || y > viewport.bottom) return "";
+  for (const button of card.querySelectorAll(".folder-carousel-item")) {
+    const rect = button.getBoundingClientRect();
+    if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) return button.dataset.categoryKey;
+  }
+  return "";
+}
+function renderHome() {
+  cancelHomeTopicCapture();
+  if ($("home-archive-count")) $("home-archive-count").textContent = archivedLessons().length;
+  syncDeveloperLauncherVisibility();
+  const selectedLayerIndex = categoryLayerEntries().findIndex(entry => entry.key === wheel.layerCategory);
+  if (wheel.layerCategory && selectedLayerIndex < 0) { wheel.layerCategory = null; wheel.layerIndex = 0; }
+  else if (selectedLayerIndex >= 0) wheel.layerIndex = selectedLayerIndex;
+  renderSourceLibrary();
+  const c = $("carousel");
+  c.innerHTML = "";
+  wheel.cards = []; wheel.ids = []; wheel.renderedIndices = new Set();
+  let nc = null;
+
+  const insidePersonalCategory = !!(wheel.layerCategory && wheel.layerCategory.startsWith("custom:"));
+  const layerEntry = categoryLayerEntries().find(entry => entry.key === wheel.layerCategory);
+  const layerName = (layerEntry && layerEntry.label) || "this folder";
+  const pilotRemaining = paidPilotLessonLimitApplies() && backendPilotLessonsRemaining != null && Number.isFinite(Number(backendPilotLessonsRemaining))
+    ? Math.max(0,Number(backendPilotLessonsRemaining)) : null;
+  const pilotAtLimit = pilotRemaining === 0;
+  const startStatus = lessonStartHomeStatus();
+  const pilotLabel = pilotRemaining == null ? "" : ` &middot; ${pilotRemaining} left`;
+  /* A folder is a filter, not a different app. It keeps the same Notes card
+     and the same ask-anything card as the main shelf — a folder you can only
+     read out of is a dead end, and the deck pill alone was not a visible
+     enough way back (BUG-129). A lesson started here is filed here. */
+  {
+    const noc = document.createElement("div");
+    noc.className = "card notes-card";
+    noc.dataset.kind = "notes";
+    noc.innerHTML = `
+      <div class="card-cat">${state.notes.length ? state.notes.length + " saved" : "for later"}</div>
+      <div class="card-title serif">Notes</div>
+      <div class="card-hint">tap to open</div>
+    `;
+    c.appendChild(noc);
+    wheel.cards.push(noc); wheel.ids.push(null);
+
+    nc = document.createElement("div");
+    nc.className = "card new-card";
+    nc.innerHTML = `
+      <div class="card-cat">${insidePersonalCategory && !homeLearnerAccountAllowed() ? `ask &middot; filed in ${esc(layerName)}` : "ask anything"}${pilotLabel}</div>
+      <input id="topic-input" type="text" autocomplete="off" autocapitalize="sentences" autocorrect="on" spellcheck="true" placeholder="${pilotAtLimit ? "Reopen a saved lesson" : "What are you curious about?"}" enterkeyhint="go"${pilotAtLimit || startStatus.blocksInput ? " disabled" : ""}>
+      <div class="new-card-actions">
+        <button id="home-topic-mic" type="button" aria-label="Speak your topic" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg></button>
+        <button id="start-btn" type="button"${startStatus.busy ? " disabled" : ""}>${pilotAtLimit ? "10/10 created" : startStatus.label || "Begin"}</button>
+      </div>
+      <p id="home-topic-mic-status" role="status" aria-live="polite"></p>
+      <button id="home-topic-mic-cancel" type="button" hidden>Cancel recording</button>
+      ${insidePersonalCategory
+        ? `<button id="new-card-leave-folder" type="button" aria-label="Leave ${esc(layerName)} and show all lessons"><span>&#8592;</span> All lessons</button>`
+        : `<button id="new-card-folders" type="button" aria-label="Browse folders and archive"><span aria-hidden="true">▱</span> Folders</button>`}
+    `;
+    c.appendChild(nc);
+    wheel.cards.push(nc); wheel.ids.push(null);
+  }
+
+  // Folders occupy one place after Ask Anything; the remaining shelf is recent lessons.
+  renderHomeFolderCarousel(c);
+  renderHomeLearnerRuns(c);
+
+  // lesson cards, newest first
+  const visibleLessons = recentLessonOrder(state.lessons).filter(lesson => {
+    if (isSourceLesson(lesson) || lessonIsArchived(lesson) || !lessonMatchesLayer(lesson)) return false;
+    // Filing changes organization, not recency. Recent lessons include filed lessons.
+    // Finishing never archives a lesson; the learner chooses when to put it away.
+    return true;
+  });
+  visibleLessons.forEach(l => {
+    const progress = authoritativeLessonProgress(l);
+    const card = document.createElement("div");
+    card.className = "card lesson-card";
+    card.dataset.id = l.id;
+    card.dataset.progressState = progress.state;
+    card.style.setProperty("--lesson-progress",`${progress.percent == null ? 0 : progress.percent}%`);
+    const progressLabel = progress.percent == null
+      ? "Lesson progress unavailable"
+      : `${progress.percent}% complete, ${progress.completedCount} of ${progress.totalCount} checkpoints demonstrated`;
+    card.setAttribute("aria-label",`${l.title || l.topic || "Lesson"}. ${progressLabel}. Tap to continue.`);
+    card.innerHTML = `
+      <button type="button" class="lesson-path-button card-path-button" aria-label="Open lesson path" title="Lesson path">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6v4m10-4v4M7 10h10M12 10v5"/><circle cx="7" cy="4" r="2"/><circle cx="17" cy="4" r="2"/><circle cx="12" cy="18" r="2"/></svg>
+      </button>
+      <button type="button" class="lesson-options-button" aria-label="Lesson options" title="Lesson options">•••</button>
       <div class="card-cat">${esc(l.category || "")}</div>
       <div class="card-title serif ${cardTitleSizeClass(l.title)}">${cardTitleHtml(l.title)}</div>
       ${state.continueHintDismissed ? "" : '<div class="card-hint">tap to continue</div>'}
