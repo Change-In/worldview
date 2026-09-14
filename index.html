@@ -738,19 +738,6 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .card.new-card button:disabled { opacity: 0.45; }
   .card.new-card .new-card-actions { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
   .card.new-card .new-card-actions #start-btn { flex: 1; max-width: 132px; }
-  #home-topic-mic { display:grid; place-items:center; flex:0 0 46px; width:46px; height:46px; border:1px solid var(--ink-soft); border-radius:50%; color:var(--ink); background:transparent; cursor:pointer; touch-action:manipulation; }
-  #home-topic-mic svg { width:23px; height:23px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; }
-  #home-topic-mic[aria-pressed="true"] { background:var(--accent-100); box-shadow:0 0 0 3px var(--accent-100); }
-  #home-topic-mic-status { min-height:1.4em; max-width:100%; margin:8px 0 0; font:12px/1.4 system-ui,sans-serif; text-align:center; color:var(--ink-soft); }
-  #home-topic-mic-cancel { min-height:36px; margin-top:4px; background:transparent; color:var(--ink); border:0; text-decoration:underline; }
-  #home-topic-mic-cancel[hidden] { display:none; }
-  .card.new-card .new-card-actions #home-topic-mic { display:flex; align-items:center; justify-content:center; box-sizing:border-box; padding:0; flex:0 0 48px; width:48px; min-width:48px; max-width:48px; height:48px; min-height:48px; aspect-ratio:1; border:1px solid var(--accent-500,#d4946b); border-radius:50%; background:transparent; box-shadow:none; }
-  #home-topic-mic svg { flex:none; display:block; width:22px; height:22px; margin:0; }
-  #home-topic-mic[data-capture-state="recording"] { background:var(--accent-100); }
-  #home-topic-mic[data-capture-state="recording"] svg { visibility:hidden; }
-  #home-topic-mic { position:relative; }
-  #home-topic-mic[data-capture-state="recording"]::after { content:""; position:absolute; inset:0; margin:auto; width:14px; height:14px; border-radius:3px; background:var(--ink); }
-  #home-topic-mic-status { height:2.8em; min-height:2.8em; overflow:auto; }
   /* Folders lives on the Ask Anything card's bottom-right corner (moved off the
      old floating pill that made Explore feel cluttered). */
   #new-card-folders, #new-card-leave-folder {
@@ -2191,7 +2178,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.33 · Sep 14";
+const BUILD = "v2.1.34 · Sep 14";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2199,6 +2186,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  { tag:"v2.1.34", date:"Sep 14", changes:["Removed the recording button from Ask Anything. Type your topic and select Begin."] },
   {tag:"v2.1.33",date:"Sep 14",changes:["Lesson cards open a compact mode-selection popup on Home.","Choose Text, Voice or Car before entering; your choice carries into the lesson.","Remaining startup work shows as lesson loading, without a second mode-selection step."]},
   { tag:"v2.1.32", date:"Sep 14", changes:["Extraction uses a concise starting picture, relevant context and a faster path when requested.","Live reuses researched material across the scope and receives one quiet handoff per saved update.","Lost voice connections expose a saved continuation after a short recovery window."] },
   {tag:"v2.1.31",date:"Sep 13",changes:["Extraction responds to your starting picture, corrects broad misunderstandings and adds a little context before one connected question.","Foundations deepen naturally without requiring precise details; lesson planning keeps the relevant people, period and everyday setting."]},
@@ -6347,11 +6335,8 @@ function renderHome() {
       <div class="card-cat">${insidePersonalCategory && !homeLearnerAccountAllowed() ? `ask &middot; filed in ${esc(layerName)}` : "ask anything"}${pilotLabel}</div>
       <input id="topic-input" type="text" autocomplete="off" autocapitalize="sentences" autocorrect="on" spellcheck="true" placeholder="${pilotAtLimit ? "Reopen a saved lesson" : "What are you curious about?"}" enterkeyhint="go"${pilotAtLimit || startStatus.blocksInput ? " disabled" : ""}>
       <div class="new-card-actions">
-        <button id="home-topic-mic" type="button" aria-label="Speak your topic" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg></button>
         <button id="start-btn" type="button"${startStatus.busy ? " disabled" : ""}>${pilotAtLimit ? "10/10 created" : startStatus.label || "Begin"}</button>
       </div>
-      <p id="home-topic-mic-status" role="status" aria-live="polite"></p>
-      <button id="home-topic-mic-cancel" type="button" hidden>Cancel recording</button>
       ${insidePersonalCategory
         ? `<button id="new-card-leave-folder" type="button" aria-label="Leave ${esc(layerName)} and show all lessons"><span>&#8592;</span> All lessons</button>`
         : `<button id="new-card-folders" type="button" aria-label="Browse folders and archive"><span aria-hidden="true">▱</span> Folders</button>`}
@@ -6426,8 +6411,6 @@ function renderHome() {
 
   if (!nc) return;
   $("start-btn").onclick = startLesson;
-  $("home-topic-mic").onclick = event => { if (!event.detail) void toggleHomeTopicCapture(); };
-  $("home-topic-mic-cancel").onclick = event => { if (!event.detail) { cancelHomeTopicCapture();syncStartButton(); } };
   $("topic-input").onkeydown = e => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); startLesson(); }
   };
@@ -6731,12 +6714,10 @@ function pathControlAtPoint(x, y) {
           const hit = (id) => { const b = $(id); const r = b && b.getBoundingClientRect(); return r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; };
           // Resolve before centering the transformed card. Pointer capture
           // retargets the native click to the carousel, so dispatch once here.
-          const control = ["home-topic-mic", "home-topic-mic-cancel", "start-btn", "new-card-folders", "new-card-leave-folder"]
+          const control = ["start-btn", "new-card-folders", "new-card-leave-folder"]
             .find(id => !$(id)?.hidden && !$(id)?.disabled && hit(id));
           wheel.pos = idx; layoutWheel();
-          if (control === "home-topic-mic") void toggleHomeTopicCapture();
-          else if (control === "home-topic-mic-cancel") { cancelHomeTopicCapture(); syncStartButton(); }
-          else if (control === "start-btn") startLesson();
+          if (control === "start-btn") startLesson();
           else if (control === "new-card-folders") openCategoryOrganizer(null, "explore");
           else if (control === "new-card-leave-folder") applyCategoryKey(null);
           return;
