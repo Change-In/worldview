@@ -17,6 +17,7 @@
   try {
     const packet = JSON.parse(sessionStorage.getItem("worldview-learner-launch-v1") || "null");
     if (packet?.ownerUserId) {
+      if (["text", "voice", "car"].includes(packet.entryMode) && Number(packet.entryConfirmedAt) > Date.now() - 900000 && Number(packet.entryConfirmedAt) <= Date.now()) root.classList.add("learner-opening-selected");
       if (packet.runId && /^[A-Za-z0-9-]{8,128}$/.test(String(packet.runId))) kind = "saved";
       else if (!packet.runId && String(packet.topic || "").trim()) kind = "new";
       else kind = "unknown";
@@ -25,7 +26,7 @@
   root.dataset.learnerEntryKind = ["saved", "new"].includes(kind) ? kind : "unknown";
 })();
 </script>
-<link rel="stylesheet" href="./lab.css?v=2.1.21">
+<link rel="stylesheet" href="./lab.css?v=2.1.33">
 <link rel="stylesheet" href="./live-conversation.css?v=2.1.25">
 <link rel="stylesheet" href="../appearance.css?v=2.1.20">
 <script src="../appearance.js?v=2.1.20"></script>
@@ -57,6 +58,7 @@
     <h2>Worldview</h2>
   </header>
   <main class="learner-entry-conversation">
+    <div id="learner-entry-opening" role="status" aria-live="polite"><span class="entry-loading-mark" aria-hidden="true"></span><h3>Opening your lesson</h3><p>Restoring your place. You can return Home at any time.</p></div>
     <div class="learner-entry-choice" aria-labelledby="learner-entry-title">
       <p id="learner-entry-topic" class="learner-entry-topic" hidden></p>
       <h3 id="learner-entry-title">How would you like to chat?</h3>
@@ -774,7 +776,8 @@ Use the saved briefing as grounding. Search only for a new, recent, or explicitl
 </script>
 <script src="../models.js?v=2.1.30"></script>
 <script src="./live-conversation.js?v=2.1.32"></script>
-<script src="./lab.js?v=2.1.32" defer></script>
+<script src="./lab.js?v=2.1.33" defer></script>
 <script src="./conversation-clock.js?v=2.1.12" defer></script>
 </body>
 </html>
+

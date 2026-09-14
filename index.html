@@ -14,6 +14,8 @@ try { document.documentElement.dataset.theme = (JSON.parse(localStorage.getItem(
 catch (error) { document.documentElement.dataset.theme = "system"; }
 </script>
 <link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="lesson-entry-popup.css?v=2.1.33">
+<script src="lesson-entry-popup.js?v=2.1.33"></script>
 <link rel="apple-touch-icon" href="icon.png">
 <style>
   :root {
@@ -2189,7 +2191,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.32 · Sep 14";
+const BUILD = "v2.1.33 · Sep 14";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2197,6 +2199,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.33",date:"Sep 14",changes:["Lesson cards open a compact mode-selection popup on Home.","Choose Text, Voice or Car before entering; your choice carries into the lesson.","Remaining startup work shows as lesson loading, without a second mode-selection step."]},
   { tag:"v2.1.32", date:"Sep 14", changes:["Extraction uses a concise starting picture, relevant context and a faster path when requested.","Live reuses researched material across the scope and receives one quiet handoff per saved update.","Lost voice connections expose a saved continuation after a short recovery window."] },
   {tag:"v2.1.31",date:"Sep 13",changes:["Extraction responds to your starting picture, corrects broad misunderstandings and adds a little context before one connected question.","Foundations deepen naturally without requiring precise details; lesson planning keeps the relevant people, period and everyday setting."]},
 
@@ -8291,6 +8294,15 @@ async function openHomeLearnerRun({topic = "",runId = "",view = ""} = {}) {
   const startingOwner = cloudAccount?.id || "", startingEpoch = accountAuthEpoch;
   homeLearnerLaunchBusy = true;
   try {
+    let entryMode = "";
+    if (view !== "map") {
+      entryMode = await window.WorldviewLessonEntry.choose({
+        title:runId ? homeLearnerRuns().find(row => row.runId === runId)?.title || "Your saved lesson" : topic,
+        saved:Boolean(runId)
+      });
+      if (!entryMode) return false;
+    }
+    if (startingEpoch !== accountAuthEpoch || cloudAccount?.id !== startingOwner) return false;
     if (!await ensureStableIdentityForMutation("start or continue a lesson")) return false;
     if (!startingOwner || startingEpoch !== accountAuthEpoch || cloudAccount?.id !== startingOwner) return false;
     if (!homeLearnerAccountAllowed()) {
@@ -8299,7 +8311,8 @@ async function openHomeLearnerRun({topic = "",runId = "",view = ""} = {}) {
       toast("Sign in with your approved tester account to begin. If you have just joined, your tester access needs to be enabled.",6500);return false;
     }
     const owner = cloudAccount.id;
-    const packet = {ownerUserId:owner,topic,...(runId ? {runId} : {}),...(runId && view === "map" ? {view:"map"} : {})};
+    const packet = {ownerUserId:owner,topic,...(runId ? {runId} : {}),...(runId && view === "map" ? {view:"map"} : {}),
+      ...(entryMode ? {entryMode,entryConfirmedAt:Date.now()} : {})};
     const serialized = JSON.stringify(packet);
     sessionStorage.setItem(HOME_LEARNER_LAUNCH_KEY,serialized);
     if (sessionStorage.getItem(HOME_LEARNER_LAUNCH_KEY) !== serialized) throw new Error("launch_storage_unavailable");
@@ -16689,3 +16702,4 @@ window.addEventListener("blur", () => {
 </script>
 </body>
 </html>
+

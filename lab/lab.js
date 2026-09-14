@@ -96,6 +96,7 @@ function setLearnerEntry(ready = false, topic = "", complete = false) {
   if (!LAB_LEARNER) return;
   labState.learnerEntryReady = ready;
   document.documentElement.classList.toggle("learner-entry-complete", complete);
+  if (complete) document.documentElement.classList.remove("learner-opening-selected");
   for (const mode of ["text", "voice", "car"]) {
     const button = q("learner-entry-" + mode);
     if (button) { button.disabled = Boolean(labState.learnerEntryStarting); button.setAttribute("aria-pressed", String(labState.learnerEntryMode === mode)); }
@@ -191,7 +192,30 @@ function readLearnerLaunch() {
   catch (_) { return null; }
   if (!packet || packet.ownerUserId !== labState.verifiedUserId || labState.workspaceOwnerId !== packet.ownerUserId) return null;
   if (packet.runId && !/^[A-Za-z0-9-]{8,128}$/.test(String(packet.runId))) return null;
-  return { ownerUserId:packet.ownerUserId, topic:String(packet.topic || "").trim().slice(0, 500), runId:String(packet.runId || ""), view:packet.runId && packet.view === "map" ? "map" : "" };
+  const confirmedAt = Number(packet.entryConfirmedAt);
+  const entryMode = ["text", "voice", "car"].includes(packet.entryMode)
+    && confirmedAt > Date.now() - 900000 && confirmedAt <= Date.now() ? packet.entryMode : "";
+  return { ownerUserId:packet.ownerUserId, topic:String(packet.topic || "").trim().slice(0, 500), runId:String(packet.runId || ""), view:packet.runId && packet.view === "map" ? "map" : "", ...(entryMode ? {entryMode} : {}) };
+}
+
+async function completeLearnerEntryPreparation(packet, topic) {
+  setLearnerEntry(true, topic);
+  if (!packet?.entryMode || packet.view === "map") {
+    document.documentElement.classList.remove("learner-opening-selected");
+    return;
+  }
+  // Consume only the one-shot choice before dispatch. A reload still keeps the
+  // saved run/topic, but cannot replay consent into another automatic opening.
+  const current = readLearnerLaunch();
+  if (!current || current.ownerUserId !== packet.ownerUserId || current.runId !== packet.runId
+    || current.topic !== packet.topic || current.entryMode !== packet.entryMode) throw labAccountError("identity_changed");
+  const retained = JSON.parse(sessionStorage.getItem(LEARNER_LAUNCH_KEY));
+  delete retained.entryMode;
+  delete retained.entryConfirmedAt;
+  sessionStorage.setItem(LEARNER_LAUNCH_KEY, JSON.stringify(retained));
+  labState.learnerEntryMode = packet.entryMode;
+  const started = await startLearnerEntry(packet.entryMode);
+  if (!started) document.documentElement.classList.remove("learner-opening-selected");
 }
 
 async function hydrateLearnerSavedRun(runId) {
@@ -301,7 +325,7 @@ async function openLearnerLesson() {
     if (labState.verifiedUserId !== ownerId) throw labAccountError("identity_changed");
     labState.learnerEntryResume = row;
     labState.learnerLessonOpened = true;
-    setLearnerEntry(true, row.topic || row.artifact?.topic || row.activeResume?.topic || packet.topic);
+    await completeLearnerEntryPreparation(packet, row.topic || row.artifact?.topic || row.activeResume?.topic || packet.topic);
     if (packet.view === "map") await openLearnerSavedMap(row);
     return;
   }
@@ -314,7 +338,7 @@ async function openLearnerLesson() {
       if (labState.verifiedUserId !== ownerId) throw labAccountError("identity_changed");
       labState.learnerEntryResume = row;
       labState.learnerLessonOpened = true;
-      setLearnerEntry(true, row.topic || row.artifact?.topic || row.activeResume?.topic || "Your saved lesson");
+      await completeLearnerEntryPreparation(packet, row.topic || row.artifact?.topic || row.activeResume?.topic || "Your saved lesson");
       return;
     }
   }
@@ -337,7 +361,7 @@ async function openLearnerLesson() {
     syncClarificationTopic("clarification-topic");
     // Keep the launch draft across a refresh until the learner chooses a mode.
     // Home never chooses Text or sends a paid opening on the learner's behalf.
-    setLearnerEntry(true, packet.topic);
+    await completeLearnerEntryPreparation(packet, packet.topic);
   } else {
     setLearnerEntry(false, "", true);
   }
@@ -19699,3 +19723,4 @@ window.WorldviewTimingHost = {
 };
 void boot();
 setTimeout(() => scheduleConversationDeliveryRecovery(), 2000);
+
