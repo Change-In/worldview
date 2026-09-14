@@ -160,7 +160,7 @@ const key = 'worldview-home-models-v1';
 const legacyKey = 'worldview-lab-mock-run-config-gemini38-v2';
 const voiceKey = 'wv-lab-voice-routes';
 const liveKey = 'worldview-live-lesson-stages-v1';
-const liveStages = ['lesson'];
+const liveStages = ['clarification','extraction','lesson','quiz'];
 function liveEnabled(stage,storage=localStorage) { return liveStages.includes(stage) && read(storage,liveKey)[stage] === true; }
 const labels = {clarification:'Getting started',map:'Lesson planning',extraction:'Your starting knowledge',lesson:'Tutor',brain:'Understanding checks',quiz:'Final review'};
 const links = {anthropic:'https://platform.claude.com/docs/en/about-claude/pricing',google:'https://ai.google.dev/gemini-api/docs/pricing',openai:'https://developers.openai.com/api/docs/pricing',xai:'https://docs.x.ai/developers/models',deepgram:'https://deepgram.com/pricing'};

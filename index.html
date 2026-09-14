@@ -2184,12 +2184,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <script src="config.js"></script>
 <!-- optional: data.js is a shared lessons file — auto-loaded so browsers/devices stay in sync -->
 <script src="data.js"></script>
-<script src="models.js?v=2.1.25"></script>
+<script src="models.js?v=2.1.29"></script>
 <script>
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.28 · Sep 13";
+const BUILD = "v2.1.29 · Sep 13";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2197,6 +2197,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  { tag:"v2.1.29", date:"Sep 13", changes:["GPT Live now supports Clarification, Extraction, Tutor and the final Quiz.","Spoken approvals and saved evidence move the conversation between phases on the same Live connection.","Phase handoffs save privately, survive reloads and reject late or duplicate transitions. Final Quiz uses fresh answers."] },
   { tag:"v2.1.28", date:"Sep 13", changes:["Sources is now a placeholder. Source uploads and source lessons are unavailable for now."] },
   { tag:"v2.1.27", date:"Sep 13", changes:["Keep Models and your current page open when you switch apps or return to the window. Account checks no longer dismiss Models while reconnecting."] },
   { tag:"v2.1.26", date:"Sep 13", changes:["Teaching repairs one missing person, place or relationship before asking you to reason from it.","Saved Lesson replies can recover partial results and unchanged models without the repeated model-change rejection."] },
@@ -8259,6 +8260,7 @@ async function refreshHomeLearnerRuns() {
     const response = await backendFetch("learner-jobs",{headers:{"content-type":"application/json"},body:JSON.stringify({action:"list_runs"}),signal:AbortSignal.timeout(12000)});
     if (!response.ok) { await response.body?.cancel();return false; }
     const payload = await response.json();
+    if(backendEntitlementRecord?.access_tier==='admin'){try{const liveResponse=await backendFetch('live-trial',{headers:{'content-type':'application/json'},body:JSON.stringify({action:'journey_list'}),signal:AbortSignal.timeout(10000)});if(liveResponse.ok){const live=await liveResponse.json();if(Array.isArray(live.runs))payload.runs=[...(payload.runs||[]),...live.runs];}}catch{/* Existing saved runs remain available. */}}
     if (epoch !== accountAuthEpoch || cloudAccount?.id !== owner || !homeLearnerAccountAllowed() || homeTopicCapture) return false;
     if (!Array.isArray(payload.runs)) return false;
     const before = JSON.stringify(homeLearnerRuns());

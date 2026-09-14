@@ -50,6 +50,7 @@ function learnerRunSummaries() {
     clocks.set(key, { signature, updatedAt });
     add(current.runId, current.topic, labState.pipelineStage, updatedAt);
   }
+  const live=labState.liveJourney;if(live?.runId)rows.set(live.runId,{runId:live.runId,title:live.packet.topic,phase:live.complete?'complete':live.phase,updatedAt:Date.now()});
   return [...rows.values()].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 100);
 }
 
@@ -10298,6 +10299,7 @@ function lessonOpeningInstruction(evidenceStatus) {
 }
 
 async function createPipelineLessonTurn(action, answer = "", targetOutcomeIndex = null, options = {}) {
+  if(liveLessonSelected()) { renderMockLearnerShell(); return false; }
   const timingId = options.timingId || "";
   const selection = selectedPipelineMapRecord();
   ensureSelectedPipelineMapResearch(selection);
@@ -11633,6 +11635,7 @@ async function ensurePipelineExtractionDetail(job) {
 }
 
 async function ensurePipelineExtractionOpening(artifact = selectedPipelineArtifact()) {
+  if(liveLessonSelected()) { renderMockLearnerShell(); return; }
   const scope = pipelineExtractionMapScope(artifact);
   if (!artifact?.runId || !scope || labState.preview || labState.extractionBusy) return;
   if (pipelineExtractionJobs(artifact).length) return;
@@ -15199,38 +15202,52 @@ function mockLearnerMapState(stage, artifact) {
 
 let liveConversationMounted=false;
 function liveLessonSelected(stage=labState.pipelineStage){
- return Boolean(labState.accessVerified&&labState.verifiedAdmin&&labState.pipelineMode==='mock'&&stage==='lesson'&&labState.extraction.mode==='voice'&&window.WorldviewModels?.liveEnabled('lesson'));
+ const mode=stage==='clarification'?labState.clarification.mode:labState.extraction.mode;
+ return Boolean(labState.accessVerified&&labState.verifiedAdmin&&labState.pipelineMode==='mock'&&['clarification','extraction','lesson','quiz'].includes(stage)&&mode==='voice'&&window.WorldviewModels?.liveEnabled(stage));
 }
 function liveStudyInput(artifact,selection,transcript){
- if(!pipelineMapSelectionIsUsable(selection))return null;
- const outcomes=pipelineLessonOutcomes(selection),state=pipelineLessonConversationState(selection);
- const index=Math.max(0,Math.min(outcomes.length-1,state.record?.outcomeIndex||0));
- const packet=JSON.parse(pipelineLessonPacket(selection,index,'reply'));
- return {runId:artifact.runId,mapJobId:selection.job.id,mapFingerprint:selection.fingerprint,currentIndex:index,teacherPrompt:lessonTutorPrompt(),evaluatorPrompt:lessonEvaluatorPrompt(),brain:{provider:mockStageConfig('brain').provider,model:mockStageConfig('brain').model},
-  context:{topic:artifact.topic,scope:packet.clarifiedScope,outcomes:outcomes.map(o=>({...o,sourceLinks:lessonSourceLinks(o.verifiedSupport)})),priorUnderstanding:packet.unverifiedPriorUnderstanding,recentConversation:transcript.slice(-20)}};
+ const stage=labState.pipelineStage,usable=pipelineMapSelectionIsUsable(selection),outcomes=usable?pipelineLessonOutcomes(selection):[];
+ const current=labState.clarification,runId=artifact?.runId||current.runId;
+ return {runId,stage,prompts:{clarification:q('clarification-prompt')?.value||CLARIFICATION_PROMPT,extraction:EXTRACTION_PROMPT+"\n\nWhen the researched map is ready, continue with this policy: "+MAP_AWARE_EXTRACTION_PROMPT,lesson:lessonTutorPrompt(),quiz:QUIZ_INTERVIEWER_PROMPT,evaluator:lessonEvaluatorPrompt(),assessor:QUIZ_ASSESSOR_PROMPT},brain:{provider:mockStageConfig('brain').provider,model:mockStageConfig('brain').model},context:{topic:artifact?.topic||current.topic,scope:artifact?.scopeSummary||'',outcomes:outcomes.map(o=>({...o,sourceLinks:lessonSourceLinks(o.verifiedSupport)})),map:usable?{jobId:selection.job.id,recordId:selection.recordKey,fingerprint:selection.fingerprint}:null,sourceClarificationFingerprint:artifact?fingerprint(pipelineExtractionPacket(artifact)):'',recentConversation:transcript.slice(-20),mockRunSettings:artifact?.mockRunSettings||{runConfig:sanitizedMockRunConfig(labState.mockRunActiveConfig||labState.mockRunConfig),clarificationBoundaries:labState.mockBoundaryActive||null}}};
+}
+async function applyLiveJourney(study){
+ const active=selectedPipelineArtifact()?.runId||labState.clarification.runId;if(study.runId!==active)return;
+ const changed=labState.liveJourney?.id!==study.id||labState.liveJourney?.phaseVersion!==study.phaseVersion;
+ labState.liveJourney=study;
+ if(study.clarification){labState.clarification.finalized=study.clarification;labState.clarification.finalizedStorage='server';labState.pipelineSelectedRunId=study.runId;rememberClarificationArtifact(study.clarification,'server');}
+ if(study.extraction)rememberExtractionArtifact(study.extraction,'server');
+ if(changed){
+  const target=study.phase==='complete'?'quiz':study.phase;
+  if(target!==labState.pipelineStage)setPipelineStage(target);
+  if(target==='extraction'&&study.clarification&&!pipelineMapJobs(study.clarification).length&&!pendingCreateForComponent('lesson',study.runId))void startMapThenExtraction().catch(()=>setMessage('mock-learner-status','The map needs a retry. Your Live conversation is saved.'));
+  if(study.complete){labState.quiz.status='complete';labState.quiz.completionMessage='Your final teach-back covered the researched lesson. This Live conversation and its evidence are saved.';}
+  persistClarificationSettings();renderMockLearnerShell();
+ }
+ publishLearnerRunSummaries();
 }
 function syncLiveLesson(){
  const live=window.WorldviewLiveConversation;if(!live||!q('mock-learner-composer'))return;
- if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),
-  requestForCurrentAccount:()=>{const token=labState.verifiedAccessToken;return async body=>{const response=await fetch(SUPABASE_URL+'/functions/v1/live-trial',{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(body.action==='study_check'?140000:40000)});const result=await response.json();if(!response.ok)throw Error(result.error?.message||'Live lesson is unavailable.');return result;};},
-  releaseMedia:()=>{stopClarificationCaptureForModeChange();stopClarificationSpeech();stopPipelineExtractionVoice();labState.mockCar.active=false;}
+ if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),onStudy:applyLiveJourney,
+  requestForCurrentAccount:()=>{const token=labState.verifiedAccessToken;return async body=>{const response=await fetch(SUPABASE_URL+'/functions/v1/live-trial',{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(body.action==='journey_check'?150000:40000)});const result=await response.json();if(!response.ok)throw Error(result.error?.message||'Live lesson is unavailable.');return result;};},
+  releaseMedia:()=>{setLiveVoicePreference(true);stopClarificationCaptureForModeChange();stopClarificationSpeech();stopPipelineExtractionVoice();labState.mockCar.active=false;}
  });}
  const stage=labState.pipelineStage,artifact=selectedPipelineArtifact(),selection=artifact?selectedPipelineMapRecord(artifact):null;
  const transcript=mockLearnerTranscript(stage,artifact),selected=liveLessonSelected(stage)&&mockLearnerConversationActive();
- const lineage=[labState.verifiedUserId,artifact?.runId||labState.clarification.runId,selection?.fingerprint||'',stage].join('|');
- live.sync({enabled:selected,lineage,history:transcript,ready:selected&&!labState.lessonBusy&&q('mock-learner-reply')?.dataset.replyBlocked!=='true',studyInput:selected?liveStudyInput(artifact,selection,transcript):null});
- if(selected){q('mock-learner-voice-controls').hidden=true;q('mock-learner-car').hidden=true;q('mock-learner-scroll').hidden=true;}
+ const runId=artifact?.runId||labState.clarification.runId;
+ const lineage=[labState.verifiedUserId,runId].join('|');
+ const busy=stage==='clarification'?labState.clarification.busy:stage==='extraction'?labState.extractionBusy:stage==='lesson'?labState.lessonBusy:labState.quiz.busy;
+ live.sync({enabled:selected,lineage,history:[],ready:selected&&!busy,studyInput:selected?liveStudyInput(artifact,selection,transcript):null});
+ if(selected){q('mock-learner-voice-controls').hidden=true;q('mock-learner-car').hidden=true;q('mock-learner-scroll').hidden=true;q('mock-learner-waiting').hidden=true;q('mock-learner-retry').hidden=true;q('mock-learner-status').textContent='';}
  const mode=stage==='clarification'?labState.clarification.mode:labState.extraction.mode;
  const label=selected?'GPT Live':mode==='voice'?'Voice':'Text';q('mock-learner-mode').textContent=label+' ⌄';q('mock-learner-mode').setAttribute('aria-label','Conversation mode: '+label);
 }
 function setLiveVoicePreference(value){
  const key=window.WorldviewModels?.liveKey;if(!key)return;
- try{const saved=JSON.parse(localStorage.getItem(key)||'{}');saved.lesson=value;localStorage.setItem(key,JSON.stringify(saved));}catch{setMessage('mock-learner-status','Could not save the voice choice on this device.');}
+ try{const saved=JSON.parse(localStorage.getItem(key)||'{}');for(const stage of ['clarification','extraction','lesson','quiz'])saved[stage]=value;localStorage.setItem(key,JSON.stringify(saved));}catch{setMessage('mock-learner-status','Could not save the voice choice on this device.');}
 }
 function closeLiveModeMenu(){const menu=q('live-mode-menu');if(menu)menu.hidden=true;q('mock-learner-mode')?.setAttribute('aria-expanded','false');}
 async function chooseLiveConversationMode(choice){
- closeLiveModeMenu();void window.WorldviewLiveConversation?.stop('Voice mode changed.');
- setLiveVoicePreference(choice==='live');
+ closeLiveModeMenu();void window.WorldviewLiveConversation?.stop('Voice mode changed.');setLiveVoicePreference(choice==='live');
  const mode=labState.pipelineStage==='clarification'?labState.clarification.mode:labState.extraction.mode;
  if((choice==='text'&&mode==='voice')||(choice!=='text'&&mode!=='voice'))await switchMockLearnerConversationMode();
  if(choice==='car')await enterMockCarMode();else if(labState.mockCar.active){labState.mockCar.active=false;stopMockCarMedia();}
@@ -15239,14 +15256,11 @@ async function chooseLiveConversationMode(choice){
 function toggleLiveModeMenu(){
  let menu=q('live-mode-menu');if(menu&&!menu.hidden){closeLiveModeMenu();return;}
  if(!menu){menu=document.createElement('div');menu.id='live-mode-menu';menu.className='live-mode-menu';menu.setAttribute('aria-label','Conversation modes');q('mock-learner-header').append(menu);document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLiveModeMenu();q('mock-learner-mode')?.focus();}});document.addEventListener('click',e=>{if(!menu.contains(e.target)&&!q('mock-learner-mode')?.contains(e.target))closeLiveModeMenu();});}
- menu.replaceChildren();
- const options=[['text','Text','Read and type.'],['voice','Standard voice','Your chosen lesson model, transcription and spoken replies.']];
- if(labState.verifiedAdmin)options.push(['live','GPT Live','Live generates the teaching. $0.05/min + understanding checks.']);
- options.push(['car','Car','A simpler view of standard voice.']);
- for(const [choice,title,note]of options){const b=document.createElement('button');b.type='button';b.textContent=title;const small=document.createElement('small');small.textContent=note;b.append(small);b.onclick=()=>void chooseLiveConversationMode(choice);if(choice==='live'&&labState.pipelineStage!=='lesson'){b.disabled=true;small.textContent='Available in the researched teaching lesson.';}menu.append(b);}
+ menu.replaceChildren();const options=[['text','Text','Read and type.'],['voice','Standard voice','Your chosen lesson model, transcription and spoken replies.']];
+ if(labState.verifiedAdmin)options.push(['live','GPT Live','Talk through every phase. $0.05/min + background checks.']);options.push(['car','Car','A simpler view of standard voice.']);
+ for(const [choice,title,note]of options){const b=document.createElement('button');b.type='button';b.textContent=title;const small=document.createElement('small');small.textContent=note;b.append(small);b.onclick=()=>void chooseLiveConversationMode(choice);menu.append(b);}
  menu.hidden=false;q('mock-learner-mode').setAttribute('aria-expanded','true');menu.querySelector('button')?.focus();
 }
-
 
 function renderMockLearnerShell() {
   const shell = q("mock-learner-shell");
@@ -18115,6 +18129,7 @@ async function runScriptedClarificationOpening(timingId = "") {
 }
 
 async function runClarificationModel(timingId = "") {
+  if(liveLessonSelected()) { renderMockLearnerShell(); return; }
   const state = labState.clarification;
   if (state.busy) { abandonMockTurnTiming(timingId); return; }
   if ((labState.pendingConversationCreates || []).some(item => item.ownerUserId === labState.verifiedUserId && item.request.component === "clarification" && item.request.idempotencyKey === state.pendingRequestKey)) {
