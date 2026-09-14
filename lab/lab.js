@@ -3616,7 +3616,7 @@ function setMockRunConfigCollapsed(collapsed) {
 }
 
 function stopMockRunLearnerMedia() {
-  void window.WorldviewLiveLesson?.stop("Live stopped when leaving the lesson.");
+  void window.WorldviewLiveConversation?.stop("Live stopped when leaving the lesson.");
   labState.mockCar.active = false;
   labState.mockCar.errorKey = "";
   if (labState.clarification.focusMode) setClarificationFocus(false);
@@ -3898,7 +3898,7 @@ function switchToVerifiedLabUser(userId) {
 }
 
 function clearVerifiedLabUser() {
-  void window.WorldviewLiveLesson?.stop("Live stopped because account access changed.");
+  void window.WorldviewLiveConversation?.stop("Live stopped because account access changed.");
   closePipelineExtractionMapDialog({ restoreFocus:false });
   stopSpeechComparison();
   clearTimeout(workspaceSaveTimer);
@@ -15183,52 +15183,56 @@ function mockLearnerMapState(stage, artifact) {
     ? pipelineExtractionMapViewState(artifact) : null;
 }
 
-let liveLessonMounted = false;
-const liveLessonDrafts = new Map();
-function liveLessonSelected(stage = labState.pipelineStage) {
- return Boolean(labState.accessVerified && labState.verifiedAdmin && labState.pipelineMode === "mock"
-   && (stage === "clarification" ? labState.clarification.mode : labState.extraction.mode) === "voice"
-   && window.WorldviewModels?.liveEnabled(stage));
+let liveConversationMounted=false;
+function liveLessonSelected(stage=labState.pipelineStage){
+ return Boolean(labState.accessVerified&&labState.verifiedAdmin&&labState.pipelineMode==='mock'&&stage==='lesson'&&labState.extraction.mode==='voice'&&window.WorldviewModels?.liveEnabled('lesson'));
 }
-function syncLiveLesson() {
- const live = window.WorldviewLiveLesson;
- if (!live || !q("mock-learner-composer")) return;
- if (!liveLessonMounted) {
-  liveLessonMounted = true;
-  live.mount({container:q("mock-learner-composer"),
-   requestForCurrentAccount:() => {
-    const token=labState.verifiedAccessToken;
-    return async body => {
-     const response=await fetch(SUPABASE_URL+"/functions/v1/live-trial",{method:"POST",headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(body),signal:AbortSignal.timeout(40000)});
-     const result=await response.json();if(!response.ok)throw Error(result.error?.message||"GPT Live is unavailable.");return result;
-    };
-   },
-   releaseMedia:() => {stopClarificationCaptureForModeChange();stopClarificationSpeech();stopPipelineExtractionVoice();labState.mockCar.active=false;},
-   retain:(text,lineage) => {if(text&&lineage)liveLessonDrafts.set(lineage,text);},
-   submit:async text => {
-    const stage=labState.pipelineStage;
-    if(!liveLessonSelected(stage))return false;
-    if(stage==="clarification")return submitClarificationReply(text,{inputMode:"voice"});
-    if(stage==="extraction")return submitPipelineExtractionReply(text,"voice");
-    if(stage==="lesson")return submitPipelineLessonReply(text,{inputMode:"voice"});
-    if(stage==="quiz")return submitPipelineQuizReply(text,{inputMode:"voice"});
-    return false;
-   }
-  });
- }
- const stage=labState.pipelineStage,artifact=selectedPipelineArtifact();
- const runId=stage==="clarification"?labState.clarification.runId:artifact?.runId;
- const mode=stage==="clarification"?labState.clarification.mode:labState.extraction.mode;
- const lineage=[labState.verifiedUserId,runId,stage].join('|');
- const transcript=mockLearnerTranscript(stage,artifact);
- const selected=liveLessonSelected(stage)&&mockLearnerConversationActive()&&mode==="voice";
- live.sync({enabled:selected,lineage,runId,stage,topic:artifact?.topic||labState.clarification.topic||"Current lesson",history:transcript,
-  ready:selected&&q("mock-learner-reply")?.dataset.replyBlocked!=="true",
-  reply:transcript.at(-1)?.role==="assistant"?transcript.at(-1).content:""});
- if(selected){q("mock-learner-voice-controls").hidden=true;q("mock-learner-car").hidden=true;}
- const draft=liveLessonDrafts.get(lineage);
- if(draft&&mode==="text"&&!q("mock-learner-reply").value){q("mock-learner-reply").value=draft;q("mock-learner-send").disabled=q("mock-learner-reply").dataset.replyBlocked==="true";liveLessonDrafts.delete(lineage);}
+function liveStudyInput(artifact,selection,transcript){
+ if(!pipelineMapSelectionIsUsable(selection))return null;
+ const outcomes=pipelineLessonOutcomes(selection),state=pipelineLessonConversationState(selection);
+ const index=Math.max(0,Math.min(outcomes.length-1,state.record?.outcomeIndex||0));
+ const packet=JSON.parse(pipelineLessonPacket(selection,index,'reply'));
+ return {runId:artifact.runId,mapJobId:selection.job.id,mapFingerprint:selection.fingerprint,currentIndex:index,teacherPrompt:lessonTutorPrompt(),evaluatorPrompt:lessonEvaluatorPrompt(),brain:{provider:mockStageConfig('brain').provider,model:mockStageConfig('brain').model},
+  context:{topic:artifact.topic,scope:packet.clarifiedScope,outcomes:outcomes.map(o=>({...o,sourceLinks:lessonSourceLinks(o.verifiedSupport)})),priorUnderstanding:packet.unverifiedPriorUnderstanding,recentConversation:transcript.slice(-20)}};
 }
+function syncLiveLesson(){
+ const live=window.WorldviewLiveConversation;if(!live||!q('mock-learner-composer'))return;
+ if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),
+  requestForCurrentAccount:()=>{const token=labState.verifiedAccessToken;return async body=>{const response=await fetch(SUPABASE_URL+'/functions/v1/live-trial',{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(body.action==='study_check'?140000:40000)});const result=await response.json();if(!response.ok)throw Error(result.error?.message||'Live lesson is unavailable.');return result;};},
+  releaseMedia:()=>{stopClarificationCaptureForModeChange();stopClarificationSpeech();stopPipelineExtractionVoice();labState.mockCar.active=false;}
+ });}
+ const stage=labState.pipelineStage,artifact=selectedPipelineArtifact(),selection=artifact?selectedPipelineMapRecord(artifact):null;
+ const transcript=mockLearnerTranscript(stage,artifact),selected=liveLessonSelected(stage)&&mockLearnerConversationActive();
+ const lineage=[labState.verifiedUserId,artifact?.runId||labState.clarification.runId,selection?.fingerprint||'',stage].join('|');
+ live.sync({enabled:selected,lineage,history:transcript,ready:selected&&!labState.lessonBusy&&q('mock-learner-reply')?.dataset.replyBlocked!=='true',studyInput:selected?liveStudyInput(artifact,selection,transcript):null});
+ if(selected){q('mock-learner-voice-controls').hidden=true;q('mock-learner-car').hidden=true;q('mock-learner-scroll').hidden=true;}
+ const mode=stage==='clarification'?labState.clarification.mode:labState.extraction.mode;
+ const label=selected?'GPT Live':mode==='voice'?'Voice':'Text';q('mock-learner-mode').textContent=label+' ⌄';q('mock-learner-mode').setAttribute('aria-label','Conversation mode: '+label);
+}
+function setLiveVoicePreference(value){
+ const key=window.WorldviewModels?.liveKey;if(!key)return;
+ try{const saved=JSON.parse(localStorage.getItem(key)||'{}');saved.lesson=value;localStorage.setItem(key,JSON.stringify(saved));}catch{setMessage('mock-learner-status','Could not save the voice choice on this device.');}
+}
+function closeLiveModeMenu(){const menu=q('live-mode-menu');if(menu)menu.hidden=true;q('mock-learner-mode')?.setAttribute('aria-expanded','false');}
+async function chooseLiveConversationMode(choice){
+ closeLiveModeMenu();void window.WorldviewLiveConversation?.stop('Voice mode changed.');
+ setLiveVoicePreference(choice==='live');
+ const mode=labState.pipelineStage==='clarification'?labState.clarification.mode:labState.extraction.mode;
+ if((choice==='text'&&mode==='voice')||(choice!=='text'&&mode!=='voice'))await switchMockLearnerConversationMode();
+ if(choice==='car')await enterMockCarMode();else if(labState.mockCar.active){labState.mockCar.active=false;stopMockCarMedia();}
+ renderMockLearnerShell();
+}
+function toggleLiveModeMenu(){
+ let menu=q('live-mode-menu');if(menu&&!menu.hidden){closeLiveModeMenu();return;}
+ if(!menu){menu=document.createElement('div');menu.id='live-mode-menu';menu.className='live-mode-menu';menu.setAttribute('aria-label','Conversation modes');q('mock-learner-header').append(menu);document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLiveModeMenu();q('mock-learner-mode')?.focus();}});document.addEventListener('click',e=>{if(!menu.contains(e.target)&&!q('mock-learner-mode')?.contains(e.target))closeLiveModeMenu();});}
+ menu.replaceChildren();
+ const options=[['text','Text','Read and type.'],['voice','Standard voice','Your chosen lesson model, transcription and spoken replies.']];
+ if(labState.verifiedAdmin)options.push(['live','GPT Live','Live generates the teaching. $0.05/min + understanding checks.']);
+ options.push(['car','Car','A simpler view of standard voice.']);
+ for(const [choice,title,note]of options){const b=document.createElement('button');b.type='button';b.textContent=title;const small=document.createElement('small');small.textContent=note;b.append(small);b.onclick=()=>void chooseLiveConversationMode(choice);if(choice==='live'&&labState.pipelineStage!=='lesson'){b.disabled=true;small.textContent='Available in the researched teaching lesson.';}menu.append(b);}
+ menu.hidden=false;q('mock-learner-mode').setAttribute('aria-expanded','true');menu.querySelector('button')?.focus();
+}
+
 
 function renderMockLearnerShell() {
   const shell = q("mock-learner-shell");
@@ -15237,7 +15241,7 @@ function renderMockLearnerShell() {
   const active = mockLearnerConversationActive();
   shell.hidden = !active;
   document.body.classList.toggle("mock-learner-shell-active", active);
-  if (!active) { window.WorldviewLiveLesson?.sync({enabled:false,lineage:""}); cancelMockLearnerScrollMotion(); closeMockLearnerSources(); return; }
+  if (!active) { window.WorldviewLiveConversation?.sync({enabled:false,lineage:""}); cancelMockLearnerScrollMotion(); closeMockLearnerSources(); return; }
 
   const artifact = selectedPipelineArtifact();
   const selection = artifact ? selectedPipelineMapRecord(artifact) : null;
@@ -19209,7 +19213,7 @@ function bindEvents() {
   q("pipeline-learner-exit").addEventListener("click", openMockSetup);
   q("mock-learner-back")?.addEventListener("click", openMockSetup);
   bindMockLearnerDensity();
-  q("mock-learner-mode")?.addEventListener("click", () => { void switchMockLearnerConversationMode(); });
+  q("mock-learner-mode")?.addEventListener("click", () => { toggleLiveModeMenu(); });
   q("mock-learner-sources")?.addEventListener("click", toggleMockLearnerSources);
   q("mock-learner-source-close")?.addEventListener("click", () => closeMockLearnerSources({ restoreFocus:true }));
   for (const eventName of ["pointermove", "pointerleave", "focusin", "focusout", "scroll", "touchstart"]) {

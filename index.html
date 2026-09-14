@@ -2181,16 +2181,17 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <script src="config.js"></script>
 <!-- optional: data.js is a shared lessons file — auto-loaded so browsers/devices stay in sync -->
 <script src="data.js"></script>
-<script src="models.js?v=2.1.23"></script>
+<script src="models.js?v=2.1.25"></script>
 <script>
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.24 · Sep 13";
+const BUILD = "v2.1.25 · Sep 13";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
 const VERSIONS = [
+  { tag:"v2.1.25", date:"Sep 13", changes:["GPT Live teaches from saved lesson research in a continuous conversation, without Review or Send each turn.","Choose Text, Standard voice, GPT Live or Car inside the lesson. Live has no app-imposed 90-second cutoff.","Conversation saves automatically; separate background checks record Live understanding progress. Optional captions keep the screen quiet."] },
   { tag:"v2.1.24", date:"Sep 13", changes:["Extraction establishes the world, foundations and connections before specific knowledge and Lesson entry.","Context uses plain descriptions and spatial relationships without unnecessary measurements or unsupported claims."] },
   { tag:"v2.1.23", date:"Sep 13", changes:["Models has separate company and model menus, feature presets and quieter price details.","Owners can select GPT Live for real lesson conversations, with explicit 90-second paid starts.","Live answers are reviewed before sending through the normal lesson and understanding checks."] },
 

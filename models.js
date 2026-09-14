@@ -160,7 +160,7 @@ const key = 'worldview-home-models-v1';
 const legacyKey = 'worldview-lab-mock-run-config-gemini38-v2';
 const voiceKey = 'wv-lab-voice-routes';
 const liveKey = 'worldview-live-lesson-stages-v1';
-const liveStages = ['clarification','extraction','lesson','quiz'];
+const liveStages = ['lesson'];
 function liveEnabled(stage,storage=localStorage) { return liveStages.includes(stage) && read(storage,liveKey)[stage] === true; }
 const labels = {clarification:'Getting started',map:'Lesson planning',extraction:'Your starting knowledge',lesson:'Tutor',brain:'Understanding checks',quiz:'Final review'};
 const links = {anthropic:'https://platform.claude.com/docs/en/about-claude/pricing',google:'https://ai.google.dev/gemini-api/docs/pricing',openai:'https://developers.openai.com/api/docs/pricing',xai:'https://docs.x.ai/developers/models',deepgram:'https://deepgram.com/pricing'};
@@ -232,9 +232,9 @@ function render(host,{admin=false,onVoice=()=>{},storage=localStorage}={}) {
    badge.textContent=useLive?'Live voice':selected.model===recommended.model&&selected.provider===recommended.provider?'Recommended':'Custom';
    badge.classList.toggle('is-live',useLive);
    const rate=rates[selected.model];
-   price.textContent=useLive?'$0.05 / minute + lesson models':selected.model==='device'?'No cloud voice charge':rate?'$'+rate[0]+' in · $'+rate[1]+' out / 1M tokens':selected.model.startsWith('aura-2-')?'$0.030 / 1,000 characters':'See provider pricing';
-   liveNote.hidden=!useLive;liveNote.textContent='Live handles this conversation. '+(choices[selected.provider].models.find(m=>m.id===selected.model)?.label||selected.model)+' still handles lesson decisions. Start Live inside the lesson; selecting it here does not start billing.';
-   explanation.replaceChildren();explanation.append(useLive?'About $0.075 for each 90-second test in your saved lesson. Connected silence counts. Startup may cost $0.0125, credited to a running session. Lesson models and research cost extra. Owner testing: up to ten starts per day. ':rate?'Standard uncached USD API rates. These are token prices, not a fixed lesson quote. Caching, research and long context can change the total. ':'A current per-lesson estimate is unavailable for this model. ');
+   price.textContent=useLive?'$0.05 / minute + understanding checks':selected.model==='device'?'No cloud voice charge':rate?'$'+rate[0]+' in · $'+rate[1]+' out / 1M tokens':selected.model.startsWith('aura-2-')?'$0.030 / 1,000 characters':'See provider pricing';
+   liveNote.hidden=!useLive;liveNote.textContent='Live generates the teaching replies. Your selected Brain model checks understanding in the background. Choose GPT Live beside Text / Voice in the researched lesson, then Start. Selecting it here does not start billing.';
+   explanation.replaceChildren();explanation.append(useLive?'Voice costs about $1.50 for 30 minutes or $3 for an hour. Connected silence counts. Startup may cost $0.0125, credited to a running session. Understanding checks and earlier lesson research cost extra. Owner testing: up to ten starts per day. ':rate?'Standard uncached USD API rates. These are token prices, not a fixed lesson quote. Caching, research and long context can change the total. ':'A current per-lesson estimate is unavailable for this model. ');
    const a=el('a','','Official pricing');a.href=useLive?'https://developers.openai.com/api/docs/models/gpt-live-1':links[selected.provider]||'';a.target='_blank';a.rel='noopener noreferrer';if(a.href&&selected.provider!=='device')explanation.append(a);
   }
   function commit(next,resetLive=false){if(!save(next)){fill();return;}selected=next;if(canLive&&(useLive||resetLive))liveChoice(false);fill();}
