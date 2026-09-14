@@ -1871,7 +1871,9 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
           <div id="source-carousel" aria-label="Source lessons">
             <article id="source-panel" class="source-create-card">
               <button id="source-close" type="button" aria-label="Close source entry">&times;</button>
-              <h3 id="source-title">Add a source</h3>
+              <h3 id="source-title" tabindex="-1">Sources</h3>
+              <p id="source-placeholder" style="margin:0 0 16px;color:var(--ink-soft);font-size:15px;line-height:1.5">Sources is a placeholder and isn’t available yet.</p>
+              <fieldset hidden disabled style="display:none">
               <input id="source-url" type="url" inputmode="url" autocomplete="url" aria-label="Webpage link" placeholder="Paste a webpage link">
               <div class="source-input-divider"><span>or</span></div>
               <button id="source-file-button" type="button">Choose a photo or PDF</button>
@@ -1882,10 +1884,11 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
                 <button id="source-file-clear" type="button" aria-label="Remove selected file">&times;</button>
               </div>
               <button id="source-start" type="button">Start lesson</button>
+              </fieldset>
               <div id="source-status" role="status" aria-live="polite"></div>
             </article>
           </div>
-          <button id="source-category-add" class="category-add-button" type="button" aria-label="Create or organize source folders"><span class="category-add-icon">+</span><span>Folders</span></button>
+          <button hidden disabled style="display:none" id="source-category-add" class="category-add-button" type="button" aria-label="Create or organize source folders"><span class="category-add-icon">+</span><span>Folders</span></button>
         </div>
         <button id="home-archive-entry" class="archive-drawer" type="button"><span aria-hidden="true">▤</span><span><strong>Archive</strong><small>Kept out of the way, still yours</small></span><b id="home-archive-count">0</b><span aria-hidden="true">›</span></button>
       </section>
@@ -2186,11 +2189,15 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.27 · Sep 13";
+const BUILD = "v2.1.28 · Sep 13";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
+const SOURCES_PLACEHOLDER = true;
+const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
+
 const VERSIONS = [
+  { tag:"v2.1.28", date:"Sep 13", changes:["Sources is now a placeholder. Source uploads and source lessons are unavailable for now."] },
   { tag:"v2.1.27", date:"Sep 13", changes:["Keep Models and your current page open when you switch apps or return to the window. Account checks no longer dismiss Models while reconnecting."] },
   { tag:"v2.1.26", date:"Sep 13", changes:["Teaching repairs one missing person, place or relationship before asking you to reason from it.","Saved Lesson replies can recover partial results and unchanged models without the repeated model-change rejection."] },
   { tag:"v2.1.25", date:"Sep 13", changes:["GPT Live teaches from saved lesson research in a continuous conversation, without Review or Send each turn.","Choose Text, Standard voice, GPT Live or Car inside the lesson. Live has no app-imposed 90-second cutoff.","Conversation saves automatically; separate background checks record Live understanding progress. Optional captions keep the screen quiet."] },
@@ -7437,6 +7444,7 @@ function createLessonPlanningProgress(lesson, planningBubble, wantsVoice) {
 }
 
 async function beginLesson(topic, methodKey, starterText, parentId, sourceUrl, sourceMedia, intakeContext, startToken = "") {
+  if (SOURCES_PLACEHOLDER && (sourceUrl || sourceMedia)) { showSourcesPlaceholder(); return null; }
   if (!await ensureStableIdentityForMutation("start a lesson")) return null;
   if (!aiAvailable()) { openSettings(); toast("Enter the access code, then Save."); return; }
   if (!intakeContext || intakeContext.version !== LESSON_INTAKE_PROMPT_VERSION) {
@@ -10500,6 +10508,7 @@ function renderConversationModelSwitches() {
 }
 
 function openChat(id, noVoice, entryConfirmed = false) {
+  if (SOURCES_PLACEHOLDER && isSourceLesson(getLesson(id))) { showSourcesPlaceholder(); return; }
   if (String(id || "").startsWith("learner:")) { openHomeLearnerRun({runId:String(id).slice(8)});return; }
   const lesson = getLesson(id);
   if (!lesson) return;
@@ -11416,6 +11425,7 @@ async function createCustomCategory() {
   save();renderCategoryOrganizer();renderHome();
 }
 function openCategoryOrganizer(lessonId = null,section = "explore") {
+  if (SOURCES_PLACEHOLDER && section === "upload") { showSourcesPlaceholder(); return; }
   if (!$("category-organizer").classList.contains("open")) organizerReturnFocus = document.activeElement;
   categoryOrganizerState.archive = false;
   categoryOrganizerState.lessonId = lessonId;
@@ -11532,6 +11542,7 @@ function renderSourceLibrary() {
   const row = $("source-carousel");
   if (!row) return;
   row.querySelectorAll("[data-source-lesson-id],[data-source-category-id],[data-source-category-return]").forEach(card => card.remove());
+  if (SOURCES_PLACEHOLDER) return;
   const uploadCategories = categoriesForSection("upload");
   if (sourceLibraryCategoryId && !uploadCategories.some(category => category.id === sourceLibraryCategoryId)) sourceLibraryCategoryId = null;
   if (!sourceLibraryCategoryId) {
@@ -11590,6 +11601,7 @@ function closeSourcePreview() {
   $("source-preview-media").innerHTML = "";
 }
 async function openSourcePreview(id) {
+  if (SOURCES_PLACEHOLDER) { showSourcesPlaceholder(); return; }
   const lesson = getLesson(id);
   if (!lesson) return;
   sourcePreviewLessonId = id;
@@ -11633,6 +11645,7 @@ $("source-preview-sheet").onclick = event => { if (event.target === $("source-pr
 $("source-preview-path").onclick = () => { const id=sourcePreviewLessonId; closeSourcePreview(); if (id) openSourceTree(id); };
 $("source-preview-continue").onclick = () => { const id=sourcePreviewLessonId; closeSourcePreview(); if (id) openChat(id); };
 function openSourceTree(id) {
+  if (SOURCES_PLACEHOLDER) { showSourcesPlaceholder(); return; }
   const lesson = getLesson(id);
   if (!lesson) return;
   sourceTreeLessonId = id;
@@ -11676,6 +11689,7 @@ function clearPendingSourceFile() {
   $("source-pending-visual").innerHTML = "";
 }
 function showPendingSourceFile(file) {
+  if (SOURCES_PLACEHOLDER) { showSourcesPlaceholder(); return; }
   clearPendingSourceFile();
   pendingSourceFile = file;
   const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
@@ -11688,18 +11702,23 @@ function showPendingSourceFile(file) {
   $("source-pending-preview").classList.add("show");
   $("source-status").textContent = "";
 }
+function showSourcesPlaceholder() {
+  openSourceSheet();
+  toast(SOURCES_PLACEHOLDER_MESSAGE);
+}
 function openSourceSheet() {
   cancelActiveDictationForNavigation();
   closeDrawer();
   show("home");
   $("source-status").textContent = "";
   $("source-page").scrollIntoView({ behavior: "smooth", block: "start" });
-  if (matchMedia("(pointer:fine)").matches) setTimeout(() => $("source-url").focus(), 380);
+  $("source-title").focus({preventScroll:true});
 }
 function closeSourceSheet() {
   $("carousel-page").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 async function startSourceLesson() {
+  if (SOURCES_PLACEHOLDER) { showSourcesPlaceholder(); return; }
   const raw = $("source-url").value.trim();
   if (!raw && !pendingSourceFile) { $("source-status").textContent = "Add a webpage, photo, or PDF first."; return; }
   if (!aiAvailable()) { openSettings(); toast("Enter the access code, then Save."); return; }
@@ -11755,7 +11774,7 @@ $("nav-settings").onclick = () => { closeDrawer(); openSettings(); };
 $("source-close").onclick = closeSourceSheet;
 $("source-start").onclick = startSourceLesson;
 $("source-url").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); startSourceLesson(); } };
-$("source-file-button").onclick = () => $("source-file").click();
+$("source-file-button").onclick = () => { if (SOURCES_PLACEHOLDER) { showSourcesPlaceholder(); return; } $("source-file").click(); };
 $("source-file").onchange = event => { const file=event.target.files && event.target.files[0]; if (file) showPendingSourceFile(file); };
 $("source-file-clear").onclick = event => { event.stopPropagation();clearPendingSourceFile(); };
 document.addEventListener("keydown", e => {
