@@ -2189,7 +2189,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.30 · Sep 13";
+const BUILD = "v2.1.31 · Sep 13";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2197,6 +2197,8 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.31",date:"Sep 13",changes:["Extraction responds to your starting picture, corrects broad misunderstandings and adds a little context before one connected question.","Foundations deepen naturally without requiring precise details; lesson planning keeps the relevant people, period and everyday setting."]},
+
   { tag:"v2.1.30", date:"Sep 13", changes:["Choose one Conversation model across all stages, with a separate Lesson map model.","Individual stage overrides and background checks are available under Advanced.","GPT Live hides separate transcription and text-to-speech controls when it handles the whole conversation."] },
   { tag:"v2.1.29", date:"Sep 13", changes:["GPT Live now supports Clarification, Extraction, Tutor and the final Quiz.","Spoken approvals and saved evidence move the conversation between phases on the same Live connection.","Phase handoffs save privately, survive reloads and reject late or duplicate transitions. Final Quiz uses fresh answers."] },
   { tag:"v2.1.28", date:"Sep 13", changes:["Sources is now a placeholder. Source uploads and source lessons are unavailable for now."] },
