@@ -1637,7 +1637,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .lesson-options-button{left:8px;top:8px;width:44px;height:44px;padding:0}
   #home-archive-entry{margin-bottom:calc(env(safe-area-inset-bottom) + 60px)}
 </style>
-<link rel="stylesheet" href="models.css?v=2.1.23">
+<link rel="stylesheet" href="models.css?v=2.1.30">
 <link rel="stylesheet" href="appearance.css?v=2.1.20">
 <script src="appearance.js?v=2.1.20"></script>
 </head>
@@ -2184,12 +2184,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <script src="config.js"></script>
 <!-- optional: data.js is a shared lessons file — auto-loaded so browsers/devices stay in sync -->
 <script src="data.js"></script>
-<script src="models.js?v=2.1.29"></script>
+<script src="models.js?v=2.1.30"></script>
 <script>
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.29 · Sep 13";
+const BUILD = "v2.1.30 · Sep 13";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2197,6 +2197,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  { tag:"v2.1.30", date:"Sep 13", changes:["Choose one Conversation model across all stages, with a separate Lesson map model.","Individual stage overrides and background checks are available under Advanced.","GPT Live hides separate transcription and text-to-speech controls when it handles the whole conversation."] },
   { tag:"v2.1.29", date:"Sep 13", changes:["GPT Live now supports Clarification, Extraction, Tutor and the final Quiz.","Spoken approvals and saved evidence move the conversation between phases on the same Live connection.","Phase handoffs save privately, survive reloads and reject late or duplicate transitions. Final Quiz uses fresh answers."] },
   { tag:"v2.1.28", date:"Sep 13", changes:["Sources is now a placeholder. Source uploads and source lessons are unavailable for now."] },
   { tag:"v2.1.27", date:"Sep 13", changes:["Keep Models and your current page open when you switch apps or return to the window. Account checks no longer dismiss Models while reconnecting."] },

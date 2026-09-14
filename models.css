@@ -16,3 +16,5 @@
 .model-presets[hidden],.model-custom[hidden],.model-live-note[hidden]{display:none}.model-custom{display:flex;gap:8px;margin-top:8px}.model-custom button{width:auto;white-space:nowrap}.models-status{min-height:18px;margin:8px 0 0}
 #models-list :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 @media(max-width:360px){.model-setting-controls{grid-template-columns:minmax(0,1fr)}.model-badge{font-size:9px}}
+
+.models-standard-voice[hidden]{display:none}
