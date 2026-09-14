@@ -1626,7 +1626,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .lesson-options-button{left:8px;top:8px;width:44px;height:44px;padding:0}
   #home-archive-entry{margin-bottom:calc(env(safe-area-inset-bottom) + 60px)}
 </style>
-<link rel="stylesheet" href="models.css?v=2.1.30">
+<link rel="stylesheet" href="models.css?v=2.1.35">
 <link rel="stylesheet" href="appearance.css?v=2.1.20">
 <script src="appearance.js?v=2.1.20"></script>
 </head>
@@ -2173,12 +2173,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <script src="config.js"></script>
 <!-- optional: data.js is a shared lessons file — auto-loaded so browsers/devices stay in sync -->
 <script src="data.js"></script>
-<script src="models.js?v=2.1.30"></script>
+<script src="models.js?v=2.1.35"></script>
 <script>
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.34 · Sep 14";
+const BUILD = "v2.1.35 · Sep 14";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2186,6 +2186,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.35",date:"Sep 14",changes:["GPT Live is the default for Voice and Car, with automatic start and return.","Car uses the same live conversation, with mute instead of hold or tap recording.","Models has separate Voice and Text views. Live microphone setup handles the iPhone audio-session conflict."]},
   { tag:"v2.1.34", date:"Sep 14", changes:["Removed the recording button from Ask Anything. Type your topic and select Begin."] },
   {tag:"v2.1.33",date:"Sep 14",changes:["Lesson cards open a compact mode-selection popup on Home.","Choose Text, Voice or Car before entering; your choice carries into the lesson.","Remaining startup work shows as lesson loading, without a second mode-selection step."]},
   { tag:"v2.1.32", date:"Sep 14", changes:["Extraction uses a concise starting picture, relevant context and a faster path when requested.","Live reuses researched material across the scope and receives one quiet handoff per saved update.","Lost voice connections expose a saved continuation after a short recovery window."] },

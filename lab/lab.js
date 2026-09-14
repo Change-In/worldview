@@ -129,7 +129,7 @@ async function startLearnerEntry(mode = labState.learnerEntryMode) {
   if (!LAB_LEARNER || !labState.learnerEntryReady || labState.learnerEntryStarting
     || !labState.accessVerified || !labState.verifiedUserId || labState.workspaceOwnerId !== labState.verifiedUserId
     || !["text", "voice", "car"].includes(mode)) return false;
-  if (mode !== "text" && (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder)) {
+  if (mode !== "text" && (!navigator.mediaDevices?.getUserMedia || (!liveVoiceAvailable()&&!window.MediaRecorder))) {
     q("learner-entry-status").textContent = "This browser cannot record audio. Choose Text to continue.";
     return false;
   }
@@ -146,7 +146,7 @@ async function startLearnerEntry(mode = labState.learnerEntryMode) {
         ...(selected.resume ? { resume:{ ...selected.resume, conversationMode } } : {}) };
       labState.clarification.mode = conversationMode;
       labState.extraction.mode = conversationMode;
-      if (mode !== "text") void primeMockVoiceAudio();
+      if (mode !== "text"&&!liveVoiceAvailable()) void primeMockVoiceAudio();
       await continueMockRunFromSetup(row);
       assertLabRequestOwner(epoch, ownerId);
       if (labState.mockSetupActive) throw new Error("Saved checkpoint unavailable");
@@ -12461,6 +12461,7 @@ function closePipelineExtractionMapDialog({ restoreFocus = true } = {}) {
 }
 
 function setPipelineExtractionAudioSession(type) {
+  if(window.WorldviewLiveConversation?.ownsAudio?.()||liveLessonSelected())type="play-and-record";
   try {
     if (navigator.audioSession && "type" in navigator.audioSession && navigator.audioSession.type !== type) navigator.audioSession.type = type;
   } catch (_) { /* The browser owns the physical route when this API is unavailable. */ }
@@ -12820,6 +12821,7 @@ function releaseLabMicrophoneStream(state, expectedStream = null) {
 }
 
 async function prepareMockMicrophone() {
+  if(liveLessonSelected())return;
   // Browser access notices can recur even for granted permission. Rendering,
   // phase changes and foreground return never open a microphone connection.
   // Only the learner's actual recording gesture acquires the device.
@@ -12973,10 +12975,12 @@ function extractionShouldCarryClarificationVoice() {
 }
 
 function primePipelineExtractionAudio() {
+  if (liveLessonSelected() || window.WorldviewLiveConversation?.ownsAudio?.()) return Promise.resolve(false);
   return primeMockVoiceAudio();
 }
 
 async function requestPipelineExtractionVoice() {
+  if (liveLessonSelected()) return true;
   const state = labState.extraction;
   const statusId = pipelineVoiceStatusId();
   if (state.mode !== "voice" || state.modeSwitching) return false;
@@ -13245,6 +13249,7 @@ function setMockVoicePlaybackCancel(token, cancel) {
 }
 
 function primeMockVoiceAudio() {
+  if (liveLessonSelected() || window.WorldviewLiveConversation?.ownsAudio?.()) return Promise.resolve(false);
   const { audio, token } = beginMockVoicePlayback("prime");
   labState.clarification.audioPrimed = false;
   labState.extraction.audioPrimed = false;
@@ -14291,6 +14296,7 @@ function startMockVoiceMeter(state, recorder, isCurrent) {
 }
 
 function renderMockRecordingControls() {
+  if(liveLessonSelected())return;
   const { state, latched, ready, blocked, holdActive, listening, derived } = mockRecordingControlState();
   const capturing = state.recorder?.state === "recording" && state.recorder.wvReadyAnnounced === true;
   const recording = state.recorder?.state === "recording";
@@ -14340,6 +14346,7 @@ function renderMockRecordingControls() {
 }
 
 function toggleMockRecording(event) {
+  if(liveLessonSelected())return;
   event?.preventDefault?.();
   const control = mockRecordingControlState();
   if (event?.currentTarget?.disabled) return;
@@ -14536,7 +14543,8 @@ function placeLabConnectionNotice(active, surface) {
 }
 
 function renderMockCarMode() {
-  const available = mockCarConversationAvailable();
+  const nativeLive=liveLessonSelected();
+  const available = nativeLive?mockLearnerConversationActive():mockCarConversationAvailable();
   const ready = mockCarConversationReady();
   const active = available && labState.mockCar.active;
   document.body.classList.toggle("mock-car-active", active);
@@ -14547,6 +14555,11 @@ function renderMockCarMode() {
     setMockCarIsolation(false, surface);
     setMockCarIsolation(true, q("pipeline-extraction-map-dialog"));
   } else setMockCarIsolation(active, surface);
+  if(surface)surface.dataset.live=String(nativeLive);
+  const liveHost=q('mock-car-live');if(liveHost)liveHost.hidden=!(nativeLive&&active);
+  const exit=q('mock-car-live-exit');if(exit)exit.hidden=!nativeLive;
+  window.WorldviewLiveConversation?.place?.(nativeLive&&active?liveHost:q('mock-learner-composer'),nativeLive&&active);
+  if(nativeLive){q('mock-learner-car').hidden=false;q('mock-learner-car').setAttribute('aria-pressed',String(active));return;}
   const ids = {
     clarification:"clarification-car-mode",
     extraction:"pipeline-extraction-car-mode",
@@ -14619,6 +14632,12 @@ async function retryMockCarAction() {
 }
 
 async function enterMockCarMode() {
+  if(liveVoiceAvailable()){
+    labState.mockCar.returnFocus=document.activeElement;
+    const state=labState.pipelineStage==='clarification'?labState.clarification:labState.extraction;
+    state.mode='voice';labState.mockCar.active=true;persistClarificationSettings();
+    renderMockLearnerShell();q('mock-car-live-exit')?.focus({preventScroll:true});return true;
+  }
   if (!mockCarConversationAvailable()) return false;
   cancelMockLearnerScrollMotion();
   const entryToken = makeId();
@@ -14654,6 +14673,7 @@ async function enterMockCarMode() {
 }
 
 function cancelMockCarCapture() {
+  if(liveLessonSelected())return;
   labState.mockRecordingGesture = null;
   if (labState.pipelineStage === "clarification") {
     const state = labState.clarification;
@@ -14675,6 +14695,11 @@ function cancelMockCarCapture() {
 }
 
 function exitMockCarMode({ switchToText = false } = {}) {
+  if(liveLessonSelected()){
+    labState.mockCar.active=false;
+    if(switchToText){void chooseLiveConversationMode('text');return;}
+    renderMockLearnerShell();q('mock-learner-car')?.focus({preventScroll:true});return;
+  }
   const returnFocus = labState.mockCar.returnFocus;
   labState.mockCar.entryToken = makeId();
   cancelMockCarCapture();
@@ -14697,6 +14722,7 @@ function exitMockCarMode({ switchToText = false } = {}) {
 }
 
 function startMockCarRecording(event) {
+  if(liveLessonSelected())return;
   if (!labState.mockCar.active || !mockCarConversationReady()) return;
   const control = mockRecordingControlState();
   if (control.latched) { beginMockRecordingGesture(event, true); return; }
@@ -14708,6 +14734,7 @@ function startMockCarRecording(event) {
 }
 
 function stopMockCarRecording(event) {
+  if(liveLessonSelected())return;
   if (!labState.mockCar.active) return;
   const cancelled = ["pointercancel", "lostpointercapture"].includes(event?.type);
   if (labState.pipelineStage === "clarification") {
@@ -15240,6 +15267,7 @@ function mockLearnerMapState(stage, artifact) {
 }
 
 let liveConversationMounted=false;
+function liveVoiceAvailable(stage=labState.pipelineStage){return Boolean(labState.accessVerified&&labState.verifiedAdmin&&labState.pipelineMode==='mock'&&['clarification','extraction','lesson','quiz'].includes(stage)&&window.WorldviewModels?.liveEnabled(stage));}
 function liveLessonSelected(stage=labState.pipelineStage){
  const mode=stage==='clarification'?labState.clarification.mode:labState.extraction.mode;
  return Boolean(labState.accessVerified&&labState.verifiedAdmin&&labState.pipelineMode==='mock'&&['clarification','extraction','lesson','quiz'].includes(stage)&&mode==='voice'&&window.WorldviewModels?.liveEnabled(stage));
@@ -15268,35 +15296,44 @@ function syncLiveLesson(){
  const live=window.WorldviewLiveConversation;if(!live||!q('mock-learner-composer'))return;
  if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),onStudy:applyLiveJourney,
   requestForCurrentAccount:()=>{const token=labState.verifiedAccessToken;return async body=>{const response=await fetch(SUPABASE_URL+'/functions/v1/live-trial',{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(body.action==='journey_check'?150000:40000)});const result=await response.json();if(!response.ok)throw Error(result.error?.message||'Live lesson is unavailable.');return result;};},
-  releaseMedia:()=>{setLiveVoicePreference(true);stopClarificationCaptureForModeChange();stopClarificationSpeech();stopPipelineExtractionVoice();labState.mockCar.active=false;}
+  releaseMedia:()=>{stopClarificationCaptureForModeChange();stopClarificationSpeech();stopPipelineExtractionVoice();if(typeof releaseClarificationTopicCapture==='function')releaseClarificationTopicCapture();}
  });}
  const stage=labState.pipelineStage,artifact=selectedPipelineArtifact(),selection=artifact?selectedPipelineMapRecord(artifact):null;
  const transcript=mockLearnerTranscript(stage,artifact),selected=liveLessonSelected(stage)&&mockLearnerConversationActive();
  const runId=artifact?.runId||labState.clarification.runId;
  const lineage=[labState.verifiedUserId,runId].join('|');
- const busy=stage==='clarification'?labState.clarification.busy:stage==='extraction'?labState.extractionBusy:stage==='lesson'?labState.lessonBusy:labState.quiz.busy;
- live.sync({enabled:selected,lineage,history:[],ready:selected&&!busy,studyInput:selected?liveStudyInput(artifact,selection,transcript):null});
- if(selected){q('mock-learner-voice-controls').hidden=true;q('mock-learner-car').hidden=true;q('mock-learner-scroll').hidden=true;q('mock-learner-waiting').hidden=true;q('mock-learner-retry').hidden=true;q('mock-learner-status').textContent='';}
+ live.sync({enabled:selected,lineage,history:[],ready:selected,autoStart:true,car:labState.mockCar.active,studyInput:selected?liveStudyInput(artifact,selection,transcript):null});
+ if(selected){q('mock-learner-voice-controls').hidden=true;q('mock-learner-car').hidden=false;q('mock-learner-scroll').hidden=true;q('mock-learner-waiting').hidden=true;q('mock-learner-retry').hidden=true;q('mock-learner-status').textContent='';}
  const mode=stage==='clarification'?labState.clarification.mode:labState.extraction.mode;
- const label=selected?'GPT Live':mode==='voice'?'Voice':'Text';q('mock-learner-mode').textContent=label+' ⌄';q('mock-learner-mode').setAttribute('aria-label','Conversation mode: '+label);
+ const label=selected?'GPT Live':mode==='voice'?'Voice':'Text';q('mock-learner-mode').textContent=label+' ⌄';q('mock-learner-mode').setAttribute('aria-label','Conversation mode: '+label);renderMockCarMode();
 }
 function setLiveVoicePreference(value){
- const key=window.WorldviewModels?.liveKey;if(!key)return;
- try{const saved=JSON.parse(localStorage.getItem(key)||'{}');for(const stage of ['clarification','extraction','lesson','quiz'])saved[stage]=value;localStorage.setItem(key,JSON.stringify(saved));}catch{setMessage('mock-learner-status','Could not save the voice choice on this device.');}
+ const key=window.WorldviewModels?.voiceRouteKey;if(!key)return;
+ try{localStorage.setItem(key,JSON.stringify({mode:value?'live':'standard'}));}catch{setMessage('mock-learner-status','Could not save the voice choice on this device.');}
 }
 function closeLiveModeMenu(){const menu=q('live-mode-menu');if(menu)menu.hidden=true;q('mock-learner-mode')?.setAttribute('aria-expanded','false');}
 async function chooseLiveConversationMode(choice){
- closeLiveModeMenu();void window.WorldviewLiveConversation?.stop('Voice mode changed.');setLiveVoicePreference(choice==='live');
- const mode=labState.pipelineStage==='clarification'?labState.clarification.mode:labState.extraction.mode;
- if((choice==='text'&&mode==='voice')||(choice!=='text'&&mode!=='voice'))await switchMockLearnerConversationMode();
- if(choice==='car')await enterMockCarMode();else if(labState.mockCar.active){labState.mockCar.active=false;stopMockCarMedia();}
+ closeLiveModeMenu();
+ if(choice!=='text'&&labState.verifiedAdmin)setLiveVoicePreference(true);
+ const state=labState.pipelineStage==='clarification'?labState.clarification:labState.extraction;
+ if(choice==='text'){
+  stopClarificationCaptureForModeChange();stopClarificationSpeech();stopPipelineExtractionVoice();
+  state.mode='text';labState.mockCar.active=false;persistClarificationSettings();
+  void window.WorldviewLiveConversation?.stop('Voice paused.',{pause:true});
+ }else if(liveVoiceAvailable()){
+  state.mode='voice';persistClarificationSettings();
+  if(choice==='car'){await enterMockCarMode();return;}
+  labState.mockCar.active=false;
+ }else{
+  if(state.mode!=='voice')await switchMockLearnerConversationMode();
+  if(choice==='car')await enterMockCarMode();
+ }
  renderMockLearnerShell();
 }
 function toggleLiveModeMenu(){
  let menu=q('live-mode-menu');if(menu&&!menu.hidden){closeLiveModeMenu();return;}
  if(!menu){menu=document.createElement('div');menu.id='live-mode-menu';menu.className='live-mode-menu';menu.setAttribute('aria-label','Conversation modes');q('mock-learner-header').append(menu);document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLiveModeMenu();q('mock-learner-mode')?.focus();}});document.addEventListener('click',e=>{if(!menu.contains(e.target)&&!q('mock-learner-mode')?.contains(e.target))closeLiveModeMenu();});}
- menu.replaceChildren();const options=[['text','Text','Read and type.'],['voice','Standard voice','Your chosen lesson model, transcription and spoken replies.']];
- if(labState.verifiedAdmin)options.push(['live','GPT Live','Talk through every phase. $0.05/min + background checks.']);options.push(['car','Car','A simpler view of standard voice.']);
+ menu.replaceChildren();const options=[['text','Text',''],[labState.verifiedAdmin?'live':'voice',labState.verifiedAdmin?'GPT Live':'Voice',labState.verifiedAdmin?'$0.05/min':''],['car','Car','']];
  for(const [choice,title,note]of options){const b=document.createElement('button');b.type='button';b.textContent=title;const small=document.createElement('small');small.textContent=note;b.append(small);b.onclick=()=>void chooseLiveConversationMode(choice);menu.append(b);}
  menu.hidden=false;q('mock-learner-mode').setAttribute('aria-expanded','true');menu.querySelector('button')?.focus();
 }
@@ -15670,6 +15707,7 @@ function finishMockRecordingGesture(event) {
 }
 
 function startMockLearnerRecording(event) {
+  if(liveLessonSelected())return;
   const control = mockRecordingControlState();
   if (control.latched) { beginMockRecordingGesture(event, true); return; }
   if (control.blocked || control.holdActive) return;
@@ -15680,6 +15718,7 @@ function startMockLearnerRecording(event) {
 }
 
 function stopMockLearnerRecording(event) {
+  if(liveLessonSelected())return;
   const cancelled = ["pointercancel", "lostpointercapture"].includes(event?.type);
   if (labState.pipelineStage === "clarification") {
     if (cancelled) cancelClarificationRecording(event); else stopClarificationRecording(event);
@@ -16669,6 +16708,7 @@ function cancelClarificationRecordingArmOnMove(event) {
 }
 
 function setClarificationAudioSession(type) {
+  if(window.WorldviewLiveConversation?.ownsAudio?.()||liveLessonSelected())type="play-and-record";
   try {
     if (navigator.audioSession && "type" in navigator.audioSession && navigator.audioSession.type !== type) navigator.audioSession.type = type;
   } catch (_) { /* The browser owns the physical route when this API is unavailable. */ }
@@ -17784,6 +17824,7 @@ async function resumeSavedMockRun(resumeValue = labState.pendingMockResume) {
 }
 
 function primeClarificationAudio() {
+  if (liveLessonSelected() || window.WorldviewLiveConversation?.ownsAudio?.()) return Promise.resolve(false);
   const state = labState.clarification;
   try { return primeMockVoiceAudio(); }
   catch (_) { state.audioPrimed = false; return Promise.resolve(false); }
@@ -18461,7 +18502,7 @@ async function startClarification(mode) {
   state.recoveryRoutes = [];
   state.retryableModelTurn = -1;
   if (mode === "voice" && !labState.preview) {
-    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    if (!navigator.mediaDevices?.getUserMedia || (!liveVoiceAvailable() && !window.MediaRecorder)) {
       setClarificationLaunchError("This browser does not expose microphone recording. Use Text on this device.");
       return;
     }
@@ -18495,6 +18536,13 @@ async function startClarification(mode) {
     q("clarification-surface").classList.add("has-reply");
     setMessage("clarification-message", "Use the authenticated Lab to run the selected model.", "error");
     if (typeof persistClarificationSettings === "function") persistClarificationSettings();
+    return;
+  }
+
+  if (liveLessonSelected()) {
+    setClarificationActivity(false);
+    persistClarificationSettings();
+    renderMockLearnerShell();
     return;
   }
 
@@ -19379,6 +19427,7 @@ function bindEvents() {
   for (const id of ["clarification-car-mode", "pipeline-extraction-car-mode", "pipeline-lesson-car-mode", "pipeline-quiz-car-mode"]) {
     q(id)?.addEventListener("click", () => { void enterMockCarMode(); });
   }
+  q("mock-car-live-exit")?.addEventListener("click",()=>exitMockCarMode());
   q("mock-car-text")?.addEventListener("click", () => exitMockCarMode({ switchToText:true }));
   q("mock-car-speaker")?.addEventListener("click", () => { void toggleMockCarSpeaker(); });
   for (const route of ["speaker", "receiver"]) q(`mock-car-output-${route}`)?.addEventListener("click", () => { void chooseMockPhoneOutput(route); });

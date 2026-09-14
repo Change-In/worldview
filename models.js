@@ -160,8 +160,9 @@ const key = 'worldview-home-models-v1';
 const legacyKey = 'worldview-lab-mock-run-config-gemini38-v2';
 const voiceKey = 'wv-lab-voice-routes';
 const liveKey = 'worldview-live-lesson-stages-v1';
+const voiceRouteKey='worldview-voice-route-v2';
 const liveStages = ['clarification','extraction','lesson','quiz'];
-function liveEnabled(stage,storage=localStorage) { return liveStages.includes(stage) && read(storage,liveKey)[stage] === true; }
+function liveEnabled(stage,storage=localStorage) { return liveStages.includes(stage) && read(storage,voiceRouteKey).mode !== 'standard'; }
 const labels = {clarification:'Getting started',map:'Lesson planning',extraction:'Your starting knowledge',lesson:'Tutor',brain:'Understanding checks',quiz:'Final review'};
 const links = {anthropic:'https://platform.claude.com/docs/en/about-claude/pricing',google:'https://ai.google.dev/gemini-api/docs/pricing',openai:'https://developers.openai.com/api/docs/pricing',xai:'https://docs.x.ai/developers/models',deepgram:'https://deepgram.com/pricing'};
 // Standard uncached short-context USD rates checked against official pages 2026-09-10.
@@ -189,23 +190,18 @@ function initial(storage,admin) {
  return apply(config,storage);
 }
 
-function render(host,{admin=false,onVoice=()=>{},storage=localStorage}={}) {
+function render(host,{admin=false,onVoice=()=>{},storage=localStorage,mode='voice'}={}) {
  host.replaceChildren();
  const config=initial(storage,admin);
  const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text)n.textContent=text;return n;};
- host.append(el('p','models-note','Choose one model for the conversation and another for the lesson map. Changes apply when you open a lesson.'));
+ const tabs=el('div','models-mode-tabs');tabs.setAttribute('role','group');tabs.setAttribute('aria-label','Voice and Text models');
+ for(const value of ['voice','text']){const b=el('button','',value==='voice'?'Voice':'Text');b.type='button';b.id='models-tab-'+value;b.setAttribute('aria-pressed',String(mode===value));b.onclick=()=>{render(host,{admin,onVoice,storage,mode:value});host.querySelector('#models-tab-'+value)?.focus();};tabs.append(b);}host.append(tabs);
  const status=el('p','models-status');status.setAttribute('role','status');
  const persist=(k,value)=>{try{storage.setItem(k,JSON.stringify(value));status.textContent='Saved on this device.';return true;}catch{status.textContent='Could not save. Your previous setting is still in use.';return false;}};
- const details=el('details','models-more');details.append(el('summary','','Advanced · individual stages & checks'));
- const rerender=(focusId)=>{const open=details.open;render(host,{admin,onVoice,storage});host.querySelector('.models-more').open=open;host.querySelector('.models-status').textContent='Saved on this device.';if(focusId)host.querySelector('#'+focusId)?.focus();};
- const allLive=()=>admin&&liveStages.every(stage=>liveEnabled(stage,storage));
- const mixed=()=>liveStages.some(stage=>liveEnabled(stage,storage)!==liveEnabled('lesson',storage)||(!liveEnabled(stage,storage)&&(config[stage].provider!==config.lesson.provider||config[stage].model!==config.lesson.model)));
- const voiceSection=el('div','models-standard-voice');
- const audioNote=el('p','models-note');
- const refreshAudio=()=>{voiceSection.hidden=allLive();audioNote.textContent=allLive()?'GPT Live listens, generates replies and speaks. No separate transcription or text-to-speech model is used. Lesson research and background checks are billed separately.':admin&&liveStages.some(stage=>liveEnabled(stage,storage))?'These voice models apply to stages using standard voice. Live handles its own audio.':'Standard voice transcribes your speech, sends it to the conversation model, then speaks the reply.';};
+ const details=el('details','models-more');details.append(el('summary','',mode==='voice'?'Advanced · lesson map & checks':'Advanced · individual stages & checks'));
+ const rerender=(focusId)=>{const open=details.open;render(host,{admin,onVoice,storage,mode});host.querySelector('.models-more').open=open;host.querySelector('.models-status').textContent='Saved on this device.';if(focusId)host.querySelector('#'+focusId)?.focus();};
+ const mixed=()=>liveStages.some(stage=>config[stage].provider!==config.lesson.provider||config[stage].model!==config.lesson.model);
  function row(parent,id,title,choices,selected,save,recommended,custom=false) {
-  const canLive=admin&&(id==='conversation'||liveStages.includes(id));
-  let useLive=canLive&&(id==='conversation'?allLive():liveEnabled(id,storage));
   const section=el('section','model-setting');section.dataset.feature=id;
   const heading=el('button','model-feature',title+' ⌄');heading.type='button';heading.setAttribute('aria-expanded','false');heading.setAttribute('aria-controls','model-presets-'+id);
   const badge=el('span','model-badge');
@@ -222,53 +218,50 @@ function render(host,{admin=false,onVoice=()=>{},storage=localStorage}={}) {
   const customLine=el('form','model-custom');customLine.hidden=true;
   const input=document.createElement('input');input.setAttribute('aria-label',title+' exact model ID');input.placeholder='Exact model ID';input.maxLength=64;input.required=true;
   const button=el('button','','Use model');button.type='submit';customLine.append(input,button);
-  function liveChoice(value){const saved=read(storage,liveKey);for(const stage of id==='conversation'?liveStages:[id])saved[stage]=value;if(!persist(liveKey,saved))return false;useLive=value;refreshAudio();return true;}
   function closePresets(){presets.hidden=true;heading.setAttribute('aria-expanded','false');heading.focus();}
   heading.onclick=()=>{const open=presets.hidden;host.querySelectorAll('.model-presets').forEach(p=>p.hidden=true);host.querySelectorAll('.model-feature').forEach(b=>b.setAttribute('aria-expanded','false'));presets.hidden=!open;heading.setAttribute('aria-expanded',String(open));};
   reset.onclick=()=>{commit({...recommended},true);closePresets();};
-  if(canLive){const live=el('button','','GPT Live · natural voice');live.type='button';live.onclick=()=>{if(liveChoice(true))rerender('model-provider-'+id);else fill();};presets.append(live);}
   function fill(){
    company.replaceChildren();for(const [value,p] of Object.entries(choices))company.add(new Option(p.label,value));
-   const provider=useLive?'openai':selected.provider;company.value=provider;
+   const provider=selected.provider;company.value=provider;
    model.replaceChildren();for(const m of choices[provider].models)model.add(new Option(m.label,m.id));
-   if(canLive&&provider==='openai')model.add(new Option('GPT Live 1 · voice','gpt-live-1'));
-   if(!useLive&&!choices[provider].models.some(m=>m.id===selected.model))model.add(new Option(selected.model,selected.model));
+   if(!choices[provider].models.some(m=>m.id===selected.model))model.add(new Option(selected.model,selected.model));
    if(custom)model.add(new Option('Other model…','__custom__'));
-   model.value=useLive?'gpt-live-1':selected.model;customLine.hidden=true;
-   badge.textContent=id==='conversation'&&mixed()?'Varies by stage':useLive?'Live voice':selected.model===recommended.model&&selected.provider===recommended.provider?'Recommended':'Custom';
-   badge.classList.toggle('is-live',useLive);
+   model.value=selected.model;customLine.hidden=true;
+   badge.textContent=id==='conversation'&&mixed()?'Varies by stage':selected.model===recommended.model&&selected.provider===recommended.provider?'Recommended':'Custom';
    const rate=rates[selected.model];
-   price.textContent=useLive?'$0.05 / minute + understanding checks':selected.model==='device'?'No cloud voice charge':rate?'$'+rate[0]+' in · $'+rate[1]+' out / 1M tokens':selected.model.startsWith('aura-2-')?'$0.030 / 1,000 characters':'See provider pricing';
-   liveNote.hidden=!useLive;liveNote.textContent='Live teaches across the conversation using your lesson context. Background checks save progress. Choose GPT Live beside Text / Voice in a lesson, then Start. Selecting it here does not start billing.';
-   explanation.replaceChildren();explanation.append(useLive?'Voice costs about $1.50 for 30 minutes or $3 for an hour. Connected silence counts. Startup may cost $0.0125, credited to a running session. Understanding checks and earlier lesson research cost extra. Owner testing: up to ten starts per day. ':rate?'Standard uncached USD API rates. These are token prices, not a fixed lesson quote. Caching, research and long context can change the total. ':'A current per-lesson estimate is unavailable for this model. ');
-   const a=el('a','','Official pricing');a.href=useLive?'https://developers.openai.com/api/docs/models/gpt-live-1':links[selected.provider]||'';a.target='_blank';a.rel='noopener noreferrer';if(a.href&&selected.provider!=='device')explanation.append(a);
+   price.textContent=selected.model==='device'?'No cloud voice charge':rate?'$'+rate[0]+' in · $'+rate[1]+' out / 1M tokens':selected.model.startsWith('aura-2-')?'$0.030 / 1,000 characters':'See provider pricing';
+   liveNote.hidden=true;
+   explanation.replaceChildren();explanation.append(rate?'Standard uncached USD API rates. These are token prices, not a fixed lesson quote. Caching, research and long context can change the total. ':'A current per-lesson estimate is unavailable for this model. ');
+   const a=el('a','','Official pricing');a.href=links[selected.provider]||'';a.target='_blank';a.rel='noopener noreferrer';if(a.href&&selected.provider!=='device')explanation.append(a);
   }
-  function commit(next,resetLive=false){
-   // A text choice must also disable Live; restore the previous route if saving fails.
-   const before=storage.getItem(liveKey);
-   if(canLive&&!liveChoice(false)){fill();return;}
-   if(!save(next)){if(canLive){try{if(before===null)storage.removeItem(liveKey);else storage.setItem(liveKey,before);}catch{}useLive=id==='conversation'?allLive():liveEnabled(id,storage);}fill();refreshAudio();return;}
+  function commit(next){
+   if(!save(next)){fill();return;}
    selected=next;rerender('model-choice-'+id);
   }
   company.onchange=()=>commit({provider:company.value,model:choices[company.value].models[0].id});
-  model.onchange=()=>{if(model.value==='gpt-live-1'){if(liveChoice(true))rerender('model-choice-'+id);else fill();}else if(model.value==='__custom__'){customLine.hidden=false;input.value='';input.focus();}else commit({provider:company.value,model:model.value});};
-  customLine.onsubmit=event=>{event.preventDefault();const value=input.value.trim();if(!valid(company.value,value)||/^gpt-(live|realtime)/i.test(value)){input.setCustomValidity('Choose GPT Live from the menu for live voice, or enter a supported text model ID.');input.reportValidity();return;}commit({provider:company.value,model:value});};input.oninput=()=>input.setCustomValidity('');
+  model.onchange=()=>{if(model.value==='__custom__'){customLine.hidden=false;input.value='';input.focus();}else commit({provider:company.value,model:model.value});};
+  customLine.onsubmit=event=>{event.preventDefault();const value=input.value.trim();if(!valid(company.value,value)||/^gpt-(live|realtime)/i.test(value)){input.setCustomValidity('Enter a supported text model ID. GPT Live is the default in Voice.');input.reportValidity();return;}commit({provider:company.value,model:value});};input.oninput=()=>input.setCustomValidity('');
   section.append(top,presets,controls,customLine,price,liveNote,advanced);parent.append(section);fill();
  }
- row(host,'conversation','Conversation',catalog,config.lesson,choice=>{const saved=read(storage,key);for(const stage of [...liveStages,'brain'])saved[stage]=choice;return persist(key,saved);},defaults.lesson,true);
- host.append(el('p','models-note',mixed()?'Existing individual choices are preserved below. Choosing a Conversation model replaces them.':'Used from getting started through the final review.'));
- row(host,'map','Lesson map',catalog,config.map,choice=>{const saved=read(storage,key);saved.map=choice;return persist(key,saved);},defaults.map,true);
- host.append(audioNote,voiceSection);
- details.append(el('p','models-note',allLive()?'Live teaches every stage. Only its background progress checks use a separate text model.':'Override a stage only when you need to. Choosing a Conversation model above resets these choices.'));
- for(const stage of allLive()?['brain']:['clarification','extraction','lesson','quiz','brain']) row(details,stage,labels[stage],catalog,config[stage],choice=>{const saved=read(storage,key);saved[stage]=choice;return persist(key,saved);},defaults[stage],true);
+ if(mode==='voice'){
+  const card=el('section','models-live-default');card.append(el('div','model-badge',admin?'Default':'Owner access required'),el('h3','','GPT Live'),el('p','models-note','OpenAI'),el('p','model-rate','$0.05/min'));host.append(card);
+  row(details,'map','Lesson map',catalog,config.map,choice=>{const saved=read(storage,key);saved.map=choice;return persist(key,saved);},defaults.map,true);
+  row(details,'brain','Understanding checks',catalog,config.brain,choice=>{const saved=read(storage,key);saved.brain=choice;return persist(key,saved);},defaults.brain,true);
+ }else{
+  host.append(el('p','models-note','One model for the text conversation. Lesson map is independent.'));
+  row(host,'conversation','Conversation',catalog,config.lesson,choice=>{const saved=read(storage,key);for(const stage of [...liveStages,'brain'])saved[stage]=choice;return persist(key,saved);},defaults.lesson,true);
+  if(mixed())host.append(el('p','models-note','Individual stage choices are preserved below. A Conversation choice replaces them.'));
+  row(host,'map','Lesson map',catalog,config.map,choice=>{const saved=read(storage,key);saved.map=choice;return persist(key,saved);},defaults.map,true);
+  for(const stage of ['clarification','extraction','lesson','quiz','brain'])row(details,stage,labels[stage],catalog,config[stage],choice=>{const saved=read(storage,key);saved[stage]=choice;return persist(key,saved);},defaults[stage],true);
+ }
  const voices=read(storage,voiceKey);
- for(const [kind,title,choices,fallback] of [['stt','Transcription',transcription,'deepgram-nova-3'],['tts','Text-to-speech',speech,'aura-2-arcas-en']]) {
+ for(const [kind,title,choices,fallback] of mode==='text'? [['stt','Transcription',transcription,'deepgram-nova-3'],['tts','Text-to-speech',speech,'aura-2-arcas-en']]:[]) {
   const value=Object.values(choices).some(p=>p.models.some(m=>m.id===voices[kind]))?voices[kind]:fallback;
   const provider=Object.keys(choices).find(p=>choices[p].models.some(m=>m.id===value));
-  row(voiceSection,kind,title,choices,{provider,model:value},choice=>{const saved=read(storage,voiceKey);saved[kind]=choice.model;if(!persist(voiceKey,saved))return false;onVoice(kind,choice.model);return true;},{provider:'deepgram',model:fallback});
+  row(details,kind,title,choices,{provider,model:value},choice=>{const saved=read(storage,voiceKey);saved[kind]=choice.model;if(!persist(voiceKey,saved))return false;onVoice(kind,choice.model);return true;},{provider:'deepgram',model:fallback});
  }
- refreshAudio();
- host.append(details,el('p','models-note','Text-model rates checked Sep 10; GPT Live Sep 13, 2026. Live voice is currently available for owner testing. Other model IDs need support for the selected task.'),status);
+ host.append(details,status);
 }
-return {catalog,defaults,key,liveKey,liveStages,liveEnabled,valid,apply,initial,render};
+return {catalog,defaults,key,liveKey,voiceRouteKey,liveStages,liveEnabled,valid,apply,initial,render};
 })();

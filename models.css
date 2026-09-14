@@ -18,3 +18,5 @@
 @media(max-width:360px){.model-setting-controls{grid-template-columns:minmax(0,1fr)}.model-badge{font-size:9px}}
 
 .models-standard-voice[hidden]{display:none}
+
+.models-mode-tabs{display:flex;gap:6px;background:var(--card);padding:4px;border:1px solid var(--line);border-radius:12px;margin:8px 0 18px}.models-mode-tabs button{flex:1;border:0;min-height:44px;border-radius:8px;font:600 14px system-ui;background:transparent;color:var(--ink);cursor:pointer}.models-mode-tabs button[aria-pressed="true"]{background:var(--line)}.models-live-default{padding:10px 0 20px}.models-live-default h3{font:600 23px system-ui;margin:8px 0}.models-live-default p{margin:6px 0}
