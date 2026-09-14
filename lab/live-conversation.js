@@ -90,10 +90,19 @@ window.WorldviewLiveConversation=(()=>{
  }
  async function applyPhase(){
   if(!study||study.phaseVersion===appliedPhase)return;appliedPhase=study.phaseVersion;
-  const s=session;if(s?.ready&&!s.closing){injectInstructions(s,'PHASE UPDATE START. Suspend the old phase policy; the following chunks form the new current phase instructions.');injectInstructions(s,study.instructions);inject(s,'Current saved phase data: '+JSON.stringify(study.packet));injectInstructions(s,'PHASE UPDATE COMPLETE. Use this new phase policy and data now. Continue the conversation without asking the learner to restart Live.');}
   await host.onStudy?.(study);
  }
- function injectInstructions(state,content){let piece='';const encoder=new TextEncoder();for(const char of content){if(encoder.encode(piece+char).length>400){send(state,{type:'session.instructions.append',delegation_id:null,content:piece});piece='';}piece+=char;}if(piece)send(state,{type:'session.instructions.append',delegation_id:null,content:piece});}
+ function publishStudy(state,delegationId=null){
+  const signature=JSON.stringify({version:study.phaseVersion,instructions:study.instructions,packet:study.packet});
+  if(state.publishedStudy===signature)return false;
+  const phaseChanged=state.publishedPhase!==study.phaseVersion;
+  // Quiet context does not cut off ongoing speech. One complete envelope per saved update.
+  inject(state,'APP_HANDOFF_START. Buffer this complete update; do not speak or interrupt because it arrived.',delegationId);
+  if(phaseChanged)inject(state,'Replacement phase policy: '+study.instructions,delegationId);
+  inject(state,'Saved reference packet: '+JSON.stringify(study.packet),delegationId);
+  inject(state,'APP_HANDOFF_END. Adopt this saved phase/outcome at the next natural boundary. Do not repeat a bridge or answer twice. Continue from what the learner just said.',delegationId);
+  state.publishedStudy=signature;state.publishedPhase=study.phaseVersion;return true;
+ }
  async function check(delegationId=null){
   const s=session;if(!s?.ready||s.closing)return;
   if(checking){if(delegationId)inject(s,'An understanding check is already running. Continue listening; do not ask for button presses.',delegationId);return;}
@@ -101,11 +110,11 @@ window.WorldviewLiveConversation=(()=>{
   try{
    if(!await flush())return;
    if(scope!==expected||session!==s)return;
-   const prepared=await captured({action:'journey_prepare',...input});if(scope!==expected||session!==s)return;const refreshed=JSON.stringify(study.packet)!==JSON.stringify(prepared.study.packet);study={...prepared.study,fragments};if(refreshed)inject(s,'Updated verified lesson context: '+JSON.stringify(study.packet));await applyPhase();
+   const prepared=await captured({action:'journey_prepare',...input});if(scope!==expected||session!==s)return;study={...prepared.study,fragments};
    const result=await captured({action:'journey_check',studyId:id});if(scope!==expected||session!==s)return;
-   const packetChanged=JSON.stringify(study.packet)!==JSON.stringify(result.study.packet);study={...result.study,fragments};
+   study={...result.study,fragments};
    await applyPhase();
-   if(result.advanced||packetChanged)inject(s,'Saved understanding/phase update: '+JSON.stringify(study.packet),delegationId);
+   if(publishStudy(s,delegationId)){}
    else if(delegationId)inject(s,'Application check: '+(result.focus||'Continue listening in the current phase; never request Review or Send.'),delegationId);
    if(study.checkError)message('Conversation saved. The understanding check could not finish; Live can keep teaching.');
    paint();
@@ -114,14 +123,14 @@ window.WorldviewLiveConversation=(()=>{
  }
  function event(state,e){
   if(session!==state)return;if(e.event_id){if(state.seen.has(e.event_id))return;state.seen.add(e.event_id);}
-  if(e.type==='session.started'){if(state.closing){send(state,{type:'session.close'});return;}state.ready=true;clearTimeout(state.startup);message('Live is listening. Just talk; no Review or Send is needed.');state.checkTimer=setInterval(()=>void check(),25000);paint();}
+  if(e.type==='session.started'){if(state.closing){send(state,{type:'session.close'});return;}state.ready=true;state.publishedPhase=study.phaseVersion;state.publishedStudy=JSON.stringify({version:study.phaseVersion,instructions:study.instructions,packet:study.packet});clearTimeout(state.startup);message('Live is listening. Just talk; no Review or Send is needed.');state.checkTimer=setInterval(()=>void check(),25000);paint();}
   else if(e.type==='session.input_transcript.delta')append(state,e,'user');
   else if(e.type==='session.output_transcript.delta')append(state,e,'assistant');
   else if(e.type==='session.delegation.created'){const id=e.delegation?.id;if(typeof id==='string'&&!state.delegations.has(id)){state.delegations.add(id);void check(id);}}
   else if(e.type==='session.usage.updated'||e.type==='session.closed'){
    if(Number.isFinite(e.usage?.seconds)&&e.usage.seconds>=0)state.seconds=Math.max(state.seconds,e.usage.seconds);
    ui.usage.textContent=(state.seconds/60).toFixed(1)+' min · $'+(state.seconds/60*.05).toFixed(3)+' Live voice'+(e.type==='session.closed'?' · final duration':'');
-   if(e.type==='session.closed'){void flush();cleanup(state);message(e.reason==='expired'?'The provider ended this connection. Your lesson is saved; choose Continue to reconnect.':'Live ended. Your conversation remains saved.');}
+   if(e.type==='session.closed'){void flush();cleanup(state);message(e.reason==='expired'?'The provider ended this connection. Your lesson is saved; choose Continue to reconnect.':'Live ended ('+String(e.reason||'reason unavailable').replace(/[^a-z_]/g,'').slice(0,40)+'). Your conversation remains saved; choose Continue to reconnect.');}
   }else if(e.type==='error')void stop('Live reported a connection error. Your conversation is retained.');
  }
  async function begin(){
@@ -132,7 +141,7 @@ window.WorldviewLiveConversation=(()=>{
    const mic=await navigator.mediaDevices.getUserMedia({audio:true});if(session!==s||s.closing){mic.getTracks().forEach(t=>t.stop());return;}s.mic=mic;
    const peer=s.peer=new RTCPeerConnection();mic.getAudioTracks().forEach(t=>{peer.addTrack(t,mic);t.addEventListener('ended',()=>{if(session===s&&!s.closing)void stop('Microphone disconnected.');});});
    peer.addEventListener('track',e=>{if(session!==s||s.closing)return;ui.audio.srcObject=new MediaStream([e.track]);ui.audio.hidden=false;void ui.audio.play().catch(()=>message('Tap Play to hear GPT Live.'));});
-   peer.addEventListener('connectionstatechange',()=>{if(session===s&&!s.closing&&['failed','closed'].includes(peer.connectionState))void stop('Live disconnected. Your lesson is retained.');});
+   peer.addEventListener('connectionstatechange',()=>{clearTimeout(s.disconnectTimer);if(session!==s||s.closing)return;if(['failed','closed'].includes(peer.connectionState))void stop('Live disconnected. Your lesson is retained; choose Continue to reconnect.');else if(peer.connectionState==='disconnected')s.disconnectTimer=setTimeout(()=>{if(session===s&&!s.closing&&peer.connectionState==='disconnected')void stop('Live lost its connection. Your lesson is retained; choose Continue to reconnect.');},15000);});
    s.channel=peer.createDataChannel('oai-events');s.channel.addEventListener('message',e=>{try{event(s,JSON.parse(e.data));}catch{void stop('Live returned an unreadable event.');}});
    s.channel.addEventListener('close',()=>{if(session===s&&!s.closing)void stop('Live connection closed.');});
    await peer.setLocalDescription(await peer.createOffer());
@@ -150,6 +159,6 @@ window.WorldviewLiveConversation=(()=>{
   if(!s.dispatched){cleanup(s);message(reason);return;}
   s.closeTimer=setTimeout(()=>{if(session===s){cleanup(s);message(reason+' Final voice usage was not confirmed.');}},8000);paint();
  }
- function cleanup(s){clearTimeout(quietTimer);s.closing=true;clearTimeout(s.startup);clearTimeout(s.closeTimer);clearInterval(s.checkTimer);s.mic?.getTracks().forEach(t=>t.stop());s.channel?.close();s.peer?.close();if(session===s){session=null;ui.audio.srcObject=null;ui.audio.hidden=true;paint();}}
+ function cleanup(s){clearTimeout(s.disconnectTimer);clearTimeout(quietTimer);s.closing=true;clearTimeout(s.startup);clearTimeout(s.closeTimer);clearInterval(s.checkTimer);s.mic?.getTracks().forEach(t=>t.stop());s.channel?.close();s.peer?.close();if(session===s){session=null;ui.audio.srcObject=null;ui.audio.hidden=true;paint();}}
  const api={mount,sync,stop,active:()=>!!session,enabled:()=>enabled};return api;
 })();
