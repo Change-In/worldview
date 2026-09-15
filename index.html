@@ -2178,7 +2178,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.35 · Sep 14";
+const BUILD = "v2.1.36 · Sep 15";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2186,6 +2186,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.36",date:"Sep 15",changes:["Lessons now start teaching after a short orientation instead of a long set-up interview.","Teaching begins as soon as the first chapter is researched, rather than waiting for all of them.","Each chapter asks about its own material right before teaching it, and skips the question when you have already shown you know it.","A chapter you cannot answer is carried forward with the gap recorded, so a lesson can always be finished.","Phase changes no longer flood the voice model, which was making it talk over you and answer itself.","The status line now names what the lesson is moving to instead of going quiet."]},
   {tag:"v2.1.35",date:"Sep 14",changes:["GPT Live is the default for Voice and Car, with automatic start and return.","Car uses the same live conversation, with mute instead of hold or tap recording.","Models has separate Voice and Text views. Live microphone setup handles the iPhone audio-session conflict."]},
   { tag:"v2.1.34", date:"Sep 14", changes:["Removed the recording button from Ask Anything. Type your topic and select Begin."] },
   {tag:"v2.1.33",date:"Sep 14",changes:["Lesson cards open a compact mode-selection popup on Home.","Choose Text, Voice or Car before entering; your choice carries into the lesson.","Remaining startup work shows as lesson loading, without a second mode-selection step."]},

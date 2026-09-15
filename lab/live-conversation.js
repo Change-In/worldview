@@ -2,7 +2,7 @@
 window.WorldviewLiveConversation=(()=>{
  'use strict';
  let host,ui,context,study,session,loadToken=0,loading=false,saving=null,checking=false,enabled=false,saveTimer;
- let showCaptions=false,quietTimer,paused=false,startError=false,autoAttempts=0;
+ let showCaptions=false,quietTimer,paused=false,startError=false,autoAttempts=0,slowTimer,restoreTimer;
  let appliedPhase=0;
  let fragments=[],ack=0,saveError='',request,scope='',draftKey='';
  const element=(tag,text)=>{const n=document.createElement(tag);if(text)n.textContent=text;return n;};
@@ -114,10 +114,22 @@ window.WorldviewLiveConversation=(()=>{
   inject(state,'APP_HANDOFF_END. Adopt this saved phase/outcome at the next natural boundary. Do not repeat a bridge or answer twice. Continue from what the learner just said.',delegationId);
   state.publishedStudy=signature;state.publishedPhase=study.phaseVersion;return true;
  }
+ function announceTransition(state){
+  // The handoff itself is quick, but the tutor is briefly silent while it adopts the new phase.
+  // Name where the lesson is going so the pause reads as progress rather than a stall.
+  const next={extraction:'Setting up your starting point…',lesson:'Starting the lesson…',quiz:'Starting the final teach-back…',complete:'Wrapping up…'}[study?.phase];
+  if(!next)return;
+  message(next+' one moment.');
+  clearTimeout(restoreTimer);
+  restoreTimer=setTimeout(()=>{if(session===state&&!state.closing&&!saveError&&!checking)message(paused?'Paused':'Listening');},8000);
+ }
  async function check(delegationId=null){
   const s=session;if(!s?.ready||s.closing)return;
   if(checking){if(delegationId)inject(s,'An understanding check is already running. Continue listening; do not ask for button presses.',delegationId);return;}
-  checking=true;const expected=scope,id=study.id,captured=request,input=context.studyInput;
+  checking=true;const expected=scope,id=study.id,captured=request,input=context.studyInput,startedPhase=study.phaseVersion;
+  // A routine check is fast and should stay invisible. Only say something once the learner has
+  // actually been left waiting, so the status never flickers on every answer.
+  clearTimeout(slowTimer);slowTimer=setTimeout(()=>{if(checking&&session===s&&!s.closing&&!saveError)message('Checking in…');},1500);
   try{
    if(!await flush())return;
    if(scope!==expected||session!==s)return;
@@ -128,9 +140,11 @@ window.WorldviewLiveConversation=(()=>{
    if(publishStudy(s,delegationId)){}
    else if(delegationId)inject(s,'Application check: '+(result.focus||'Continue listening in the current phase; never request Review or Send.'),delegationId);
    if(study.checkError)message('Conversation saved. The understanding check could not finish; Live can keep teaching.');
+   else if(study.phaseVersion!==startedPhase)announceTransition(s);
+   else if(!saveError)message(paused?'Paused':'Listening');
    paint();
   }catch{if(scope===expected)message('Live can keep teaching. The background understanding check is unavailable; no new progress was recorded.');}
-  finally{checking=false;}
+  finally{clearTimeout(slowTimer);checking=false;}
  }
  function event(state,e){
   if(session!==state)return;if(e.event_id){if(state.seen.has(e.event_id))return;state.seen.add(e.event_id);}
@@ -172,6 +186,6 @@ window.WorldviewLiveConversation=(()=>{
   if(!s.dispatched){cleanup(s);message(reason);return;}
   s.closeTimer=setTimeout(()=>{if(session===s){cleanup(s);message(reason);maybeStart();}},8000);paint();
  }
- function cleanup(s){clearTimeout(s.disconnectTimer);clearTimeout(quietTimer);s.closing=true;clearTimeout(s.startup);clearTimeout(s.closeTimer);clearInterval(s.checkTimer);s.mic?.getTracks().forEach(t=>t.stop());s.channel?.close();s.peer?.close();if(session===s){session=null;captureAudioType('auto');ui.audio.srcObject=null;ui.audio.hidden=true;ui.enableAudio.hidden=true;paint();}}
+ function cleanup(s){clearTimeout(s.disconnectTimer);clearTimeout(quietTimer);clearTimeout(slowTimer);clearTimeout(restoreTimer);s.closing=true;clearTimeout(s.startup);clearTimeout(s.closeTimer);clearInterval(s.checkTimer);s.mic?.getTracks().forEach(t=>t.stop());s.channel?.close();s.peer?.close();if(session===s){session=null;captureAudioType('auto');ui.audio.srcObject=null;ui.audio.hidden=true;ui.enableAudio.hidden=true;paint();}}
  const api={mount,sync,stop,place,ownsAudio:()=>!!session,active:()=>!!session,enabled:()=>enabled};return api;
 })();
