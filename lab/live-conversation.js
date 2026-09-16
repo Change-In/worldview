@@ -96,7 +96,7 @@ window.WorldviewLiveConversation=(()=>{
   const root=host.transcript,follow=root.scrollHeight-root.scrollTop-root.clientHeight<40,position=root.scrollTop;
   if(session&&!showCaptions){root.replaceChildren();return;}
   const groups=[];for(const turn of context.history||[])groups.push({role:turn.role,text:turn.content});
-  for(const f of fragments){const last=groups.at(-1);if(last?.live&&last.role===f.role)last.text+=f.delta;else groups.push({role:f.role,text:f.delta,live:true});}
+  for(const f of fragments){if(isControlEcho(f.delta))continue;const last=groups.at(-1);if(last?.live&&last.role===f.role)last.text+=f.delta;else groups.push({role:f.role,text:f.delta,live:true});}
   root.replaceChildren();for(const g of groups){const item=element('li');item.className='extraction-turn '+(g.role==='user'?'is-user':'is-assistant');const label=element('small',g.role==='user'?'You':g.live?'Worldview':'Earlier in this lesson');const text=element('p',g.text);item.append(label,text);root.append(item);}
   root.scrollTop=follow?root.scrollHeight:position;
  }
@@ -155,11 +155,26 @@ window.WorldviewLiveConversation=(()=>{
   }catch(error){if(scope===expected){saveError='Transcript not yet saved. Your device draft is retained. '+(error.message||'Tap Retry saving.');stash();paint();}return false;}
   finally{saving=null;}})();return saving;
  }
+ // Application control messages are injected into the session as context, not
+ // as speech. A provider can echo that injected text back on a transcript
+ // channel, where it would otherwise be recorded as a turn and shown to the
+ // learner as something they said. These markers are the app's own vocabulary
+ // and are always uppercase, so real speech never transcribes as one.
+ const CONTROL_MARKERS=['APP_HANDOFF'];
+ function isControlEcho(text){const t=String(text||'').trimStart();return CONTROL_MARKERS.some(marker=>t.startsWith(marker));}
  function append(state,event,role){
   if(session!==state||state.scope!==scope)return;
   if(typeof event.delta!=='string'||!event.delta)return;
+  if(isControlEcho(event.delta))return;
   const f={seq:fragments.length+1,id:String(event.event_id||state.id+':'+fragments.length),role,delta:event.delta,start_ms:Number.isFinite(event.start_ms)?event.start_ms:null,end_ms:Number.isFinite(event.end_ms)?event.end_ms:null};
-  fragments.push(f);state.lastTranscriptAt=performance.now();if(role==='user')state.lastUserSeq=f.seq;stash();paint();clearTimeout(saveTimer);saveTimer=setTimeout(()=>void flush(),1500);if(!state.closing)scheduleCheck(state,4000);
+  fragments.push(f);state.lastTranscriptAt=performance.now();if(role==='user')state.lastUserSeq=f.seq;stash();paint();clearTimeout(saveTimer);saveTimer=setTimeout(()=>void flush(),1500);
+  // Only learner speech schedules a check. The tutor's own output carries
+  // nothing new to assess, and a check can publish a saved phase into the
+  // session; injected context is advisory, not a provider-enforced speech
+  // boundary, so it can prompt another reply. Letting the tutor's captions
+  // schedule that check closes the loop: it answers, hears itself, checks,
+  // is injected into, and answers again with nobody having spoken.
+  if(!state.closing&&role==='user')scheduleCheck(state,4000);
  }
  // This debounce reduces context churn. Captions have no completed-turn event,
  // so elapsed time is never evidence that either speaker has finished speaking.
@@ -324,7 +339,7 @@ window.WorldviewLiveConversation=(()=>{
   insert(0);
   // Imports are complete turns; only adjacent native deltas share a turn.
   // Text typed between voice sessions stays at that exact fragment boundary.
-  for(const f of fragments){const native=!f.id.startsWith('import:'),last=turns.at(-1);if(native&&previousNative&&last?.role===f.role)last.content+=f.delta;else turns.push({role:f.role,content:f.delta});previousNative=native;insert(f.seq);}
+  for(const f of fragments){if(isControlEcho(f.delta))continue;const native=!f.id.startsWith('import:'),last=turns.at(-1);if(native&&previousNative&&last?.role===f.role)last.content+=f.delta;else turns.push({role:f.role,content:f.delta});previousNative=native;insert(f.seq);}
   return turns;
  }
  const api={mount,sync,stop,place,transcriptTurns,ownsAudio:()=>!!session,active:()=>!!session,enabled:()=>enabled};return api;

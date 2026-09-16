@@ -743,7 +743,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .card.new-card .new-card-actions { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
   .card.new-card .new-card-actions #start-btn,
   .card.new-card .new-card-actions #start-voice-btn { flex:1; min-width:0; min-height:44px; padding:10px 6px; font-size:12px; white-space:nowrap; }
-  .card.new-card .new-card-actions #start-voice-btn { background:transparent; color:var(--ink); border:1px solid var(--line); }
+  .card.new-card .new-card-actions #start-voice-btn { background:transparent; color:var(--ink); border:1px solid var(--line); border-radius:999px; }
   /* Folders lives on the Ask Anything card's bottom-right corner (moved off the
      old floating pill that made Explore feel cluttered). */
   #new-card-folders, #new-card-leave-folder {
@@ -2185,7 +2185,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.42 · Sep 16";
+const BUILD = "v2.1.43 · Sep 16";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2193,6 +2193,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.43",date:"Sep 16",changes:["The tutor no longer answers repeatedly without you speaking; its own voice can no longer trigger a background check.","Internal handoff markers no longer appear in the transcript as something you said, including in saved lessons.","Voice and Text buttons now share the same shape."]},
   {tag:"v2.1.42",date:"Sep 16",changes:["Worldview starts the conversation when you enter Voice, then listens to your answer.","Live Voice resumes from your saved lesson instead of restarting the interview."]},
   {tag:"v2.1.41",date:"Sep 16",changes:["Saved lesson cards no longer show internal labels such as Lesson Map research or Guided Lesson routing.","A voice lesson that has not said its topic yet reads as New voice lesson instead of placeholder text."]},
   {tag:"v2.1.40",date:"Sep 16",changes:["Home buttons are now Voice and Text.","Allowing microphone access continues into Voice without a second tap while account access refreshes."]},
