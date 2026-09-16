@@ -15391,7 +15391,7 @@ async function applyLiveJourney(study){
 }
 function syncLiveLesson(){
  const live=window.WorldviewLiveConversation;if(!live||!q('mock-learner-composer'))return;
- if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),onStudy:applyLiveJourney,onCheckerUsage:recordLiveCheckerCost,
+ if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),onStudy:applyLiveJourney,onLearnerTopic:applyLiveLearnerTopic,onCheckerUsage:recordLiveCheckerCost,
   requestForCurrentAccount:()=>{const token=labState.verifiedAccessToken;return async body=>{const response=await fetch(SUPABASE_URL+'/functions/v1/live-trial',{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(body.action==='journey_check'?150000:40000)});const result=await response.json();if(!response.ok)throw Error(result.error?.message||'Live lesson is unavailable.');return result;};},
   releaseMedia:()=>{stopClarificationCaptureForModeChange();stopClarificationSpeech();stopPipelineExtractionVoice();if(typeof releaseClarificationTopicCapture==='function')releaseClarificationTopicCapture();}
  });}
@@ -15405,6 +15405,24 @@ function syncLiveLesson(){
  if(selected){q('mock-learner-voice-controls').hidden=true;q('mock-learner-car').hidden=false;q('mock-learner-scroll').hidden=true;q('mock-learner-waiting').hidden=true;renderLiveResearchRecovery(selection,stage);}
  const mode=stage==='clarification'?labState.clarification.mode:labState.extraction.mode;
  const label=selected?(window.WorldviewModels?.liveLabel()||'GPT Live'):mode==='voice'?'Voice':'Text';q('mock-learner-mode').textContent=label+' ⌄';q('mock-learner-mode').setAttribute('aria-label','Conversation mode: '+label);renderMockCarMode();
+}
+/* A topic-free Voice lesson saves the placeholder as its topic, and the code that
+   replaces it with the real one only ever ran on the typed reply path. Voice runs
+   therefore stayed unnamed forever. The learner's own first spoken words are used
+   here; they are never wrong about what was asked, though they read like speech. A
+   shorter model-written title is a separate, server-side change. */
+const VOICE_TOPIC_PLACEHOLDER='Topic to be chosen by voice';
+function applyLiveLearnerTopic(text){
+ const spoken=String(text||'').trim();
+ const state=labState.clarification;
+ if(!spoken||!state?.runId||state.topic!==VOICE_TOPIC_PLACEHOLDER)return;
+ state.topic=spoken.slice(0,500);
+ labState.learnerVoiceDiscovery=false;
+ const topicField=q('clarification-topic'),backendField=q('clarification-backend-topic');
+ if(topicField)topicField.value=state.topic;
+ if(backendField)backendField.value=state.topic;
+ persistClarificationSettings();
+ publishLearnerRunSummaries();
 }
 function setLiveVoicePreference(value){
  const key=window.WorldviewModels?.voiceRouteKey;if(!key)return;

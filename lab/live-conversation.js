@@ -177,7 +177,11 @@ window.WorldviewLiveConversation=(()=>{
   if(typeof event.delta!=='string'||!event.delta)return;
   if(isControlEcho(event.delta))return;
   const f={seq:fragments.length+1,id:String(event.event_id||state.id+':'+fragments.length),role,delta:event.delta,start_ms:Number.isFinite(event.start_ms)?event.start_ms:null,end_ms:Number.isFinite(event.end_ms)?event.end_ms:null};
-  fragments.push(f);state.lastTranscriptAt=performance.now();if(role==='user')state.lastUserSeq=f.seq;stash();paint();clearTimeout(saveTimer);saveTimer=setTimeout(()=>void flush(),1500);
+  fragments.push(f);state.lastTranscriptAt=performance.now();
+  // The first thing the learner actually says is what a topic-free Voice lesson
+  // is about. Report it once so the saved card can stop carrying a placeholder.
+  if(role==='user'&&!fragments.some(other=>other.seq!==f.seq&&other.role==='user'))host?.onLearnerTopic?.(f.delta);
+  if(role==='user')state.lastUserSeq=f.seq;stash();paint();clearTimeout(saveTimer);saveTimer=setTimeout(()=>void flush(),1500);
   // Only learner speech schedules a check. The tutor's own output carries
   // nothing new to assess, and a check can publish a saved phase into the
   // session; injected context is advisory, not a provider-enforced speech
