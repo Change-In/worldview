@@ -210,7 +210,13 @@ function readLearnerLaunch() {
 async function completeLearnerEntryPreparation(packet, topic) {
   setLearnerEntry(true, topic);
   if (!packet?.entryMode || packet.view === "map") {
-    document.documentElement.classList.remove("learner-opening-selected");
+    /* A map launch is a deliberate, already-decided action: Home does not ask
+       how to chat, so neither should this. Keep the opening screen behind the
+       map rather than revealing the Text/Voice/Car question while the lesson
+       is still connecting. Closing the map restores the question, which is
+       still needed to continue the lesson. */
+    if (packet?.view !== "map") document.documentElement.classList.remove("learner-opening-selected");
+    else labState.learnerEntryMapOpening = true;
     return;
   }
   // Consume only the one-shot choice before dispatch. A reload still keeps the
@@ -12514,6 +12520,10 @@ function closePipelineExtractionMapDialog({ restoreFocus = true } = {}) {
   if (progress) progress.setAttribute("aria-expanded", "false");
   q("mock-learner-map-progress")?.setAttribute("aria-expanded", "false");
   if (labState.mockCar.active) { setMockCarIsolation(false); renderMockCarMode(); }
+  if (labState.learnerEntryMapOpening) {
+    labState.learnerEntryMapOpening = false;
+    document.documentElement.classList.remove("learner-opening-selected");
+  }
   if (restoreFocus && returnFocus?.focus) returnFocus.focus();
 }
 
