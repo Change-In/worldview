@@ -227,7 +227,7 @@ window.WorldviewLiveConversation=(()=>{
   // Name where the lesson is going so the pause reads as progress rather than a stall.
   const next={extraction:'Setting up your starting point…',lesson:'Starting the lesson…',quiz:'Starting the final teach-back…',complete:'Wrapping up…'}[study?.phase];
   if(!next)return;
-  message(next+' one moment.');
+  message(next+' the next reply may take a few seconds.');
   clearTimeout(restoreTimer);
   restoreTimer=setTimeout(()=>{if(session===state&&!state.closing&&!saveError&&!state.checking)message(paused?'Paused':'Listening');},8000);
  }
