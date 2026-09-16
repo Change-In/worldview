@@ -12482,7 +12482,12 @@ function openPipelineExtractionMapDialog({ savedOnly = false } = {}) {
   labState.extraction.mapDialogSavedOnly = savedOnly;
   if (savedOnly) {
     labState.extraction.mapDialogParent = dialog.parentElement;
-    q("learner-entry-shell").append(dialog);
+    /* The entry shell is display:none once the lesson has finished opening, so a
+       dialog parked inside it opens and then disappears with its container - the
+       Home map button appeared to do nothing but continue into the lesson. The
+       dialog is position:fixed with its own z-index, so the body is both a valid
+       and a stable parent. */
+    document.body.append(dialog);
   }
   cancelMockLearnerScrollMotion();
   labState.extraction.mapDialogReturnFocus = document.activeElement || progress;
