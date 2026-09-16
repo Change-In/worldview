@@ -14,8 +14,8 @@ try { document.documentElement.dataset.theme = (JSON.parse(localStorage.getItem(
 catch (error) { document.documentElement.dataset.theme = "system"; }
 </script>
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="lesson-entry-popup.css?v=2.1.33">
-<script src="lesson-entry-popup.js?v=2.1.33"></script>
+<link rel="stylesheet" href="lesson-entry-popup.css?v=2.1.38">
+<script src="lesson-entry-popup.js?v=2.1.38"></script>
 <link rel="apple-touch-icon" href="icon.png">
 <style>
   :root {
@@ -741,7 +741,9 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   }
   .card.new-card button:disabled { opacity: 0.45; }
   .card.new-card .new-card-actions { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
-  .card.new-card .new-card-actions #start-btn { flex: 1; max-width: 132px; }
+  .card.new-card .new-card-actions #start-btn,
+  .card.new-card .new-card-actions #start-voice-btn { flex:1; min-width:0; min-height:44px; padding:10px 6px; font-size:12px; white-space:nowrap; }
+  .card.new-card .new-card-actions #start-voice-btn { background:transparent; color:var(--ink); border:1px solid var(--line); }
   /* Folders lives on the Ask Anything card's bottom-right corner (moved off the
      old floating pill that made Explore feel cluttered). */
   #new-card-folders, #new-card-leave-folder {
@@ -2183,7 +2185,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.37 · Sep 16";
+const BUILD = "v2.1.38 · Sep 16";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2191,6 +2193,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.38",date:"Sep 16",changes:["Typed topics start in Text. Start Voice lets you say what you want to learn.","Voice asks for microphone permission before entering the lesson, and waits while you decide.","Copy transcript copies the full conversation, including Live captions.","Pinch to zoom without the lesson resizing underneath you; Live transcript text can be selected."]},
   {tag:"v2.1.37",date:"Sep 16",changes:["Live remembers the current lesson phase and already-shared direction more consistently, without restarting the interview.","Waiting replies now lead straight into a useful response, and saved approval carries through research delays.","Missing chapter research has a visible retry that keeps your answers and verified chapters.","Gemini 3.8 Live is available as a voice test option; GPT Live remains the default.","The live view and lesson card share one running estimated cost, including recorded resumes and preparation."]},
   {tag:"v2.1.36",date:"Sep 15",changes:["Lessons now start teaching after a short orientation instead of a long set-up interview.","Teaching begins as soon as the first chapter is researched, rather than waiting for all of them.","Each chapter asks about its own material right before teaching it, and skips the question when you have already shown you know it.","A chapter you cannot answer is carried forward with the gap recorded, so a lesson can always be finished.","Phase changes no longer flood the voice model, which was making it talk over you and answer itself.","The status line now names what the lesson is moving to instead of going quiet."]},
   {tag:"v2.1.35",date:"Sep 14",changes:["GPT Live is the default for Voice and Car, with automatic start and return.","Car uses the same live conversation, with mute instead of hold or tap recording.","Models has separate Voice and Text views. Live microphone setup handles the iPhone audio-session conflict."]},
@@ -6215,8 +6218,9 @@ function syncStartButton() {
      the still-focused iPhone input while that modal is trying to paint; WebKit
      can otherwise collapse the keyboard and strand the fixed dialog offscreen. */
   $("topic-input").disabled = atPilotLimit || startStatus.blocksInput || Boolean(homeTopicCapture?.busy);
-  $("start-btn").textContent = atPilotLimit ? "10/10 created" : startStatus.label || "Begin";
+  $("start-btn").textContent = atPilotLimit ? "10/10 created" : startStatus.label || "Start text";
   $("start-btn").disabled = atPilotLimit || startStatus.busy || Boolean(homeTopicCapture?.busy) || !$("topic-input").value.trim();
+  if ($("start-voice-btn")) $("start-voice-btn").disabled = atPilotLimit || startStatus.busy || Boolean(homeTopicCapture?.busy);
   const mic = $("home-topic-mic");
   if (mic) {
     mic.dataset.captureState = homeTopicCapture?.phase || "idle";
@@ -6343,7 +6347,8 @@ function renderHome() {
       <div class="card-cat">${insidePersonalCategory && !homeLearnerAccountAllowed() ? `ask &middot; filed in ${esc(layerName)}` : "ask anything"}${pilotLabel}</div>
       <input id="topic-input" type="text" autocomplete="off" autocapitalize="sentences" autocorrect="on" spellcheck="true" placeholder="${pilotAtLimit ? "Reopen a saved lesson" : "What are you curious about?"}" enterkeyhint="go"${pilotAtLimit || startStatus.blocksInput ? " disabled" : ""}>
       <div class="new-card-actions">
-        <button id="start-btn" type="button"${startStatus.busy ? " disabled" : ""}>${pilotAtLimit ? "10/10 created" : startStatus.label || "Begin"}</button>
+        <button id="start-btn" type="button"${startStatus.busy ? " disabled" : ""}>${pilotAtLimit ? "10/10 created" : startStatus.label || "Start text"}</button>
+        <button id="start-voice-btn" type="button" aria-label="Start a voice conversation and say what you want to learn"${pilotAtLimit || startStatus.busy ? " disabled" : ""}>Start voice</button>
       </div>
       ${insidePersonalCategory
         ? `<button id="new-card-leave-folder" type="button" aria-label="Leave ${esc(layerName)} and show all lessons"><span>&#8592;</span> All lessons</button>`
@@ -6419,6 +6424,7 @@ function renderHome() {
 
   if (!nc) return;
   $("start-btn").onclick = startLesson;
+  $("start-voice-btn").onclick = startVoiceLesson;
   $("topic-input").onkeydown = e => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); startLesson(); }
   };
@@ -6722,10 +6728,11 @@ function pathControlAtPoint(x, y) {
           const hit = (id) => { const b = $(id); const r = b && b.getBoundingClientRect(); return r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; };
           // Resolve before centering the transformed card. Pointer capture
           // retargets the native click to the carousel, so dispatch once here.
-          const control = ["start-btn", "new-card-folders", "new-card-leave-folder"]
+          const control = ["start-btn", "start-voice-btn", "new-card-folders", "new-card-leave-folder"]
             .find(id => !$(id)?.hidden && !$(id)?.disabled && hit(id));
           wheel.pos = idx; layoutWheel();
           if (control === "start-btn") startLesson();
+          else if (control === "start-voice-btn") startVoiceLesson();
           else if (control === "new-card-folders") openCategoryOrganizer(null, "explore");
           else if (control === "new-card-leave-folder") applyCategoryKey(null);
           return;
@@ -8283,16 +8290,17 @@ async function refreshHomeLearnerRuns() {
   } catch (_) { return false; }
   finally { if (homeLearnerRefreshOwner === owner) homeLearnerRefreshOwner = ""; }
 }
-async function openHomeLearnerRun({topic = "",runId = "",view = ""} = {}) {
+async function openHomeLearnerRun({topic = "",runId = "",view = "",entryMode = "",voiceDiscovery = false} = {}) {
   if (homeLearnerLaunchBusy) return false;
   topic = String(topic).trim();runId = String(runId);
-  if (runId ? !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(runId) : !topic) return false;
+  voiceDiscovery = Boolean(voiceDiscovery && !runId && entryMode === "voice");
+  if (runId ? !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(runId) : !topic && !voiceDiscovery) return false;
   if (topic.length > 500) { toast("Keep the topic under 500 characters; you can add the details in the conversation.",5000);return false; }
   const startingOwner = cloudAccount?.id || "", startingEpoch = accountAuthEpoch;
   homeLearnerLaunchBusy = true;
   try {
-    let entryMode = "";
-    if (view !== "map") {
+    entryMode = ["text","voice","car"].includes(entryMode) ? entryMode : "";
+    if (view !== "map" && !entryMode) {
       entryMode = await window.WorldviewLessonEntry.choose({
         title:runId ? homeLearnerRuns().find(row => row.runId === runId)?.title || "Your saved lesson" : topic,
         saved:Boolean(runId)
@@ -8304,11 +8312,17 @@ async function openHomeLearnerRun({topic = "",runId = "",view = ""} = {}) {
     if (!startingOwner || startingEpoch !== accountAuthEpoch || cloudAccount?.id !== startingOwner) return false;
     if (!homeLearnerAccountAllowed()) {
       // Commerce migration remains separate; preserve the existing paid path.
-      if (!runId && backendEntitled && backendEntitlementRecord?.access_tier === "paid") { openDirection(topic,"voice");return true; }
+      if (!runId && topic && backendEntitled && backendEntitlementRecord?.access_tier === "paid") { openDirection(topic,entryMode === "text" ? "text" : "voice");return true; }
       toast("Sign in with your approved tester account to begin. If you have just joined, your tester access needs to be enabled.",6500);return false;
+    }
+    if (["voice","car"].includes(entryMode)) {
+      if (!await window.WorldviewLessonEntry.prepareMicrophone()) return false;
+      if (startingEpoch !== accountAuthEpoch || cloudAccount?.id !== startingOwner || !homeLearnerAccountAllowed()) return false;
     }
     const owner = cloudAccount.id;
     const packet = {ownerUserId:owner,topic,...(runId ? {runId} : {}),...(runId && view === "map" ? {view:"map"} : {}),
+      ...(voiceDiscovery ? {voiceDiscovery:true} : {}),
+      ...(["voice","car"].includes(entryMode) ? {microphonePreparedAt:Date.now()} : {}),
       ...(entryMode ? {entryMode,entryConfirmedAt:Date.now()} : {})};
     const serialized = JSON.stringify(packet);
     sessionStorage.setItem(HOME_LEARNER_LAUNCH_KEY,serialized);
@@ -8329,7 +8343,14 @@ async function startLesson() {
   if (!topic) return;
   if (Date.now() - (startLesson._t || 0) < 500) return;
   startLesson._t = Date.now();
-  await openHomeLearnerRun({topic});
+  await openHomeLearnerRun({topic,entryMode:"text"});
+}
+
+async function startVoiceLesson() {
+  if (homeTopicCapture?.busy || $("start-voice-btn")?.disabled) return;
+  if (Date.now() - (startVoiceLesson._t || 0) < 500) return;
+  startVoiceLesson._t = Date.now();
+  await openHomeLearnerRun({entryMode:"voice",voiceDiscovery:true});
 }
 
 const KNOWLEDGE_PLAN_VERSION = "dependency-graph-v6-overview-first";

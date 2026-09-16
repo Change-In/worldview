@@ -1570,7 +1570,7 @@ body.mock-learner-shell-active #mock-learner-shell { display:flex!important; }
   overflow-y:auto;
   list-style:none;
   overscroll-behavior-y:contain;
-  touch-action:pan-y;
+  touch-action:manipulation;
   -webkit-overflow-scrolling:touch;
 }
 .mock-learner-transcript li { display:grid; max-width:690px; margin:0 auto 22px; gap:7px; color:#f4eee5; font:400 clamp(1rem,2.3vw,1.16rem)/1.55 system-ui,sans-serif; white-space:pre-wrap; }
@@ -1805,8 +1805,10 @@ body.mock-setup #lab-voice-settings { order:-1; }
 
 /* One stable voice surface above the composer; dialogs own their gestures. */
 body.mock-learner-shell-active #panel-pipeline { inset:auto; top:var(--lab-viewport-top,0px); left:var(--lab-viewport-left,0px); }
-.mock-learner-shell[data-voice="true"] { touch-action:none; user-select:none; -webkit-user-select:none; }
-.mock-learner-shell[data-voice="true"] .mock-learner-transcript { touch-action:none; padding-right:max(48px,calc((100vw - 760px)/2)); }
+.mock-learner-shell { touch-action:manipulation; }
+.mock-learner-shell[data-voice="true"] { touch-action:pinch-zoom; user-select:none; -webkit-user-select:none; }
+.mock-learner-shell[data-voice="true"] .mock-learner-transcript { touch-action:pinch-zoom; padding-right:max(48px,calc((100vw - 760px)/2)); }
+.mock-learner-shell[data-live="true"], .mock-learner-shell[data-live="true"] .mock-learner-transcript { touch-action:manipulation; user-select:text; -webkit-user-select:text; }
 .mock-learner-shell[data-voice="true"] #mock-learner-ptt { display:none; }
 .mock-learner-shell[data-voice="true"] .mock-recording-row { justify-content:center; }
 .mock-learner-shell .extraction-map-dialog, .mock-learner-source-panel, .mock-learner-composer { touch-action:pan-y; user-select:text; -webkit-user-select:text; }

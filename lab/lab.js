@@ -139,6 +139,11 @@ async function startLearnerEntry(mode = labState.learnerEntryMode) {
   labState.learnerEntryPending = false;
   for (const name of ["text", "voice", "car", "continue"]) if (q("learner-entry-" + name)) q("learner-entry-" + name).disabled = true;
   try {
+    if (mode !== 'text' && !labState.learnerMicrophonePrepared) {
+      if (!await window.WorldviewLessonEntry?.prepareMicrophone()) return false;
+      assertLabRequestOwner(epoch, ownerId);
+    }
+    labState.learnerMicrophonePrepared = false;
     if (labState.learnerEntryResume) {
       const selected = labState.learnerEntryResume;
       const conversationMode = mode === "car" ? "voice" : mode;
@@ -147,6 +152,7 @@ async function startLearnerEntry(mode = labState.learnerEntryMode) {
         ...(selected.resume ? { resume:{ ...selected.resume, conversationMode } } : {}) };
       labState.clarification.mode = conversationMode;
       labState.extraction.mode = conversationMode;
+      if (selected.activeResume?.liveRun) labState.clarification.liveResumeRunId = selected.runId;
       if (mode !== "text"&&!liveVoiceAvailable()) void primeMockVoiceAudio();
       await continueMockRunFromSetup(row);
       assertLabRequestOwner(epoch, ownerId);
@@ -196,7 +202,8 @@ function readLearnerLaunch() {
   const confirmedAt = Number(packet.entryConfirmedAt);
   const entryMode = ["text", "voice", "car"].includes(packet.entryMode)
     && confirmedAt > Date.now() - 900000 && confirmedAt <= Date.now() ? packet.entryMode : "";
-  return { ownerUserId:packet.ownerUserId, topic:String(packet.topic || "").trim().slice(0, 500), runId:String(packet.runId || ""), view:packet.runId && packet.view === "map" ? "map" : "", ...(entryMode ? {entryMode} : {}) };
+  const microphonePrepared = entryMode && entryMode !== 'text' && Number(packet.microphonePreparedAt) > Date.now() - 900000 && Number(packet.microphonePreparedAt) <= Date.now();
+  return { ownerUserId:packet.ownerUserId, topic:String(packet.topic || "").trim().slice(0, 500), runId:String(packet.runId || ""), voiceDiscovery:packet.voiceDiscovery === true && !packet.runId, microphonePrepared, view:packet.runId && packet.view === "map" ? "map" : "", ...(entryMode ? {entryMode} : {}) };
 }
 
 async function completeLearnerEntryPreparation(packet, topic) {
@@ -215,6 +222,7 @@ async function completeLearnerEntryPreparation(packet, topic) {
   delete retained.entryConfirmedAt;
   sessionStorage.setItem(LEARNER_LAUNCH_KEY, JSON.stringify(retained));
   labState.learnerEntryMode = packet.entryMode;
+  labState.learnerMicrophonePrepared = packet.microphonePrepared === true;
   const started = await startLearnerEntry(packet.entryMode);
   if (!started) document.documentElement.classList.remove("learner-opening-selected");
 }
@@ -332,7 +340,7 @@ async function openLearnerLesson() {
   }
   // A refresh rejoins the exact saved phase. A Home topic packet explicitly
   // starts fresh, after all optional server hydration has completed.
-  if (!packet?.topic) {
+  if (!packet?.topic && !packet?.voiceDiscovery) {
     const runId = labState.pendingClarificationResume?.runId || labState.pendingMockResume?.runId || labState.pipelineSelectedRunId;
     const row = labState.workspaceRows.find(item => item.runId === runId);
     if (row) {
@@ -357,12 +365,12 @@ async function openLearnerLesson() {
   launchNewMockRun();
   labState.learnerEntryResume = null;
   labState.learnerLessonOpened = true;
-  if (packet?.topic) {
+  labState.learnerVoiceDiscovery = packet?.voiceDiscovery === true;
+  if (packet?.topic || labState.learnerVoiceDiscovery) {
     q("clarification-topic").value = packet.topic;
     syncClarificationTopic("clarification-topic");
-    // Keep the launch draft across a refresh until the learner chooses a mode.
-    // Home never chooses Text or sends a paid opening on the learner's behalf.
-    await completeLearnerEntryPreparation(packet, packet.topic);
+    // Home carries the learner's explicit Text/Voice choice into this opening.
+    await completeLearnerEntryPreparation(packet, packet.topic || "Tell me what you want to learn");
   } else {
     setLearnerEntry(false, "", true);
   }
@@ -1096,6 +1104,8 @@ let labViewportLayoutTimer = 0;
 let labViewportLayoutFrame = 0;
 let labFieldRevealGeneration = 0;
 function syncLabViewportLayout() {
+  // Native magnification owns panning and scaling until the user pinches back.
+  if (Number(globalThis.window?.visualViewport?.scale) > 1.01) return;
   // Car has no keyboard. Screenshot/permission sheets can briefly pan the
   // visual viewport; applying those offsets moves the entire fixed surface.
   const viewport = document.body.classList.contains("mock-car-active") ? null : window.visualViewport;
@@ -1157,6 +1167,7 @@ function labLearnerViewportActive() {
     || document.body.classList.contains("quiz-learner-active");
 }
 function resetLabRootScroll() {
+  if (Number(globalThis.window?.visualViewport?.scale) > 1.01) return;
   if (!labLearnerViewportActive()) return;
   document.documentElement.classList.add("lab-viewport-locked");
   document.documentElement.scrollTop = 0;
@@ -1189,6 +1200,7 @@ function labFieldNeedsReveal(target) {
   return rect.top < viewport.top + 18 || rect.bottom > lowerSafeEdge;
 }
 function revealLabField(target) {
+  if (Number(globalThis.window?.visualViewport?.scale) > 1.01) return;
   if (!target?.isConnected || document.activeElement !== target || target.disabled) return;
   resetLabRootScroll();
   syncLabViewportLayout();
@@ -14899,7 +14911,7 @@ function mockLearnerClarificationTranscript(artifact = selectedPipelineArtifact(
     }
     turns.push({ role:turn?.role === "assistant" ? "assistant" : "user", content });
   }
-  if (!turns.length && topic) turns.push({ role:"user", content:topic });
+  if (!turns.length && topic && topic !== 'Topic to be chosen by voice') turns.push({ role:"user", content:topic });
   return turns;
 }
 
@@ -15302,7 +15314,7 @@ function mockLearnerMapState(stage, artifact) {
     ? pipelineExtractionMapViewState(artifact) : null;
 }
 
-let liveConversationMounted=false;
+let liveConversationMounted=false, conversationTools=null;
 window.addEventListener('storage',event=>{if([window.WorldviewModels?.liveModelKey,window.WorldviewModels?.voiceRouteKey].includes(event.key))renderMockLearnerShell();});
 function liveVoiceAvailable(stage=labState.pipelineStage){return Boolean(labState.accessVerified&&labState.verifiedAdmin&&labState.pipelineMode==='mock'&&['clarification','extraction','lesson','quiz'].includes(stage)&&window.WorldviewModels?.liveEnabled(stage));}
 function liveLessonSelected(stage=labState.pipelineStage){
@@ -15335,6 +15347,9 @@ async function applyLiveJourney(study){
  const active=selectedPipelineArtifact()?.runId||labState.clarification.runId;if(study.runId!==active)return;
  const changed=labState.liveJourney?.id!==study.id||labState.liveJourney?.phaseVersion!==study.phaseVersion;
  labState.liveJourney=study;
+ // This marker permits a browser resume before the first spoken fragment. It
+ // carries no phase authority: journey_prepare still restores the server row.
+ labState.clarification.liveResumeRunId=study.runId;
  if(study.clarification){labState.clarification.finalized=study.clarification;labState.clarification.finalizedStorage='server';labState.pipelineSelectedRunId=study.runId;rememberClarificationArtifact(study.clarification,'server');}
  if(study.extraction)rememberExtractionArtifact(study.extraction,'server');
  if(changed){
@@ -15342,7 +15357,16 @@ async function applyLiveJourney(study){
   if(target!==labState.pipelineStage)setPipelineStage(target);
   if(target==='extraction'&&study.clarification&&!pipelineMapJobs(study.clarification).length&&!pendingCreateForComponent('lesson',study.runId))void startMapThenExtraction().catch(()=>setMessage('mock-learner-status','The map needs a retry. Your Live conversation is saved.'));
   if(study.complete){labState.quiz.status='complete';labState.quiz.completionMessage='Your final teach-back covered the researched lesson. This Live conversation and its evidence are saved.';}
-  persistClarificationSettings();renderMockLearnerShell();
+  const saved=persistClarificationSettings();
+  if(saved&&typeof LAB_LEARNER!=='undefined'&&LAB_LEARNER){
+   const launch=readLearnerLaunch();
+   if(launch&&!launch.runId&&(launch.topic===labState.clarification.topic||(launch.voiceDiscovery&&labState.clarification.topic==='Topic to be chosen by voice'))){
+    // The durable Live study now exists. A reload targets it instead of
+    // replaying the original fresh-topic launch and creating another run.
+    sessionStorage.setItem(LEARNER_LAUNCH_KEY,JSON.stringify({ownerUserId:labState.verifiedUserId,runId:study.runId,topic:study.packet?.topic||labState.clarification.topic}));
+   }
+  }
+  renderMockLearnerShell();
  }
  publishLearnerRunSummaries();
 }
@@ -15354,10 +15378,11 @@ function syncLiveLesson(){
  });}
  const stage=labState.pipelineStage,artifact=selectedPipelineArtifact(),selection=artifact?selectedPipelineMapRecord(artifact):null;
  const transcript=mockLearnerTranscript(stage,artifact),selected=liveLessonSelected(stage)&&mockLearnerConversationActive();
+ q('mock-learner-shell').dataset.live=String(selected);
  const runId=artifact?.runId||labState.clarification.runId;
  const lineage=[labState.verifiedUserId,runId].join('|');
  recordLessonJobCosts(runId);
- live.sync({enabled:selected,lineage,owner:labState.verifiedUserId,runId,model:window.WorldviewModels?.liveModel()||'gpt-live-1',history:[],ready:selected,autoStart:true,car:labState.mockCar.active,studyInput:selected?liveStudyInput(artifact,selection,transcript):null});
+ live.sync({enabled:selected,lineage,owner:labState.verifiedUserId,runId,model:window.WorldviewModels?.liveModel()||'gpt-live-1',history:[],priorHistory:transcript,ready:selected,autoStart:true,car:labState.mockCar.active,studyInput:selected?liveStudyInput(artifact,selection,transcript):null});
  if(selected){q('mock-learner-voice-controls').hidden=true;q('mock-learner-car').hidden=false;q('mock-learner-scroll').hidden=true;q('mock-learner-waiting').hidden=true;renderLiveResearchRecovery(selection,stage);}
  const mode=stage==='clarification'?labState.clarification.mode:labState.extraction.mode;
  const label=selected?(window.WorldviewModels?.liveLabel()||'GPT Live'):mode==='voice'?'Voice':'Text';q('mock-learner-mode').textContent=label+' ⌄';q('mock-learner-mode').setAttribute('aria-label','Conversation mode: '+label);renderMockCarMode();
@@ -15369,6 +15394,11 @@ function setLiveVoicePreference(value){
 function closeLiveModeMenu(){const menu=q('live-mode-menu');if(menu)menu.hidden=true;q('mock-learner-mode')?.setAttribute('aria-expanded','false');}
 async function chooseLiveConversationMode(choice){
  closeLiveModeMenu();
+ if(choice!=='text'&&!window.WorldviewLiveConversation?.ownsAudio?.()){
+  const owner=labState.verifiedUserId,epoch=labState.authEpoch;
+  if(!await window.WorldviewLessonEntry?.prepareMicrophone())return;
+  if(owner!==labState.verifiedUserId||epoch!==labState.authEpoch)return;
+ }
  if(choice!=='text'&&labState.verifiedAdmin)setLiveVoicePreference(true);
  const state=labState.pipelineStage==='clarification'?labState.clarification:labState.extraction;
  if(choice==='text'){
@@ -15394,6 +15424,7 @@ function toggleLiveModeMenu(){
 }
 
 function renderMockLearnerShell() {
+  conversationTools?.sync();
   const shell = q("mock-learner-shell");
   if (!shell) return;
   const stage = MOCK_LEARNER_STAGES.includes(labState.pipelineStage) ? labState.pipelineStage : "clarification";
@@ -16113,7 +16144,8 @@ function sanitizeActiveClarificationResume(value) {
       content:String(turn?.content || "").trim(),
     }))
     .filter((turn) => turn.role && turn.content);
-  if (!runId || !topic || !mode || !turns.length || turns[0].role !== "user") return null;
+  const liveRun = value.liveRun === true && value.pipelineMode === "mock";
+  if (!runId || !topic || !mode || (!liveRun && (!turns.length || turns[0].role !== "user"))) return null;
   const learnerReplyCount = Math.max(0, turns.filter((turn) => turn.role === "user").length - 1);
   if (Number(value.learnerReplyCount) !== learnerReplyCount) return null;
   const latestValue = value.latest && typeof value.latest === "object" ? value.latest : null;
@@ -16168,6 +16200,7 @@ function sanitizeActiveClarificationResume(value) {
     topic,
     mode,
     pipelineMode:value.pipelineMode === "mock" ? "mock" : "controls",
+    liveRun,
     turns,
     learnerReplyCount,
     latest,
@@ -16205,6 +16238,7 @@ function currentActiveClarificationResume() {
     updatedAt:now(),
     mode:state.mode,
     pipelineMode:labState.pipelineMode,
+    liveRun:state.liveResumeRunId === state.runId,
     turns:state.turns,
     learnerReplyCount:state.learnerReplyCount,
     latest:state.latest,
@@ -17435,6 +17469,7 @@ function restoreActiveClarificationResume(value) {
   }
   Object.assign(state, {
     runId:resume.runId,
+    liveResumeRunId:resume.liveRun ? resume.runId : "",
     topic:resume.topic,
     mode:resume.mode,
     turns:resume.turns.map((turn) => ({ ...turn })),
@@ -18526,7 +18561,8 @@ async function runClarificationModel(timingId = "") {
 }
 
 async function startClarification(mode) {
-  const topic = clip(q("clarification-topic").value, 500);
+  const voiceDiscovery = labState.learnerVoiceDiscovery === true && mode === 'voice';
+  const topic = clip(q("clarification-topic").value, 500) || (voiceDiscovery ? 'Topic to be chosen by voice' : '');
   if (!topic) { setClarificationLaunchError("Add the thing you want to learn first."); return; }
   const topicStartedPerf = performance.now();
   if (typeof releaseClarificationTopicCapture === "function") releaseClarificationTopicCapture();
@@ -18538,7 +18574,7 @@ async function startClarification(mode) {
   state.topic = topic;
   state.mode = mode;
   q("clarification-surface")?.classList?.toggle("is-voice", mode === "voice");
-  state.turns = [{ role: "user", content: `The learner entered this topic: ${topic}\nThis is the first clarification turn.` }];
+  state.turns = voiceDiscovery ? [] : [{ role: "user", content: `The learner entered this topic: ${topic}\nThis is the first clarification turn.` }];
   state.learnerReplyCount = 0;
   state.latest = null;
   state.runError = "";
@@ -18601,6 +18637,16 @@ async function startClarification(mode) {
     return;
   }
 
+  if (voiceDiscovery) {
+    // Standard Voice waits for the learner's actual topic recording. There is
+    // no empty provider request and no invented initial learner statement.
+    setClarificationActivity(false);
+    setMessage("clarification-message", "Hold or tap Record and say what you want to learn.");
+    persistClarificationSettings();
+    renderMockLearnerShell();
+    return;
+  }
+
   const activeRunId = state.runId;
   let microphonePromise = Promise.resolve();
   let audioPrimePromise = Promise.resolve(false);
@@ -18640,12 +18686,27 @@ async function submitClarificationReply(text, { timingId = "", inputMode = "", o
   }
   stopSpeechComparison();
   stopClarificationSpeech();
-  state.learnerReplyCount += 1;
+  const firstSpokenTopic = state.topic === 'Topic to be chosen by voice' && state.turns.length === 0;
+  if (firstSpokenTopic) {
+    state.topic = clip(reply, 500);
+    labState.learnerVoiceDiscovery = false;
+    q("clarification-topic").value = state.topic;
+    q("clarification-backend-topic").value = state.topic;
+  } else state.learnerReplyCount += 1;
   state.turns.push({ role: "user", content: reply });
   state.pendingRequestKey = "";
   state.pendingRequestTurn = -1;
   state.pendingJobId = "";
-  persistClarificationSettings();
+  const saved = persistClarificationSettings();
+  if (firstSpokenTopic && saved && typeof LAB_LEARNER !== "undefined" && LAB_LEARNER) {
+    const launch = readLearnerLaunch();
+    if (launch?.voiceDiscovery && !launch.runId) {
+      // The actual spoken topic is now saved under this exact run. Reopening
+      // must resume it, including a pending model reply, rather than replay
+      // the original topic-free Home launch as a second conversation.
+      sessionStorage.setItem(LEARNER_LAUNCH_KEY, JSON.stringify({ ownerUserId:labState.verifiedUserId, runId:state.runId, topic:state.topic }));
+    }
+  }
   q("clarification-reply").value = "";
   syncClarificationSendControl();
   const activeTimingId = timingId || beginMockTurnTiming({
@@ -19384,6 +19445,14 @@ function bindEvents() {
   q("pipeline-learner-exit").addEventListener("click", openMockSetup);
   q("mock-learner-back")?.addEventListener("click", openMockSetup);
   bindMockLearnerDensity();
+  conversationTools=window.WorldviewConversationTools?.mount({button:q('mock-learner-copy'),status:q('mock-learner-copy-status'),getScope:()=>[labState.verifiedUserId,labState.accessVerified,selectedPipelineArtifact()?.runId||labState.clarification.runId].join('|'),getText:()=>{
+    if(!labState.accessVerified||!labState.verifiedUserId)return '';
+    const artifact=selectedPipelineArtifact(),ordinary=mockLearnerTranscript('quiz',artifact);
+    const lineage=[labState.verifiedUserId,artifact?.runId||labState.clarification.runId].join('|');
+    const native = window.WorldviewLiveConversation?.transcriptTurns?.(lineage,ordinary);
+    const turns = native ?? ordinary;
+    return window.WorldviewConversationTools.serializeTurns(turns);
+  }});
   q("mock-learner-mode")?.addEventListener("click", () => { toggleLiveModeMenu(); });
   q("mock-learner-sources")?.addEventListener("click", toggleMockLearnerSources);
   q("mock-learner-source-close")?.addEventListener("click", () => closeMockLearnerSources({ restoreFocus:true }));

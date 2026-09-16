@@ -26,8 +26,10 @@
   root.dataset.learnerEntryKind = ["saved", "new"].includes(kind) ? kind : "unknown";
 })();
 </script>
-<link rel="stylesheet" href="./lab.css?v=2.1.33">
+<link rel="stylesheet" href="./lab.css?v=2.1.38">
 <link rel="stylesheet" href="./live-conversation.css?v=2.1.37">
+<link rel="stylesheet" href="./conversation-tools.css?v=2.1.38">
+<link rel="stylesheet" href="../lesson-entry-popup.css?v=2.1.38">
 <link rel="stylesheet" href="../appearance.css?v=2.1.20">
 <script src="../appearance.js?v=2.1.20"></script>
 </head>
@@ -177,6 +179,13 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
           </button>
         </div>
       </header>
+      <div class="mock-learner-reading-tools">
+        <span id="mock-learner-copy-status" role="status" aria-live="polite"></span>
+        <button id="mock-learner-copy" class="mock-learner-copy" type="button" aria-label="Copy entire conversation transcript" title="Copy the entire conversation">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>
+          Copy transcript
+        </button>
+      </div>
       <div id="mock-learner-progress" class="mock-learner-progress" hidden aria-label="Lesson chapters"></div>
       <main class="mock-learner-conversation">
         <div id="mock-voice-cue" class="mock-voice-cue" role="status" hidden><span class="mock-voice-dot" aria-hidden="true"></span><span id="mock-voice-cue-text">Listening</span><span class="mock-voice-meter" aria-hidden="true"><i></i></span></div>
@@ -779,8 +788,10 @@ Use the saved briefing as grounding. Search only for a new, recent, or explicitl
 <script src="../models.js?v=2.1.37"></script>
 <script src="./lesson-cost.js?v=2.1.37"></script>
 <script src="./gemini-live.js?v=2.1.37"></script>
-<script src="./live-conversation.js?v=2.1.37"></script>
-<script src="./lab.js?v=2.1.37" defer></script>
+<script src="./live-conversation.js?v=2.1.38"></script>
+<script src="./conversation-tools.js?v=2.1.38"></script>
+<script src="../lesson-entry-popup.js?v=2.1.38"></script>
+<script src="./lab.js?v=2.1.38" defer></script>
 <script src="./conversation-clock.js?v=2.1.12" defer></script>
 </body>
 </html>

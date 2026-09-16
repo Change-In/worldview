@@ -4,7 +4,7 @@ window.WorldviewLiveConversation=(()=>{
  let host,ui,context,study,session,loadToken=0,loading=false,saving=null,checking=false,enabled=false,saveTimer;
  let showCaptions=false,quietTimer,paused=false,startError=false,autoAttempts=0,slowTimer,restoreTimer;
  let appliedPhase=0,releasing=null;
- let fragments=[],ack=0,saveError='',request,scope='',draftKey='';
+ let fragments=[],prefix=[],textInsertions=[],textSnapshot=null,exportWasText=false,exportStudyId='',ack=0,saveError='',request,scope='',draftKey='';
  const element=(tag,text)=>{const n=document.createElement(tag);if(text)n.textContent=text;return n;};
  function mount(adapter){
   host=adapter;const root=element('section');root.className='live-conversation';root.hidden=true;
@@ -60,7 +60,26 @@ window.WorldviewLiveConversation=(()=>{
   if(!s.costTimer)s.costTimer=setInterval(()=>{if(session===s&&!s.closing)recordVoiceCost(s);},1000);
  }
  function stopVoiceCost(s){if(!s)return;if(s.costStartedAt!=null)s.costStoppedAt??=performance.now();clearInterval(s.costTimer);s.costTimer=null;if(!s.costFinal)recordVoiceCost(s);}
- function stash(){if(!draftKey||!study)return;try{localStorage.setItem(draftKey,JSON.stringify({studyId:study.id,fragments}));}catch{saveError='Device backup is unavailable. Keep this page open until the transcript is saved.';}}
+ const exportTurns=value=>Array.isArray(value)?value.filter(t=>['user','assistant'].includes(t?.role)&&typeof t.content==='string').map(t=>({role:t.role,content:t.content})):[];
+ function exportDraft(key){
+  try{
+   const draft=JSON.parse(localStorage.getItem(key)||'null');
+   if(typeof draft?.studyId!=='string'||!Array.isArray(draft.fragments)||!draft.fragments.every(f=>Number.isInteger(f?.seq)&&typeof f.id==='string'&&['user','assistant'].includes(f.role)&&typeof f.delta==='string'))return null;
+   return {...draft,prefix:exportTurns(draft.prefix),textSnapshot:Array.isArray(draft.textSnapshot)?exportTurns(draft.textSnapshot):null,textInsertions:Array.isArray(draft.textInsertions)?draft.textInsertions.filter(s=>Number.isInteger(s?.afterSeq)&&s.afterSeq>=0&&Array.isArray(s.turns)).map(s=>({afterSeq:s.afterSeq,turns:exportTurns(s.turns)})):[]};
+  }catch{return null;}
+ }
+ function stash(){if(!draftKey||!(study?.id||exportStudyId))return;try{localStorage.setItem(draftKey,JSON.stringify({studyId:study?.id||exportStudyId,fragments,prefix,textInsertions,textSnapshot,textMode:exportWasText}));}catch{saveError='Device backup is unavailable. Keep this page open until the transcript is saved.';}}
+ function rememberTextHistory(value,collect=false){
+  const next=exportTurns(value);
+  if(collect&&textSnapshot){
+   // A history still loading after refresh is not deletion. Wait for its saved
+   // prefix before attaching newly typed turns; never guess from repeated words.
+   if(textSnapshot.length>next.length||!textSnapshot.every((t,i)=>next[i]?.role===t.role&&next[i]?.content===t.content))return;
+   const tail=next.slice(textSnapshot.length);
+   if(tail.length)textInsertions.push({afterSeq:fragments.at(-1)?.seq||0,turns:tail});
+  }
+  textSnapshot=next;stash();
+ }
  function paint(){
   if(!ui)return;ui.root.hidden=!enabled;ui.start.hidden=!!session||(!paused&&!startError);ui.start.disabled=loading||!!session||!context?.ready||document.hidden;
   ui.start.textContent=paused?'Resume voice':'Try microphone again';
@@ -83,8 +102,15 @@ window.WorldviewLiveConversation=(()=>{
  }
  function sync(next){
   const changed=context?.lineage!==next.lineage;
+  let collectText=!enabled;
   if(session&&(changed||!next.enabled||context?.model!==next.model))void stop('Live ended because the lesson or voice model changed.');
-  if(changed){paused=false;startError=false;autoAttempts=0;appliedPhase=0;loadToken++;study=null;fragments=[];ack=0;loading=false;saveError='';scope='';draftKey='';}
+  if(changed){paused=false;startError=false;autoAttempts=0;appliedPhase=0;loadToken++;study=null;fragments=[];prefix=[];textInsertions=[];textSnapshot=null;exportWasText=false;exportStudyId='';ack=0;loading=false;saveError='';scope='';draftKey='';collectText=false;
+   if(next.lineage){const key='worldview-live-draft-v2:'+next.lineage,draft=exportDraft(key);if(draft){scope=next.lineage;draftKey=key;exportStudyId=draft.studyId;fragments=draft.fragments;prefix=draft.prefix;textInsertions=draft.textInsertions;textSnapshot=draft.textSnapshot;collectText=draft.textMode===true;}}
+  }
+  // Hydrated phase artifacts can contain the same native speech. Only a saved
+  // ordinary-mode snapshot permits collecting their growth as new Text turns.
+  exportWasText=!next.enabled;
+  if((study||exportStudyId)&&Array.isArray(next.priorHistory))rememberTextHistory(next.priorHistory,collectText);
   const returning=!enabled&&next.enabled;context=next;enabled=!!next.enabled;if(returning){paused=false;startError=false;autoAttempts=0;}
   if(enabled&&!study&&!loading&&!startError&&!paused&&next.studyInput)void prepare();
   paint();maybeStart();
@@ -109,6 +135,11 @@ window.WorldviewLiveConversation=(()=>{
    const result=await captured({action:'journey_prepare',...context.studyInput});
    if(token!==loadToken||context.lineage!==expected)return;
    study=result.study;fragments=study.fragments.slice();ack=fragments.length;request=captured;scope=expected;draftKey='worldview-live-draft-v2:'+expected;
+   const imported=fragments.filter(f=>f.id.startsWith('import:')),earlier=context.priorHistory||[];
+   let at=-1;for(let i=earlier.length-imported.length;imported.length&&i>=0;i--){if(imported.every((f,j)=>earlier[i+j]?.role===f.role&&earlier[i+j]?.content===f.delta)){at=i;break;}}
+   prefix=at>0?earlier.slice(0,at).map(t=>({role:t.role,content:t.content})):[];
+   const prior=exportDraft(draftKey);exportStudyId=study.id;textInsertions=[];textSnapshot=exportTurns(earlier);
+   if(prior?.studyId===study.id){if(!prefix.length)prefix=prior.prefix;textInsertions=prior.textInsertions;}
    try{const draft=JSON.parse(localStorage.getItem(draftKey)||'null');if(draft?.studyId===study.id&&Array.isArray(draft.fragments)&&draft.fragments.length>ack&&fragments.every((f,i)=>['seq','id','role','delta','start_ms','end_ms'].every(k=>f[k]===draft.fragments[i][k])))fragments=draft.fragments;}catch{/* Server copy remains available. */}
    await applyPhase();stash();message('Connecting…');
    if(fragments.length>ack)void flush();
@@ -207,8 +238,9 @@ window.WorldviewLiveConversation=(()=>{
   if(autoAttempts>=3){startError=true;message('Voice could not reconnect. Try again.');paint();return;}autoAttempts++;
   const s={id:crypto.randomUUID(),request,scope,model:context.model||'gpt-live-1',connectedAt:Date.now(),studyId:study.id,seen:new Set(),delegations:new Set(),seconds:0,ready:false,closing:false,dispatched:false,muted:false};session=s;paint();
   try{
-   host.releaseMedia();captureAudioType();s.startup=setTimeout(()=>{startError=true;void stop('Voice could not connect. Try again.');},45000);
+   host.releaseMedia();captureAudioType();message('Waiting for microphone permission…');
    const mic=await acquireMic(s);if(session!==s||s.closing){mic.getTracks().forEach(t=>t.stop());return;}s.mic=mic;
+   message('Connecting voice…');s.startup=setTimeout(()=>{if(session!==s||s.closing)return;startError=true;void stop('Voice could not connect. Try again.');},45000);
    if(s.model==='gemini-3.8-live'){
     mic.getAudioTracks().forEach(t=>t.addEventListener('ended',()=>{if(session===s&&!s.closing)void stop('Microphone disconnected.');}));
     if(!await flush())throw Error('Transcript save is pending.');if(session!==s||s.closing||document.hidden)return;
@@ -244,5 +276,17 @@ window.WorldviewLiveConversation=(()=>{
   s.closeTimer=setTimeout(()=>{if(session===s){cleanup(s);message(reason);maybeStart();}},8000);paint();
  }
  function cleanup(s){stopVoiceCost(s);clearTimeout(s.disconnectTimer);clearTimeout(quietTimer);clearTimeout(slowTimer);clearTimeout(restoreTimer);s.closing=true;clearTimeout(s.startup);clearTimeout(s.closeTimer);clearInterval(s.checkTimer);s.mic?.getTracks().forEach(t=>t.stop());s.gemini?.dispose();s.channel?.close();s.peer?.close();if(session===s){session=null;captureAudioType('auto');ui.audio.srcObject=null;ui.audio.hidden=true;ui.enableAudio.hidden=true;paint();}}
- const api={mount,sync,stop,place,ownsAudio:()=>!!session,active:()=>!!session,enabled:()=>enabled};return api;
+ function transcriptTurns(expectedLineage,currentHistory){
+  if(!expectedLineage||scope!==expectedLineage||context?.lineage!==expectedLineage||!(study||exportStudyId))return null;
+  if(!enabled&&Array.isArray(currentHistory))rememberTextHistory(currentHistory,true);
+  const turns=prefix.map(t=>({...t}));
+  let previousNative=false;
+  const insert=seq=>{for(const group of textInsertions.filter(s=>s.afterSeq===seq)){turns.push(...group.turns.map(t=>({...t})));previousNative=false;}};
+  insert(0);
+  // Imports are complete turns; only adjacent native deltas share a turn.
+  // Text typed between voice sessions stays at that exact fragment boundary.
+  for(const f of fragments){const native=!f.id.startsWith('import:'),last=turns.at(-1);if(native&&previousNative&&last?.role===f.role)last.content+=f.delta;else turns.push({role:f.role,content:f.delta});previousNative=native;insert(f.seq);}
+  return turns;
+ }
+ const api={mount,sync,stop,place,transcriptTurns,ownsAudio:()=>!!session,active:()=>!!session,enabled:()=>enabled};return api;
 })();
