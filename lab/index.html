@@ -19,15 +19,15 @@
     if (packet?.ownerUserId) {
       if (["text", "voice", "car"].includes(packet.entryMode) && Number(packet.entryConfirmedAt) > Date.now() - 900000 && Number(packet.entryConfirmedAt) <= Date.now()) root.classList.add("learner-opening-selected");
       if (packet.runId && /^[A-Za-z0-9-]{8,128}$/.test(String(packet.runId))) kind = "saved";
-      else if (!packet.runId && String(packet.topic || "").trim()) kind = "new";
+      else if (!packet.runId && (String(packet.topic || "").trim() || packet.voiceDiscovery === true)) kind = "new";
       else kind = "unknown";
     }
   } catch (_) { kind = "unknown"; }
   root.dataset.learnerEntryKind = ["saved", "new"].includes(kind) ? kind : "unknown";
 })();
 </script>
-<link rel="stylesheet" href="./lab.css?v=2.1.38">
-<link rel="stylesheet" href="./live-conversation.css?v=2.1.37">
+<link rel="stylesheet" href="./lab.css?v=2.1.44">
+<link rel="stylesheet" href="./live-conversation.css?v=2.1.44">
 <link rel="stylesheet" href="./conversation-tools.css?v=2.1.38">
 <link rel="stylesheet" href="../lesson-entry-popup.css?v=2.1.38">
 <link rel="stylesheet" href="../appearance.css?v=2.1.20">
@@ -60,7 +60,7 @@
     <h2>Worldview</h2>
   </header>
   <main class="learner-entry-conversation">
-    <div id="learner-entry-opening" role="status" aria-live="polite"><span class="entry-loading-mark" aria-hidden="true"></span><h3>Opening your lesson</h3><p>Restoring your place. You can return Home at any time.</p></div>
+    <div id="learner-entry-opening" role="status" aria-live="polite"><span class="entry-loading-mark" aria-hidden="true"></span><h3>Opening your lesson</h3><p data-entry-kind="saved">Restoring your place. You can return Home at any time.</p><p data-entry-kind="new">You can return Home at any time.</p></div>
     <div class="learner-entry-choice" aria-labelledby="learner-entry-title">
       <p id="learner-entry-topic" class="learner-entry-topic" hidden></p>
       <h3 id="learner-entry-title">How would you like to chat?</h3>
@@ -788,7 +788,7 @@ Use the saved briefing as grounding. Search only for a new, recent, or explicitl
 <script src="../models.js?v=2.1.37"></script>
 <script src="./lesson-cost.js?v=2.1.37"></script>
 <script src="./gemini-live.js?v=2.1.42"></script>
-<script src="./live-conversation.js?v=2.1.42"></script>
+<script src="./live-conversation.js?v=2.1.44"></script>
 <script src="./conversation-tools.js?v=2.1.38"></script>
 <script src="../lesson-entry-popup.js?v=2.1.38"></script>
 <script src="./lab.js?v=2.1.42" defer></script>

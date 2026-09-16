@@ -2065,3 +2065,9 @@ body.mock-run.mock-car-active .mock-car-surface {
 .entry-loading-mark { display:inline-block; width:24px; height:24px; border:2px solid var(--wv-muted); border-right-color:transparent; border-radius:50%; animation:entry-turn 1s linear infinite; }
 @keyframes entry-turn { to { transform:rotate(360deg); } }
 @media(prefers-reduced-motion:reduce) { .entry-loading-mark { animation:none; } }
+
+/* Only a saved lesson has a place to restore. An unknown entry kind falls back
+   to the neutral line, which is true either way. */
+#learner-entry-opening p[data-entry-kind]{display:none}
+:root[data-learner-entry-kind="saved"] #learner-entry-opening p[data-entry-kind="saved"]{display:block}
+:root:not([data-learner-entry-kind="saved"]) #learner-entry-opening p[data-entry-kind="new"]{display:block}

@@ -5,3 +5,12 @@
 
 #mock-car-surface[data-live="true"] .mock-car-recording-row,#mock-car-surface[data-live="true"] .mock-car-recovery-actions,#mock-car-surface[data-live="true"] .mock-car-safety,#mock-car-surface[data-live="true"] #mock-car-status,#mock-car-surface[data-live="true"] #mock-car-speaker,#mock-car-surface[data-live="true"] #mock-car-speaker-status,#mock-car-surface[data-live="true"] #mock-car-output-choices,#mock-car-surface[data-live="true"] #mock-car-chapters,#mock-car-surface[data-live="true"] #mock-car-map{display:none!important}
 #mock-car-live{width:min(560px,100%);margin:auto}#mock-car-live[hidden]{display:none}.live-conversation.is-car{text-align:center}.live-conversation.is-car .live-conversation-actions{justify-content:center}.live-conversation.is-car button{min-height:64px;min-width:130px;font-size:20px}.live-conversation.is-car p{font-size:18px}.live-conversation audio[hidden],.live-conversation-progress[hidden]{display:none}
+
+/* Mute, Pause and the transcript toggle are icon-only. The 44px floor keeps the
+   tap target at size once the words are gone; the slash appears only on mute. */
+.live-conversation .live-icon-button{min-width:44px;padding:9px;display:inline-flex;align-items:center;justify-content:center}
+.live-conversation .live-icon-button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.live-conversation .live-icon-button .live-icon-slash{display:none}
+.live-conversation .live-icon-button.is-muted .live-icon-slash{display:inline}
+.live-conversation.is-car .live-icon-button{min-width:64px;min-height:64px}
+.live-conversation.is-car .live-icon-button svg{width:28px;height:28px}

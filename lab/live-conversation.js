@@ -11,7 +11,17 @@ window.WorldviewLiveConversation=(()=>{
   const note=element('p'),rate=element('span','$0.05/min'),total=element('strong','Est. total —');note.className='live-conversation-cost';note.append(rate,total);
   const actions=element('div');actions.className='live-conversation-actions';
   const enableAudio=element('button','Enable audio');enableAudio.hidden=true;
-  const start=element('button','Start GPT Live'),mute=element('button','Mute mic'),end=element('button','Pause voice'),retry=element('button','Retry saving'),captions=element('button','Show transcript');
+  const start=element('button','Start GPT Live'),retry=element('button','Retry saving');
+  // Mute, Pause and the transcript toggle are icon-only. Each keeps a real
+  // aria-label and title, kept in sync by paint(), so the control is still
+  // named for screen readers and on hover once the words are gone.
+  const ICONS={
+   mic:'<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/><path class="live-icon-slash" d="m4 4 16 16"/>',
+   pause:'<rect x="7" y="5" width="3.5" height="14" rx="1.2"/><rect x="13.5" y="5" width="3.5" height="14" rx="1.2"/>',
+   transcript:'<path d="M5 6h14M5 10h14M5 14h10M5 18h7"/>'
+  };
+  const iconButton=(name,label)=>{const b=element('button');b.className='live-icon-button';b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+ICONS[name]+'</svg>';b.setAttribute('aria-label',label);b.title=label;return b;};
+  const mute=iconButton('mic','Mute mic'),end=iconButton('pause','Pause voice'),captions=iconButton('transcript','Show transcript');
   for(const b of [start,enableAudio,mute,end,retry,captions])b.type='button';actions.append(start,enableAudio,mute,end,retry,captions);
   const status=element('p','Connecting…');status.setAttribute('role','status');
   const usage=element('small'),progress=element('p');progress.className='live-conversation-progress';
@@ -84,8 +94,8 @@ window.WorldviewLiveConversation=(()=>{
   if(!ui)return;ui.root.hidden=!enabled;ui.start.hidden=!!session||(!paused&&!startError);ui.start.disabled=loading||!!session||!context?.ready||document.hidden;
   ui.start.textContent=paused?'Resume voice':'Try microphone again';
   ui.rate.textContent=(session?.model||context?.model)==='gemini-3.8-live'?'Gemini · $0.005/min in + $0.018/min out + text':'GPT Live · $0.05/min';
-  ui.captions.hidden=!session?.ready||context?.car;ui.captions.textContent=showCaptions?'Hide transcript':'Show transcript';ui.captions.setAttribute('aria-pressed',String(showCaptions));
-  ui.end.hidden=!session;ui.mute.hidden=!session?.ready;ui.mute.textContent=session?.muted?'Unmute mic':'Mute mic';ui.mute.setAttribute('aria-pressed',String(!!session?.muted));
+  ui.captions.hidden=!session?.ready||context?.car;const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.setAttribute('aria-label',capsLabel);ui.captions.title=capsLabel;ui.captions.setAttribute('aria-pressed',String(showCaptions));
+  ui.end.hidden=!session;ui.mute.hidden=!session?.ready;const muteLabel=session?.muted?'Unmute mic':'Mute mic';ui.mute.setAttribute('aria-label',muteLabel);ui.mute.title=muteLabel;ui.mute.classList.toggle('is-muted',!!session?.muted);ui.mute.setAttribute('aria-pressed',String(!!session?.muted));
   ui.retry.hidden=!saveError;ui.retry.disabled=!!saving;
   if(saveError)message(saveError);
   const count=Object.keys(study?.assessment||{}).length,total=study?.packet?.roadmap?.length||0;const phaseName={clarification:'Your direction',extraction:'Your starting point',lesson:'Lesson',quiz:'Final teach-back',complete:'Complete'}[study?.phase]||'Lesson';

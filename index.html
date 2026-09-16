@@ -2185,7 +2185,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.43 · Sep 16";
+const BUILD = "v2.1.44 · Sep 16";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2193,6 +2193,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.44",date:"Sep 16",changes:["Opening a new lesson no longer says it is restoring your place, and the opening screen drops the technical note.","Mute, Pause and the transcript toggle are now icons."]},
   {tag:"v2.1.43",date:"Sep 16",changes:["The tutor no longer answers repeatedly without you speaking; its own voice can no longer trigger a background check.","Internal handoff markers no longer appear in the transcript as something you said, including in saved lessons.","Voice and Text buttons now share the same shape."]},
   {tag:"v2.1.42",date:"Sep 16",changes:["Worldview starts the conversation when you enter Voice, then listens to your answer.","Live Voice resumes from your saved lesson instead of restarting the interview."]},
   {tag:"v2.1.41",date:"Sep 16",changes:["Saved lesson cards no longer show internal labels such as Lesson Map research or Guided Lesson routing.","A voice lesson that has not said its topic yet reads as New voice lesson instead of placeholder text."]},
@@ -7222,7 +7223,7 @@ function requestNextLessonClarifier(session) {
     session,
     requestNumber === 1 ? "Opening your lesson." : "Narrowing the focus.",
     requestNumber === 1 ? "Checking whether your topic could mean more than one thing…" : "Using your answer to decide whether one final question is needed…",
-    requestNumber === 1 ? "No lesson or progress is being created yet." : "Checking whether one more detail would make the lesson clearer."
+    ""
   );
   const task = withLessonStartDeadline(
     signal => requestLessonClarifier(session.topic,session.answers.slice(0,1),{signal,presentation:session.entryMode}),
@@ -7299,7 +7300,7 @@ async function checkLessonIntakeAllowance(session) {
   session.phase = "allowance";
   showLessonIntakeChecking(
     session,"Opening your lesson.","Checking that a lesson space is ready…",
-    "The topic check starts only after this capacity check succeeds."
+    ""
   );
   const task = withLessonStartDeadline(
     signal => refreshPilotLessonAllowance({signal,deadline:false}),
@@ -7347,7 +7348,7 @@ async function openLessonIntake(topic, options = {}) {
     requestAbort:new AbortController(),clarifierTask:null,allowanceTask:null,allowanceConfirmed:false,
   };
   activeLessonIntake = session;
-  showLessonIntakeChecking(session,"Opening your lesson.","Getting the topic setup ready…","Nothing billable has started.");
+  showLessonIntakeChecking(session,"Opening your lesson.","Getting the topic setup ready…","");
   setLessonIntakeOpen(true);
   /* Give the fixed dialog two real paint opportunities before any network or
      provider work. This is especially important while iOS is dismissing the
