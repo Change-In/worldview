@@ -2185,7 +2185,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.40 · Sep 16";
+const BUILD = "v2.1.41 · Sep 16";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2193,6 +2193,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.41",date:"Sep 16",changes:["Saved lesson cards no longer show internal labels such as Lesson Map research or Guided Lesson routing.","A voice lesson that has not said its topic yet reads as New voice lesson instead of placeholder text."]},
   {tag:"v2.1.40",date:"Sep 16",changes:["Home buttons are now Voice and Text.","Allowing microphone access continues into Voice without a second tap while account access refreshes."]},
   {tag:"v2.1.39",date:"Sep 16",changes:["Voice stops playback immediately when paused or changed, with stronger protection against stale replies.","The tutor is instructed to wait after its question, respond once, and accept corrections to misheard words.","Background lesson checks avoid repeated updates and retain recovery after a failed check.","Saved cards show the subject without internal labels such as Feynman overview."]},
   {tag:"v2.1.38",date:"Sep 16",changes:["Typed topics start in Text. Start Voice lets you say what you want to learn.","Voice asks for microphone permission before entering the lesson, and waits while you decide.","Copy transcript copies the full conversation, including Live captions.","Pinch to zoom without the lesson resizing underneath you; Live transcript text can be selected."]},
@@ -8213,15 +8214,64 @@ function homeLearnerAccountAllowed() {
     && !row.revoked_at && ["admin","tester"].includes(row.access_tier)
     && (expiry === null || Number.isFinite(expiry) && expiry > Date.now()));
 }
+// The literal placeholder a topic-free Voice launch saves as its topic. It is
+// application copy, never something the learner said, so it must never reach a
+// card. A Voice run still carrying it has not been named yet.
+const VOICE_TOPIC_PLACEHOLDER = "Topic to be chosen by voice";
+
+/* Internal job names, exactly as lab.js builds them. Each is prefixed to a
+   learner topic as "<job> · <topic>". Listed longest-first so a longer name is
+   never shadowed by a shorter one that prefixes it. Keeping this list aligned
+   with the names lab.js actually creates is the whole point: the earlier list
+   guessed at "Lesson Map planner"/"Lesson Map revision", which are never
+   produced, and omitted "Lesson Map research" and "Guided Lesson routing",
+   which are — so exactly those two leaked onto Home cards. The retired
+   guesses are kept in case an old saved row still carries one. */
+const LEGACY_JOB_LABELS = [
+  "Retry guided Lesson reply",
+  "Feynman map-aware overview",
+  "Guided Lesson routing",
+  "Lesson Map research",
+  "Lesson Map planner",
+  "Lesson Map revision",
+  "Retry Feynman reply",
+  "Final teach-back",
+  "Feynman overview",
+  "Guided Lesson",
+  "Clarification",
+];
+// Every label is plain letters, spaces and one hyphen, so none needs escaping.
+const LEGACY_JOB_PATTERN = new RegExp("^(?:" + LEGACY_JOB_LABELS.join("|") + ")" + /\s*·\s*(.+)$/.source, "i");
+
+function stripLegacyJobLabel(value) {
+  /* A saved title can carry more than one prefix when a job was queued from
+     another job, so peel until nothing else comes off rather than assuming a
+     single layer. The bound stops a pathological title from looping. */
+  let text = String(value || "").trim();
+  for (let depth = 0; depth < 4; depth += 1) {
+    const match = LEGACY_JOB_PATTERN.exec(text);
+    if (!match) break;
+    text = match[1].trim();
+  }
+  return text;
+}
+
 function homeLearnerRunTitle(item) {
   // Explicit topic metadata is learner-owned, even when it mentions a teaching
   // method. Older summaries can instead contain the internal job's name.
   const topic = String(item?.topic || "").trim();
-  if (topic) return topic.slice(0, 500);
-  const title = String(item?.title || "").trim();
-  const legacyJob = /^(?:Clarification|Guided Lesson|Retry guided Lesson reply|Lesson Map(?: planner| revision)?|Feynman(?: map-aware)? overview|Retry Feynman reply|Final teach-back)\s*·\s*(.+)$/i.exec(title);
-  return (legacyJob ? legacyJob[1].trim() : title).slice(0, 500) || "Saved lesson";
+  if (topic && topic !== VOICE_TOPIC_PLACEHOLDER) return topic.slice(0, 500);
+  const cleaned = stripLegacyJobLabel(item?.title);
+  if (cleaned && cleaned !== VOICE_TOPIC_PLACEHOLDER) return cleaned.slice(0, 500);
+  /* Either nothing usable was saved, or the only thing saved is the Voice
+     placeholder for a lesson whose topic has not been captured yet. Name it
+     for what it is rather than showing application copy as though the learner
+     had chosen it. */
+  return topic === VOICE_TOPIC_PLACEHOLDER || cleaned === VOICE_TOPIC_PLACEHOLDER
+    ? "New voice lesson"
+    : "Saved lesson";
 }
+
 function normalizedHomeLearnerRuns(value) {
   if (!Array.isArray(value)) return [];
   const runs = new Map();
