@@ -161,6 +161,9 @@ const legacyKey = 'worldview-lab-mock-run-config-gemini38-v2';
 const voiceKey = 'wv-lab-voice-routes';
 const liveKey = 'worldview-live-lesson-stages-v1';
 const voiceRouteKey='worldview-voice-route-v2';
+const liveModelKey='worldview-live-model-v1';
+function liveModel(storage=localStorage){return read(storage,liveModelKey).model==='gemini-3.8-live'?'gemini-3.8-live':'gpt-live-1';}
+function liveLabel(storage=localStorage){return liveModel(storage)==='gemini-3.8-live'?'Gemini 3.8 Live':'GPT Live';}
 const liveStages = ['clarification','extraction','lesson','quiz'];
 function liveEnabled(stage,storage=localStorage) { return liveStages.includes(stage) && read(storage,voiceRouteKey).mode !== 'standard'; }
 const labels = {clarification:'Getting started',map:'Lesson planning',extraction:'Your starting knowledge',lesson:'Tutor',brain:'Understanding checks',quiz:'Final review'};
@@ -245,7 +248,13 @@ function render(host,{admin=false,onVoice=()=>{},storage=localStorage,mode='voic
   section.append(top,presets,controls,customLine,price,liveNote,advanced);parent.append(section);fill();
  }
  if(mode==='voice'){
-  const card=el('section','models-live-default');card.append(el('div','model-badge',admin?'Default':'Owner access required'),el('h3','','GPT Live'),el('p','models-note','OpenAI'),el('p','model-rate','$0.05/min'));host.append(card);
+  const selectedLive=liveModel(storage),gemini=selectedLive==='gemini-3.8-live';
+  const card=el('section','models-live-default');card.append(el('div','model-badge',admin?(gemini?'Test option':'Recommended'):'Owner access required'),el('h3','',liveLabel(storage)));
+  const choose=el('select');choose.id='model-choice-live';choose.setAttribute('aria-label','Live voice model');choose.disabled=!admin;
+  choose.add(new Option('GPT Live 1 · recommended','gpt-live-1'));choose.add(new Option('Gemini 3.8 Live · try it','gemini-3.8-live'));choose.value=selectedLive;
+  choose.onchange=()=>{if(persist(liveModelKey,{model:choose.value})){persist(voiceRouteKey,{mode:'live'});rerender('model-choice-live');}};
+  const pricing=el('a','','Official voice pricing');pricing.href=links[gemini?'google':'openai'];pricing.target='_blank';pricing.rel='noopener noreferrer';
+  card.append(choose,el('p','model-rate',gemini?'$0.005/min audio in + $0.018/min audio out':'$0.05/min'),el('p','models-note',gemini?'Text and context tokens are additional. The lesson total uses reported usage; this is not a fixed session-minute rate.':'Your current default. Keep this selected to retain the voice you have been testing.'),pricing);host.append(card);
   row(details,'map','Lesson map',catalog,config.map,choice=>{const saved=read(storage,key);saved.map=choice;return persist(key,saved);},defaults.map,true);
   row(details,'brain','Understanding checks',catalog,config.brain,choice=>{const saved=read(storage,key);saved.brain=choice;return persist(key,saved);},defaults.brain,true);
  }else{
@@ -263,5 +272,5 @@ function render(host,{admin=false,onVoice=()=>{},storage=localStorage,mode='voic
  }
  host.append(details,status);
 }
-return {catalog,defaults,key,liveKey,voiceRouteKey,liveStages,liveEnabled,valid,apply,initial,render};
+return {catalog,defaults,key,liveKey,voiceRouteKey,liveModelKey,liveModel,liveLabel,liveStages,liveEnabled,valid,apply,initial,render};
 })();

@@ -56,6 +56,7 @@ function learnerRunSummaries() {
 
 function publishLearnerRunSummaries() {
   if (!LAB_LEARNER || !labState.verifiedUserId || labState.workspaceOwnerId !== labState.verifiedUserId) return false;
+  recordLessonJobCosts();
   try {
     const key = LEARNER_RUNS_PREFIX + labState.verifiedUserId;
     const existing = JSON.parse(localStorage.getItem(key) || "[]");
@@ -7880,7 +7881,7 @@ function normalizePipelineMap(value, raw = "", artifact = selectedPipelineArtifa
       id:cleanMapText(item?.id || `source_${index + 1}`, 80),
       title:cleanMapText(item?.title || item?.name || item?.url, 180),
       publisher:cleanMapText(item?.publisher || item?.author, 140),
-      url:cleanMapText(item?.url || item?.href, 600),
+      url:String(item?.url || item?.href || '').trim().length <= 8192 ? String(item?.url || item?.href || '').trim() : '',
       published:cleanMapText(item?.published || item?.publicationDate || item?.publication_date, 80),
       accessed:cleanMapText(item?.accessed || item?.accessDate || item?.access_date, 80),
     })).filter((source) => source.title || source.url);
@@ -8633,8 +8634,8 @@ function pipelineMapRecordMeta(record, map = null) {
 }
 
 function canonicalPipelineSupportUrl(value) {
-  const raw = cleanMapText(typeof value === "string" ? value : value?.url, 600);
-  if (!raw) return "";
+  const raw = String((typeof value === "string" ? value : value?.url) || '').trim();
+  if (!raw || raw.length > 8192) return "";
   try {
     const parsed = new URL(raw);
     if (parsed.protocol !== "https:") return "";
@@ -9865,7 +9866,7 @@ function pipelineLessonOutcomes(selection = selectedPipelineMapRecord()) {
       status:clip(outcome.verifiedSupport.status, 32),
       summary:clip(outcome.verifiedSupport.summary, 600),
       claims:(Array.isArray(outcome.verifiedSupport.claims) ? outcome.verifiedSupport.claims : []).map((claim) => ({ id:clip(claim.id, 80), text:clip(claim.text, 360), sourceIds:(Array.isArray(claim.sourceIds) ? claim.sourceIds : []).map((id) => clip(id, 80)).filter(Boolean) })).filter((claim) => claim.text),
-      sources:(Array.isArray(outcome.verifiedSupport.sources) ? outcome.verifiedSupport.sources : []).map((source) => ({ id:clip(source.id, 80), title:clip(source.title, 180), publisher:clip(source.publisher, 140), url:clip(source.url, 600), published:clip(source.published, 80), accessed:clip(source.accessed, 80) })),
+      sources:(Array.isArray(outcome.verifiedSupport.sources) ? outcome.verifiedSupport.sources : []).map((source) => ({ id:clip(source.id, 80), title:clip(source.title, 180), publisher:clip(source.publisher, 140), url:clip(source.url, 8192), published:clip(source.published, 80), accessed:clip(source.accessed, 80) })),
       boundaries:(Array.isArray(outcome.verifiedSupport.boundaries) ? outcome.verifiedSupport.boundaries : []).map((item) => clip(item, 280)).filter(Boolean),
       examples:(Array.isArray(outcome.verifiedSupport.examples) ? outcome.verifiedSupport.examples : []).map((example) => ({ title:clip(example.title, 140), description:clip(example.description, 280), sourceIds:(Array.isArray(example.sourceIds) ? example.sourceIds : []).map((id) => clip(id, 80)).filter(Boolean) })).filter((example) => example.title || example.description),
     } : null,
@@ -12260,6 +12261,41 @@ function mapResearchSpend(artifact = selectedPipelineArtifact()) {
     }
   }
   return { tokenCost, measured, unknown, searches, searchUnknown, jobs:jobs.length };
+}
+
+function recordLessonJobCosts(runId = '') {
+  const costs=window.WorldviewLessonCost,owner=labState.verifiedUserId;
+  if(!costs||!owner||labState.workspaceOwnerId!==owner)return;
+  for(const job of labState.jobs||[]){
+    const run=job.scenario?.pipelineRunId;if(!run||runId&&run!==runId)continue;
+    const detail=labState.jobDetails.get(job.id);let usd=0,known=0,unknown=0;
+    if(detail){
+      for(const sample of detail.samples||[]){
+        const attempts=(detail.attempts||[]).filter(a=>String(a.sampleId||a.sample_id)===String(sample.id));
+        const records=attempts.length?[...attempts].sort((a,b)=>Number(a.attemptNo||a.attempt_no||0)-Number(b.attemptNo||b.attempt_no||0)):[sample];
+        for(const record of records){
+          const latest=record===records.at(-1)&&record.status===sample.status?sample:{};
+          const result=record.result||latest.result||{};
+          const value=numeric(record.costUsd??record.cost_usd??result.costUsd??result.cost_usd)
+            ??estimateTextCost(sample.model,numeric(record.inputTokens??result.inputTokens??latest.inputTokens),numeric(record.outputTokens??result.outputTokens??latest.outputTokens));
+          if(value===null)unknown++;else{usd+=value;known++;}
+        }
+      }
+    }else{
+      // Already rendered outputs are a useful fallback while full job details load.
+      const seen=new Set();for(const output of labState.outputs||[]){if(output.jobId!==job.id||seen.has(output.id))continue;seen.add(output.id);const value=numeric(output.cost);if(value===null)unknown++;else{usd+=value;known++;}}
+      unknown++;
+    }
+    if(!known&&!unknown)continue; // Saved Live phase artifacts make no provider call.
+    const research=['map_research'].includes(job.scenario?.pipelineStage)||detail?.samples?.some(sample=>sample.request?.research);
+    costs.report(owner,run,'job:'+job.id,{usd:known?usd:null,partial:unknown>0||!!research,atLeast:true});
+  }
+}
+
+function recordLiveCheckerCost(owner,runId,usage){
+  if(!usage?.id||!owner||!runId)return;
+  const usd=estimateTextCost(usage.model,usage.inputTokens,usage.outputTokens);
+  window.WorldviewLessonCost?.report(owner,runId,'checker:'+usage.id,{usd,model:usage.model,partial:usd===null,final:true});
 }
 
 function renderMapResearchSpend(artifact) {
@@ -15267,15 +15303,33 @@ function mockLearnerMapState(stage, artifact) {
 }
 
 let liveConversationMounted=false;
+window.addEventListener('storage',event=>{if([window.WorldviewModels?.liveModelKey,window.WorldviewModels?.voiceRouteKey].includes(event.key))renderMockLearnerShell();});
 function liveVoiceAvailable(stage=labState.pipelineStage){return Boolean(labState.accessVerified&&labState.verifiedAdmin&&labState.pipelineMode==='mock'&&['clarification','extraction','lesson','quiz'].includes(stage)&&window.WorldviewModels?.liveEnabled(stage));}
 function liveLessonSelected(stage=labState.pipelineStage){
  const mode=stage==='clarification'?labState.clarification.mode:labState.extraction.mode;
  return Boolean(labState.accessVerified&&labState.verifiedAdmin&&labState.pipelineMode==='mock'&&['clarification','extraction','lesson','quiz'].includes(stage)&&mode==='voice'&&window.WorldviewModels?.liveEnabled(stage));
 }
+function liveResearchState(selection, stage=labState.pipelineStage) {
+ if(!['extraction','lesson','quiz'].includes(stage))return null;
+ const meta=selection?.meta,first=selection?.map?.chapters?.[0]?.outcomes?.[0],artifact=selectedPipelineArtifact();
+ const planner=selection?.job||pipelineMapJob(artifact),outcomes=(selection?.map?.chapters||[]).flatMap(chapter=>chapter.outcomes||[]);
+ const ready=meta?.researchComplete===true||meta?.researchComplete!==false&&meta?.researchApplied===true&&outcomes.length>0&&outcomes.every(outcome=>outcome.verifiedSupport?.status==='verified');
+ const retryAvailable=!ready&&(meta?.researchRetryAvailable===true||meta?.workflowState==='needs-attention'
+  ||Boolean(planner&&!LAB_ACTIVE_JOB_STATES.has(planner.status)&&planner.status!=='completed')
+  ||Boolean(artifact?.runId&&labState.extraction.mapStartFailureRunId===artifact.runId));
+ return {state:ready?'ready':retryAvailable?'needs-attention':'working',firstOutcomeReady:first?.verifiedSupport?.status==='verified',retryAvailable,
+  message:ready?'Verified lesson research is ready.':retryAvailable?'Some chapter research could not be verified. Retry missing research; keep completed support and the saved conversation.':'Lesson research is still running. Preserve any agreement to begin.'};
+}
+function renderLiveResearchRecovery(selection, stage=labState.pipelineStage) {
+ const research=liveResearchState(selection,stage),retry=q('mock-learner-retry'),status=q('mock-learner-status');
+ const failed=research?.retryAvailable||stage==='extraction'&&labState.extraction.mapStartFailureRunId===selectedPipelineArtifact()?.runId;
+ retry.hidden=!failed;retry.disabled=!!labState.extraction.mapRetryBusy;retry.dataset.retry='map';retry.textContent=retry.disabled?'Retrying research…':'Retry missing research';
+ status.textContent=failed?'Some lesson research needs a retry. Your answers and verified chapters are saved.':'';status.classList.toggle('is-error',!!failed);
+}
 function liveStudyInput(artifact,selection,transcript){
  const stage=labState.pipelineStage,usable=pipelineMapSelectionIsUsable(selection),outcomes=usable?pipelineLessonOutcomes(selection):[];
  const current=labState.clarification,runId=artifact?.runId||current.runId;
- return {runId,stage,prompts:{clarification:q('clarification-prompt')?.value||CLARIFICATION_PROMPT,extraction:EXTRACTION_PROMPT+"\n\nWhen the researched map is ready, continue with this policy: "+MAP_AWARE_EXTRACTION_PROMPT+"\n\n"+EXTRACTION_PACING_POLICY,lesson:lessonTutorPrompt(),quiz:QUIZ_INTERVIEWER_PROMPT,evaluator:lessonEvaluatorPrompt(),assessor:QUIZ_ASSESSOR_PROMPT},brain:{provider:mockStageConfig('brain').provider,model:mockStageConfig('brain').model},context:{topic:artifact?.topic||current.topic,scope:artifact?.scopeSummary||'',outcomes:outcomes.map(o=>({...o,sourceLinks:lessonSourceLinks(o.verifiedSupport)})),map:usable?{jobId:selection.job.id,recordId:selection.recordKey,fingerprint:selection.fingerprint}:null,sourceClarificationFingerprint:artifact?fingerprint(pipelineExtractionPacket(artifact)):'',recentConversation:transcript.slice(-20),mockRunSettings:artifact?.mockRunSettings||{runConfig:sanitizedMockRunConfig(labState.mockRunActiveConfig||labState.mockRunConfig),clarificationBoundaries:labState.mockBoundaryActive||null}}};
+ return {runId,stage,prompts:{clarification:q('clarification-prompt')?.value||CLARIFICATION_PROMPT,extraction:EXTRACTION_PROMPT+"\n\nWhen the researched map is ready, continue with this policy: "+MAP_AWARE_EXTRACTION_PROMPT+"\n\n"+EXTRACTION_PACING_POLICY,lesson:lessonTutorPrompt(),quiz:QUIZ_INTERVIEWER_PROMPT,evaluator:lessonEvaluatorPrompt(),assessor:QUIZ_ASSESSOR_PROMPT},brain:{provider:mockStageConfig('brain').provider,model:mockStageConfig('brain').model},context:{research:liveResearchState(selection,stage),topic:artifact?.topic||current.topic,scope:artifact?.scopeSummary||'',outcomes:outcomes.map(o=>({...o,sourceLinks:lessonSourceLinks(o.verifiedSupport)})),map:usable?{jobId:selection.job.id,recordId:selection.recordKey,fingerprint:selection.fingerprint}:null,sourceClarificationFingerprint:artifact?fingerprint(pipelineExtractionPacket(artifact)):'',recentConversation:transcript.slice(-20),mockRunSettings:artifact?.mockRunSettings||{runConfig:sanitizedMockRunConfig(labState.mockRunActiveConfig||labState.mockRunConfig),clarificationBoundaries:labState.mockBoundaryActive||null}}};
 }
 async function applyLiveJourney(study){
  const active=selectedPipelineArtifact()?.runId||labState.clarification.runId;if(study.runId!==active)return;
@@ -15294,7 +15348,7 @@ async function applyLiveJourney(study){
 }
 function syncLiveLesson(){
  const live=window.WorldviewLiveConversation;if(!live||!q('mock-learner-composer'))return;
- if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),onStudy:applyLiveJourney,
+ if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),onStudy:applyLiveJourney,onCheckerUsage:recordLiveCheckerCost,
   requestForCurrentAccount:()=>{const token=labState.verifiedAccessToken;return async body=>{const response=await fetch(SUPABASE_URL+'/functions/v1/live-trial',{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(body.action==='journey_check'?150000:40000)});const result=await response.json();if(!response.ok)throw Error(result.error?.message||'Live lesson is unavailable.');return result;};},
   releaseMedia:()=>{stopClarificationCaptureForModeChange();stopClarificationSpeech();stopPipelineExtractionVoice();if(typeof releaseClarificationTopicCapture==='function')releaseClarificationTopicCapture();}
  });}
@@ -15302,10 +15356,11 @@ function syncLiveLesson(){
  const transcript=mockLearnerTranscript(stage,artifact),selected=liveLessonSelected(stage)&&mockLearnerConversationActive();
  const runId=artifact?.runId||labState.clarification.runId;
  const lineage=[labState.verifiedUserId,runId].join('|');
- live.sync({enabled:selected,lineage,history:[],ready:selected,autoStart:true,car:labState.mockCar.active,studyInput:selected?liveStudyInput(artifact,selection,transcript):null});
- if(selected){q('mock-learner-voice-controls').hidden=true;q('mock-learner-car').hidden=false;q('mock-learner-scroll').hidden=true;q('mock-learner-waiting').hidden=true;q('mock-learner-retry').hidden=true;q('mock-learner-status').textContent='';}
+ recordLessonJobCosts(runId);
+ live.sync({enabled:selected,lineage,owner:labState.verifiedUserId,runId,model:window.WorldviewModels?.liveModel()||'gpt-live-1',history:[],ready:selected,autoStart:true,car:labState.mockCar.active,studyInput:selected?liveStudyInput(artifact,selection,transcript):null});
+ if(selected){q('mock-learner-voice-controls').hidden=true;q('mock-learner-car').hidden=false;q('mock-learner-scroll').hidden=true;q('mock-learner-waiting').hidden=true;renderLiveResearchRecovery(selection,stage);}
  const mode=stage==='clarification'?labState.clarification.mode:labState.extraction.mode;
- const label=selected?'GPT Live':mode==='voice'?'Voice':'Text';q('mock-learner-mode').textContent=label+' ⌄';q('mock-learner-mode').setAttribute('aria-label','Conversation mode: '+label);renderMockCarMode();
+ const label=selected?(window.WorldviewModels?.liveLabel()||'GPT Live'):mode==='voice'?'Voice':'Text';q('mock-learner-mode').textContent=label+' ⌄';q('mock-learner-mode').setAttribute('aria-label','Conversation mode: '+label);renderMockCarMode();
 }
 function setLiveVoicePreference(value){
  const key=window.WorldviewModels?.voiceRouteKey;if(!key)return;
@@ -15333,7 +15388,7 @@ async function chooseLiveConversationMode(choice){
 function toggleLiveModeMenu(){
  let menu=q('live-mode-menu');if(menu&&!menu.hidden){closeLiveModeMenu();return;}
  if(!menu){menu=document.createElement('div');menu.id='live-mode-menu';menu.className='live-mode-menu';menu.setAttribute('aria-label','Conversation modes');q('mock-learner-header').append(menu);document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLiveModeMenu();q('mock-learner-mode')?.focus();}});document.addEventListener('click',e=>{if(!menu.contains(e.target)&&!q('mock-learner-mode')?.contains(e.target))closeLiveModeMenu();});}
- menu.replaceChildren();const options=[['text','Text',''],[labState.verifiedAdmin?'live':'voice',labState.verifiedAdmin?'GPT Live':'Voice',labState.verifiedAdmin?'$0.05/min':''],['car','Car','']];
+ menu.replaceChildren();const gemini=window.WorldviewModels?.liveModel()==='gemini-3.8-live';const options=[['text','Text',''],[labState.verifiedAdmin?'live':'voice',labState.verifiedAdmin?(window.WorldviewModels?.liveLabel()||'GPT Live'):'Voice',labState.verifiedAdmin?(gemini?'Usage-based pricing':'$0.05/min'):''],['car','Car','']];
  for(const [choice,title,note]of options){const b=document.createElement('button');b.type='button';b.textContent=title;const small=document.createElement('small');small.textContent=note;b.append(small);b.onclick=()=>void chooseLiveConversationMode(choice);menu.append(b);}
  menu.hidden=false;q('mock-learner-mode').setAttribute('aria-expanded','true');menu.querySelector('button')?.focus();
 }
@@ -15772,7 +15827,7 @@ async function retryMockLearnerAction(requestedAction = "") {
   }
   if (action === "clarification") { q("clarification-retry-model")?.click(); return; }
   if (action === "map") {
-    if (labState.pipelineStage !== "extraction" || labState.extraction.mapRetryBusy) return;
+    if (!["extraction", "lesson", "quiz"].includes(labState.pipelineStage) || labState.extraction.mapRetryBusy) return;
     const pending = retryPipelineMapFromExtraction();
     renderMockLearnerShell();
     try { await pending; }

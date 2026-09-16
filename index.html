@@ -699,6 +699,10 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     position: absolute; bottom: 14px; left: 0; right: 0;
     font-size: max(7px, calc(var(--cardW, 262px) * 0.042)); color: var(--ink-soft);
   }
+  .card .card-cost {
+    position:absolute;top:52px;left:16px;right:16px;text-align:left;
+    font-size:max(10px,calc(var(--cardW,262px) * .044));line-height:1.4;color:var(--ink-soft);
+  }
   .card.lesson-card {
     cursor:pointer;
     /* A hard bottom-up fill: the checkpoint ratio is a solid level rather
@@ -1626,7 +1630,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .lesson-options-button{left:8px;top:8px;width:44px;height:44px;padding:0}
   #home-archive-entry{margin-bottom:calc(env(safe-area-inset-bottom) + 60px)}
 </style>
-<link rel="stylesheet" href="models.css?v=2.1.35">
+<link rel="stylesheet" href="models.css?v=2.1.37">
 <link rel="stylesheet" href="appearance.css?v=2.1.20">
 <script src="appearance.js?v=2.1.20"></script>
 </head>
@@ -2173,12 +2177,13 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <script src="config.js"></script>
 <!-- optional: data.js is a shared lessons file — auto-loaded so browsers/devices stay in sync -->
 <script src="data.js"></script>
-<script src="models.js?v=2.1.35"></script>
+<script src="models.js?v=2.1.37"></script>
+<script src="lab/lesson-cost.js?v=2.1.37"></script>
 <script>
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.36 · Sep 15";
+const BUILD = "v2.1.37 · Sep 16";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2186,6 +2191,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.37",date:"Sep 16",changes:["Live remembers the current lesson phase and already-shared direction more consistently, without restarting the interview.","Waiting replies now lead straight into a useful response, and saved approval carries through research delays.","Missing chapter research has a visible retry that keeps your answers and verified chapters.","Gemini 3.8 Live is available as a voice test option; GPT Live remains the default.","The live view and lesson card share one running estimated cost, including recorded resumes and preparation."]},
   {tag:"v2.1.36",date:"Sep 15",changes:["Lessons now start teaching after a short orientation instead of a long set-up interview.","Teaching begins as soon as the first chapter is researched, rather than waiting for all of them.","Each chapter asks about its own material right before teaching it, and skips the question when you have already shown you know it.","A chapter you cannot answer is carried forward with the gap recorded, so a lesson can always be finished.","Phase changes no longer flood the voice model, which was making it talk over you and answer itself.","The status line now names what the lesson is moving to instead of going quiet."]},
   {tag:"v2.1.35",date:"Sep 14",changes:["GPT Live is the default for Voice and Car, with automatic start and return.","Car uses the same live conversation, with mute instead of hold or tap recording.","Models has separate Voice and Text views. Live microphone setup handles the iPhone audio-session conflict."]},
   { tag:"v2.1.34", date:"Sep 14", changes:["Removed the recording button from Ask Anything. Type your topic and select Begin."] },
@@ -8225,7 +8231,8 @@ function renderHomeLearnerRuns(carousel) {
     card.dataset.kind = "learner-run";
     const stage = {clarification:"Your direction",map:"Lesson Map",extraction:"Your starting point",lesson:"Lesson",quiz:"Quiz",complete:"Completed"}[run.phase];
     card.setAttribute("aria-label",`${run.title}. ${stage}. Tap to continue.`);
-    card.innerHTML = `<div class="card-cat">${esc(stage)}</div><div class="card-title serif ${cardTitleSizeClass(run.title)}">${cardTitleHtml(run.title)}</div><div class="card-hint">tap to continue</div>`;
+    const costs=window.WorldviewLessonCost,cost=costs?.summary(cloudAccount.id,run.runId);
+    card.innerHTML = `<div class="card-cat">${esc(stage)}</div><div class="card-cost" data-run-cost="${esc(run.runId)}" title="${esc(costs?.describe(cost)||'Cost estimate unavailable.')}">${esc(costs?.format(cost)||'Est. total —')}</div><div class="card-title serif ${cardTitleSizeClass(run.title)}">${cardTitleHtml(run.title)}</div><div class="card-hint">tap to continue</div>`;
     const mapButton = document.createElement("button");
     mapButton.type = "button";
     mapButton.className = "lesson-path-button card-path-button";
@@ -8240,6 +8247,13 @@ function renderHomeLearnerRuns(carousel) {
     carousel.appendChild(card);wheel.cards.push(card);wheel.ids.push(card.dataset.id);
   }
 }
+function refreshHomeLessonCosts(){
+  if(!homeLearnerAccountAllowed()||stateAccountId!==cloudAccount.id)return;
+  const costs=window.WorldviewLessonCost;if(!costs)return;
+  document.querySelectorAll('[data-run-cost]').forEach(node=>{const value=costs.summary(cloudAccount.id,node.dataset.runCost);node.textContent=costs.format(value);node.title=costs.describe(value);});
+}
+window.addEventListener('worldview-lesson-cost-updated',refreshHomeLessonCosts);
+window.addEventListener('storage',event=>{if(event.key?.startsWith(window.WorldviewLessonCost?.prefix))refreshHomeLessonCosts();});
 async function refreshHomeLearnerRuns() {
   if (homeTopicCapture) return false;
   if (!homeLearnerAccountAllowed()) return false;
