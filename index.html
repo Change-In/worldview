@@ -2185,7 +2185,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.38 · Sep 16";
+const BUILD = "v2.1.39 · Sep 16";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2193,6 +2193,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.39",date:"Sep 16",changes:["Voice stops playback immediately when paused or changed, with stronger protection against stale replies.","The tutor is instructed to wait after its question, respond once, and accept corrections to misheard words.","Background lesson checks avoid repeated updates and retain recovery after a failed check.","Saved cards show the subject without internal labels such as Feynman overview."]},
   {tag:"v2.1.38",date:"Sep 16",changes:["Typed topics start in Text. Start Voice lets you say what you want to learn.","Voice asks for microphone permission before entering the lesson, and waits while you decide.","Copy transcript copies the full conversation, including Live captions.","Pinch to zoom without the lesson resizing underneath you; Live transcript text can be selected."]},
   {tag:"v2.1.37",date:"Sep 16",changes:["Live remembers the current lesson phase and already-shared direction more consistently, without restarting the interview.","Waiting replies now lead straight into a useful response, and saved approval carries through research delays.","Missing chapter research has a visible retry that keeps your answers and verified chapters.","Gemini 3.8 Live is available as a voice test option; GPT Live remains the default.","The live view and lesson card share one running estimated cost, including recorded resumes and preparation."]},
   {tag:"v2.1.36",date:"Sep 15",changes:["Lessons now start teaching after a short orientation instead of a long set-up interview.","Teaching begins as soon as the first chapter is researched, rather than waiting for all of them.","Each chapter asks about its own material right before teaching it, and skips the question when you have already shown you know it.","A chapter you cannot answer is carried forward with the gap recorded, so a lesson can always be finished.","Phase changes no longer flood the voice model, which was making it talk over you and answer itself.","The status line now names what the lesson is moving to instead of going quiet."]},
@@ -8211,16 +8212,31 @@ function homeLearnerAccountAllowed() {
     && !row.revoked_at && ["admin","tester"].includes(row.access_tier)
     && (expiry === null || Number.isFinite(expiry) && expiry > Date.now()));
 }
+function homeLearnerRunTitle(item) {
+  // Explicit topic metadata is learner-owned, even when it mentions a teaching
+  // method. Older summaries can instead contain the internal job's name.
+  const topic = String(item?.topic || "").trim();
+  if (topic) return topic.slice(0, 500);
+  const title = String(item?.title || "").trim();
+  const legacyJob = /^(?:Clarification|Guided Lesson|Retry guided Lesson reply|Lesson Map(?: planner| revision)?|Feynman(?: map-aware)? overview|Retry Feynman reply|Final teach-back)\s*·\s*(.+)$/i.exec(title);
+  return (legacyJob ? legacyJob[1].trim() : title).slice(0, 500) || "Saved lesson";
+}
 function normalizedHomeLearnerRuns(value) {
   if (!Array.isArray(value)) return [];
   const runs = new Map();
   for (const item of value) {
     const runId = String(item?.runId || "");
     if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(runId)) continue;
-    const row = {runId,title:String(item.title || "Saved lesson").slice(0,500),
+    const topic = String(item.topic || "").trim().slice(0,500);
+    const row = {runId,title:homeLearnerRunTitle(item),...(topic ? {topic} : {}),
       phase:["clarification","map","extraction","lesson","quiz","complete"].includes(item.phase) ? item.phase : "clarification",
       updatedAt:Number(item.updatedAt) || Date.parse(item.updatedAt) || 0};
-    if (!runs.has(runId) || runs.get(runId).updatedAt < row.updatedAt) runs.set(runId,row);
+    const previous = runs.get(runId);
+    if (!previous || previous.updatedAt < row.updatedAt) runs.set(runId,row);
+    else if (previous.updatedAt === row.updatedAt && topic && !previous.topic) {
+      // Better title provenance does not establish a different lesson phase.
+      runs.set(runId,{...previous,title:row.title,topic});
+    }
   }
   return [...runs.values()].sort((a,b) => b.updatedAt-a.updatedAt).slice(0,250);
 }

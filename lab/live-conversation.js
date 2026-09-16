@@ -1,8 +1,8 @@
 /* Native Live teaching. Captions are revisable fragments, never automatic submitted text turns. */
 window.WorldviewLiveConversation=(()=>{
  'use strict';
- let host,ui,context,study,session,loadToken=0,loading=false,saving=null,checking=false,enabled=false,saveTimer;
- let showCaptions=false,quietTimer,paused=false,startError=false,autoAttempts=0,slowTimer,restoreTimer;
+ let host,ui,context,study,session,loadToken=0,loading=false,saving=null,enabled=false,saveTimer;
+ let showCaptions=false,paused=false,startError=false,autoAttempts=0,restoreTimer;
  let appliedPhase=0,releasing=null;
  let fragments=[],prefix=[],textInsertions=[],textSnapshot=null,exportWasText=false,exportStudyId='',ack=0,saveError='',request,scope='',draftKey='';
  const element=(tag,text)=>{const n=document.createElement(tag);if(text)n.textContent=text;return n;};
@@ -18,7 +18,7 @@ window.WorldviewLiveConversation=(()=>{
   const audio=element('audio');audio.autoplay=true;audio.controls=false;audio.playsInline=true;audio.hidden=true;
   root.append(note,actions,status,usage,progress);adapter.container.append(root);(document.body||adapter.container).append(audio);
   ui={root,note,rate,total,start,enableAudio,mute,end,retry,captions,status,usage,progress,audio};
-  enableAudio.onclick=()=>{void(session?.gemini?session.gemini.resumeAudio():audio.play()).then(()=>{enableAudio.hidden=true;message('Listening');}).catch(()=>message('Audio is blocked. Check the browser’s audio permission.'));};
+  enableAudio.onclick=()=>{const s=session;if(!s||s.closing)return;void(s.gemini?s.gemini.resumeAudio():audio.play()).then(()=>{if(session===s&&!s.closing){enableAudio.hidden=true;message('Listening');}}).catch(()=>{if(session===s&&!s.closing)message('Audio is blocked. Check the browser’s audio permission.');});};
   captions.onclick=()=>{showCaptions=!showCaptions;paint();};
   start.onclick=()=>{paused=false;startError=false;autoAttempts=0;void(study?begin():prepare());};end.onclick=()=>{paused=true;void stop('Voice paused.',{pause:true});};retry.onclick=()=>void flush();
   mute.onclick=()=>{const s=session;if(!s?.ready||s.closing)return;s.muted=!s.muted;s.mic?.getAudioTracks().forEach(t=>t.enabled=!s.muted);s.gemini?.mute(s.muted);message(s.muted?'Mic muted':'Listening');paint();};
@@ -156,11 +156,15 @@ window.WorldviewLiveConversation=(()=>{
   finally{saving=null;}})();return saving;
  }
  function append(state,event,role){
-  if(state.scope!==scope)return;
+  if(session!==state||state.scope!==scope)return;
   if(typeof event.delta!=='string'||!event.delta)return;
   const f={seq:fragments.length+1,id:String(event.event_id||state.id+':'+fragments.length),role,delta:event.delta,start_ms:Number.isFinite(event.start_ms)?event.start_ms:null,end_ms:Number.isFinite(event.end_ms)?event.end_ms:null};
-  fragments.push(f);stash();paint();clearTimeout(saveTimer);saveTimer=setTimeout(()=>void flush(),1500);clearTimeout(quietTimer);quietTimer=setTimeout(()=>void check(),4000);
+  fragments.push(f);state.lastTranscriptAt=performance.now();if(role==='user')state.lastUserSeq=f.seq;stash();paint();clearTimeout(saveTimer);saveTimer=setTimeout(()=>void flush(),1500);if(!state.closing)scheduleCheck(state,4000);
  }
+ // This debounce reduces context churn. Captions have no completed-turn event,
+ // so elapsed time is never evidence that either speaker has finished speaking.
+ function checkDelay(state){return state.lastTranscriptAt==null?0:Math.max(0,4000-(performance.now()-state.lastTranscriptAt));}
+ function scheduleCheck(state,delay=checkDelay(state)){clearTimeout(state.quietTimer);state.quietTimer=setTimeout(()=>{if(session===state&&!state.closing)void check();},delay);}
  function send(state,event){if(session===state&&state.channel?.readyState==='open')state.channel.send(JSON.stringify(event));}
  function inject(state,content,delegationId=null){
   if(state.gemini){state.gemini.context(content);return;}
@@ -174,6 +178,7 @@ window.WorldviewLiveConversation=(()=>{
   await host.onStudy?.(study);
  }
  function publishStudy(state,delegationId=null){
+  if(session!==state||state.closing)return false;
   const signature=JSON.stringify({version:study.phaseVersion,instructions:study.instructions,packet:study.packet});
   if(state.publishedStudy===signature)return false;
   const phaseChanged=state.publishedPhase!==study.phaseVersion;
@@ -181,7 +186,7 @@ window.WorldviewLiveConversation=(()=>{
    state.gemini.context('APP_HANDOFF. Adopt this saved phase and next focus at the next natural boundary. This is application context, not learner speech. Do not repeat answered questions or speak merely because this update arrived.\n'+(phaseChanged?'Phase policy: '+study.instructions+'\n':'')+'Saved reference packet: '+JSON.stringify(study.packet));
    state.publishedStudy=signature;state.publishedPhase=study.phaseVersion;return true;
   }
-  // Quiet context does not cut off ongoing speech. One complete envelope per saved update.
+  // Silent context is advisory, not a provider-enforced speech boundary.
   inject(state,'APP_HANDOFF_START. Buffer this complete update; do not speak or interrupt because it arrived.',delegationId);
   if(phaseChanged)inject(state,'Replacement phase policy: '+study.instructions,delegationId);
   inject(state,'Saved reference packet: '+JSON.stringify(study.packet),delegationId);
@@ -195,34 +200,54 @@ window.WorldviewLiveConversation=(()=>{
   if(!next)return;
   message(next+' one moment.');
   clearTimeout(restoreTimer);
-  restoreTimer=setTimeout(()=>{if(session===state&&!state.closing&&!saveError&&!checking)message(paused?'Paused':'Listening');},8000);
+  restoreTimer=setTimeout(()=>{if(session===state&&!state.closing&&!saveError&&!state.checking)message(paused?'Paused':'Listening');},8000);
  }
  async function check(delegationId=null){
   const s=session;if(!s?.ready||s.closing)return;
-  if(checking){if(delegationId)inject(s,'An understanding check is already running. Continue listening; do not ask for button presses.',delegationId);return;}
-  checking=true;const expected=scope,id=study.id,captured=request,input=context.studyInput,startedPhase=study.phaseVersion;
+  if(delegationId)s.pendingDelegations.add(delegationId);
+  if(checkDelay(s)>0){scheduleCheck(s);return;}
+  if(s.checking)return;
+  s.checking=true;const expected=scope,id=study.id,captured=request,input=context.studyInput,startedPhase=study.phaseVersion,startedUserSeq=s.lastUserSeq||0;
   // A routine check is fast and should stay invisible. Only say something once the learner has
   // actually been left waiting, so the status never flickers on every answer.
-  clearTimeout(slowTimer);slowTimer=setTimeout(()=>{if(checking&&session===s&&!s.closing&&!saveError)message('Checking in…');},1500);
+  clearTimeout(s.slowTimer);s.slowTimer=setTimeout(()=>{if(s.checking&&session===s&&!s.closing&&!saveError)message('Checking in…');},1500);
   try{
    if(!await flush())return;
-   if(scope!==expected||session!==s)return;
-   const prepared=await captured({action:'journey_prepare',...input});if(scope!==expected||session!==s)return;study={...prepared.study,fragments};
-   const result=await captured({action:'journey_check',studyId:id});host.onCheckerUsage?.(s.costOwner,s.costRunId,result.checkerUsage);if(scope!==expected||session!==s)return;
+   if(scope!==expected||session!==s||s.closing)return;
+   const prepared=await captured({action:'journey_prepare',...input});if(scope!==expected||session!==s||s.closing)return;
+   // Polling may discover newly finished research without new learner speech.
+   // An unchanged poll does not need another coordinator request or instruction.
+   const changed=JSON.stringify(prepared.study.packet)!==JSON.stringify(study.packet);
+   // Only the server's checked revision acknowledges assessment. A throttled,
+   // pending or failed response must remain eligible for the next bounded poll.
+   const checked=Number.isInteger(prepared.study.checkedRevision)?prepared.study.checkedRevision:-1;
+   const needsCheck=startedUserSeq>checked||changed||!!prepared.study.checkError||s.pendingDelegations.size>0;
+   const result=needsCheck?await captured({action:'journey_check',studyId:id}):prepared;
+   host.onCheckerUsage?.(s.costOwner,s.costRunId,result.checkerUsage);if(scope!==expected||session!==s||s.closing)return;
    study={...result.study,fragments};
+   // A check started against older speech cannot inject a stale next focus over
+   // a newer answer. Save and check that answer before publishing the next update.
+   if((s.lastUserSeq||0)!==startedUserSeq||checkDelay(s)>0){scheduleCheck(s);return;}
    await applyPhase();
-   if(publishStudy(s,delegationId)){}
-   else if(delegationId)inject(s,'Application check: '+(result.focus||'Continue listening in the current phase; never request Review or Send.'),delegationId);
+   if(session!==s||s.closing)return;
+   if((s.lastUserSeq||0)!==startedUserSeq||checkDelay(s)>0){scheduleCheck(s);return;}
+   const pending=[...s.pendingDelegations];s.pendingDelegations.clear();
+   const firstDelegation=pending.shift()||null,published=publishStudy(s,firstDelegation);
+   if(!published&&firstDelegation)inject(s,'Application state received. The saved phase is unchanged. Continue the current conversation; this is not a new learner turn.',firstDelegation);
+   for(const id of pending)inject(s,'Application state received. Use the latest saved phase; this is not a new learner turn.',id);
    if(study.checkError)message('Conversation saved. The understanding check could not finish; Live can keep teaching.');
    else if(study.phaseVersion!==startedPhase)announceTransition(s);
    else if(!saveError)message(paused?'Paused':'Listening');
    paint();
-  }catch{if(scope===expected)message('Live can keep teaching. The background understanding check is unavailable; no new progress was recorded.');}
-  finally{clearTimeout(slowTimer);checking=false;}
+  }catch{if(scope===expected&&session===s&&!s.closing)message('Live can keep teaching. The background understanding check is unavailable; no new progress was recorded.');}
+  finally{clearTimeout(s.slowTimer);s.checking=false;}
  }
  function event(state,e){
   if(session!==state)return;if(e.event_id){if(state.seen.has(e.event_id))return;state.seen.add(e.event_id);}
-  if(e.type==='session.started'){if(state.closing){send(state,{type:'session.close'});return;}state.ready=true;state.publishedPhase=study.phaseVersion;state.publishedStudy=JSON.stringify({version:study.phaseVersion,instructions:study.instructions,packet:study.packet});clearTimeout(state.startup);message('Listening');state.checkTimer=setInterval(()=>void check(),25000);paint();}
+  // Caption tails may describe already-captured speech. Retain them for export
+  // while closing, but never let them trigger another check or audio operation.
+  if(state.closing&&!['session.started','session.input_transcript.delta','session.output_transcript.delta','session.usage.updated','session.closed'].includes(e.type))return;
+  if(e.type==='session.started'){if(state.closing){send(state,{type:'session.close'});return;}if(state.ready)return;state.ready=true;state.publishedPhase=study.phaseVersion;state.publishedStudy=JSON.stringify({version:study.phaseVersion,instructions:study.instructions,packet:study.packet});clearTimeout(state.startup);message('Listening');state.checkTimer=setInterval(()=>{if(session===state&&!state.closing)void check();},25000);paint();}
   else if(e.type==='session.input_transcript.delta')append(state,e,'user');
   else if(e.type==='session.output_transcript.delta')append(state,e,'assistant');
   else if(e.type==='gemini.turn.complete'){state.usageTurn=(state.usageTurn||0)+1;if(Date.now()-(state.connectedAt||Date.now())>=60000)autoAttempts=0;}
@@ -236,7 +261,7 @@ window.WorldviewLiveConversation=(()=>{
  async function begin(){
   if(!enabled||loading||!study||session||releasing||!context?.ready||document.hidden)return;
   if(autoAttempts>=3){startError=true;message('Voice could not reconnect. Try again.');paint();return;}autoAttempts++;
-  const s={id:crypto.randomUUID(),request,scope,model:context.model||'gpt-live-1',connectedAt:Date.now(),studyId:study.id,seen:new Set(),delegations:new Set(),seconds:0,ready:false,closing:false,dispatched:false,muted:false};session=s;paint();
+  const s={id:crypto.randomUUID(),request,scope,model:context.model||'gpt-live-1',connectedAt:Date.now(),studyId:study.id,seen:new Set(),delegations:new Set(),pendingDelegations:new Set(),lastUserSeq:fragments.findLast(f=>f.role==='user')?.seq||0,seconds:0,ready:false,closing:false,dispatched:false,muted:false};session=s;paint();
   try{
    host.releaseMedia();captureAudioType();message('Waiting for microphone permission…');
    const mic=await acquireMic(s);if(session!==s||s.closing){mic.getTracks().forEach(t=>t.stop());return;}s.mic=mic;
@@ -251,9 +276,9 @@ window.WorldviewLiveConversation=(()=>{
     return;
    }
    const peer=s.peer=new RTCPeerConnection();mic.getAudioTracks().forEach(t=>{peer.addTrack(t,mic);t.addEventListener('ended',()=>{if(session===s&&!s.closing)void stop('Microphone disconnected.');});});
-   peer.addEventListener('track',e=>{if(session!==s||s.closing)return;ui.audio.srcObject=new MediaStream([e.track]);void ui.audio.play().catch(()=>{ui.enableAudio.hidden=false;message('Tap Enable audio.');});});
+   peer.addEventListener('track',e=>{if(session!==s||s.closing)return;ui.audio.srcObject=new MediaStream([e.track]);void ui.audio.play().catch(()=>{if(session===s&&!s.closing){ui.enableAudio.hidden=false;message('Tap Enable audio.');}});});
    peer.addEventListener('connectionstatechange',()=>{clearTimeout(s.disconnectTimer);if(session!==s||s.closing)return;if(['failed','closed'].includes(peer.connectionState))void stop('Reconnecting…');else if(peer.connectionState==='disconnected')s.disconnectTimer=setTimeout(()=>{if(session===s&&!s.closing&&peer.connectionState==='disconnected')void stop('Reconnecting…');},15000);});
-   s.channel=peer.createDataChannel('oai-events');s.channel.addEventListener('message',e=>{try{event(s,JSON.parse(e.data));}catch{void stop('Live returned an unreadable event.');}});
+   s.channel=peer.createDataChannel('oai-events');s.channel.addEventListener('message',e=>{if(session!==s)return;try{event(s,JSON.parse(e.data));}catch{if(!s.closing)void stop('Live returned an unreadable event.');}});
    s.channel.addEventListener('close',()=>{if(session===s&&!s.closing)void stop('Live connection closed.');});
    await peer.setLocalDescription(await peer.createOffer());
    if(peer.iceGatheringState!=='complete')await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{peer.removeEventListener('icegatheringstatechange',ready);reject(Error('Voice connection setup timed out.'));},10000);function ready(){if(peer.iceGatheringState==='complete'){clearTimeout(timer);peer.removeEventListener('icegatheringstatechange',ready);resolve();}}peer.addEventListener('icegatheringstatechange',ready);ready();});
@@ -266,7 +291,10 @@ window.WorldviewLiveConversation=(()=>{
  }
  async function stop(reason='Voice paused.',options={}){
   if(options.pause)paused=true;
-  const s=session;if(!s||s.closing)return;stopVoiceCost(s);s.closing=true;clearInterval(s.checkTimer);s.mic?.getTracks().forEach(t=>t.stop());stash();void flush();message(reason);
+  const s=session;if(!s||s.closing)return;stopVoiceCost(s);s.closing=true;clearInterval(s.checkTimer);clearTimeout(s.quietTimer);clearTimeout(s.slowTimer);s.mic?.getTracks().forEach(t=>t.stop());
+  // Keep the channel briefly for final usage, but release audible playback now.
+  // Otherwise a paused/replaced session can keep talking for the 8-second grace.
+  ui.audio.pause?.();ui.audio.srcObject=null;ui.enableAudio.hidden=true;stash();void flush();message(reason);
   if(s.model==='gemini-3.8-live'){
    closeGeminiReceipt(s);s.gemini?.close();cleanup(s);message(reason);return;
   }
@@ -275,7 +303,7 @@ window.WorldviewLiveConversation=(()=>{
   if(!s.dispatched){cleanup(s);message(reason);return;}
   s.closeTimer=setTimeout(()=>{if(session===s){cleanup(s);message(reason);maybeStart();}},8000);paint();
  }
- function cleanup(s){stopVoiceCost(s);clearTimeout(s.disconnectTimer);clearTimeout(quietTimer);clearTimeout(slowTimer);clearTimeout(restoreTimer);s.closing=true;clearTimeout(s.startup);clearTimeout(s.closeTimer);clearInterval(s.checkTimer);s.mic?.getTracks().forEach(t=>t.stop());s.gemini?.dispose();s.channel?.close();s.peer?.close();if(session===s){session=null;captureAudioType('auto');ui.audio.srcObject=null;ui.audio.hidden=true;ui.enableAudio.hidden=true;paint();}}
+ function cleanup(s){stopVoiceCost(s);clearTimeout(s.disconnectTimer);clearTimeout(s.quietTimer);clearTimeout(s.slowTimer);clearTimeout(restoreTimer);s.closing=true;clearTimeout(s.startup);clearTimeout(s.closeTimer);clearInterval(s.checkTimer);s.mic?.getTracks().forEach(t=>t.stop());s.gemini?.dispose();s.channel?.close();s.peer?.close();if(session===s){session=null;captureAudioType('auto');ui.audio.pause?.();ui.audio.srcObject=null;ui.audio.hidden=true;ui.enableAudio.hidden=true;paint();}}
  function transcriptTurns(expectedLineage,currentHistory){
   if(!expectedLineage||scope!==expectedLineage||context?.lineage!==expectedLineage||!(study||exportStudyId))return null;
   if(!enabled&&Array.isArray(currentHistory))rememberTextHistory(currentHistory,true);

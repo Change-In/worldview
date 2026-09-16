@@ -29,7 +29,8 @@ function learnerRunSummaries() {
     if (!/^[A-Za-z0-9-]{8,128}$/.test(String(runId || "")) || !String(title || "").trim()) return;
     const previous = rows.get(runId);
     const updated = durableTimes.get(runId) || timestamp(updatedAt) || previous?.updatedAt || 0;
-    rows.set(runId, { runId, title:String(title).trim().slice(0, 500), phase:["clarification", "map", "extraction", "lesson", "quiz"].includes(phase) ? phase : "clarification", updatedAt:updated });
+    const topic = String(title).trim().slice(0, 500);
+    rows.set(runId, { runId, title:topic, topic, phase:["clarification", "map", "extraction", "lesson", "quiz"].includes(phase) ? phase : "clarification", updatedAt:updated });
   };
   for (const artifact of labState.clarificationArtifacts || []) add(artifact.runId, artifact.topic, "extraction", artifact.createdAt);
   for (const resume of labState.mockClarificationHistory || []) add(resume.runId, resume.topic, "clarification", resume.updatedAt);
@@ -50,7 +51,7 @@ function learnerRunSummaries() {
     clocks.set(key, { signature, updatedAt });
     add(current.runId, current.topic, labState.pipelineStage, updatedAt);
   }
-  const live=labState.liveJourney;if(live?.runId)rows.set(live.runId,{runId:live.runId,title:live.packet.topic,phase:live.complete?'complete':live.phase,updatedAt:Date.now()});
+  const live=labState.liveJourney;if(live?.runId)rows.set(live.runId,{runId:live.runId,title:live.packet.topic,topic:live.packet.topic,phase:live.complete?'complete':live.phase,updatedAt:Date.now()});
   return [...rows.values()].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 100);
 }
 
@@ -61,7 +62,7 @@ function publishLearnerRunSummaries() {
     const key = LEARNER_RUNS_PREFIX + labState.verifiedUserId;
     const existing = JSON.parse(localStorage.getItem(key) || "[]");
     const summaries = new Map((Array.isArray(existing) ? existing : []).filter(row => row?.runId && row?.title)
-      .map(row => [row.runId, { runId:String(row.runId), title:String(row.title).slice(0, 500), phase:String(row.phase || "clarification"), updatedAt:Number(row.updatedAt) || Date.parse(row.updatedAt) || 0 }]));
+      .map(row => [row.runId, { runId:String(row.runId), title:String(row.title).slice(0, 500), ...(row.topic ? {topic:String(row.topic).slice(0,500)} : {}), phase:String(row.phase || "clarification"), updatedAt:Number(row.updatedAt) || Date.parse(row.updatedAt) || 0 }]));
     for (const row of learnerRunSummaries()) summaries.set(row.runId, row);
     localStorage.setItem(key, JSON.stringify([...summaries.values()].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 100)));
     return true;
