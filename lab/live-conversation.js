@@ -3,7 +3,7 @@ window.WorldviewLiveConversation=(()=>{
  'use strict';
  let host,ui,context,study,session,loadToken=0,loading=false,saving=null,enabled=false,saveTimer;
  let showCaptions=false,paused=false,startError=false,autoAttempts=0,restoreTimer;
- let appliedPhase=0,releasing=null;
+ let appliedPhase=0,releasing=null,openingPending=true;
  let fragments=[],prefix=[],textInsertions=[],textSnapshot=null,exportWasText=false,exportStudyId='',ack=0,saveError='',request,scope='',draftKey='';
  const element=(tag,text)=>{const n=document.createElement(tag);if(text)n.textContent=text;return n;};
  function mount(adapter){
@@ -20,7 +20,7 @@ window.WorldviewLiveConversation=(()=>{
   ui={root,note,rate,total,start,enableAudio,mute,end,retry,captions,status,usage,progress,audio};
   enableAudio.onclick=()=>{const s=session;if(!s||s.closing)return;void(s.gemini?s.gemini.resumeAudio():audio.play()).then(()=>{if(session===s&&!s.closing){enableAudio.hidden=true;message('Listening');}}).catch(()=>{if(session===s&&!s.closing)message('Audio is blocked. Check the browser’s audio permission.');});};
   captions.onclick=()=>{showCaptions=!showCaptions;paint();};
-  start.onclick=()=>{paused=false;startError=false;autoAttempts=0;void(study?begin():prepare());};end.onclick=()=>{paused=true;void stop('Voice paused.',{pause:true});};retry.onclick=()=>void flush();
+  start.onclick=()=>{openingPending=true;paused=false;startError=false;autoAttempts=0;void(study?begin():prepare());};end.onclick=()=>{paused=true;void stop('Voice paused.',{pause:true});};retry.onclick=()=>void flush();
   mute.onclick=()=>{const s=session;if(!s?.ready||s.closing)return;s.muted=!s.muted;s.mic?.getAudioTracks().forEach(t=>t.enabled=!s.muted);s.gemini?.mute(s.muted);message(s.muted?'Mic muted':'Listening');paint();};
   document.addEventListener('visibilitychange',()=>{if(document.hidden)void stop('Voice paused in the background.');else maybeStart();});
   window.addEventListener('pagehide',()=>{stash();void stop('Live ended when you left the lesson.');});
@@ -104,14 +104,14 @@ window.WorldviewLiveConversation=(()=>{
   const changed=context?.lineage!==next.lineage;
   let collectText=!enabled;
   if(session&&(changed||!next.enabled||context?.model!==next.model))void stop('Live ended because the lesson or voice model changed.');
-  if(changed){paused=false;startError=false;autoAttempts=0;appliedPhase=0;loadToken++;study=null;fragments=[];prefix=[];textInsertions=[];textSnapshot=null;exportWasText=false;exportStudyId='';ack=0;loading=false;saveError='';scope='';draftKey='';collectText=false;
+  if(changed){openingPending=true;paused=false;startError=false;autoAttempts=0;appliedPhase=0;loadToken++;study=null;fragments=[];prefix=[];textInsertions=[];textSnapshot=null;exportWasText=false;exportStudyId='';ack=0;loading=false;saveError='';scope='';draftKey='';collectText=false;
    if(next.lineage){const key='worldview-live-draft-v2:'+next.lineage,draft=exportDraft(key);if(draft){scope=next.lineage;draftKey=key;exportStudyId=draft.studyId;fragments=draft.fragments;prefix=draft.prefix;textInsertions=draft.textInsertions;textSnapshot=draft.textSnapshot;collectText=draft.textMode===true;}}
   }
   // Hydrated phase artifacts can contain the same native speech. Only a saved
   // ordinary-mode snapshot permits collecting their growth as new Text turns.
   exportWasText=!next.enabled;
   if((study||exportStudyId)&&Array.isArray(next.priorHistory))rememberTextHistory(next.priorHistory,collectText);
-  const returning=!enabled&&next.enabled;context=next;enabled=!!next.enabled;if(returning){paused=false;startError=false;autoAttempts=0;}
+  const returning=!enabled&&next.enabled;context=next;enabled=!!next.enabled;if(returning){openingPending=true;paused=false;startError=false;autoAttempts=0;}
   if(enabled&&!study&&!loading&&!startError&&!paused&&next.studyInput)void prepare();
   paint();maybeStart();
  }
@@ -242,12 +242,23 @@ window.WorldviewLiveConversation=(()=>{
   }catch{if(scope===expected&&session===s&&!s.closing)message('Live can keep teaching. The background understanding check is unavailable; no new progress was recorded.');}
   finally{clearTimeout(s.slowTimer);s.checking=false;}
  }
+ // One entry cue, not a learner turn. Acknowledgment is not playback proof.
+ const VOICE_ENTRY_INSTRUCTION='VOICE ENTRY. Speak first now in English; do not wait for learner speech. Keep the saved phase and instructions. If topic is unknown or "Topic to be chosen by voice", ask "What would you like to explore today?" Otherwise give one brief opening or continuation from saved context; never repeat answered questions. Then pause and listen. If speech has begun, do not start a second opening.';
+ function requestOpening(state){
+  if(!state.initiate)return;
+  openingPending=false;
+  if(state.model==='gemini-3.8-live'||state.lastTranscriptAt!=null)return;
+  state.openingEventId=state.id+':voice-entry';
+  send(state,{type:'session.instructions.append',event_id:state.openingEventId,delegation_id:null,content:VOICE_ENTRY_INSTRUCTION});
+  message('Starting conversation…');
+ }
  function event(state,e){
   if(session!==state)return;if(e.event_id){if(state.seen.has(e.event_id))return;state.seen.add(e.event_id);}
   // Caption tails may describe already-captured speech. Retain them for export
   // while closing, but never let them trigger another check or audio operation.
   if(state.closing&&!['session.started','session.input_transcript.delta','session.output_transcript.delta','session.usage.updated','session.closed'].includes(e.type))return;
-  if(e.type==='session.started'){if(state.closing){send(state,{type:'session.close'});return;}if(state.ready)return;state.ready=true;state.publishedPhase=study.phaseVersion;state.publishedStudy=JSON.stringify({version:study.phaseVersion,instructions:study.instructions,packet:study.packet});clearTimeout(state.startup);message('Listening');state.checkTimer=setInterval(()=>{if(session===state&&!state.closing)void check();},25000);paint();}
+  if(e.type==='session.started'){if(state.closing){send(state,{type:'session.close'});return;}if(state.ready)return;state.ready=true;state.publishedPhase=study.phaseVersion;state.publishedStudy=JSON.stringify({version:study.phaseVersion,instructions:study.instructions,packet:study.packet});clearTimeout(state.startup);message('Listening');requestOpening(state);state.checkTimer=setInterval(()=>{if(session===state&&!state.closing)void check();},25000);paint();}
+  else if(e.type==='session.instructions.appended'&&state.openingEventId&&e.client_event_id===state.openingEventId){state.openingAcknowledged=true;if(state.lastTranscriptAt==null)message('Listening');}
   else if(e.type==='session.input_transcript.delta')append(state,e,'user');
   else if(e.type==='session.output_transcript.delta')append(state,e,'assistant');
   else if(e.type==='gemini.turn.complete'){state.usageTurn=(state.usageTurn||0)+1;if(Date.now()-(state.connectedAt||Date.now())>=60000)autoAttempts=0;}
@@ -261,7 +272,7 @@ window.WorldviewLiveConversation=(()=>{
  async function begin(){
   if(!enabled||loading||!study||session||releasing||!context?.ready||document.hidden)return;
   if(autoAttempts>=3){startError=true;message('Voice could not reconnect. Try again.');paint();return;}autoAttempts++;
-  const s={id:crypto.randomUUID(),request,scope,model:context.model||'gpt-live-1',connectedAt:Date.now(),studyId:study.id,seen:new Set(),delegations:new Set(),pendingDelegations:new Set(),lastUserSeq:fragments.findLast(f=>f.role==='user')?.seq||0,seconds:0,ready:false,closing:false,dispatched:false,muted:false};session=s;paint();
+  const s={id:crypto.randomUUID(),initiate:openingPending,request,scope,model:context.model||'gpt-live-1',connectedAt:Date.now(),studyId:study.id,seen:new Set(),delegations:new Set(),pendingDelegations:new Set(),lastUserSeq:fragments.findLast(f=>f.role==='user')?.seq||0,seconds:0,ready:false,closing:false,dispatched:false,muted:false};session=s;paint();
   try{
    host.releaseMedia();captureAudioType();message('Waiting for microphone permission…');
    const mic=await acquireMic(s);if(session!==s||s.closing){mic.getTracks().forEach(t=>t.stop());return;}s.mic=mic;
@@ -272,7 +283,7 @@ window.WorldviewLiveConversation=(()=>{
     s.dispatched=true;startVoiceCost(s);
     const result=await s.request({action:'create',mode:'study',model:s.model,requestId:s.id,studyId:s.studyId,consent:'paid-gemini-3.8-live-whole-lesson'});
     if(session!==s||s.closing){void s.request({action:'close',requestId:s.id}).catch(()=>{});return;}
-    await window.WorldviewGeminiLive.connect({transport:result.transport,mic,isCurrent:()=>session===s&&!s.closing,onTransport:value=>{s.gemini=value;},onEvent:e=>event(s,e),onUsage:metadata=>recordVoiceCost(s,{metadata,usageId:s.usageTurn||0}),onStatus:text=>{if(session===s){message(text);if(text==='Tap Enable audio.')ui.enableAudio.hidden=false;}}});
+    await window.WorldviewGeminiLive.connect({transport:result.transport,mic,initiate:s.initiate,isCurrent:()=>session===s&&!s.closing,onTransport:value=>{s.gemini=value;},onEvent:e=>event(s,e),onUsage:metadata=>recordVoiceCost(s,{metadata,usageId:s.usageTurn||0}),onStatus:text=>{if(session===s){message(text);if(text==='Tap Enable audio.')ui.enableAudio.hidden=false;}}});
     return;
    }
    const peer=s.peer=new RTCPeerConnection();mic.getAudioTracks().forEach(t=>{peer.addTrack(t,mic);t.addEventListener('ended',()=>{if(session===s&&!s.closing)void stop('Microphone disconnected.');});});

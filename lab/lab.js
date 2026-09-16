@@ -259,10 +259,13 @@ async function hydrateLearnerSavedRun(runId) {
   const sample = detail.samples?.[0];
   const request = sample?.request;
   const scenario = detail.job.scenario;
-  const turns = Array.isArray(request?.messages) ? request.messages.map(message => ({ role:message.role, content:String(message.content || "") })) : [];
+  const requestTurns = Array.isArray(request?.messages) ? request.messages.map(message => ({ role:message.role, content:String(message.content || "") })) : [];
   const turn = Number(scenario.turn);
-  if (!request?.system || !turns.length || turns[0].role !== "user" || turns.at(-1).role !== "user"
-    || turns.filter(message => message.role === "user").length - 1 !== turn) return null;
+  const modelInitiated = scenario.modelInitiated === true;
+  const openingControl = modelInitiated && turn === 0 && requestTurns.length === 1 && requestTurns[0].role === "user" && requestTurns[0].content === CLARIFICATION_VOICE_ENTRY_INSTRUCTION;
+  const turns = openingControl ? [] : requestTurns;
+  if (!request?.system || (!openingControl && (!turns.length || turns[0].role !== (modelInitiated ? "assistant" : "user") || turns.at(-1).role !== "user"
+    || turns.filter(message => message.role === "user").length - (modelInitiated ? 0 : 1) !== turn))) return null;
   const system = String(request.system);
   const boundaries = [system.indexOf("\n\n" + CLARIFICATION_CONTINUITY_GUARD), system.indexOf("\n\n" + CLARIFICATION_RUNTIME_CONTRACT), system.indexOf("\n\n" + CLARIFICATION_DISCOVERY_GUARD)].filter(index => index > 0);
   if (!boundaries.length) return null;
@@ -285,13 +288,13 @@ async function hydrateLearnerSavedRun(runId) {
     }
   }
   const pendingRequestKey = conversationRequestKey("clarification", { runId, turn,
-    inputFingerprint:fingerprint(JSON.stringify(turns)), promptFingerprint:fingerprint(system),
+    inputFingerprint:fingerprint(JSON.stringify(requestTurns)), promptFingerprint:fingerprint(system),
     provider:sample.provider, model:sample.model, retryAttempt:Number(scenario.retryAttempt || 0),
     automaticRecoveryAttempt:Number(scenario.automaticRecoveryAttempt || 0) });
   const runConfig = sanitizedMockRunConfig(labState.mockRunConfig);
   runConfig.clarification = { ...runConfig.clarification, provider:sample.provider, model:sample.model, outputTokens:request.maxTokens };
   const activeResume = sanitizeActiveClarificationResume({ ownerUserId:ownerId, runId, topic:scenario.topic,
-    mode:"text", pipelineMode:"mock", turns, learnerReplyCount:turn, latest, latestJobId:previousJobId,
+    mode:"text", pipelineMode:"mock", modelInitiated, turns, learnerReplyCount:turn, latest, latestJobId:previousJobId,
     pendingJobId:job.id, pendingRequestKey, pendingRequestTurn:turn, modelRetryAttempt:Number(scenario.retryAttempt || 0),
     effectiveProvider:sample.provider, effectiveModel:sample.model, effectiveMaxTokens:request.maxTokens,
     promptSource:scenario.promptSource, editor:{ prompt, provider:sample.provider, model:sample.model }, runConfig,
@@ -16146,8 +16149,10 @@ function sanitizeActiveClarificationResume(value) {
     }))
     .filter((turn) => turn.role && turn.content);
   const liveRun = value.liveRun === true && value.pipelineMode === "mock";
-  if (!runId || !topic || !mode || (!liveRun && (!turns.length || turns[0].role !== "user"))) return null;
-  const learnerReplyCount = Math.max(0, turns.filter((turn) => turn.role === "user").length - 1);
+  const modelInitiated = value.modelInitiated === true;
+  if (!runId || !topic || !mode || (!liveRun && !modelInitiated && (!turns.length || turns[0].role !== "user"))) return null;
+  if (modelInitiated && turns.length && turns[0].role !== "assistant") return null;
+  const learnerReplyCount = Math.max(0, turns.filter((turn) => turn.role === "user").length - (modelInitiated ? 0 : 1));
   if (Number(value.learnerReplyCount) !== learnerReplyCount) return null;
   const latestValue = value.latest && typeof value.latest === "object" ? value.latest : null;
   const latestPhaseAction = ["continue", "offer_transition", "commit_transition"].includes(String(latestValue?.phase_action || "").trim())
@@ -16202,6 +16207,7 @@ function sanitizeActiveClarificationResume(value) {
     mode,
     pipelineMode:value.pipelineMode === "mock" ? "mock" : "controls",
     liveRun,
+    modelInitiated,
     turns,
     learnerReplyCount,
     latest,
@@ -16240,6 +16246,7 @@ function currentActiveClarificationResume() {
     mode:state.mode,
     pipelineMode:labState.pipelineMode,
     liveRun:state.liveResumeRunId === state.runId,
+    modelInitiated:state.modelInitiated === true,
     turns:state.turns,
     learnerReplyCount:state.learnerReplyCount,
     latest:state.latest,
@@ -17471,6 +17478,7 @@ function restoreActiveClarificationResume(value) {
   Object.assign(state, {
     runId:resume.runId,
     liveResumeRunId:resume.liveRun ? resume.runId : "",
+    modelInitiated:resume.modelInitiated === true,
     topic:resume.topic,
     mode:resume.mode,
     turns:resume.turns.map((turn) => ({ ...turn })),
@@ -18224,6 +18232,7 @@ async function waitForClarificationJob(jobId, expectedUserId = labState.verified
   throw pending;
 }
 
+const CLARIFICATION_VOICE_ENTRY_INSTRUCTION = 'APPLICATION VOICE ENTRY, not learner speech. No subject has been chosen yet. Initiate the conversation now: in English, briefly ask what the learner would like to explore today, then wait. Do not treat the placeholder topic as a subject, teach, or offer a transition. Return the usual response contract with phase_action continue and no invented learner facts.';
 function clarificationRequestPacket() {
   const state = labState.clarification;
   const configured = labState.pipelineMode === "mock" ? mockStageConfig("clarification") : null;
@@ -18239,6 +18248,7 @@ function clarificationRequestPacket() {
   const editableSystem = q("clarification-prompt").value.trim();
   if (!editableSystem) throw new Error("The clarification prompt is empty.");
   const laterTurn = state.turns.some((turn) => turn.role === "assistant");
+  const voiceOpening = state.modelInitiated === true && state.topic === "Topic to be chosen by voice" && state.turns.length === 0;
   const system = [
     editableSystem,
     laterTurn ? CLARIFICATION_CONTINUITY_GUARD : "",
@@ -18246,9 +18256,10 @@ function clarificationRequestPacket() {
     clarificationValidatedActionContext(state),
     CLARIFICATION_DISCOVERY_GUARD,
     !state.pendingRequestKey ? CLARIFICATION_RECOGNITION_GUARD : "",
+    voiceOpening ? CLARIFICATION_VOICE_ENTRY_INSTRUCTION : "",
   ].filter(Boolean).join("\n\n");
   const maxTokens = labState.pipelineMode === "mock" ? normalizeOutputTokenCap(configured?.outputTokens, MOCK_STAGE_DEFAULTS.clarification.outputTokens) : CLARIFICATION_OUTPUT_TOKENS;
-  return { provider, model, system, editableSystem, messages: state.turns.map(({ role, content }) => ({ role, content })), maxTokens, research: false };
+  return { provider, model, system, editableSystem, messages: voiceOpening ? [{role:"user",content:CLARIFICATION_VOICE_ENTRY_INSTRUCTION}] : state.turns.map(({ role, content }) => ({ role, content })), maxTokens, research: false };
 }
 
 function clarificationPromptProvenance(packet) {
@@ -18367,7 +18378,7 @@ async function runClarificationModel(timingId = "") {
     idempotencyKey,
     component: "clarification",
     name: `Clarification · ${clip(state.topic, 100)}`,
-    scenario: { pipelineRunId: state.runId, turn: state.learnerReplyCount, retryAttempt:state.modelRetryAttempt, automaticRecoveryAttempt:recoveryAttempt, topic: state.topic, mode: state.mode, promptVersion: requestPromptVersion, promptSource: provenance.source },
+    scenario: { pipelineRunId: state.runId, modelInitiated:state.modelInitiated === true, turn: state.learnerReplyCount, retryAttempt:state.modelRetryAttempt, automaticRecoveryAttempt:recoveryAttempt, topic: state.topic, mode: state.mode, promptVersion: requestPromptVersion, promptSource: provenance.source },
     samples: [{
       clientSampleId: `${state.runId}:${state.learnerReplyCount}:${idempotencyKey}`,
       provider: packet.provider,
@@ -18575,6 +18586,7 @@ async function startClarification(mode) {
   state.topic = topic;
   state.mode = mode;
   q("clarification-surface")?.classList?.toggle("is-voice", mode === "voice");
+  state.modelInitiated = voiceDiscovery && !liveLessonSelected();
   state.turns = voiceDiscovery ? [] : [{ role: "user", content: `The learner entered this topic: ${topic}\nThis is the first clarification turn.` }];
   state.learnerReplyCount = 0;
   state.latest = null;
@@ -18638,17 +18650,11 @@ async function startClarification(mode) {
     return;
   }
 
-  if (voiceDiscovery) {
-    // Standard Voice waits for the learner's actual topic recording. There is
-    // no empty provider request and no invented initial learner statement.
-    setClarificationActivity(false);
-    setMessage("clarification-message", "Hold or tap Record and say what you want to learn.");
-    persistClarificationSettings();
-    renderMockLearnerShell();
-    return;
-  }
-
   const activeRunId = state.runId;
+  if (voiceDiscovery && state.modelInitiated && typeof LAB_LEARNER !== "undefined" && LAB_LEARNER) {
+    // Preserve this exact opening/run if the learner reloads before speaking.
+    if (persistClarificationSettings()) sessionStorage.setItem(LEARNER_LAUNCH_KEY, JSON.stringify({ownerUserId:labState.verifiedUserId,runId:state.runId,topic:state.topic}));
+  }
   let microphonePromise = Promise.resolve();
   let audioPrimePromise = Promise.resolve(false);
   if (mode === "voice") {
@@ -18664,7 +18670,7 @@ async function startClarification(mode) {
 
   state.voiceStartupPromise = mode === "voice" ? Promise.allSettled([audioPrimePromise, microphonePromise]) : null;
   const modelTimingId = beginMockTurnTiming({ stage:"clarification", inputMode:mode, originKind:"topic-start", originPerf:topicStartedPerf });
-  const openingPromise = labState.pipelineMode === "mock" && labState.mockBoundaryActive?.scriptOpening
+  const openingPromise = !voiceDiscovery && labState.pipelineMode === "mock" && labState.mockBoundaryActive?.scriptOpening
     ? Promise.allSettled([microphonePromise, audioPrimePromise]).then(() => runScriptedClarificationOpening(modelTimingId))
     : runClarificationModel(modelTimingId);
   await Promise.allSettled([openingPromise, microphonePromise, audioPrimePromise]);
@@ -18687,8 +18693,9 @@ async function submitClarificationReply(text, { timingId = "", inputMode = "", o
   }
   stopSpeechComparison();
   stopClarificationSpeech();
-  const firstSpokenTopic = state.topic === 'Topic to be chosen by voice' && state.turns.length === 0;
+  const firstSpokenTopic = state.topic === 'Topic to be chosen by voice' && !state.turns.some(turn => turn.role === 'user');
   if (firstSpokenTopic) {
+    if (state.turns.some(turn => turn.role === "assistant")) state.learnerReplyCount += 1;
     state.topic = clip(reply, 500);
     labState.learnerVoiceDiscovery = false;
     q("clarification-topic").value = state.topic;
@@ -18701,7 +18708,7 @@ async function submitClarificationReply(text, { timingId = "", inputMode = "", o
   const saved = persistClarificationSettings();
   if (firstSpokenTopic && saved && typeof LAB_LEARNER !== "undefined" && LAB_LEARNER) {
     const launch = readLearnerLaunch();
-    if (launch?.voiceDiscovery && !launch.runId) {
+    if ((launch?.voiceDiscovery && !launch.runId) || launch?.runId === state.runId) {
       // The actual spoken topic is now saved under this exact run. Reopening
       // must resume it, including a pending model reply, rather than replay
       // the original topic-free Home launch as a second conversation.

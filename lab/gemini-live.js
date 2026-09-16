@@ -5,7 +5,7 @@ window.WorldviewGeminiLive=(()=>{
  const endpoint='wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained';
  function encodePcm(buffer){let bytes='';for(const value of new Uint8Array(buffer))bytes+=String.fromCharCode(value);return btoa(bytes);}
  function decodePcm(data){const raw=atob(data),view=new DataView(new ArrayBuffer(raw.length));for(let i=0;i<raw.length;i++)view.setUint8(i,raw.charCodeAt(i));const samples=new Float32Array(Math.floor(raw.length/2));for(let i=0;i<samples.length;i++)samples[i]=view.getInt16(i*2,true)/32768;return samples;}
- async function connect({transport,mic,onEvent,onUsage,onStatus,onTransport,isCurrent}){
+ async function connect({transport,mic,initiate=true,onEvent,onUsage,onStatus,onTransport,isCurrent}){
   if(transport?.type!=='gemini-websocket'||transport.setup?.model!==`models/${model}`||!transport.token?.startsWith('auth_tokens/'))throw Error('Gemini authorization was invalid.');
   const Audio=window.AudioContext||window.webkitAudioContext;
   if(!Audio||!window.AudioWorkletNode)throw Error('Gemini Live needs a browser with AudioWorklet support.');
@@ -59,7 +59,7 @@ window.WorldviewGeminiLive=(()=>{
      if(audio.state==='suspended')onStatus('Tap Enable audio.');
      // Give a fresh conversation its opening; resumed lessons continue from the
      // saved current phase/question rather than running Clarification again.
-     modelActive=true;send({clientContent:{turns:[{role:'user',parts:[{text:'APP_START. Begin or resume the saved lesson now. Use the saved phase and conversation. Do not re-ask a question already answered. Ask at most one relevant next question, then listen.'}]}],turnComplete:true}});
+     if(initiate){modelActive=true;send({clientContent:{turns:[{role:'user',parts:[{text:'APP_START. Begin or resume the saved lesson now. Use the saved phase and conversation. Do not re-ask a question already answered. Speak first now in English. If no subject is chosen, ask what they would like to explore today. Ask at most one relevant next question, then listen.'}]}],turnComplete:true}});}
     }else onStatus('Listening');
     flushContext();
    }

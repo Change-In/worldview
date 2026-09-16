@@ -2185,7 +2185,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.41 · Sep 16";
+const BUILD = "v2.1.42 · Sep 16";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2193,6 +2193,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.42",date:"Sep 16",changes:["Worldview starts the conversation when you enter Voice, then listens to your answer.","Live Voice resumes from your saved lesson instead of restarting the interview."]},
   {tag:"v2.1.41",date:"Sep 16",changes:["Saved lesson cards no longer show internal labels such as Lesson Map research or Guided Lesson routing.","A voice lesson that has not said its topic yet reads as New voice lesson instead of placeholder text."]},
   {tag:"v2.1.40",date:"Sep 16",changes:["Home buttons are now Voice and Text.","Allowing microphone access continues into Voice without a second tap while account access refreshes."]},
   {tag:"v2.1.39",date:"Sep 16",changes:["Voice stops playback immediately when paused or changed, with stronger protection against stale replies.","The tutor is instructed to wait after its question, respond once, and accept corrections to misheard words.","Background lesson checks avoid repeated updates and retain recovery after a failed check.","Saved cards show the subject without internal labels such as Feynman overview."]},
