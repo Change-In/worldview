@@ -107,7 +107,8 @@ window.WorldviewLiveConversation=(()=>{
   if(session&&!showCaptions){root.replaceChildren();return;}
   const groups=[];for(const turn of context.history||[])groups.push({role:turn.role,text:turn.content});
   for(const f of fragments){if(isControlEcho(f.delta))continue;const last=groups.at(-1);if(last?.live&&last.role===f.role)last.text+=f.delta;else groups.push({role:f.role,text:f.delta,live:true});}
-  root.replaceChildren();for(const g of groups){const item=element('li');item.className='extraction-turn '+(g.role==='user'?'is-user':'is-assistant');const label=element('small',g.role==='user'?'You':g.live?'Worldview':'Earlier in this lesson');const text=element('p',g.text);item.append(label,text);root.append(item);}
+  for(const g of groups)g.text=cleanCaption(g.text);
+  root.replaceChildren();for(const g of groups){if(!g.text)continue;const item=element('li');item.className='extraction-turn '+(g.role==='user'?'is-user':'is-assistant');const label=element('small',g.role==='user'?'You':g.live?'Worldview':'Earlier in this lesson');const text=element('p',g.text);item.append(label,text);root.append(item);}
   root.scrollTop=follow?root.scrollHeight:position;
  }
  function sync(next){
@@ -171,6 +172,25 @@ window.WorldviewLiveConversation=(()=>{
  // learner as something they said. These markers are the app's own vocabulary
  // and are always uppercase, so real speech never transcribes as one.
  const CONTROL_MARKERS=['APP_HANDOFF'];
+ /* GPT Live emits harmony channel markup, and on device it reaches the caption
+    stream as literal text: |channel|commentary|> and its variants. The commentary
+    channel is the model's internal side, is not spoken, and restates what the
+    spoken channel says - which is the markup and the repetition seen on screen.
+    Markers are cleaned from joined turn text rather than from each delta, because
+    a streamed marker can be split across two deltas. */
+ const CHANNEL_MARKER=new RegExp('<?\\|channel\\|>?[ ]*([a-z_]*)[ ]*(?:<?\\|message\\|>?|\\|>|>)?','gi');
+ const CHANNEL_STRAY=new RegExp('<?\\|(?:message|start|end|return|constrain)\\|>?','gi');
+ function cleanCaption(text){
+  const raw=String(text||'');if(!raw)return '';
+  const parts=[];let last=0,keep=true,m;CHANNEL_MARKER.lastIndex=0;
+  while((m=CHANNEL_MARKER.exec(raw))){
+   if(keep)parts.push(raw.slice(last,m.index));
+   keep=(m[1]||'').toLowerCase()!=='commentary';
+   last=m.index+m[0].length;
+  }
+  if(keep)parts.push(raw.slice(last));
+  return parts.join(' ').replace(CHANNEL_STRAY,' ').replace(/[ 	]{2,}/g,' ').trim();
+ }
  function isControlEcho(text){const t=String(text||'').trimStart();return CONTROL_MARKERS.some(marker=>t.startsWith(marker));}
  function append(state,event,role){
   if(session!==state||state.scope!==scope)return;
@@ -354,7 +374,8 @@ window.WorldviewLiveConversation=(()=>{
   // Imports are complete turns; only adjacent native deltas share a turn.
   // Text typed between voice sessions stays at that exact fragment boundary.
   for(const f of fragments){if(isControlEcho(f.delta))continue;const native=!f.id.startsWith('import:'),last=turns.at(-1);if(native&&previousNative&&last?.role===f.role)last.content+=f.delta;else turns.push({role:f.role,content:f.delta});previousNative=native;insert(f.seq);}
-  return turns;
+  for(const t of turns)t.content=cleanCaption(t.content);
+  return turns.filter(t=>t.content);
  }
  const api={mount,sync,stop,place,transcriptTurns,ownsAudio:()=>!!session,active:()=>!!session,enabled:()=>enabled};return api;
 })();
