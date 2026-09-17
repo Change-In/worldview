@@ -2185,7 +2185,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.49 · Sep 16";
+const BUILD = "v2.1.50 · Sep 16";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2193,6 +2193,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.50",date:"Sep 16",changes:["Opening a lesson map that cannot load now returns you to the lesson instead of leaving you on the loading screen."]},
   {tag:"v2.1.49",date:"Sep 16",changes:["Internal channel markup no longer appears in the conversation, and the tutor no longer looks like it is repeating itself."]},
   {tag:"v2.1.48",date:"Sep 16",changes:["A phase change now says the next reply may take a few seconds, instead of going quiet."]},
   {tag:"v2.1.47",date:"Sep 16",changes:["A voice lesson now takes its name from the first thing you say, instead of staying unnamed."]},

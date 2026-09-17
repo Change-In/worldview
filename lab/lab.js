@@ -345,7 +345,20 @@ async function openLearnerLesson() {
     labState.learnerEntryResume = row;
     labState.learnerLessonOpened = true;
     await completeLearnerEntryPreparation(packet, row.topic || row.artifact?.topic || row.activeResume?.topic || packet.topic);
-    if (packet.view === "map") await openLearnerSavedMap(row);
+    if (packet.view === "map") {
+      /* v2.1.46 keeps the opening screen up behind the map so a map launch does
+         not re-ask how to chat. If the map cannot actually open - access gate,
+         missing dialog, or a throw - that would strand the learner on "Opening
+         your lesson" with no map and no way forward. Only an opened dialog earns
+         the held screen; otherwise restore the conversation-mode question. */
+      try { await openLearnerSavedMap(row); }
+      finally {
+        if (!labState.extraction.mapDialogOpen) {
+          labState.learnerEntryMapOpening = false;
+          document.documentElement.classList.remove("learner-opening-selected");
+        }
+      }
+    }
     return;
   }
   // A refresh rejoins the exact saved phase. A Home topic packet explicitly
