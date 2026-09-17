@@ -117,7 +117,7 @@ window.WorldviewLiveConversation=(()=>{
   const changed=context?.lineage!==next.lineage;
   let collectText=!enabled;
   if(session&&(changed||!next.enabled||context?.model!==next.model))void stop('Live ended because the lesson or voice model changed.');
-  if(changed){openingPending=true;paused=false;startError=false;autoAttempts=0;appliedPhase=0;loadToken++;study=null;fragments=[];prefix=[];textInsertions=[];textSnapshot=null;exportWasText=false;exportStudyId='';ack=0;loading=false;saveError='';scope='';draftKey='';collectText=false;
+  if(changed){openingPending=true;paused=false;startError=false;autoAttempts=0;appliedPhase=0;loadToken++;loading=false;study=null;fragments=[];prefix=[];textInsertions=[];textSnapshot=null;exportWasText=false;exportStudyId='';ack=0;loading=false;saveError='';scope='';draftKey='';collectText=false;
    if(next.lineage){const key='worldview-live-draft-v2:'+next.lineage,draft=exportDraft(key);if(draft){scope=next.lineage;draftKey=key;exportStudyId=draft.studyId;fragments=draft.fragments;prefix=draft.prefix;textInsertions=draft.textInsertions;textSnapshot=draft.textSnapshot;collectText=draft.textMode===true;}}
   }
   // Hydrated phase artifacts can contain the same native speech. Only a saved
@@ -309,7 +309,7 @@ window.WorldviewLiveConversation=(()=>{
   // Caption tails may describe already-captured speech. Retain them for export
   // while closing, but never let them trigger another check or audio operation.
   if(state.closing&&!['session.started','session.input_transcript.delta','session.output_transcript.delta','session.usage.updated','session.closed'].includes(e.type))return;
-  if(e.type==='session.started'){if(state.closing){send(state,{type:'session.close'});return;}if(state.ready)return;state.ready=true;state.publishedPhase=study.phaseVersion;state.publishedStudy=JSON.stringify({version:study.phaseVersion,instructions:study.instructions,packet:study.packet});clearTimeout(state.startup);message('Listening');requestOpening(state);state.checkTimer=setInterval(()=>{if(session===state&&!state.closing)void check();},25000);paint();}
+  if(e.type==='session.started'){if(state.closing){send(state,{type:'session.close'});return;}if(state.ready)return;state.ready=true;autoAttempts=0;state.publishedPhase=study.phaseVersion;state.publishedStudy=JSON.stringify({version:study.phaseVersion,instructions:study.instructions,packet:study.packet});clearTimeout(state.startup);message('Listening');requestOpening(state);state.checkTimer=setInterval(()=>{if(session===state&&!state.closing)void check();},25000);paint();}
   else if(e.type==='session.instructions.appended'&&state.openingEventId&&e.client_event_id===state.openingEventId){state.openingAcknowledged=true;if(state.lastTranscriptAt==null)message('Listening');}
   else if(e.type==='session.input_transcript.delta')append(state,e,'user');
   else if(e.type==='session.output_transcript.delta')append(state,e,'assistant');

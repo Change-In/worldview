@@ -5638,7 +5638,26 @@ async function refreshJob(jobId, { deferUi = false } = {}) {
   return operation;
 }
 
-async function refreshJobs() {
+/* Opening one saved lesson used to page through the account's entire job
+   history first - up to a hundred pages - before the lesson could appear. That
+   is the long wait before a lesson or its map opens, and on a device that has
+   not cached anything it can exhaust the 30s preparation deadline, which
+   surfaces as "This saved lesson is not ready on this device" for a lesson that
+   exists and is perfectly intact.
+
+   Jobs come back newest first, so the run being opened is almost always on the
+   first page. untilRunId stops paging once that run's clarification job has
+   arrived. The rest of the history is not lost: labState.jobsPartial records
+   that it is outstanding and the caller completes it in the background. */
+function collectedRunIsReady(collected, runId) {
+  if (!runId) return false;
+  for (const job of collected.values()) {
+    if (job.scenario?.pipelineRunId === runId && job.component === "clarification") return true;
+  }
+  return false;
+}
+
+async function refreshJobs({ untilRunId = "" } = {}) {
   if (labState.preview) {
     q("jobs-status").textContent = "Preview · server calls disabled";
     renderJobHistory();
@@ -5648,7 +5667,7 @@ async function refreshJobs() {
   const expectedUserId = labState.verifiedUserId;
   try {
     const collected = new Map();
-    let cursor = null;
+    let cursor = null, partial = false;
     for (let page = 0; page < 100; page += 1) {
       const payload = await boundedLabJobRead({ action:"list", ...(cursor ? { cursor } : {}) }, { expectedUserId });
       if (labState.verifiedUserId !== expectedUserId) return;
@@ -5658,15 +5677,21 @@ async function refreshJobs() {
       }
       cursor = payload.nextCursor || null;
       if (!cursor) break;
+      // Enough to open this lesson now; the remainder is fetched afterwards.
+      if (untilRunId && collectedRunIsReady(collected, untilRunId)) { partial = true; break; }
       if (page === 99) throw new Error("History exceeds this load limit. Existing saved work was preserved.");
     }
     labState.jobs = [...collected.values()];
+    labState.jobsPartial = partial;
     labState.jobUiDirty = true;
     q("jobs-status").textContent = `${labState.jobs.length} recent job${labState.jobs.length === 1 ? "" : "s"}`;
     scheduleJobUiReconcile();
     renderClarificationBackendHistory();
     scheduleJobPoll();
-    await Promise.allSettled(labState.jobs.slice(0, 12).map((job) => refreshJob(job.id)));
+    const prefetch = untilRunId
+      ? labState.jobs.filter((job) => job.scenario?.pipelineRunId === untilRunId).slice(0, 12)
+      : labState.jobs.slice(0, 12);
+    await Promise.allSettled(prefetch.map((job) => refreshJob(job.id)));
   } catch (error) {
     if (labState.verifiedUserId === expectedUserId) q("jobs-status").textContent = `Could not load jobs: ${clip(error.message, 100)}`;
   }
@@ -19454,7 +19479,7 @@ async function prepareLabEntry(epoch, learner) {
     // its details here made owner accounts wait on unrelated past lessons.
     const launch = learner ? readLearnerLaunch() : null;
     if (!(launch?.topic && !launch.runId)) {
-      await refreshJobs();
+      await refreshJobs(launch?.runId ? { untilRunId:launch.runId } : {});
       assertLabRequestOwner(epoch, userId);
       if (!learner && !labState.mockSetupActive) await reconcileActiveClarificationResume();
       assertLabRequestOwner(epoch, userId);
@@ -19490,6 +19515,13 @@ async function openLab() {
     assertLabRequestOwner(epoch, userId);
     setMessage("lab-gate-message", "");
     if (learner) await openLearnerLesson();
+    // The lesson is open; complete any history the fast open skipped without
+    // making the learner wait for it.
+    if (labState.jobsPartial) {
+      setTimeout(() => {
+        if (labState.authEpoch === epoch && labState.jobsPartial) void refreshJobs();
+      }, 1500);
+    }
   } catch (error) {
     if (epoch === labState.authEpoch) lockLabAccount(`${learner ? "Could not open your lesson" : "Could not open the Model Lab"}: ${error.message || "check the account and try again"}`);
   } finally {

@@ -2080,3 +2080,7 @@ body.mock-run.mock-car-active .mock-car-surface {
 /* Map sits to the right of the running total rather than on its own line. */
 .mock-learner-utilities{display:flex;justify-content:flex-end;padding:0 4px}
 #mock-learner-map-progress{min-height:36px;padding:6px 16px;border-radius:999px}
+
+/* Car mode is retired. The control stays in the DOM because the saved-surface
+   code still references it, but it is never offered as a way to start. */
+#learner-entry-car { display:none !important; }
