@@ -895,6 +895,8 @@ const labState = {
   mapRevisionHandled: new Set(),
   mapAutoRetryStarting: new Set(),
   mapAutoRetryHandled: new Set(),
+  researchAutoRetries: new Map(),
+  learnerAutoRecovery: new Map(),
   extractionDetailRequests: new Set(),
   lessonDetailRequests: new Set(),
   lessonEvaluatorHandled: new Set(),
@@ -1522,6 +1524,8 @@ function resetWorkspaceContents() {
   labState.mapRevisionHandled = new Set();
   labState.mapAutoRetryStarting = new Set();
   labState.mapAutoRetryHandled = new Set();
+  labState.researchAutoRetries = new Map();
+  labState.learnerAutoRecovery = new Map();
   labState.extractionDetailRequests = new Set();
   labState.lessonDetailRequests = new Set();
   labState.lessonEvaluatorHandled = new Set();
@@ -7564,10 +7568,14 @@ async function maybeAutoRetryPipelineMap(job = pipelineMapJob(), artifact = sele
   // route was never the problem. A malformed or refused result is not, so it
   // keeps the saved failure and the visible Retry control instead.
   const sameRoute = !alternate || (alternate.provider === currentProvider && alternate.model === currentModel);
-  if (sameRoute && !transient) {
-    labState.mapAutoRetryHandled.add(job.id);
-    return false;
-  }
+  /* A different configured model is still preferred. Previously, when none was
+     available, only a transport failure was repeated on the same route and a
+     malformed or refused result kept the visible Retry control instead - which
+     is the learner being asked to press a button the application could press
+     itself. A malformed plan is a non-deterministic result, so repeating the
+     same route genuinely repairs it. pipelineMapPlannerNeedsAutoRetry still
+     stops at PIPELINE_MAP_AUTO_RETRY_LIMIT attempts and still refuses to spend
+     against an exhausted server-owned allowance, so this cannot loop. */
   labState.mapAutoRetryHandled.add(job.id);
   labState.mapAutoRetryStarting.add(job.id);
   try {
@@ -8455,6 +8463,33 @@ async function submitPendingMapResearchCreate(pending, { deadlineMs = LAB_CONVER
   })();
   flights.set(key, operation);
   return operation;
+}
+
+/* Chapter research that fails flips the workflow to needs-attention, and until
+   now nothing retried it: the learner had to press Retry missing research to
+   make the lesson whole. Retry automatically instead, bounded by the same limit
+   the planner uses so a genuinely broken run cannot spend without end. The
+   manual control stays as the last resort once the attempts are used. */
+const RESEARCH_AUTO_RETRY_LIMIT = PIPELINE_MAP_AUTO_RETRY_LIMIT;
+function researchAutoRetriesLeft(plannerJob) {
+  if (!plannerJob) return 0;
+  const used = labState.researchAutoRetries?.get?.(plannerJob.id) || 0;
+  return Math.max(0, RESEARCH_AUTO_RETRY_LIMIT - used);
+}
+function maybeAutoRetryChapterResearch(plannerJob, artifact = selectedPipelineArtifact(), selection = null) {
+  if (!plannerJob || !artifact || labState.preview || labState.learnerEntryPending) return false;
+  if (labState.extraction?.mapRetryBusy || labState.busy || labState.createStarting) return false;
+  if (labState.mapResearchStarting?.has?.(plannerJob.id)) return false;
+  // Only retry where a retry is actually offered. This keeps an exhausted
+  // server-owned allowance, which another attempt cannot repair, off the path.
+  if (selection?.meta?.researchRetryAvailable !== true) return false;
+  if (!researchAutoRetriesLeft(plannerJob)) return false;
+  const tracker = labState.researchAutoRetries ||= new Map();
+  tracker.set(plannerJob.id, (tracker.get(plannerJob.id) || 0) + 1);
+  void retryPipelineMapChapterResearch(plannerJob, artifact).catch((error) => {
+    logFlow(`Automatic research retry failed: ${clip(error.message, 120)}`, "map workflow");
+  });
+  return true;
 }
 
 async function retryPipelineMapChapterResearch(plannerJob, artifact = selectedPipelineArtifact()) {
@@ -9753,6 +9788,12 @@ function pipelineExtractionMapViewState(artifact = selectedPipelineArtifact()) {
   if (LAB_ACTIVE_JOB_STATES.has(job.status)) return { state:"working", job, selection, detail, message:"Worldview is planning this run's Lesson Map." };
   if (!detail && ["completed", "partial"].includes(job.status)) return { state:"loading", job, selection:null, detail:null, message:"The Lesson Map planner finished. Worldview is loading its saved route." };
   if (pipelineMapSelectionHasRoute(selection)) {
+    if (selection?.meta?.workflowState === "needs-attention") {
+      // Try to repair it before telling the learner anything is wrong.
+      if (maybeAutoRetryChapterResearch(job, artifact, selection)) {
+        return { state:"working", job, selection, detail, message:"Some chapter research did not verify. Worldview is retrying it in the background; your conversation and verified chapters are kept." };
+      }
+    }
     if (selection?.meta?.workflowState === "needs-attention") return { state:"needs-attention", job, selection, detail, message:selection.meta.workflowMessage || "The first chapter's source support needs attention." };
     void ensurePipelineMapChapterResearch(job, artifact);
     return { state:"route-ready", job, selection, detail, message:selection.meta?.workflowMessage || "Your lesson route is ready while source support is prepared." };
@@ -15529,9 +15570,12 @@ function renderMockLearnerShell() {
   statusNode.textContent = mode === "voice" && stageBusy && !status.error ? "" : status.text;
   statusNode.classList.toggle("is-error", status.error);
   const retry = q("mock-learner-retry");
-  retry.hidden = !status.retry;
+  // Attempt the recovery first; only show the control once that is exhausted.
+  const autoRecovering = status.error && maybeAutoRecoverLearner(status.retry, artifact);
+  retry.hidden = !status.retry || autoRecovering;
   retry.dataset.retry = status.retry;
   retry.textContent = status.retry === "lesson-status" ? "Check reply" : "Try again";
+  if (autoRecovering) statusNode.textContent = "That step did not complete. Worldview is retrying it for you; your conversation is saved.";
   const mapProgress = q("mock-learner-map-progress");
   const mapState = mockLearnerMapState(stage, artifact);
   mapProgress.hidden = !mapState;
@@ -15878,6 +15922,41 @@ async function retryMockExtractionConversation() {
   } else if (retryablePipelineExtractionTurn(artifact)) await retryLatestPipelineExtractionTurn();
   else if (!current) await ensurePipelineExtractionOpening(artifact);
   else throw new Error("The saved reply could not be recovered. Your conversation is kept; reconnect and try again.");
+}
+
+/* A recoverable failure used to surface as Try again and wait for a tap. The
+   application knows the exact action, so it takes it itself. Bounded per run,
+   stage and action so a genuinely broken step still settles instead of looping,
+   and the manual control remains as the last resort once attempts are spent.
+
+   Only actions that replay saved work are driven. Transcription needs the
+   retained recording and microphone context, and resume-read is a read the poll
+   loop already repeats, so neither is driven from here. */
+const LEARNER_AUTO_RECOVERY_LIMIT = 2;
+const LEARNER_AUTO_RECOVERY_ACTIONS = new Set(["map", "conversation", "lesson", "pending-conversation", "handoff"]);
+function maybeAutoRecoverLearner(action, artifact = selectedPipelineArtifact()) {
+  if (!action || !LEARNER_AUTO_RECOVERY_ACTIONS.has(action)) return false;
+  if (labState.preview || labState.learnerEntryPending || labState.busy || labState.createStarting) return false;
+  const runId = artifact?.runId || labState.clarification.runId;
+  if (!runId || !labState.verifiedUserId || labState.workspaceOwnerId !== labState.verifiedUserId) return false;
+  const key = `${labState.verifiedUserId}:${runId}:${labState.pipelineStage}:${action}`;
+  const tracker = labState.learnerAutoRecovery ||= new Map();
+  const entry = tracker.get(key) || { attempts: 0, busy: false };
+  if (entry.busy || entry.attempts >= LEARNER_AUTO_RECOVERY_LIMIT) return false;
+  entry.attempts += 1;
+  entry.busy = true;
+  tracker.set(key, entry);
+  // A short wait keeps a transient server or network fault from being retried
+  // instantly, and keeps the status from flickering on a fast recovery.
+  setTimeout(() => {
+    const stillOwned = labState.verifiedUserId && labState.workspaceOwnerId === labState.verifiedUserId
+      && (selectedPipelineArtifact()?.runId || labState.clarification.runId) === runId;
+    if (!stillOwned) { entry.busy = false; return; }
+    void Promise.resolve(retryMockLearnerAction(action))
+      .catch((error) => logFlow(`Automatic recovery failed: ${clip(error.message, 120)}`, "learner recovery"))
+      .finally(() => { entry.busy = false; });
+  }, 1200);
+  return true;
 }
 
 async function retryMockLearnerAction(requestedAction = "") {
