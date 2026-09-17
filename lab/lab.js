@@ -15564,7 +15564,9 @@ function renderMockLearnerShell() {
   const switchToVoice = mode !== "voice";
   modeButton.textContent = switchToVoice ? "Voice" : "Aa";
   modeButton.setAttribute("aria-label", switchToVoice ? "Switch to Voice" : "Switch to Text");
-  q("mock-learner-car").hidden = !mode;
+  // Car mode retired. The control stays in the DOM for the saved surface code
+  // that still references it, but it is never offered from the lesson.
+  q("mock-learner-car").hidden = true;
   const status = mockLearnerStatus(stage, artifact, selection);
   const statusNode = q("mock-learner-status");
   statusNode.textContent = mode === "voice" && stageBusy && !status.error ? "" : status.text;
@@ -15580,7 +15582,9 @@ function renderMockLearnerShell() {
   const mapState = mockLearnerMapState(stage, artifact);
   mapProgress.hidden = !mapState;
   mapProgress.disabled = !mapState || labState.extraction.mapRetryBusy;
-  mapProgress.textContent = mapState?.state === "ready" ? "View Lesson Map" : "View Lesson Map progress";
+  // One short label. The state is already carried by the error styling below.
+  mapProgress.textContent = "Map";
+  mapProgress.setAttribute("aria-label", mapState?.state === "ready" ? "View Lesson Map" : "View Lesson Map progress");
   mapProgress.classList.toggle("is-error", mapState?.state === "needs-attention");
   mapProgress.setAttribute("aria-expanded", String(Boolean(labState.extraction.mapDialogOpen)));
   if (labState.extraction.mapDialogOpen) renderPipelineExtractionMapDialog(artifact);

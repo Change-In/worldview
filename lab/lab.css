@@ -2071,3 +2071,12 @@ body.mock-run.mock-car-active .mock-car-surface {
 #learner-entry-opening p[data-entry-kind]{display:none}
 :root[data-learner-entry-kind="saved"] #learner-entry-opening p[data-entry-kind="saved"]{display:block}
 :root:not([data-learner-entry-kind="saved"]) #learner-entry-opening p[data-entry-kind="new"]{display:block}
+
+/* A turn's clock time sits under the bubble: the learner's on the left, the
+   tutor's on the right, so a long wait between turns is visible. */
+#mock-learner-transcript .turn-time{display:block;margin-top:4px;font:500 10.5px/1.3 system-ui,sans-serif;color:var(--wv-muted,#75675c);opacity:.85}
+#mock-learner-transcript .extraction-turn.is-user .turn-time{text-align:left}
+#mock-learner-transcript .extraction-turn.is-assistant .turn-time{text-align:right}
+/* Map sits to the right of the running total rather than on its own line. */
+.mock-learner-utilities{display:flex;justify-content:flex-end;padding:0 4px}
+#mock-learner-map-progress{min-height:36px;padding:6px 16px;border-radius:999px}

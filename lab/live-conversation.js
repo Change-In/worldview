@@ -4,6 +4,7 @@ window.WorldviewLiveConversation=(()=>{
  let host,ui,context,study,session,loadToken=0,loading=false,saving=null,enabled=false,saveTimer;
  let showCaptions=false,paused=false,startError=false,autoAttempts=0,restoreTimer;
  let appliedPhase=0,releasing=null,openingPending=true;
+ const fragmentTimes=new Map();
  let fragments=[],prefix=[],textInsertions=[],textSnapshot=null,exportWasText=false,exportStudyId='',ack=0,saveError='',request,scope='',draftKey='';
  const element=(tag,text)=>{const n=document.createElement(tag);if(text)n.textContent=text;return n;};
  function mount(adapter){
@@ -43,7 +44,7 @@ window.WorldviewLiveConversation=(()=>{
   const costs=window.WorldviewLessonCost;if(!ui||!costs)return;
   const summary=costs.summary(context?.owner,context?.runId);
   ui.total.textContent=costs.format(summary);ui.total.title=costs.describe(summary);
-  ui.usage.textContent=summary.saved===false?'Device saving unavailable; this estimate may be lost.':'Recorded on this device; some charges may be missing.';ui.usage.title=costs.describe(summary);ui.usage.hidden=!enabled;
+  ui.usage.textContent='';ui.usage.hidden=true;
  }
  function recordVoiceCost(s,value={}){
   const costs=window.WorldviewLessonCost;if(!costs)return;
@@ -93,7 +94,7 @@ window.WorldviewLiveConversation=(()=>{
  function paint(){
   if(!ui)return;ui.root.hidden=!enabled;ui.start.hidden=!!session||(!paused&&!startError);ui.start.disabled=loading||!!session||!context?.ready||document.hidden;
   ui.start.textContent=paused?'Resume voice':'Try microphone again';
-  ui.rate.textContent=(session?.model||context?.model)==='gemini-3.8-live'?'Gemini · $0.005/min in + $0.018/min out + text':'GPT Live · $0.05/min';
+  ui.rate.hidden=true;
   ui.captions.hidden=!session?.ready||context?.car;const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.setAttribute('aria-label',capsLabel);ui.captions.title=capsLabel;ui.captions.setAttribute('aria-pressed',String(showCaptions));
   ui.end.hidden=!session;ui.mute.hidden=!session?.ready;const muteLabel=session?.muted?'Unmute mic':'Mute mic';ui.mute.setAttribute('aria-label',muteLabel);ui.mute.title=muteLabel;ui.mute.classList.toggle('is-muted',!!session?.muted);ui.mute.setAttribute('aria-pressed',String(!!session?.muted));
   ui.retry.hidden=!saveError;ui.retry.disabled=!!saving;
@@ -105,10 +106,11 @@ window.WorldviewLiveConversation=(()=>{
  function renderTranscript(){
   const root=host.transcript,follow=root.scrollHeight-root.scrollTop-root.clientHeight<40,position=root.scrollTop;
   if(session&&!showCaptions){root.replaceChildren();return;}
+  const clock=at=>{const d=new Date(at);const pad=n=>String(n).padStart(2,'0');return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());};
   const groups=[];for(const turn of context.history||[])groups.push({role:turn.role,text:turn.content});
-  for(const f of fragments){if(isControlEcho(f.delta))continue;const last=groups.at(-1);if(last?.live&&last.role===f.role)last.text+=f.delta;else groups.push({role:f.role,text:f.delta,live:true});}
+  for(const f of fragments){if(isControlEcho(f.delta))continue;const last=groups.at(-1);const at=fragmentTimes.get(f.id);if(last?.live&&last.role===f.role){last.text+=f.delta;if(at&&!last.at)last.at=at;}else groups.push({role:f.role,text:f.delta,live:true,at});}
   for(const g of groups)g.text=cleanCaption(g.text);
-  root.replaceChildren();for(const g of groups){if(!g.text)continue;const item=element('li');item.className='extraction-turn '+(g.role==='user'?'is-user':'is-assistant');const label=element('small',g.role==='user'?'You':g.live?'Worldview':'Earlier in this lesson');const text=element('p',g.text);item.append(label,text);root.append(item);}
+  root.replaceChildren();for(const g of groups){if(!g.text)continue;const item=element('li');item.className='extraction-turn '+(g.role==='user'?'is-user':'is-assistant');const label=element('small',g.role==='user'?'You':g.live?'Worldview':'Earlier in this lesson');const text=element('p',g.text);item.append(label,text);if(g.at){const stamp=element('time',clock(g.at));stamp.className='turn-time';stamp.dateTime=new Date(g.at).toISOString();item.append(stamp);}root.append(item);}
   root.scrollTop=follow?root.scrollHeight:position;
  }
  function sync(next){
@@ -201,6 +203,7 @@ window.WorldviewLiveConversation=(()=>{
   // The first thing the learner actually says is what a topic-free Voice lesson
   // is about. Report it once so the saved card can stop carrying a placeholder.
   if(role==='user'&&!fragments.some(other=>other.seq!==f.seq&&other.role==='user'))host?.onLearnerTopic?.(f.delta);
+  fragmentTimes.set(f.id,Date.now());
   if(role==='user')state.lastUserSeq=f.seq;stash();paint();clearTimeout(saveTimer);saveTimer=setTimeout(()=>void flush(),1500);
   // Only learner speech schedules a check. The tutor's own output carries
   // nothing new to assess, and a check can publish a saved phase into the
