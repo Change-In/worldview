@@ -20,6 +20,14 @@ const LEARNER_RUNS_PREFIX = "worldview-learner-runs-v1:";
 function learnerRunSummaries() {
   const rows = new Map();
   const timestamp = value => Number(value) || Date.parse(value) || 0;
+  const mapTitles = new Map();
+  for (const artifact of labState.clarificationArtifacts || []) {
+    const selection = selectedPipelineMapRecord(artifact);
+    if (!pipelineMapSelectionHasRoute(selection)) continue;
+    const title = String(selection?.map?.lessonTitle || "").trim();
+    if (title) mapTitles.set(artifact.runId, {lessonTitle:title.slice(0,500),
+      lessonTitleMapJobId:String(selection.job?.id || ""),lessonTitleUpdatedAt:timestamp(selection.job?.createdAt)});
+  }
   const durableTimes = new Map();
   for (const job of labState.jobs || []) {
     const runId = job.scenario?.pipelineRunId;
@@ -30,7 +38,8 @@ function learnerRunSummaries() {
     const previous = rows.get(runId);
     const updated = durableTimes.get(runId) || timestamp(updatedAt) || previous?.updatedAt || 0;
     const topic = String(title).trim().slice(0, 500);
-    rows.set(runId, { runId, title:topic, topic, phase:["clarification", "map", "extraction", "lesson", "quiz"].includes(phase) ? phase : "clarification", updatedAt:updated });
+    const mapTitle = mapTitles.get(runId);
+    rows.set(runId, { runId, title:mapTitle?.lessonTitle || topic, topic, ...mapTitle, phase:["clarification", "map", "extraction", "lesson", "quiz"].includes(phase) ? phase : "clarification", updatedAt:updated });
   };
   for (const artifact of labState.clarificationArtifacts || []) add(artifact.runId, artifact.topic, "extraction", artifact.createdAt);
   for (const resume of labState.mockClarificationHistory || []) add(resume.runId, resume.topic, "clarification", resume.updatedAt);
@@ -51,7 +60,12 @@ function learnerRunSummaries() {
     clocks.set(key, { signature, updatedAt });
     add(current.runId, current.topic, labState.pipelineStage, updatedAt);
   }
-  const live=labState.liveJourney;if(live?.runId)rows.set(live.runId,{runId:live.runId,title:live.packet.topic,topic:live.packet.topic,phase:live.complete?'complete':live.phase,updatedAt:Date.now()});
+  const live=labState.liveJourney;
+  if(live?.runId){
+    const topic=live.packet?.topic || rows.get(live.runId)?.topic || "";
+    const mapTitle=mapTitles.get(live.runId);
+    rows.set(live.runId,{runId:live.runId,title:mapTitle?.lessonTitle || topic,topic,...mapTitle,phase:live.complete?'complete':live.phase,updatedAt:Date.now()});
+  }
   return [...rows.values()].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 100);
 }
 
@@ -62,8 +76,15 @@ function publishLearnerRunSummaries() {
     const key = LEARNER_RUNS_PREFIX + labState.verifiedUserId;
     const existing = JSON.parse(localStorage.getItem(key) || "[]");
     const summaries = new Map((Array.isArray(existing) ? existing : []).filter(row => row?.runId && row?.title)
-      .map(row => [row.runId, { runId:String(row.runId), title:String(row.title).slice(0, 500), ...(row.topic ? {topic:String(row.topic).slice(0,500)} : {}), phase:String(row.phase || "clarification"), updatedAt:Number(row.updatedAt) || Date.parse(row.updatedAt) || 0 }]));
-    for (const row of learnerRunSummaries()) summaries.set(row.runId, row);
+      .map(row => [row.runId, { runId:String(row.runId), title:String(row.title).slice(0, 500), ...(row.topic ? {topic:String(row.topic).slice(0,500)} : {}), ...(row.lessonTitle ? {lessonTitle:String(row.lessonTitle).trim().slice(0,500),lessonTitleMapJobId:String(row.lessonTitleMapJobId || ""),lessonTitleUpdatedAt:Number(row.lessonTitleUpdatedAt) || Date.parse(row.lessonTitleUpdatedAt) || 0} : {}), phase:String(row.phase || "clarification"), updatedAt:Number(row.updatedAt) || Date.parse(row.updatedAt) || 0 }]));
+    for (const row of learnerRunSummaries()) {
+      const previous = summaries.get(row.runId);
+      const latest = previous && previous.updatedAt >= row.updatedAt ? previous : row;
+      const named = row.lessonTitle && (!previous?.lessonTitle || row.lessonTitleUpdatedAt >= previous.lessonTitleUpdatedAt)
+        ? row : previous?.lessonTitle ? previous : null;
+      summaries.set(row.runId, {...latest,...(named?.lessonTitle ? {lessonTitle:named.lessonTitle,title:named.lessonTitle,
+        lessonTitleMapJobId:named.lessonTitleMapJobId,lessonTitleUpdatedAt:named.lessonTitleUpdatedAt} : {})});
+    }
     localStorage.setItem(key, JSON.stringify([...summaries.values()].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 100)));
     return true;
   } catch (_) { return false; }
@@ -15488,8 +15509,8 @@ function syncLiveLesson(){
 /* A topic-free Voice lesson saves the placeholder as its topic, and the code that
    replaces it with the real one only ever ran on the typed reply path. Voice runs
    therefore stayed unnamed forever. The learner's own first spoken words are used
-   here; they are never wrong about what was asked, though they read like speech. A
-   shorter model-written title is a separate, server-side change. */
+   here as the topic while Clarification runs. Once the Lesson Map exists, its
+   lessonTitle supplies the card name; no separate naming model is needed. */
 const VOICE_TOPIC_PLACEHOLDER='Topic to be chosen by voice';
 function applyLiveLearnerTopic(text){
  const spoken=String(text||'').trim();

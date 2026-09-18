@@ -2185,7 +2185,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.53 · Sep 17";
+const BUILD = "v2.1.54 · Sep 18";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2193,6 +2193,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.54",date:"Sep 18",changes:["Lesson cards use the title already created in the Lesson Map, including saved lessons."]},
   {tag:"v2.1.53",date:"Sep 17",changes:["Opening a saved lesson or its map no longer loads your whole history first, so it starts straight away.","Leaving and returning to a lesson no longer leaves Voice stuck on Try microphone again.","Car is no longer offered when choosing how to chat."]},
   {tag:"v2.1.52",date:"Sep 16",changes:["Each spoken turn now shows its clock time, so a long wait is visible.","The lesson footer is simpler: running total only, a single Map button on the right, and no device-recording caveat.","Car mode is retired."]},
   {tag:"v2.1.51",date:"Sep 16",changes:["Missing lesson research now retries itself instead of asking you to tap Retry.","A step that fails to complete is retried automatically before any Try again button appears."]},
@@ -8269,6 +8270,10 @@ function stripLegacyJobLabel(value) {
 }
 
 function homeLearnerRunTitle(item) {
+  // The selected Lesson Map already names the lesson. Keep that exact name;
+  // the original topic is only a fallback while the map is being prepared.
+  const lessonTitle = String(item?.lessonTitle || "").trim();
+  if (lessonTitle) return lessonTitle.slice(0, 500);
   // Explicit topic metadata is learner-owned, even when it mentions a teaching
   // method. Older summaries can instead contain the internal job's name.
   const topic = String(item?.topic || "").trim();
@@ -8291,15 +8296,26 @@ function normalizedHomeLearnerRuns(value) {
     const runId = String(item?.runId || "");
     if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(runId)) continue;
     const topic = String(item.topic || "").trim().slice(0,500);
-    const row = {runId,title:homeLearnerRunTitle(item),...(topic ? {topic} : {}),
+    const lessonTitle = String(item.lessonTitle || "").trim().slice(0,500);
+    const row = {runId,title:homeLearnerRunTitle(item),...(topic ? {topic} : {}),...(lessonTitle ? {lessonTitle,
+      lessonTitleMapJobId:String(item.lessonTitleMapJobId || "").slice(0,128),
+      lessonTitleUpdatedAt:Number(item.lessonTitleUpdatedAt) || Date.parse(item.lessonTitleUpdatedAt) || 0} : {}),
       phase:["clarification","map","extraction","lesson","quiz","complete"].includes(item.phase) ? item.phase : "clarification",
       updatedAt:Number(item.updatedAt) || Date.parse(item.updatedAt) || 0};
     const previous = runs.get(runId);
-    if (!previous || previous.updatedAt < row.updatedAt) runs.set(runId,row);
-    else if (previous.updatedAt === row.updatedAt && topic && !previous.topic) {
-      // Better title provenance does not establish a different lesson phase.
-      runs.set(runId,{...previous,title:row.title,topic});
-    }
+    // Display metadata can arrive separately from phase updates (including
+    // older clients). Missing metadata must not erase the map's saved name.
+    const latest = previous && previous.updatedAt >= row.updatedAt ? previous : row;
+    const other = latest === row ? previous : row;
+    const merged = {...latest};
+    const named = row.lessonTitle && (!previous?.lessonTitle || row.lessonTitleUpdatedAt >= previous.lessonTitleUpdatedAt)
+      ? row : previous?.lessonTitle ? previous : null;
+    if (named) Object.assign(merged,{lessonTitle:named.lessonTitle,lessonTitleMapJobId:named.lessonTitleMapJobId,
+      lessonTitleUpdatedAt:named.lessonTitleUpdatedAt});
+    if (!merged.topic && other?.topic) merged.topic = other.topic;
+    // Title freshness follows the map, independently of conversation activity.
+    merged.title = homeLearnerRunTitle(merged);
+    runs.set(runId,merged);
   }
   return [...runs.values()].sort((a,b) => b.updatedAt-a.updatedAt).slice(0,250);
 }
