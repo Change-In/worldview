@@ -11,7 +11,7 @@ window.WorldviewGeminiLive=(()=>{
   if(!Audio||!window.AudioWorkletNode)throw Error('Gemini Live needs a browser with AudioWorklet support.');
   const audio=new Audio({latencyHint:'interactive'}),sources=new Set();
   let socket,ready=false,closed=false,started=false,muted=false,modelActive=false,processor,input,silent,playAt=0,resumeHandle='',resumeAttempts=0,closingReason='connection_lost',expiryTimer,openTimer;
-  let received=Promise.resolve(),pendingContext='',connectResolve,connectReject,output;
+  let received=Promise.resolve(),pendingContext='',connectResolve,connectReject,output,mix,hardGain,elementGain;
   const connected=new Promise((resolve,reject)=>{connectResolve=resolve;connectReject=reject;});
   // Cancellation can precede the asynchronous worklet load and its later await.
   // Observe this promise immediately; awaiting the original still propagates errors.
@@ -35,6 +35,7 @@ window.WorldviewGeminiLive=(()=>{
    processor?.disconnect();input?.disconnect();silent?.disconnect();if(processor)processor.port.onmessage=null;
    if(outputAudio){outputAudio.removeEventListener?.('error',outputError);if(ownsOutput()){outputAudio.pause();outputAudio.srcObject=null;}}
    output?.stream.getTracks().forEach(track=>track.stop());output?.disconnect();
+   mix?.disconnect();hardGain?.disconnect();elementGain?.disconnect();
    socket?.close();void audio.close().catch(()=>{});
    if(!started)connectReject(Error('Gemini Live did not complete its connection.'));
    onEvent({type:'session.closed',reason});
@@ -44,7 +45,7 @@ window.WorldviewGeminiLive=(()=>{
    const samples=decodePcm(data),rate=Number(/rate=(\d+)/.exec(mimeType||'')?.[1]||24000);
    if(!samples.length||rate<8000||rate>96000)return;
    const buffer=audio.createBuffer(1,samples.length,rate);buffer.copyToChannel(samples,0);
-   const source=audio.createBufferSource();source.buffer=buffer;source.connect(output||audio.destination);sources.add(source);
+   const source=audio.createBufferSource();source.buffer=buffer;source.connect(mix||audio.destination);sources.add(source);
    source.onended=()=>{sources.delete(source);flushContext();};playAt=Math.max(audio.currentTime+.02,playAt);source.start(playAt);playAt+=buffer.duration;
    if(audio.state==='suspended'||outputAudio?.paused)onStatus('Tap Enable audio.');
   }
@@ -103,7 +104,16 @@ window.WorldviewGeminiLive=(()=>{
     finish(closingReason);
    });
   }
-  const controls={context,mute(value){muted=!!value;if(muted&&ready)send({realtimeInput:{audioStreamEnd:true}});},resumeAudio,close:()=>finish('client_closed'),dispose:()=>finish('client_closed')};
+  async function applyRoute(loud){
+   if(closed||!mix)return'unavailable';
+   await audio.resume().catch(()=>{});
+   if(closed)return'unavailable';
+   if(audio.state!=='running')return'unavailable';
+   if(!outputAudio||!hardGain||!elementGain)return'hardware';
+   hardGain.gain.value=loud?1:0;elementGain.gain.value=loud?0:1;outputAudio.muted=!!loud;
+   return loud?'hardware':'element';
+  }
+  const controls={context,mute(value){muted=!!value;if(muted&&ready)send({realtimeInput:{audioStreamEnd:true}});},resumeAudio,applyRoute,close:()=>finish('client_closed'),dispose:()=>finish('client_closed')};
   onTransport(controls);
   try{
    await audio.audioWorklet.addModule('./gemini-pcm-worklet.js?v=2.1.37');
@@ -112,7 +122,14 @@ window.WorldviewGeminiLive=(()=>{
     // Route model speech through the same selectable media element as GPT Live.
     // No model source also connects to the context's hardware destination.
     if(typeof audio.createMediaStreamDestination!=='function')throw Error('Gemini Live audio output is unavailable in this browser.');
-    output=audio.createMediaStreamDestination();outputAudio.autoplay=true;outputAudio.playsInline=true;outputAudio.muted=false;outputAudio.volume=1;
+    // Gemini speech is synthesised inside this context, so the hardware
+    // destination is always a real route; the element is kept for the cases
+    // where a chosen output device has to apply to it.
+    mix=audio.createGain();
+    hardGain=audio.createGain();hardGain.gain.value=0;mix.connect(hardGain);hardGain.connect(audio.destination);
+    elementGain=audio.createGain();elementGain.gain.value=1;mix.connect(elementGain);
+    output=audio.createMediaStreamDestination();elementGain.connect(output);
+    outputAudio.autoplay=true;outputAudio.playsInline=true;outputAudio.muted=false;outputAudio.volume=1;
     outputAudio.srcObject=output.stream;outputAudio.addEventListener?.('error',outputError);
    }
    void resumeAudio().catch(playbackFailure);input=audio.createMediaStreamSource(mic);processor=new AudioWorkletNode(audio,'worldview-pcm-capture');

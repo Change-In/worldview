@@ -156,26 +156,69 @@ window.WorldviewLiveConversation=(()=>{
  }
  function detachOutput(s){
   s.outputVersion=(s.outputVersion||0)+1;
-  s.outputSource?.disconnect();s.outputDestination?.disconnect();
-  s.outputDestination?.stream.getTracks().forEach(t=>t.stop());
+  clearInterval(s.outputWatch);s.outputWatch=null;
+  s.outputSource?.disconnect();s.outputGain?.disconnect();s.outputAnalyser?.disconnect();
   if(s.outputContext){void s.outputContext.close().catch(()=>{});s.outputContext=null;}
-  s.outputSource=null;s.outputDestination=null;
+  s.outputSource=null;s.outputGain=null;s.outputAnalyser=null;s.outputRoute='';s.hardwareSilent=false;
+  if(ui)ui.audio.muted=false;
  }
+ /* Two places can play the tutor. The media element is the proven remote-track
+    path, but iOS demotes it to the receiver while the microphone holds a
+    play-and-record session. A Web Audio tap into the context's hardware
+    destination stays on the loudspeaker side of that same session, so both are
+    built and one is silenced, never torn down and rebuilt mid-conversation. */
  function attachOutput(s,track){
   if(session!==s||s.closing)return;detachOutput(s);
   const stream=new MediaStream([track]),Audio=window.AudioContext||window.webkitAudioContext;
-  // Some Safari versions accept sink selection but ignore it for a remote
-  // single-track stream (WebKit 320087). A local stream uses the media renderer.
+  ui.audio.srcObject=stream;ui.audio.muted=false;
   try{
-   if(typeof ui.audio.setSinkId==='function'&&Audio){
+   if(Audio){
     const ctx=s.outputContext=new Audio({latencyHint:'interactive'});
-    s.outputSource=ctx.createMediaStreamSource(stream);s.outputDestination=ctx.createMediaStreamDestination();
-    s.outputSource.connect(s.outputDestination);ui.audio.srcObject=s.outputDestination.stream;
-   }else ui.audio.srcObject=stream;
-  }catch{detachOutput(s);ui.audio.srcObject=stream;}
+    s.outputSource=ctx.createMediaStreamSource(stream);
+    s.outputGain=ctx.createGain();s.outputGain.gain.value=0;
+    s.outputAnalyser=ctx.createAnalyser();s.outputAnalyser.fftSize=256;
+    s.outputSource.connect(s.outputAnalyser);s.outputSource.connect(s.outputGain);s.outputGain.connect(ctx.destination);
+   }
+  }catch{ // No hardware tap on this browser. The element still plays normally.
+   s.outputContext=null;s.outputSource=null;s.outputGain=null;s.outputAnalyser=null;}
   const version=s.outputVersion;
-  void output?.apply();
+  output?.attach(outputTransport(s));
   void resumeAudio(s).catch(()=>{if(session===s&&!s.closing&&s.outputVersion===version){ui.enableAudio.hidden=false;message('Tap Enable audio.');}});
+ }
+ function setHardwareRoute(s,on){
+  if(!s.outputGain)return;
+  try{s.outputGain.gain.value=on?1:0;}catch{}
+  ui.audio.muted=!!on;
+  if(!on){clearInterval(s.outputWatch);s.outputWatch=null;}
+ }
+ function outputTransport(s){
+  return{applyRoute:async loud=>{
+   if(session!==s||s.closing)return'unavailable';
+   if(!loud||!s.outputGain||s.hardwareSilent){setHardwareRoute(s,false);s.outputRoute='element';return s.outputGain?'element':'unavailable';}
+   // A suspended context produces nothing, so it is not a route we can promise.
+   await s.outputContext?.resume().catch(()=>{});
+   if(session!==s||s.closing)return'unavailable';
+   if(s.outputContext?.state!=='running'){setHardwareRoute(s,false);s.outputRoute='element';return'element';}
+   s.outputRoute='hardware';setHardwareRoute(s,true);watchHardwareRoute(s);return'hardware';
+  }};
+ }
+ // Some WebKit builds hand back a silent node for a remote track. Silence while
+ // the tutor is audibly speaking is the only reliable signal for that, so give
+ // playback straight back to the element rather than leaving the learner deaf.
+ function watchHardwareRoute(s){
+  if(!s.outputAnalyser||s.outputWatch)return;
+  const data=new Uint8Array(s.outputAnalyser.frequencyBinCount);let quiet=0;
+  s.outputWatch=setInterval(()=>{
+   if(session!==s||s.closing||s.outputRoute!=='hardware'){clearInterval(s.outputWatch);s.outputWatch=null;return;}
+   if(!s.speaking){quiet=0;return;}
+   s.outputAnalyser.getByteFrequencyData(data);
+   quiet=data.some(value=>value>2)?0:quiet+1;
+   if(quiet<6)return;
+   clearInterval(s.outputWatch);s.outputWatch=null;
+   s.hardwareSilent=true;setHardwareRoute(s,false);s.outputRoute='element';
+   message('Audio moved back to the phone output.');
+   void output?.refresh();
+  },250);
  }
  async function acquireMic(s){
   captureAudioType();
@@ -244,6 +287,8 @@ window.WorldviewLiveConversation=(()=>{
   if(isControlEcho(event.delta))return;
   const f={seq:fragments.length+1,id:String(event.event_id||state.id+':'+fragments.length),role,delta:event.delta,start_ms:Number.isFinite(event.start_ms)?event.start_ms:null,end_ms:Number.isFinite(event.end_ms)?event.end_ms:null};
   fragments.push(f);state.lastTranscriptAt=performance.now();
+  if(role==='user')state.lastUserTranscriptAt=state.lastTranscriptAt;
+  else{state.speaking=true;clearTimeout(state.speakingTimer);state.speakingTimer=setTimeout(()=>{state.speaking=false;},900);}
   // The first thing the learner actually says is what a topic-free Voice lesson
   // is about. Report it once so the saved card can stop carrying a placeholder.
   if(role==='user'&&!fragments.some(other=>other.seq!==f.seq&&other.role==='user'))host?.onLearnerTopic?.(f.delta);
@@ -259,7 +304,11 @@ window.WorldviewLiveConversation=(()=>{
  }
  // This debounce reduces context churn. Captions have no completed-turn event,
  // so elapsed time is never evidence that either speaker has finished speaking.
- function checkDelay(state){return state.lastTranscriptAt==null?0:Math.max(0,4000-(performance.now()-state.lastTranscriptAt));}
+ // It counts from the learner's own speech only. Counting the tutor's captions
+ // too starved the check: a tutor that teaches for half a minute reset the
+ // window on every caption, so the answer that should have advanced the outcome
+ // was never assessed and the same question came back.
+ function checkDelay(state){return state.lastUserTranscriptAt==null?0:Math.max(0,4000-(performance.now()-state.lastUserTranscriptAt));}
  function scheduleCheck(state,delay=checkDelay(state)){clearTimeout(state.quietTimer);state.quietTimer=setTimeout(()=>{if(session===state&&!state.closing)void check();},delay);}
  function send(state,event){if(session===state&&state.channel?.readyState==='open')state.channel.send(JSON.stringify(event));}
  function inject(state,content,delegationId=null){
@@ -273,18 +322,32 @@ window.WorldviewLiveConversation=(()=>{
   if(!study||study.phaseVersion===appliedPhase)return;appliedPhase=study.phaseVersion;
   await host.onStudy?.(study);
  }
+/* The turn-taking policy is static and is already in the session instructions
+   from the moment the session is created. Re-sending it on a phase change put a
+   block of prose in front of the model at the one moment it had nothing else to
+   answer, and it was spoken: the learner heard a description of how to handle a
+   pause and the word "um" instead of the lesson. Only the changed part of the
+   brief is sent now. If the brief ever stops carrying this block, neither marker
+   is found and the whole brief is sent exactly as before. */
+ const POLICY_MARK='PACING AND TURN-TAKING.';
+ const POLICY_TAIL='Continue from the saved conversationState';
+ function changedPolicy(text){
+  const value=String(text||''),at=value.indexOf(POLICY_MARK);
+  const tail=at<0?-1:value.indexOf(POLICY_TAIL,at+POLICY_MARK.length);
+  return at<0||tail<0?value:(value.slice(0,at)+value.slice(tail)).trim();
+ }
  function publishStudy(state,delegationId=null){
   if(session!==state||state.closing)return false;
   const signature=JSON.stringify({version:study.phaseVersion,instructions:study.instructions,packet:study.packet});
   if(state.publishedStudy===signature)return false;
   const phaseChanged=state.publishedPhase!==study.phaseVersion;
   if(state.gemini){
-   state.gemini.context('APP_HANDOFF. Adopt this saved phase and next focus at the next natural boundary. This is application context, not learner speech. Do not repeat answered questions or speak merely because this update arrived.\n'+(phaseChanged?'Phase policy: '+study.instructions+'\n':'')+'Saved reference packet: '+JSON.stringify(study.packet));
+   state.gemini.context('APP_HANDOFF. Adopt this saved phase and next focus at the next natural boundary. This is application context, not learner speech. Do not repeat answered questions or speak merely because this update arrived.\n'+(phaseChanged?'Phase policy: '+changedPolicy(study.instructions)+'\n':'')+'Saved reference packet: '+JSON.stringify(study.packet));
    state.publishedStudy=signature;state.publishedPhase=study.phaseVersion;return true;
   }
   // Silent context is advisory, not a provider-enforced speech boundary.
   inject(state,'APP_HANDOFF_START. Buffer this complete update; do not speak or interrupt because it arrived.',delegationId);
-  if(phaseChanged)inject(state,'Replacement phase policy: '+study.instructions,delegationId);
+  if(phaseChanged)inject(state,'Replacement phase policy: '+changedPolicy(study.instructions),delegationId);
   inject(state,'Saved reference packet: '+JSON.stringify(study.packet),delegationId);
   inject(state,'APP_HANDOFF_END. Adopt this saved phase/outcome at the next natural boundary. Do not repeat a bridge or answer twice. Continue from what the learner just said.',delegationId);
   state.publishedStudy=signature;state.publishedPhase=study.phaseVersion;return true;
@@ -321,19 +384,23 @@ window.WorldviewLiveConversation=(()=>{
    const result=needsCheck?await captured({action:'journey_check',studyId:id}):prepared;
    host.onCheckerUsage?.(s.costOwner,s.costRunId,result.checkerUsage);if(scope!==expected||session!==s||s.closing)return;
    study={...result.study,fragments};
-   // A check started against older speech cannot inject a stale next focus over
-   // a newer answer. Save and check that answer before publishing the next update.
-   if((s.lastUserSeq||0)!==startedUserSeq||checkDelay(s)>0){scheduleCheck(s);return;}
+   const advanced=study.phaseVersion!==startedPhase;
+   // The saved phase is what the lesson has actually reached, so the roadmap and
+   // the visible move to the next outcome follow it straight away. Only the
+   // model-facing update is held back, and only for newer learner speech: a focus
+   // written against an older answer would talk over what they just said. Holding
+   // the whole result back also hid finished progress behind the tutor's own
+   // voice, which is why an answer could be accepted without the lesson moving.
    await applyPhase();
    if(session!==s||s.closing)return;
-   if((s.lastUserSeq||0)!==startedUserSeq||checkDelay(s)>0){scheduleCheck(s);return;}
+   if(advanced)announceTransition(s);
+   if((s.lastUserSeq||0)!==startedUserSeq){scheduleCheck(s);return;}
    const pending=[...s.pendingDelegations];s.pendingDelegations.clear();
    const firstDelegation=pending.shift()||null,published=publishStudy(s,firstDelegation);
    if(!published&&firstDelegation)inject(s,'Application state received. The saved phase is unchanged. Continue the current conversation; this is not a new learner turn.',firstDelegation);
    for(const id of pending)inject(s,'Application state received. Use the latest saved phase; this is not a new learner turn.',id);
    if(study.checkError)message('Conversation saved. The understanding check could not finish; Live can keep teaching.');
-   else if(study.phaseVersion!==startedPhase)announceTransition(s);
-   else if(!saveError)message(paused?'Paused':'Listening');
+   else if(!advanced&&!saveError)message(paused?'Paused':'Listening');
    paint();
   }catch{if(scope===expected&&session===s&&!s.closing)message('Live can keep teaching. The background understanding check is unavailable; no new progress was recorded.');}
   finally{clearTimeout(s.slowTimer);s.checking=false;}
@@ -379,7 +446,7 @@ window.WorldviewLiveConversation=(()=>{
     s.dispatched=true;startVoiceCost(s);
     const result=await s.request({action:'create',mode:'study',model:s.model,requestId:s.id,studyId:s.studyId,consent:'paid-gemini-3.8-live-whole-lesson'});
     if(session!==s||s.closing){void s.request({action:'close',requestId:s.id}).catch(()=>{});return;}
-    await window.WorldviewGeminiLive.connect({transport:result.transport,mic,outputAudio:ui.audio,initiate:s.initiate,isCurrent:()=>session===s&&!s.closing,onTransport:value=>{s.gemini=value;},onEvent:e=>event(s,e),onUsage:metadata=>recordVoiceCost(s,{metadata,usageId:s.usageTurn||0}),onStatus:text=>{if(session===s){message(text);if(text.includes('Tap Enable audio.'))ui.enableAudio.hidden=false;}}});
+    await window.WorldviewGeminiLive.connect({transport:result.transport,mic,outputAudio:ui.audio,initiate:s.initiate,isCurrent:()=>session===s&&!s.closing,onTransport:value=>{s.gemini=value;output?.attach({applyRoute:loud=>value.applyRoute?value.applyRoute(loud):'unavailable'});},onEvent:e=>event(s,e),onUsage:metadata=>recordVoiceCost(s,{metadata,usageId:s.usageTurn||0}),onStatus:text=>{if(session===s){message(text);if(text.includes('Tap Enable audio.'))ui.enableAudio.hidden=false;}}});
     return;
    }
    const peer=s.peer=new RTCPeerConnection();mic.getAudioTracks().forEach(t=>{peer.addTrack(t,mic);t.addEventListener('ended',()=>{if(session===s&&!s.closing)void stop('Microphone disconnected.');});});
@@ -410,7 +477,7 @@ window.WorldviewLiveConversation=(()=>{
   if(!s.dispatched){cleanup(s);message(reason);return;}
   s.closeTimer=setTimeout(()=>{if(session===s){cleanup(s);message(reason);maybeStart();}},8000);paint();
  }
- function cleanup(s){stopVoiceCost(s);clearTimeout(s.disconnectTimer);clearTimeout(s.quietTimer);clearTimeout(s.slowTimer);clearTimeout(restoreTimer);s.closing=true;clearTimeout(s.startup);clearTimeout(s.closeTimer);clearInterval(s.checkTimer);s.mic?.getTracks().forEach(t=>t.stop());s.gemini?.dispose();detachOutput(s);s.channel?.close();s.peer?.close();if(session===s){session=null;output?.stop();captureAudioType('auto');ui.audio.pause?.();ui.audio.srcObject=null;ui.audio.hidden=true;ui.enableAudio.hidden=true;paint();}}
+ function cleanup(s){stopVoiceCost(s);clearTimeout(s.speakingTimer);s.speaking=false;clearTimeout(s.disconnectTimer);clearTimeout(s.quietTimer);clearTimeout(s.slowTimer);clearTimeout(restoreTimer);s.closing=true;clearTimeout(s.startup);clearTimeout(s.closeTimer);clearInterval(s.checkTimer);s.mic?.getTracks().forEach(t=>t.stop());s.gemini?.dispose();detachOutput(s);s.channel?.close();s.peer?.close();if(session===s){session=null;output?.stop();captureAudioType('auto');ui.audio.pause?.();ui.audio.srcObject=null;ui.audio.hidden=true;ui.enableAudio.hidden=true;paint();}}
  function transcriptTurns(expectedLineage,currentHistory){
   if(!expectedLineage||scope!==expectedLineage||context?.lineage!==expectedLineage||!(study||exportStudyId))return null;
   if(!enabled&&Array.isArray(currentHistory))rememberTextHistory(currentHistory,true);
