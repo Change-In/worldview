@@ -3,7 +3,7 @@ window.WorldviewLiveConversation=(()=>{
  'use strict';
  let host,ui,context,study,session,loadToken=0,loading=false,saving=null,enabled=false,saveTimer;
  let showCaptions=false,paused=false,startError=false,autoAttempts=0,restoreTimer;
- let appliedPhase=0,releasing=null,openingPending=true,output;
+ let appliedPhase=0,releasing=null,openingPending=true,output,lastConnectionState='';
  const fragmentTimes=new Map();
  let fragments=[],prefix=[],textInsertions=[],textSnapshot=null,exportWasText=false,exportStudyId='',ack=0,saveError='',request,scope='',draftKey='';
  const element=(tag,text)=>{const n=document.createElement(tag);if(text)n.textContent=text;return n;};
@@ -42,6 +42,16 @@ window.WorldviewLiveConversation=(()=>{
   return api;
  }
  function message(text){if(ui)ui.status.textContent=text;}
+ function connectionState(){
+  const current=session?.scope===context?.lineage&&session?.model===(context?.model||'gpt-live-1')?session:null;
+  const state=!enabled?'disabled':startError?'error':paused?'paused':current?.closing?'stopped':current?.ready?'ready':loading?'preparing':current?'connecting':'idle';
+  return {state,lineage:context?.lineage||'',owner:context?.owner||'',runId:context?.runId||'',model:context?.model||'',message:ui?.status.textContent||''};
+ }
+ function publishConnectionState(){
+  const next=connectionState(),key=JSON.stringify(next);
+  if(key===lastConnectionState)return;
+  lastConnectionState=key;host?.onConnectionState?.(next);
+ }
  function paintCosts(){
   const costs=window.WorldviewLessonCost;if(!ui||!costs)return;
   const summary=costs.summary(context?.owner,context?.runId);
@@ -105,6 +115,7 @@ window.WorldviewLiveConversation=(()=>{
   const count=Object.keys(study?.assessment||{}).length,total=study?.packet?.roadmap?.length||0;const phaseName={clarification:'Your direction',extraction:'Your starting point',lesson:'Lesson',quiz:'Final teach-back',complete:'Complete'}[study?.phase]||'Lesson';
   ui.progress.hidden=true;paintCosts();
   if(enabled&&study)renderTranscript();
+  publishConnectionState();
  }
  function renderTranscript(){
   const root=host.transcript,follow=root.scrollHeight-root.scrollTop-root.clientHeight<40,position=root.scrollTop;
@@ -173,11 +184,13 @@ window.WorldviewLiveConversation=(()=>{
    captureAudioType('auto');captureAudioType();return await navigator.mediaDevices.getUserMedia({audio:true});}
  }
  async function prepare(){
-  const token=++loadToken,expected=context.lineage,captured=host.requestForCurrentAccount();loading=true;message('Opening the saved research and conversation…');paint();
+  const token=++loadToken,expected=context.lineage,input=context.studyInput,model=context.model||'gpt-live-1',captured=host.requestForCurrentAccount();loading=true;message('Opening the saved research and conversation…');paint();
   try{
-   const ready=await captured({action:'check',model:context.model||'gpt-live-1'});if(!ready.journeyMode)throw Error('Natural Live lessons are awaiting the server update. Standard voice remains available.');
-   const result=await captured({action:'journey_prepare',...context.studyInput});
+   // Capability and saved-lesson preparation use the same captured account and
+   // do not depend on one another. Voice creation waits for both to succeed.
+   const [ready,result]=await Promise.all([captured({action:'check',model}),captured({action:'journey_prepare',...input})]);
    if(token!==loadToken||context.lineage!==expected)return;
+   if(!ready.journeyMode)throw Error('Natural Live lessons are awaiting the server update. Standard voice remains available.');
    study=result.study;fragments=study.fragments.slice();ack=fragments.length;request=captured;scope=expected;draftKey='worldview-live-draft-v2:'+expected;
    const imported=fragments.filter(f=>f.id.startsWith('import:')),earlier=context.priorHistory||[];
    let at=-1;for(let i=earlier.length-imported.length;imported.length&&i>=0;i--){if(imported.every((f,j)=>earlier[i+j]?.role===f.role&&earlier[i+j]?.content===f.delta)){at=i;break;}}
@@ -411,5 +424,5 @@ window.WorldviewLiveConversation=(()=>{
   for(const t of turns)t.content=cleanCaption(t.content);
   return turns.filter(t=>t.content);
  }
- const api={mount,sync,stop,place,transcriptTurns,toggleSpeaker:()=>output?.toggle(),paintSpeaker:()=>output?.paint(),ownsAudio:()=>!!session,active:()=>!!session,enabled:()=>enabled};return api;
+ const api={mount,sync,stop,place,transcriptTurns,connectionState,toggleSpeaker:()=>output?.toggle(),paintSpeaker:()=>output?.paint(),ownsAudio:()=>!!session,active:()=>!!session,enabled:()=>enabled};return api;
 })();

@@ -72,6 +72,7 @@ function learnerRunSummaries() {
 function publishLearnerRunSummaries() {
   if (!LAB_LEARNER || !labState.verifiedUserId || labState.workspaceOwnerId !== labState.verifiedUserId) return false;
   recordLessonJobCosts();
+  publishLearnerSavedMaps();
   try {
     const key = LEARNER_RUNS_PREFIX + labState.verifiedUserId;
     const existing = JSON.parse(localStorage.getItem(key) || "[]");
@@ -88,6 +89,22 @@ function publishLearnerRunSummaries() {
     localStorage.setItem(key, JSON.stringify([...summaries.values()].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 100)));
     return true;
   } catch (_) { return false; }
+}
+
+function publishLearnerSavedMaps() {
+  if (!LAB_LEARNER || !labState.accessVerified || !labState.verifiedUserId
+    || labState.workspaceOwnerId !== labState.verifiedUserId || !window.WorldviewSavedMap) return;
+  // Map-selection controls belong to the current run. Applying those global
+  // controls to every saved run can replace an older chosen comparison.
+  const artifact = selectedPipelineArtifact();
+  if (artifact) {
+    const selection = selectedPipelineMapRecord(artifact);
+    if (!pipelineMapSelectionHasRoute(selection) || selection.job?.scenario?.pipelineRunId !== artifact.runId) return;
+    window.WorldviewSavedMap.publish(labState.verifiedUserId, artifact.runId, selection.map,
+      { jobId:selection.job.id, recordId:selection.recordKey || selection.record?.id || "",
+        updatedAt:selection.job.updatedAt || selection.job.finishedAt || selection.job.createdAt,
+        researchReady:selection.meta?.researchComplete === true });
+  }
 }
 
 function leaveLearnerLesson() {
@@ -119,7 +136,11 @@ function setLearnerEntry(ready = false, topic = "", complete = false) {
   if (!LAB_LEARNER) return;
   labState.learnerEntryReady = ready;
   document.documentElement.classList.toggle("learner-entry-complete", complete);
-  if (complete) document.documentElement.classList.remove("learner-opening-selected");
+  if (complete) {
+    labState.learnerLiveEntry = null;
+    document.documentElement.classList.remove("learner-opening-selected");
+    if (q("learner-entry-live-status")) q("learner-entry-live-status").hidden = true;
+  }
   for (const mode of ["text", "voice", "car"]) {
     const button = q("learner-entry-" + mode);
     if (button) { button.disabled = Boolean(labState.learnerEntryStarting); button.setAttribute("aria-pressed", String(labState.learnerEntryMode === mode)); }
@@ -146,6 +167,36 @@ function selectLearnerEntryMode(mode) {
   if (!["text", "voice", "car"].includes(mode) || labState.learnerEntryStarting) return;
   labState.learnerEntryMode = mode;
   setLearnerEntry(labState.learnerEntryReady, q("learner-entry-topic")?.textContent || "");
+}
+
+function handleLearnerLiveEntryState(snapshot) {
+  const pending = labState.learnerLiveEntry;
+  if (!pending || !snapshot || snapshot.owner !== pending.owner || snapshot.runId !== pending.runId) return;
+  if (pending.epoch !== labState.authEpoch || pending.owner !== labState.verifiedUserId || !labState.accessVerified) {
+    labState.learnerLiveEntry = null;
+    return;
+  }
+  if (["ready", "error", "paused", "stopped", "disabled"].includes(snapshot.state)) {
+    labState.learnerLiveEntry = null;
+    setLearnerEntry(false, "", true);
+    return;
+  }
+  const status = q("learner-entry-live-status");
+  if (status) { status.hidden = false; status.textContent = "Connecting to Live… You can return Home at any time."; }
+}
+
+function completeLearnerConversationEntry() {
+  if (!liveLessonSelected()) { setLearnerEntry(false, "", true); return; }
+  // Keep the same entry surface until the provider confirms its session. The
+  // saved lesson being restored is not yet a connected voice conversation.
+  labState.learnerLiveEntry = { owner:labState.verifiedUserId, epoch:labState.authEpoch,
+    runId:selectedPipelineArtifact()?.runId || labState.clarification.runId };
+  labState.learnerEntryReady = false;
+  document.documentElement.classList.remove("learner-entry-complete");
+  document.documentElement.classList.add("learner-opening-selected");
+  const status = q("learner-entry-live-status");
+  if (status) { status.hidden = false; status.textContent = "Connecting to Live… You can return Home at any time."; }
+  handleLearnerLiveEntryState(window.WorldviewLiveConversation?.connectionState());
 }
 
 async function startLearnerEntry(mode = labState.learnerEntryMode) {
@@ -181,7 +232,7 @@ async function startLearnerEntry(mode = labState.learnerEntryMode) {
       if (labState.mockSetupActive) throw new Error("Saved checkpoint unavailable");
       labState.learnerEntryResume = null;
       sessionStorage.removeItem(LEARNER_LAUNCH_KEY);
-      setLearnerEntry(false, "", true);
+      completeLearnerConversationEntry();
       if (mode === "car") { await enterMockCarMode(); renderMockCarMode(); }
       publishLearnerRunSummaries();
       return true;
@@ -192,7 +243,7 @@ async function startLearnerEntry(mode = labState.learnerEntryMode) {
     if (!q("clarification-conversation").hidden && labState.clarification.runId) {
       const state = labState.clarification;
       if (state.pendingRequestKey || state.latestJobId || state.turns.some(turn => turn.role === "assistant")) sessionStorage.removeItem(LEARNER_LAUNCH_KEY);
-      setLearnerEntry(false, "", true);
+      completeLearnerConversationEntry();
       if (mode === "car") { await enterMockCarMode(); renderMockCarMode(); }
     }
     await opening;
@@ -201,6 +252,10 @@ async function startLearnerEntry(mode = labState.learnerEntryMode) {
     return true;
   } catch (error) {
     if (labState.accessVerified && ownerId === labState.verifiedUserId && epoch === labState.authEpoch) {
+      if (labState.learnerLiveEntry) {
+        labState.learnerLiveEntry = null;
+        setLearnerEntry(false, "", true);
+      }
       if (labState.learnerEntryReady) q("learner-entry-status").textContent = "The conversation could not start. Choose a mode to try again.";
       else { labState.clarification.runError = "The conversation could not start. Your topic is still saved."; renderMockLearnerShell(); }
     }
@@ -9133,6 +9188,7 @@ function renderPipelineMapRuns(artifact = selectedPipelineArtifact()) {
 }
 
 function renderPipelineMapOutput() {
+  publishLearnerSavedMaps();
   const root = q("pipeline-map-output");
   const status = q("pipeline-map-output-status");
   if (!root || !status) return;
@@ -15492,7 +15548,7 @@ async function applyLiveJourney(study){
 }
 function syncLiveLesson(){
  const live=window.WorldviewLiveConversation;if(!live||!q('mock-learner-composer'))return;
- if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),speakerButton:q('mock-learner-mode'),onTextMode:()=>void chooseLiveConversationMode('text'),onStudy:applyLiveJourney,onLearnerTopic:applyLiveLearnerTopic,onCheckerUsage:recordLiveCheckerCost,
+ if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),speakerButton:q('mock-learner-mode'),onTextMode:()=>void chooseLiveConversationMode('text'),onStudy:applyLiveJourney,onLearnerTopic:applyLiveLearnerTopic,onCheckerUsage:recordLiveCheckerCost,onConnectionState:handleLearnerLiveEntryState,
   requestForCurrentAccount:()=>{const token=labState.verifiedAccessToken;return async body=>{const response=await fetch(SUPABASE_URL+'/functions/v1/live-trial',{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(body.action==='journey_check'?150000:40000)});const result=await response.json();if(!response.ok)throw Error(result.error?.message||'Live lesson is unavailable.');return result;};},
   releaseMedia:()=>{stopClarificationCaptureForModeChange();stopClarificationSpeech();stopPipelineExtractionVoice();if(typeof releaseClarificationTopicCapture==='function')releaseClarificationTopicCapture();}
  });}
@@ -19492,9 +19548,16 @@ async function prepareLabEntry(epoch, learner) {
   const prepare = async () => {
     labState.accessVerified = true;
     if (!initializeWorkspace()) throw labAccountError("admin_required");
+    const launch = learner ? readLearnerLaunch() : null;
+    const fresh = Boolean(launch && !launch.runId && (launch.topic || launch.voiceDiscovery));
     if (learner) {
       setMessage("lab-gate-message", "Preparing your lesson…");
-      await Promise.all([probeLearnerProviders(), loadGlobalClarificationDefault()]);
+      // These independent reads share the same verified owner. Fresh Voice
+      // intentionally has no topic yet; it has no old-history dependency either.
+      // Saved entry overlaps history with settings, retaining the result reads
+      // needed to restore its exact map, research and conversation checkpoint.
+      await Promise.all([probeLearnerProviders(), loadGlobalClarificationDefault(),
+        ...(fresh ? [] : [refreshJobs({ untilRunId:launch?.runId || "" })])]);
     } else {
       await probeProviders();
       assertLabRequestOwner(epoch, userId);
@@ -19503,9 +19566,8 @@ async function prepareLabEntry(epoch, learner) {
     assertLabRequestOwner(epoch, userId);
     // New topics have no history dependency. Loading every previous job and
     // its details here made owner accounts wait on unrelated past lessons.
-    const launch = learner ? readLearnerLaunch() : null;
-    if (!(launch?.topic && !launch.runId)) {
-      await refreshJobs(launch?.runId ? { untilRunId:launch.runId } : {});
+    if (!fresh) {
+      if (!learner) await refreshJobs();
       assertLabRequestOwner(epoch, userId);
       if (!learner && !labState.mockSetupActive) await reconcileActiveClarificationResume();
       assertLabRequestOwner(epoch, userId);

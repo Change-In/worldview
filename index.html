@@ -1584,6 +1584,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .lesson-path-empty strong { display:block;margin-bottom:7px;color:var(--ink);font:500 19px Georgia,serif; }
   .lesson-path-empty button { margin-top:14px;padding:10px 15px;border:1px solid var(--line);border-radius:999px;background:var(--paper);color:var(--ink);font-weight:650;cursor:pointer; }
   .lesson-path-footnote { margin-top:24px;padding:12px;border-radius:11px;background:rgba(189,90,48,.11);color:var(--ink-soft);font-size:11px;line-height:1.5; }
+  .saved-map-chapter { margin-bottom:24px;overflow-wrap:anywhere; }
+  .saved-map-chapter h3 { margin:4px 0 10px;font:500 20px/1.25 Georgia,serif; }
+  .saved-map-chapter > small { color:var(--accent-700);font-size:11px; }
+  .saved-map-context,.saved-map-outcome { margin:8px 0;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:13px;line-height:1.5; }
+  .saved-map-context summary,.saved-map-outcome summary { cursor:pointer;font-weight:650; }
+  .saved-map-outcome p,.saved-map-context p { white-space:pre-wrap; }
+  .saved-map-outcome p strong,.saved-map-context p strong { display:block;font-size:11px;color:var(--ink-soft); }
+  .saved-map-outcome ul { padding-left:19px; }
 
   /* ---------- previous lesson sittings ---------- */
   #conversation-history-backdrop { position:fixed;inset:0;z-index:120;background:rgba(44,36,28,.28);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .24s ease,visibility .24s ease; }
@@ -2181,11 +2189,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <script src="data.js"></script>
 <script src="models.js?v=2.1.37"></script>
 <script src="lab/lesson-cost.js?v=2.1.37"></script>
+<script src="saved-map.js?v=2.1.56"></script>
 <script>
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.55 · Sep 18";
+const BUILD = "v2.1.56 · Sep 18";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2193,6 +2202,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.56",date:"Sep 18",changes:["Open a saved Lesson Map directly from Home, without opening a lesson or connecting Voice.","Voice uses one opening step through the Live connection, skips unrelated history for new lessons, and prepares independent requests together."]},
   {tag:"v2.1.55",date:"Sep 18",changes:["Live has a speaker button in place of the model label. Highlighted means the browser accepted the loudspeaker selection.","Gemini and GPT Live share an output that can be switched without closing the microphone. Unsupported phones show a clear message.","Use Aa in the Live controls to return to Text."]},
   {tag:"v2.1.54",date:"Sep 18",changes:["Lesson cards use the title already created in the Lesson Map, including saved lessons."]},
   {tag:"v2.1.53",date:"Sep 17",changes:["Opening a saved lesson or its map no longer loads your whole history first, so it starts straight away.","Leaving and returning to a lesson no longer leaves Voice stuck on Try microphone again.","Car is no longer offered when choosing how to chat."]},
@@ -3310,6 +3320,7 @@ function switchLocalAccount(nextAccountId,ownedSeed = null) {
   return true;
 }
 function clearLocalAccountView() {
+  cancelHomeSavedMap(true);
   if (typeof closeModelsSheet === "function") closeModelsSheet();
   cancelHomeTopicCapture();
   if (stateAccountId) {
@@ -10221,8 +10232,94 @@ function renderLessonPath(lesson) {
     };
   });
 }
+// The Home map is a read-only view, so it must not enter lesson/voice startup.
+var homeSavedMapRequest;
+function cancelHomeSavedMap(clear = false) {
+  homeSavedMapRequest?.controller.abort();
+  homeSavedMapRequest = null;
+  if (clear && String(lessonPathLessonId || "").startsWith("learner:")) {
+    $("lesson-path-nodes")?.replaceChildren();
+    if ($("lesson-path-title")) $("lesson-path-title").textContent = "";
+    if ($("lesson-path-overview")) $("lesson-path-overview").textContent = "";
+    if ($("lesson-path-progress")) $("lesson-path-progress").textContent = "";
+    for (const id of ["lesson-path-panel","lesson-path-backdrop"]) {
+      $(id)?.classList.remove("open");$(id)?.setAttribute("aria-hidden","true");
+    }
+    lessonPathLessonId = "";
+  }
+}
+function renderHomeSavedMap(row, status) {
+  const map = row.map;
+  $("lesson-path-title").textContent = map.lessonTitle || "Lesson map";
+  $("lesson-path-overview").textContent = map.goal || "Your saved chapter and learning outcome tree.";
+  $("lesson-path-progress").textContent = status || `${map.chapters.length} chapters · ${map.chapters.reduce((total, chapter) => total + chapter.outcomes.length,0)} learning outcomes`;
+  const field = (label,value) => value ? `<p><strong>${esc(label)}</strong>${esc(value)}</p>` : "";
+  const container = $("lesson-path-nodes");
+  const opened = new Set([...container.querySelectorAll("details[open]")].map(node => node.dataset.savedMapKey));
+  container.innerHTML = map.chapters.map((chapter,index) => `<section class="saved-map-chapter"><small>Chapter ${index+1}</small><h3>${esc(chapter.title)}</h3>${chapter.purpose || chapter.prerequisites.length ? `<details class="saved-map-context" data-saved-map-key="${esc(chapter.id)}:context"><summary>Why this chapter belongs</summary>${field("Purpose",chapter.purpose)}${field("Builds on",chapter.prerequisites.join(", "))}</details>` : ""}${chapter.outcomes.map((outcome,n) => `<details class="saved-map-outcome" data-saved-map-key="${esc(chapter.id)}:${esc(outcome.id)}"><summary>${index+1}.${n+1} · ${esc(outcome.title)}</summary>${field("Learning outcome",outcome.learningOutcome)}${field("Evidence of success",outcome.successEvidence)}${field("Example question",outcome.diagnosticQuestion)}${outcome.supportNeeds.length ? `<p><strong>Research questions</strong></p><ul>${outcome.supportNeeds.map(need => `<li>${esc(need)}</li>`).join("")}</ul>` : ""}</details>`).join("")}</section>`).join("");
+  for (const node of container.querySelectorAll("details")) node.open = opened.has(node.dataset.savedMapKey);
+}
+async function openHomeSavedMap(runId) {
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(runId)) return false;
+  if (!homeLearnerAccountAllowed() || stateAccountId !== cloudAccount?.id) {
+    toast("Reconnect your account to view this saved map.",5000);return false;
+  }
+  const cache = window.WorldviewSavedMap;
+  if (!cache) { toast("Reload Worldview to view this saved map.",5000);return false; }
+  cancelHomeSavedMap();closeConversationHistory();
+  const owner = cloudAccount.id, epoch = accountAuthEpoch, controller = new AbortController();
+  const request = { owner,runId,controller };homeSavedMapRequest = request;
+  const current = () => homeSavedMapRequest === request && !controller.signal.aborted && cloudAccount?.id === owner
+    && stateAccountId === owner && accountAuthEpoch === epoch && homeLearnerAccountAllowed();
+  const summary = homeLearnerRuns().find(row => row.runId === runId);
+  const cached = cache.read(owner,runId);
+  const selectedJobId = summary?.lessonTitleMapJobId || cached?.jobId || "";
+  lessonPathLessonId = "learner:" + runId;
+  $("lesson-path-overview-disclosure").open = false;
+  $("lesson-path-title").textContent = summary?.title || "Lesson map";
+  $("lesson-path-overview").textContent = "Your saved chapter and learning outcome tree.";
+  $("lesson-path-progress").textContent = "Loading saved map…";
+  $("lesson-path-nodes").replaceChildren();
+  if (cached) renderHomeSavedMap(cached,"Saved map · checking for updates…");
+  for (const id of ["lesson-path-panel","lesson-path-backdrop"]) { $(id).classList.add("open");$(id).setAttribute("aria-hidden","false"); }
+  $("lesson-path-close").focus({preventScroll:true});
+  if (cached && Date.now()-cached.savedAt < 60000 && (!summary?.lessonTitleMapJobId || summary.lessonTitleMapJobId === cached.jobId)) {
+    renderHomeSavedMap(cached,"Saved map on this device");return true;
+  }
+  const timer = setTimeout(() => controller.abort(),25000);
+  try {
+    const loaded = await cache.load(runId,async payload => {
+      if (!current()) throw new Error("Map view closed.");
+      const response = await backendFetch("learner-jobs",{headers:{"content-type":"application/json"},body:JSON.stringify(payload),signal:controller.signal});
+      if (!current()) { await response.body?.cancel();throw new Error("Map view closed."); }
+      if (!response.ok) { await response.body?.cancel();throw new Error("Your saved map could not be checked. Try again."); }
+      const result = await response.json();
+      if (!current()) throw new Error("Map view closed.");
+      return result;
+    },{jobId:selectedJobId,recordId:cached?.jobId === selectedJobId ? cached.recordId || "" : "",recordJobId:cached?.jobId || "",title:summary?.lessonTitle || cached?.map.lessonTitle || ""});
+    if (!current()) return false;
+    if (loaded) {
+      const row = cache.publish(owner,runId,loaded.map,loaded);
+      renderHomeSavedMap(row,"Saved map · up to date");
+    } else if (cached) $("lesson-path-progress").textContent = "Saved map · a newer map is not ready";
+    else {
+      $("lesson-path-progress").textContent = "No saved map yet";
+      $("lesson-path-nodes").innerHTML = '<div class="lesson-path-empty"><strong>Your map is not ready yet</strong><span>It appears after your lesson direction has been chosen and the map has been prepared.</span></div>';
+    }
+    return true;
+  } catch (_) {
+    // Closing/switching accounts must never let an old request reveal its map.
+    if (homeSavedMapRequest !== request || cloudAccount?.id !== owner || stateAccountId !== owner || accountAuthEpoch !== epoch || !homeLearnerAccountAllowed()) return false;
+    $("lesson-path-progress").textContent = cached ? "Saved map · updates unavailable" : "Saved map could not load";
+    if (!cached) $("lesson-path-nodes").innerHTML = '<div class="lesson-path-empty"><strong>The saved map could not load</strong><span>Your lesson is still saved.</span><button id="home-saved-map-retry" type="button">Try again</button></div>';
+    else $("lesson-path-progress").append(" · Close and reopen to retry.");
+    const retry = $("home-saved-map-retry");if (retry) retry.onclick = () => openHomeSavedMap(runId);
+    return false;
+  } finally { clearTimeout(timer); }
+}
 function openLessonPath(id = currentLessonId) {
-  if (String(id || "").startsWith("learner:")) return openHomeLearnerRun({runId:String(id).slice(8),view:"map"});
+  if (String(id || "").startsWith("learner:")) return openHomeSavedMap(String(id).slice(8));
+  cancelHomeSavedMap();
   const lesson = getLesson(id);
   if (!lesson) { toast("Open or create a lesson first."); return; }
   closeConversationHistory();
@@ -10243,6 +10340,7 @@ function openLessonPath(id = currentLessonId) {
   });
 }
 function closeLessonPath() {
+  cancelHomeSavedMap();
   resetCarouselGesture(); // never leave the carousel drag state wedged behind a closed overlay
   $("lesson-path-backdrop").classList.remove("open");
   $("lesson-path-backdrop").setAttribute("aria-hidden","true");

@@ -26,8 +26,8 @@
   root.dataset.learnerEntryKind = ["saved", "new"].includes(kind) ? kind : "unknown";
 })();
 </script>
-<link rel="stylesheet" href="./lab.css?v=2.1.53">
-<link rel="stylesheet" href="./live-conversation.css?v=2.1.55">
+<link rel="stylesheet" href="./lab.css?v=2.1.56">
+<link rel="stylesheet" href="./live-conversation.css?v=2.1.56">
 <link rel="stylesheet" href="./conversation-tools.css?v=2.1.38">
 <link rel="stylesheet" href="../lesson-entry-popup.css?v=2.1.38">
 <link rel="stylesheet" href="../appearance.css?v=2.1.20">
@@ -60,7 +60,7 @@
     <h2>Worldview</h2>
   </header>
   <main class="learner-entry-conversation">
-    <div id="learner-entry-opening" role="status" aria-live="polite"><span class="entry-loading-mark" aria-hidden="true"></span><h3>Opening your lesson</h3><p data-entry-kind="saved">Restoring your place. You can return Home at any time.</p><p data-entry-kind="new">You can return Home at any time.</p></div>
+    <div id="learner-entry-opening" role="status" aria-live="polite"><span class="entry-loading-mark" aria-hidden="true"></span><h3>Opening your lesson</h3><p id="learner-entry-live-status" hidden></p><p data-entry-kind="saved">Restoring your place. You can return Home at any time.</p><p data-entry-kind="new">You can return Home at any time.</p></div>
     <div class="learner-entry-choice" aria-labelledby="learner-entry-title">
       <p id="learner-entry-topic" class="learner-entry-topic" hidden></p>
       <h3 id="learner-entry-title">How would you like to chat?</h3>
@@ -787,12 +787,13 @@ Use the saved briefing as grounding. Search only for a new, recent, or explicitl
 </script>
 <script src="../models.js?v=2.1.37"></script>
 <script src="./lesson-cost.js?v=2.1.37"></script>
-<script src="./gemini-live.js?v=2.1.55"></script>
-<script src="./live-audio-output.js?v=2.1.55"></script>
-<script src="./live-conversation.js?v=2.1.55"></script>
+<script src="./gemini-live.js?v=2.1.56"></script>
+<script src="./live-audio-output.js?v=2.1.56"></script>
+<script src="./live-conversation.js?v=2.1.56"></script>
 <script src="./conversation-tools.js?v=2.1.38"></script>
 <script src="../lesson-entry-popup.js?v=2.1.38"></script>
-<script src="./lab.js?v=2.1.55" defer></script>
+<script src="../saved-map.js?v=2.1.56"></script>
+<script src="./lab.js?v=2.1.56" defer></script>
 <script src="./conversation-clock.js?v=2.1.12" defer></script>
 </body>
 </html>
