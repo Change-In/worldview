@@ -14,3 +14,14 @@
 .live-conversation .live-icon-button.is-muted .live-icon-slash{display:inline}
 .live-conversation.is-car .live-icon-button{min-width:64px;min-height:64px}
 .live-conversation.is-car .live-icon-button svg{width:28px;height:28px}
+
+/* The header controls the actual Live output; Text remains in the action row. */
+#mock-learner-mode.live-speaker-button{width:44px;min-width:44px;height:44px;padding:10px;display:inline-flex;align-items:center;justify-content:center}
+#mock-learner-mode.live-speaker-button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round}
+#mock-learner-mode.live-speaker-button[aria-pressed=true]{background:var(--wv-text,#392e26);color:var(--wv-card,#faf7f1);border-color:var(--wv-text,#392e26)}
+#mock-learner-mode.live-speaker-button[aria-pressed=false] .speaker-waves{opacity:.35}
+#mock-learner-mode.live-speaker-button[aria-busy=true]{opacity:.6}
+.live-speaker-status{color:var(--wv-muted,#75675c)}
+.live-speaker-choices{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.live-speaker-choices[hidden],.live-speaker-status[hidden]{display:none}
+.live-conversation button[hidden],#mock-learner-car[hidden]{display:none!important}

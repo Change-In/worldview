@@ -3,7 +3,7 @@ window.WorldviewLiveConversation=(()=>{
  'use strict';
  let host,ui,context,study,session,loadToken=0,loading=false,saving=null,enabled=false,saveTimer;
  let showCaptions=false,paused=false,startError=false,autoAttempts=0,restoreTimer;
- let appliedPhase=0,releasing=null,openingPending=true;
+ let appliedPhase=0,releasing=null,openingPending=true,output;
  const fragmentTimes=new Map();
  let fragments=[],prefix=[],textInsertions=[],textSnapshot=null,exportWasText=false,exportStudyId='',ack=0,saveError='',request,scope='',draftKey='';
  const element=(tag,text)=>{const n=document.createElement(tag);if(text)n.textContent=text;return n;};
@@ -22,14 +22,16 @@ window.WorldviewLiveConversation=(()=>{
    transcript:'<path d="M5 6h14M5 10h14M5 14h10M5 18h7"/>'
   };
   const iconButton=(name,label)=>{const b=element('button');b.className='live-icon-button';b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+ICONS[name]+'</svg>';b.setAttribute('aria-label',label);b.title=label;return b;};
-  const mute=iconButton('mic','Mute mic'),end=iconButton('pause','Pause voice'),captions=iconButton('transcript','Show transcript');
-  for(const b of [start,enableAudio,mute,end,retry,captions])b.type='button';actions.append(start,enableAudio,mute,end,retry,captions);
+  const mute=iconButton('mic','Mute mic'),end=iconButton('pause','Pause voice'),captions=iconButton('transcript','Show transcript'),textMode=element('button','Aa');
+  textMode.className='live-icon-button';textMode.setAttribute('aria-label','Switch to Text');textMode.title='Switch to Text';textMode.onclick=()=>host.onTextMode?.();
+  for(const b of [start,enableAudio,mute,end,retry,captions,textMode])b.type='button';actions.append(start,enableAudio,mute,end,retry,captions,textMode);
   const status=element('p','Connecting…');status.setAttribute('role','status');
   const usage=element('small'),progress=element('p');progress.className='live-conversation-progress';
   const audio=element('audio');audio.autoplay=true;audio.controls=false;audio.playsInline=true;audio.hidden=true;
   root.append(note,actions,status,usage,progress);adapter.container.append(root);(document.body||adapter.container).append(audio);
   ui={root,note,rate,total,start,enableAudio,mute,end,retry,captions,status,usage,progress,audio};
-  enableAudio.onclick=()=>{const s=session;if(!s||s.closing)return;void(s.gemini?s.gemini.resumeAudio():audio.play()).then(()=>{if(session===s&&!s.closing){enableAudio.hidden=true;message('Listening');}}).catch(()=>{if(session===s&&!s.closing)message('Audio is blocked. Check the browser’s audio permission.');});};
+  output=window.WorldviewLiveAudioOutput?.create({audio,button:adapter.speakerButton,container:root});
+  enableAudio.onclick=()=>{const s=session;if(!s||s.closing)return;const version=s.outputVersion;void output?.apply({user:true});void resumeAudio(s).then(()=>{if(session===s&&!s.closing&&s.outputVersion===version){enableAudio.hidden=true;message('Listening');}}).catch(()=>{if(session===s&&!s.closing&&s.outputVersion===version)message('Audio is blocked. Check the browser’s audio permission.');});};
   captions.onclick=()=>{showCaptions=!showCaptions;paint();};
   start.onclick=()=>{openingPending=true;paused=false;startError=false;autoAttempts=0;void(study?begin():prepare());};end.onclick=()=>{paused=true;void stop('Voice paused.',{pause:true});};retry.onclick=()=>void flush();
   mute.onclick=()=>{const s=session;if(!s?.ready||s.closing)return;s.muted=!s.muted;s.mic?.getAudioTracks().forEach(t=>t.enabled=!s.muted);s.gemini?.mute(s.muted);message(s.muted?'Mic muted':'Listening');paint();};
@@ -93,6 +95,7 @@ window.WorldviewLiveConversation=(()=>{
  }
  function paint(){
   if(!ui)return;ui.root.hidden=!enabled;ui.start.hidden=!!session||(!paused&&!startError);ui.start.disabled=loading||!!session||!context?.ready||document.hidden;
+  if(enabled)output?.paint();
   ui.start.textContent=paused?'Resume voice':'Try microphone again';
   ui.rate.hidden=true;
   ui.captions.hidden=!session?.ready||context?.car;const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.setAttribute('aria-label',capsLabel);ui.captions.title=capsLabel;ui.captions.setAttribute('aria-pressed',String(showCaptions));
@@ -134,7 +137,35 @@ window.WorldviewLiveConversation=(()=>{
   releasing=s.receiptClose=s.request({action:'close',requestId:s.id}).catch(()=>{}).finally(()=>{if(releasing===s.receiptClose){releasing=null;maybeStart();}});
  }
  function place(container,car=false){if(!ui||!container)return;if(ui.root.parentElement!==container)container.append(ui.root);ui.root.classList.toggle('is-car',car);paint();}
- function captureAudioType(type='play-and-record'){try{if(navigator.audioSession&&'type' in navigator.audioSession)navigator.audioSession.type=type;}catch{/* Browsers without this control choose their own route. */}}
+ function captureAudioType(type='play-and-record'){try{if(navigator.audioSession&&'type' in navigator.audioSession&&navigator.audioSession.type!==type)navigator.audioSession.type=type;}catch{/* Browsers without this control choose their own route. */}}
+ async function resumeAudio(s){
+  if(s.gemini)return s.gemini.resumeAudio();
+  // Both calls occur in the tap, before awaiting either browser permission.
+  await Promise.all([s.outputContext?.resume(),ui.audio.play()]);
+ }
+ function detachOutput(s){
+  s.outputVersion=(s.outputVersion||0)+1;
+  s.outputSource?.disconnect();s.outputDestination?.disconnect();
+  s.outputDestination?.stream.getTracks().forEach(t=>t.stop());
+  if(s.outputContext){void s.outputContext.close().catch(()=>{});s.outputContext=null;}
+  s.outputSource=null;s.outputDestination=null;
+ }
+ function attachOutput(s,track){
+  if(session!==s||s.closing)return;detachOutput(s);
+  const stream=new MediaStream([track]),Audio=window.AudioContext||window.webkitAudioContext;
+  // Some Safari versions accept sink selection but ignore it for a remote
+  // single-track stream (WebKit 320087). A local stream uses the media renderer.
+  try{
+   if(typeof ui.audio.setSinkId==='function'&&Audio){
+    const ctx=s.outputContext=new Audio({latencyHint:'interactive'});
+    s.outputSource=ctx.createMediaStreamSource(stream);s.outputDestination=ctx.createMediaStreamDestination();
+    s.outputSource.connect(s.outputDestination);ui.audio.srcObject=s.outputDestination.stream;
+   }else ui.audio.srcObject=stream;
+  }catch{detachOutput(s);ui.audio.srcObject=stream;}
+  const version=s.outputVersion;
+  void output?.apply();
+  void resumeAudio(s).catch(()=>{if(session===s&&!s.closing&&s.outputVersion===version){ui.enableAudio.hidden=false;message('Tap Enable audio.');}});
+ }
  async function acquireMic(s){
   captureAudioType();
   try{return await navigator.mediaDevices.getUserMedia({audio:true});}
@@ -326,8 +357,8 @@ window.WorldviewLiveConversation=(()=>{
   if(autoAttempts>=3){startError=true;message('Voice could not reconnect. Try again.');paint();return;}autoAttempts++;
   const s={id:crypto.randomUUID(),initiate:openingPending,request,scope,model:context.model||'gpt-live-1',connectedAt:Date.now(),studyId:study.id,seen:new Set(),delegations:new Set(),pendingDelegations:new Set(),lastUserSeq:fragments.findLast(f=>f.role==='user')?.seq||0,seconds:0,ready:false,closing:false,dispatched:false,muted:false};session=s;paint();
   try{
-   host.releaseMedia();captureAudioType();message('Waiting for microphone permission…');
-   const mic=await acquireMic(s);if(session!==s||s.closing){mic.getTracks().forEach(t=>t.stop());return;}s.mic=mic;
+   host.releaseMedia();captureAudioType();output?.start();message('Waiting for microphone permission…');
+   const mic=await acquireMic(s);if(session!==s||s.closing){mic.getTracks().forEach(t=>t.stop());return;}s.mic=mic;void output?.refresh();
    message('Connecting voice…');s.startup=setTimeout(()=>{if(session!==s||s.closing)return;startError=true;void stop('Voice could not connect. Try again.');},45000);
    if(s.model==='gemini-3.8-live'){
     mic.getAudioTracks().forEach(t=>t.addEventListener('ended',()=>{if(session===s&&!s.closing)void stop('Microphone disconnected.');}));
@@ -335,11 +366,11 @@ window.WorldviewLiveConversation=(()=>{
     s.dispatched=true;startVoiceCost(s);
     const result=await s.request({action:'create',mode:'study',model:s.model,requestId:s.id,studyId:s.studyId,consent:'paid-gemini-3.8-live-whole-lesson'});
     if(session!==s||s.closing){void s.request({action:'close',requestId:s.id}).catch(()=>{});return;}
-    await window.WorldviewGeminiLive.connect({transport:result.transport,mic,initiate:s.initiate,isCurrent:()=>session===s&&!s.closing,onTransport:value=>{s.gemini=value;},onEvent:e=>event(s,e),onUsage:metadata=>recordVoiceCost(s,{metadata,usageId:s.usageTurn||0}),onStatus:text=>{if(session===s){message(text);if(text==='Tap Enable audio.')ui.enableAudio.hidden=false;}}});
+    await window.WorldviewGeminiLive.connect({transport:result.transport,mic,outputAudio:ui.audio,initiate:s.initiate,isCurrent:()=>session===s&&!s.closing,onTransport:value=>{s.gemini=value;},onEvent:e=>event(s,e),onUsage:metadata=>recordVoiceCost(s,{metadata,usageId:s.usageTurn||0}),onStatus:text=>{if(session===s){message(text);if(text.includes('Tap Enable audio.'))ui.enableAudio.hidden=false;}}});
     return;
    }
    const peer=s.peer=new RTCPeerConnection();mic.getAudioTracks().forEach(t=>{peer.addTrack(t,mic);t.addEventListener('ended',()=>{if(session===s&&!s.closing)void stop('Microphone disconnected.');});});
-   peer.addEventListener('track',e=>{if(session!==s||s.closing)return;ui.audio.srcObject=new MediaStream([e.track]);void ui.audio.play().catch(()=>{if(session===s&&!s.closing){ui.enableAudio.hidden=false;message('Tap Enable audio.');}});});
+   peer.addEventListener('track',e=>attachOutput(s,e.track));
    peer.addEventListener('connectionstatechange',()=>{clearTimeout(s.disconnectTimer);if(session!==s||s.closing)return;if(['failed','closed'].includes(peer.connectionState))void stop('Reconnecting…');else if(peer.connectionState==='disconnected')s.disconnectTimer=setTimeout(()=>{if(session===s&&!s.closing&&peer.connectionState==='disconnected')void stop('Reconnecting…');},15000);});
    s.channel=peer.createDataChannel('oai-events');s.channel.addEventListener('message',e=>{if(session!==s)return;try{event(s,JSON.parse(e.data));}catch{if(!s.closing)void stop('Live returned an unreadable event.');}});
    s.channel.addEventListener('close',()=>{if(session===s&&!s.closing)void stop('Live connection closed.');});
@@ -357,7 +388,7 @@ window.WorldviewLiveConversation=(()=>{
   const s=session;if(!s||s.closing)return;stopVoiceCost(s);s.closing=true;clearInterval(s.checkTimer);clearTimeout(s.quietTimer);clearTimeout(s.slowTimer);s.mic?.getTracks().forEach(t=>t.stop());
   // Keep the channel briefly for final usage, but release audible playback now.
   // Otherwise a paused/replaced session can keep talking for the 8-second grace.
-  ui.audio.pause?.();ui.audio.srcObject=null;ui.enableAudio.hidden=true;stash();void flush();message(reason);
+  output?.stop();detachOutput(s);ui.audio.pause?.();ui.audio.srcObject=null;ui.enableAudio.hidden=true;stash();void flush();message(reason);
   if(s.model==='gemini-3.8-live'){
    closeGeminiReceipt(s);s.gemini?.close();cleanup(s);message(reason);return;
   }
@@ -366,7 +397,7 @@ window.WorldviewLiveConversation=(()=>{
   if(!s.dispatched){cleanup(s);message(reason);return;}
   s.closeTimer=setTimeout(()=>{if(session===s){cleanup(s);message(reason);maybeStart();}},8000);paint();
  }
- function cleanup(s){stopVoiceCost(s);clearTimeout(s.disconnectTimer);clearTimeout(s.quietTimer);clearTimeout(s.slowTimer);clearTimeout(restoreTimer);s.closing=true;clearTimeout(s.startup);clearTimeout(s.closeTimer);clearInterval(s.checkTimer);s.mic?.getTracks().forEach(t=>t.stop());s.gemini?.dispose();s.channel?.close();s.peer?.close();if(session===s){session=null;captureAudioType('auto');ui.audio.pause?.();ui.audio.srcObject=null;ui.audio.hidden=true;ui.enableAudio.hidden=true;paint();}}
+ function cleanup(s){stopVoiceCost(s);clearTimeout(s.disconnectTimer);clearTimeout(s.quietTimer);clearTimeout(s.slowTimer);clearTimeout(restoreTimer);s.closing=true;clearTimeout(s.startup);clearTimeout(s.closeTimer);clearInterval(s.checkTimer);s.mic?.getTracks().forEach(t=>t.stop());s.gemini?.dispose();detachOutput(s);s.channel?.close();s.peer?.close();if(session===s){session=null;output?.stop();captureAudioType('auto');ui.audio.pause?.();ui.audio.srcObject=null;ui.audio.hidden=true;ui.enableAudio.hidden=true;paint();}}
  function transcriptTurns(expectedLineage,currentHistory){
   if(!expectedLineage||scope!==expectedLineage||context?.lineage!==expectedLineage||!(study||exportStudyId))return null;
   if(!enabled&&Array.isArray(currentHistory))rememberTextHistory(currentHistory,true);
@@ -380,5 +411,5 @@ window.WorldviewLiveConversation=(()=>{
   for(const t of turns)t.content=cleanCaption(t.content);
   return turns.filter(t=>t.content);
  }
- const api={mount,sync,stop,place,transcriptTurns,ownsAudio:()=>!!session,active:()=>!!session,enabled:()=>enabled};return api;
+ const api={mount,sync,stop,place,transcriptTurns,toggleSpeaker:()=>output?.toggle(),paintSpeaker:()=>output?.paint(),ownsAudio:()=>!!session,active:()=>!!session,enabled:()=>enabled};return api;
 })();

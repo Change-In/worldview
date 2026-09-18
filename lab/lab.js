@@ -12628,7 +12628,8 @@ function closePipelineExtractionMapDialog({ restoreFocus = true } = {}) {
 }
 
 function setPipelineExtractionAudioSession(type) {
-  if(window.WorldviewLiveConversation?.ownsAudio?.()||liveLessonSelected())type="play-and-record";
+  if(window.WorldviewLiveConversation?.ownsAudio?.())return;
+  if(liveLessonSelected())type="play-and-record";
   try {
     if (navigator.audioSession && "type" in navigator.audioSession && navigator.audioSession.type !== type) navigator.audioSession.type = type;
   } catch (_) { /* The browser owns the physical route when this API is unavailable. */ }
@@ -14726,7 +14727,7 @@ function renderMockCarMode() {
   const liveHost=q('mock-car-live');if(liveHost)liveHost.hidden=!(nativeLive&&active);
   const exit=q('mock-car-live-exit');if(exit)exit.hidden=!nativeLive;
   window.WorldviewLiveConversation?.place?.(nativeLive&&active?liveHost:q('mock-learner-composer'),nativeLive&&active);
-  if(nativeLive){q('mock-learner-car').hidden=false;q('mock-learner-car').setAttribute('aria-pressed',String(active));return;}
+  if(nativeLive){q('mock-learner-car').hidden=true;q('mock-learner-car').setAttribute('aria-pressed',String(active));return;}
   const ids = {
     clarification:"clarification-car-mode",
     extraction:"pipeline-extraction-car-mode",
@@ -15491,7 +15492,7 @@ async function applyLiveJourney(study){
 }
 function syncLiveLesson(){
  const live=window.WorldviewLiveConversation;if(!live||!q('mock-learner-composer'))return;
- if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),onStudy:applyLiveJourney,onLearnerTopic:applyLiveLearnerTopic,onCheckerUsage:recordLiveCheckerCost,
+ if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),speakerButton:q('mock-learner-mode'),onTextMode:()=>void chooseLiveConversationMode('text'),onStudy:applyLiveJourney,onLearnerTopic:applyLiveLearnerTopic,onCheckerUsage:recordLiveCheckerCost,
   requestForCurrentAccount:()=>{const token=labState.verifiedAccessToken;return async body=>{const response=await fetch(SUPABASE_URL+'/functions/v1/live-trial',{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(body.action==='journey_check'?150000:40000)});const result=await response.json();if(!response.ok)throw Error(result.error?.message||'Live lesson is unavailable.');return result;};},
   releaseMedia:()=>{stopClarificationCaptureForModeChange();stopClarificationSpeech();stopPipelineExtractionVoice();if(typeof releaseClarificationTopicCapture==='function')releaseClarificationTopicCapture();}
  });}
@@ -15502,9 +15503,12 @@ function syncLiveLesson(){
  const lineage=[labState.verifiedUserId,runId].join('|');
  recordLessonJobCosts(runId);
  live.sync({enabled:selected,lineage,owner:labState.verifiedUserId,runId,model:window.WorldviewModels?.liveModel()||'gpt-live-1',history:[],priorHistory:transcript,ready:selected,autoStart:true,car:labState.mockCar.active,studyInput:selected?liveStudyInput(artifact,selection,transcript):null});
- if(selected){q('mock-learner-voice-controls').hidden=true;q('mock-learner-car').hidden=false;q('mock-learner-scroll').hidden=true;q('mock-learner-waiting').hidden=true;renderLiveResearchRecovery(selection,stage);}
+ if(selected){q('mock-learner-voice-controls').hidden=true;q('mock-learner-car').hidden=true;q('mock-learner-scroll').hidden=true;q('mock-learner-waiting').hidden=true;renderLiveResearchRecovery(selection,stage);}
  const mode=stage==='clarification'?labState.clarification.mode:labState.extraction.mode;
- const label=selected?(window.WorldviewModels?.liveLabel()||'GPT Live'):mode==='voice'?'Voice':'Text';q('mock-learner-mode').textContent=label+' ⌄';q('mock-learner-mode').setAttribute('aria-label','Conversation mode: '+label);renderMockCarMode();
+ const button=q('mock-learner-mode');
+ if(selected){closeLiveModeMenu();button.removeAttribute('aria-expanded');live.paintSpeaker();}
+ else{const label=mode==='voice'?'Voice':'Text';button.classList.remove('live-speaker-button');button.removeAttribute('aria-pressed');button.removeAttribute('aria-busy');button.disabled=false;button.textContent=label+' ⌄';button.setAttribute('aria-label','Conversation mode: '+label);button.title='Switch conversation mode';}
+ renderMockCarMode();
 }
 /* A topic-free Voice lesson saves the placeholder as its topic, and the code that
    replaces it with the real one only ever ran on the typed reply path. Voice runs
@@ -16980,7 +16984,8 @@ function cancelClarificationRecordingArmOnMove(event) {
 }
 
 function setClarificationAudioSession(type) {
-  if(window.WorldviewLiveConversation?.ownsAudio?.()||liveLessonSelected())type="play-and-record";
+  if(window.WorldviewLiveConversation?.ownsAudio?.())return;
+  if(liveLessonSelected())type="play-and-record";
   try {
     if (navigator.audioSession && "type" in navigator.audioSession && navigator.audioSession.type !== type) navigator.audioSession.type = type;
   } catch (_) { /* The browser owns the physical route when this API is unavailable. */ }
@@ -19643,7 +19648,7 @@ function bindEvents() {
     const turns = native ?? ordinary;
     return window.WorldviewConversationTools.serializeTurns(turns);
   }});
-  q("mock-learner-mode")?.addEventListener("click", () => { toggleLiveModeMenu(); });
+  q("mock-learner-mode")?.addEventListener("click", () => { if(liveLessonSelected())window.WorldviewLiveConversation?.toggleSpeaker();else toggleLiveModeMenu(); });
   q("mock-learner-sources")?.addEventListener("click", toggleMockLearnerSources);
   q("mock-learner-source-close")?.addEventListener("click", () => closeMockLearnerSources({ restoreFocus:true }));
   for (const eventName of ["pointermove", "pointerleave", "focusin", "focusout", "scroll", "touchstart"]) {
