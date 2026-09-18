@@ -3,7 +3,7 @@ window.WorldviewLiveConversation=(()=>{
  'use strict';
  let host,ui,context,study,session,loadToken=0,loading=false,saving=null,enabled=false,saveTimer;
  let showCaptions=false,paused=false,startError=false,autoAttempts=0,restoreTimer;
- let appliedPhase=0,releasing=null,openingPending=true,output,lastConnectionState='';
+ let appliedPhase=0,releasing=null,openingPending=true,output,lastConnectionState='',backgrounded=false;
  const fragmentTimes=new Map();
  let fragments=[],prefix=[],textInsertions=[],textSnapshot=null,exportWasText=false,exportStudyId='',ack=0,saveError='',request,scope='',draftKey='';
  const element=(tag,text)=>{const n=document.createElement(tag);if(text)n.textContent=text;return n;};
@@ -35,7 +35,7 @@ window.WorldviewLiveConversation=(()=>{
   captions.onclick=()=>{showCaptions=!showCaptions;paint();};
   start.onclick=()=>{openingPending=true;paused=false;startError=false;autoAttempts=0;void(study?begin():prepare());};end.onclick=()=>{paused=true;void stop('Voice paused.',{pause:true});};retry.onclick=()=>void flush();
   mute.onclick=()=>{const s=session;if(!s?.ready||s.closing)return;s.muted=!s.muted;s.mic?.getAudioTracks().forEach(t=>t.enabled=!s.muted);s.gemini?.mute(s.muted);message(s.muted?'Mic muted':'Listening');paint();};
-  document.addEventListener('visibilitychange',()=>{if(document.hidden)void stop('Voice paused in the background.');else maybeStart();});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){backgrounded=!!session&&!paused;void stop('Voice paused in the background.');return;}resumeFromBackground();});
   window.addEventListener('pagehide',()=>{stash();void stop('Live ended when you left the lesson.');});
   window.addEventListener('worldview-lesson-cost-updated',paintCosts);
   window.addEventListener('storage',e=>{if(e.key?.startsWith(window.WorldviewLessonCost?.prefix))paintCosts();});
@@ -143,6 +143,26 @@ window.WorldviewLiveConversation=(()=>{
   paint();maybeStart();
  }
  function maybeStart(){if(context?.autoStart&&enabled&&context.ready&&!loading&&!session&&!releasing&&!paused&&!startError&&!document.hidden&&study)void begin();}
+ /* A suspended page does not run its own timers, so the grace period that ends a
+    stopped session can never arrive: the session object stays in place, the
+    microphone stays held, and maybeStart refuses because a session still exists.
+    That is a lesson showing a live microphone indicator and answering nothing.
+    Returning to the app is the one moment we know the page is running again, so
+    finish the dead session here instead of waiting for a timer that may not come. */
+ function transportDead(state){
+  if(!state||state.closing)return false;
+  if(state.model==='gemini-3.8-live')return state.gemini?state.gemini.alive?.()===false:false;
+  if(state.peer&&['failed','closed','disconnected'].includes(state.peer.connectionState))return true;
+  return !!state.channel&&['closing','closed'].includes(state.channel.readyState);
+ }
+ function resumeFromBackground(){
+  const s=session,recovering=!!s&&(s.closing||transportDead(s));
+  if(recovering){if(!s.closing)void stop('Voice reconnecting.');cleanup(s);}
+  // Coming back deliberately is intent to continue, so a background stop no
+  // longer counts against the reconnect budget or leaves a stale error state.
+  if((backgrounded||recovering)&&!session&&!paused){autoAttempts=0;startError=false;message('Reconnecting...');}
+  backgrounded=false;paint();maybeStart();
+ }
  function closeGeminiReceipt(s){
   if(!s.dispatched||s.receiptClose)return;
   releasing=s.receiptClose=s.request({action:'close',requestId:s.id}).catch(()=>{}).finally(()=>{if(releasing===s.receiptClose){releasing=null;maybeStart();}});
@@ -189,7 +209,13 @@ window.WorldviewLiveConversation=(()=>{
   if(!s.outputGain)return;
   try{s.outputGain.gain.value=on?1:0;}catch{}
   ui.audio.muted=!!on;
-  if(!on){clearInterval(s.outputWatch);s.outputWatch=null;}
+  if(!on){
+   clearInterval(s.outputWatch);s.outputWatch=null;
+   // The element carries the audio now. A running context left attached keeps
+   // its own claim on the route, which made the off state barely audible as a
+   // change; suspending it hands the choice back to the phone.
+   void s.outputContext?.suspend().catch(()=>{});
+  }
  }
  function outputTransport(s){
   return{applyRoute:async loud=>{
@@ -288,7 +314,7 @@ window.WorldviewLiveConversation=(()=>{
   const f={seq:fragments.length+1,id:String(event.event_id||state.id+':'+fragments.length),role,delta:event.delta,start_ms:Number.isFinite(event.start_ms)?event.start_ms:null,end_ms:Number.isFinite(event.end_ms)?event.end_ms:null};
   fragments.push(f);state.lastTranscriptAt=performance.now();
   if(role==='user')state.lastUserTranscriptAt=state.lastTranscriptAt;
-  else{state.speaking=true;clearTimeout(state.speakingTimer);state.speakingTimer=setTimeout(()=>{state.speaking=false;},900);}
+  else{state.speaking=true;state.lastAssistantAt=state.lastTranscriptAt;clearTimeout(state.speakingTimer);state.speakingTimer=setTimeout(()=>{state.speaking=false;},900);}
   // The first thing the learner actually says is what a topic-free Voice lesson
   // is about. Report it once so the saved card can stop carrying a placeholder.
   if(role==='user'&&!fragments.some(other=>other.seq!==f.seq&&other.role==='user'))host?.onLearnerTopic?.(f.delta);
@@ -399,6 +425,7 @@ window.WorldviewLiveConversation=(()=>{
    const firstDelegation=pending.shift()||null,published=publishStudy(s,firstDelegation);
    if(!published&&firstDelegation)inject(s,'Application state received. The saved phase is unchanged. Continue the current conversation; this is not a new learner turn.',firstDelegation);
    for(const id of pending)inject(s,'Application state received. Use the latest saved phase; this is not a new learner turn.',id);
+   if(advanced)schedulePhaseOpening(s);
    if(study.checkError)message('Conversation saved. The understanding check could not finish; Live can keep teaching.');
    else if(!advanced&&!saveError)message(paused?'Paused':'Listening');
    paint();
@@ -406,6 +433,26 @@ window.WorldviewLiveConversation=(()=>{
   finally{clearTimeout(s.slowTimer);s.checking=false;}
  }
  // One entry cue, not a learner turn. Acknowledgment is not playback proof.
+ /* The application moves the lesson to its next part, but nothing asks the tutor
+    to open it. The handoff is advisory context and the tutor's own instructions
+    say not to speak merely because an update arrived, so it announced the move
+    and then waited; the learner waited too and the lesson sat in silence. One cue
+    is sent per phase, and only when nobody has spoken since the change. */
+ const PHASE_OPENING_INSTRUCTION='PHASE OPENING. The application has moved the lesson to its next part and the learner is waiting in silence. Speak one short opening for the new part now, in English, continuing from what they last said. Do not greet again, re-introduce yourself, or repeat an answered question. Then stop and listen.';
+ function schedulePhaseOpening(state){
+  if(!study||state.openedPhase===study.phaseVersion)return;
+  state.openedPhase=study.phaseVersion;
+  const version=study.phaseVersion,changedAt=performance.now(),seq=state.lastUserSeq||0;
+  clearTimeout(state.openingTimer);
+  state.openingTimer=setTimeout(()=>{
+   if(session!==state||state.closing||!state.ready||!study)return;
+   if(study.phaseVersion!==version||(state.lastUserSeq||0)!==seq)return;
+   // Somebody is already talking, so the handoff is not a dead end after all.
+   if(state.speaking||(state.lastAssistantAt||0)>changedAt)return;
+   if(state.gemini){state.gemini.prompt?.(PHASE_OPENING_INSTRUCTION);return;}
+   send(state,{type:'session.instructions.append',event_id:state.id+':phase-opening:'+version,delegation_id:null,content:PHASE_OPENING_INSTRUCTION});
+  },3000);
+ }
  const VOICE_ENTRY_INSTRUCTION='VOICE ENTRY. Speak first now in English; do not wait for learner speech. Keep the saved phase and instructions. If topic is unknown or "Topic to be chosen by voice", ask "What would you like to explore today?" Otherwise give one brief opening or continuation from saved context; never repeat answered questions. Then pause and listen. If speech has begun, do not start a second opening.';
  function requestOpening(state){
   if(!state.initiate)return;
@@ -465,7 +512,7 @@ window.WorldviewLiveConversation=(()=>{
  }
  async function stop(reason='Voice paused.',options={}){
   if(options.pause)paused=true;
-  const s=session;if(!s||s.closing)return;stopVoiceCost(s);s.closing=true;clearInterval(s.checkTimer);clearTimeout(s.quietTimer);clearTimeout(s.slowTimer);s.mic?.getTracks().forEach(t=>t.stop());
+  const s=session;if(!s||s.closing)return;stopVoiceCost(s);s.closing=true;clearTimeout(s.openingTimer);clearInterval(s.checkTimer);clearTimeout(s.quietTimer);clearTimeout(s.slowTimer);s.mic?.getTracks().forEach(t=>t.stop());
   // Keep the channel briefly for final usage, but release audible playback now.
   // Otherwise a paused/replaced session can keep talking for the 8-second grace.
   output?.stop();detachOutput(s);ui.audio.pause?.();ui.audio.srcObject=null;ui.enableAudio.hidden=true;stash();void flush();message(reason);
@@ -477,7 +524,7 @@ window.WorldviewLiveConversation=(()=>{
   if(!s.dispatched){cleanup(s);message(reason);return;}
   s.closeTimer=setTimeout(()=>{if(session===s){cleanup(s);message(reason);maybeStart();}},8000);paint();
  }
- function cleanup(s){stopVoiceCost(s);clearTimeout(s.speakingTimer);s.speaking=false;clearTimeout(s.disconnectTimer);clearTimeout(s.quietTimer);clearTimeout(s.slowTimer);clearTimeout(restoreTimer);s.closing=true;clearTimeout(s.startup);clearTimeout(s.closeTimer);clearInterval(s.checkTimer);s.mic?.getTracks().forEach(t=>t.stop());s.gemini?.dispose();detachOutput(s);s.channel?.close();s.peer?.close();if(session===s){session=null;output?.stop();captureAudioType('auto');ui.audio.pause?.();ui.audio.srcObject=null;ui.audio.hidden=true;ui.enableAudio.hidden=true;paint();}}
+ function cleanup(s){stopVoiceCost(s);clearTimeout(s.openingTimer);clearTimeout(s.speakingTimer);s.speaking=false;clearTimeout(s.disconnectTimer);clearTimeout(s.quietTimer);clearTimeout(s.slowTimer);clearTimeout(restoreTimer);s.closing=true;clearTimeout(s.startup);clearTimeout(s.closeTimer);clearInterval(s.checkTimer);s.mic?.getTracks().forEach(t=>t.stop());s.gemini?.dispose();detachOutput(s);s.channel?.close();s.peer?.close();if(session===s){session=null;output?.stop();captureAudioType('auto');ui.audio.pause?.();ui.audio.srcObject=null;ui.audio.hidden=true;ui.enableAudio.hidden=true;paint();}}
  function transcriptTurns(expectedLineage,currentHistory){
   if(!expectedLineage||scope!==expectedLineage||context?.lineage!==expectedLineage||!(study||exportStudyId))return null;
   if(!enabled&&Array.isArray(currentHistory))rememberTextHistory(currentHistory,true);

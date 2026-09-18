@@ -113,7 +113,14 @@ window.WorldviewGeminiLive=(()=>{
    hardGain.gain.value=loud?1:0;elementGain.gain.value=loud?0:1;outputAudio.muted=!!loud;
    return loud?'hardware':'element';
   }
-  const controls={context,mute(value){muted=!!value;if(muted&&ready)send({realtimeInput:{audioStreamEnd:true}});},resumeAudio,applyRoute,close:()=>finish('client_closed'),dispose:()=>finish('client_closed')};
+  // Quiet context cannot make the model speak, so an application-owned opening
+  // needs a completed turn. Never sent while the model already holds the floor.
+  function prompt(text){
+   if(!active()||!ready||modelActive||sources.size)return false;
+   modelActive=true;send({clientContent:{turns:[{role:'user',parts:[{text:String(text)}]}],turnComplete:true}});return true;
+  }
+  const alive=()=>!closed&&socket?.readyState===WebSocket.OPEN;
+  const controls={context,mute(value){muted=!!value;if(muted&&ready)send({realtimeInput:{audioStreamEnd:true}});},resumeAudio,applyRoute,prompt,alive,close:()=>finish('client_closed'),dispose:()=>finish('client_closed')};
   onTransport(controls);
   try{
    await audio.audioWorklet.addModule('./gemini-pcm-worklet.js?v=2.1.37');

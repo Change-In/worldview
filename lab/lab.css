@@ -1807,19 +1807,14 @@ body.mock-setup #lab-voice-settings { order:-1; }
 body.mock-learner-shell-active #panel-pipeline { inset:auto; top:var(--lab-viewport-top,0px); left:var(--lab-viewport-left,0px); }
 .mock-learner-shell { touch-action:manipulation; }
 .mock-learner-shell[data-voice="true"] { touch-action:pinch-zoom; user-select:none; -webkit-user-select:none; }
-.mock-learner-shell[data-voice="true"] .mock-learner-transcript { touch-action:pinch-zoom; padding-right:max(48px,calc((100vw - 760px)/2)); }
+.mock-learner-shell[data-voice="true"] .mock-learner-transcript { touch-action:pinch-zoom; padding-right:max(22px,calc((100vw - 760px)/2)); }
 .mock-learner-shell[data-live="true"], .mock-learner-shell[data-live="true"] .mock-learner-transcript { touch-action:manipulation; user-select:text; -webkit-user-select:text; }
 .mock-learner-shell[data-voice="true"] #mock-learner-ptt { display:none; }
 .mock-learner-shell[data-voice="true"] .mock-recording-row { justify-content:center; }
 .mock-learner-shell .extraction-map-dialog, .mock-learner-source-panel, .mock-learner-composer { touch-action:pan-y; user-select:text; -webkit-user-select:text; }
-.mock-learner-transcript { box-sizing:border-box; overflow-wrap:anywhere; padding-right:max(52px,calc((100vw - 760px)/2)); scrollbar-width:none; }
+.mock-learner-transcript { box-sizing:border-box; overflow-wrap:anywhere; padding-right:max(22px,calc((100vw - 760px)/2)); scrollbar-width:none; }
 .mock-learner-transcript::-webkit-scrollbar { display:none; }
-.mock-learner-scroll { position:absolute; top:50%; right:2px; transform:translateY(-50%); display:grid; place-items:center; width:44px; height:min(164px,80%); margin:0; padding:0; border-radius:16px; touch-action:none; user-select:none; -webkit-user-select:none; cursor:ns-resize; outline-offset:-2px; -webkit-tap-highlight-color:transparent; }
-.mock-learner-wheel { width:16px; height:144px; max-height:100%; border:1px solid color-mix(in srgb, var(--wv-muted) 27%, transparent); border-radius:10px; background:repeating-linear-gradient(to bottom,transparent 0 6px,color-mix(in srgb, var(--wv-accent) 22%, transparent) 6px 7px,transparent 7px 8px),var(--wv-card); background-position:0 var(--wheel-offset,0px),0 0; box-shadow:none; pointer-events:none; }
-.mock-learner-scroll:focus-visible { outline:2px solid #e2895a; }
-.mock-learner-scroll[data-dragging="true"] .mock-learner-wheel { border-color:#e2895a; }
-.mock-learner-scroll[data-spinning="true"] .mock-learner-wheel { border-color:color-mix(in srgb, var(--wv-accent) 53%, transparent); }
-.mock-learner-scroll[hidden], .mock-learner-source-numbers[hidden] { display:none!important; }
+.mock-learner-source-numbers[hidden] { display:none!important; }
 .mock-learner-source-numbers { display:inline-flex; gap:6px; flex-wrap:wrap; }
 .mock-learner-source-numbers a { display:grid; place-items:center; min-width:32px; min-height:32px; border:1px solid #78e5c055; border-radius:50%; color:#9cebd0; font-size:12px; text-decoration:none; }
 @media(max-width:380px) { .mock-learner-header h2 { font-size:1.05rem; } .mock-learner-header { justify-content:flex-start; padding-left:62px; } }
@@ -1842,7 +1837,12 @@ body.mock-learner-shell-active #panel-pipeline { inset:auto; top:var(--lab-viewp
 .mock-learner-transcript li { padding:18px; border:1px solid color-mix(in srgb, var(--wv-text) 14%, transparent); border-radius:22px 22px 22px 6px; background:var(--wv-card); color:var(--wv-text); font:400 17px/1.55 system-ui,sans-serif; margin-bottom:18px; }
 .mock-learner-transcript li strong { color:var(--wv-accent); font-size:10px; line-height:1.3; }
 .mock-learner-transcript li[data-role="user"] { background:transparent; border-color:transparent; color:var(--wv-muted); padding-top:10px; padding-bottom:10px; }
-.mock-learner-transcript li[data-role="user"] strong { color:var(--wv-muted); }
+/* The learner’s own words sit on the right and Worldview’s on the left, so a
+   long lesson reads as a conversation rather than one column of blocks. */
+.mock-learner-transcript { display:flex; flex-direction:column; }
+.mock-learner-transcript li { width:auto; max-width:min(100%,640px); margin-left:0; margin-right:0; align-self:flex-start; }
+.mock-learner-transcript li[data-role="user"] { align-self:flex-end; max-width:min(88%,540px); padding:14px 18px; border-radius:22px 22px 6px 22px; border-color:color-mix(in srgb, var(--wv-text) 12%, transparent); background:color-mix(in srgb, var(--wv-text) 7%, transparent); color:var(--wv-text); }
+.mock-learner-transcript li[data-role="user"] strong { color:var(--wv-muted); text-align:right; }
 .mock-learner-status { color:var(--wv-muted); }
 .mock-learner-status:empty { display:none; }
 .mock-learner-composer { background:var(--wv-card); border-color:color-mix(in srgb, var(--wv-text) 14%, transparent); }

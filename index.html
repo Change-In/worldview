@@ -1641,8 +1641,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #home-archive-entry{margin-bottom:calc(env(safe-area-inset-bottom) + 60px)}
 </style>
 <link rel="stylesheet" href="models.css?v=2.1.37">
-<link rel="stylesheet" href="appearance.css?v=2.1.20">
-<script src="appearance.js?v=2.1.20"></script>
+<link rel="stylesheet" href="appearance.css?v=2.1.58">
+<script src="appearance.js?v=2.1.58"></script>
 </head>
 <body>
 <button id="theme-toggle" type="button" aria-label="Toggle appearance"><svg id="theme-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"></svg></button>
@@ -2194,7 +2194,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.57 · Sep 18";
+const BUILD = "v2.1.58 · Sep 18";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2202,6 +2202,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.58",date:"Sep 18",changes:["When a lesson moves to its next part, the tutor now opens that part itself instead of leaving you sitting in silence.","Coming back to the app after leaving it reconnects the lesson, instead of holding the microphone open and answering nothing.","Your messages sit on the right, Worldview’s on the left.","The conversation scroll wheel is gone. Swipe the conversation to scroll it.","The light and dark button is smaller and leaves more room beside the text box.","While your Lesson Map is being built you can see how many parts have been researched."]},
   {tag:"v2.1.57",date:"Sep 18",changes:["The Live speaker button now plays through the phone loudspeaker while the microphone is open, which is what was making the volume drop to the earpiece on its own. If a phone cannot do it, audio returns to normal output and says so.","The tutor no longer reads its own turn-taking notes aloud when a lesson moves to the next part.","Finishing a learning outcome moves the lesson on straight away instead of waiting for a gap in the tutor’s speech, so an accepted answer is no longer asked again."]},
   {tag:"v2.1.56",date:"Sep 18",changes:["Open a saved Lesson Map directly from Home, without opening a lesson or connecting Voice.","Voice uses one opening step through the Live connection, skips unrelated history for new lessons, and prepares independent requests together."]},
   {tag:"v2.1.55",date:"Sep 18",changes:["Live has a speaker button in place of the model label. Highlighted means the browser accepted the loudspeaker selection.","Gemini and GPT Live share an output that can be switched without closing the microphone. Unsupported phones show a clear message.","Use Aa in the Live controls to return to Text."]},

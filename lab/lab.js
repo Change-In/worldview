@@ -677,7 +677,7 @@ const PIPELINE_MAP_PLANNER_EFFORT = "medium";
 const PIPELINE_MAP_AUTO_RETRY_LIMIT = 3;
 // Real controls keep their own behaviour, and Clarification already binds its
 // own surface, so a hold that begins on either is not a whole-surface hold.
-const MOCK_SURFACE_CONTROL_SELECTOR = "button, a, input, textarea, select, label, summary, .mock-response-sources, [role=\"button\"], [role=\"switch\"], [role=\"dialog\"], #clarification-surface, #mock-learner-composer, #mock-learner-scroll";
+const MOCK_SURFACE_CONTROL_SELECTOR = "button, a, input, textarea, select, label, summary, .mock-response-sources, [role=\"button\"], [role=\"switch\"], [role=\"dialog\"], #clarification-surface, #mock-learner-composer";
 // Transport failures are worth repeating on the same route. A malformed or
 // refused result is not, so those still wait for a deliberate decision.
 const PIPELINE_MAP_TRANSIENT_FAILURES = new Set(["provider_timeout", "provider_rate_limited", "provider_error", "job_store_unavailable", "provider_empty"]);
@@ -15506,13 +15506,20 @@ function liveResearchState(selection, stage=labState.pipelineStage) {
   ||Boolean(planner&&!LAB_ACTIVE_JOB_STATES.has(planner.status)&&planner.status!=='completed')
   ||Boolean(artifact?.runId&&labState.extraction.mapStartFailureRunId===artifact.runId));
  return {state:ready?'ready':retryAvailable?'needs-attention':'working',firstOutcomeReady:first?.verifiedSupport?.status==='verified',retryAvailable,
+  verified:outcomes.filter(outcome=>outcome.verifiedSupport?.status==='verified').length,total:outcomes.length,
   message:ready?'Verified lesson research is ready.':retryAvailable?'Some chapter research could not be verified. Retry missing research; keep completed support and the saved conversation.':'Lesson research is still running. Preserve any agreement to begin.'};
 }
 function renderLiveResearchRecovery(selection, stage=labState.pipelineStage) {
  const research=liveResearchState(selection,stage),retry=q('mock-learner-retry'),status=q('mock-learner-status');
  const failed=research?.retryAvailable||stage==='extraction'&&labState.extraction.mapStartFailureRunId===selectedPipelineArtifact()?.runId;
  retry.hidden=!failed;retry.disabled=!!labState.extraction.mapRetryBusy;retry.dataset.retry='map';retry.textContent=retry.disabled?'Retrying research…':'Retry missing research';
- status.textContent=failed?'Some lesson research needs a retry. Your answers and verified chapters are saved.':'';status.classList.toggle('is-error',!!failed);
+ // Building a Lesson Map takes real time. Silence during it reads as a stall,
+ // so the counted progress the workflow already tracks is said out loud here.
+ const building=!failed&&research?.state==='working';
+ status.textContent=failed?'Some lesson research needs a retry. Your answers and verified chapters are saved.'
+  :building?(research.total?'Building your lesson map - '+research.verified+' of '+research.total+' parts researched.':'Building your lesson map.')
+  :'';
+ status.classList.toggle('is-error',!!failed);
 }
 function liveStudyInput(artifact,selection,transcript){
  const stage=labState.pipelineStage,usable=pipelineMapSelectionIsUsable(selection),outcomes=usable?pipelineLessonOutcomes(selection):[];
@@ -15559,7 +15566,7 @@ function syncLiveLesson(){
  const lineage=[labState.verifiedUserId,runId].join('|');
  recordLessonJobCosts(runId);
  live.sync({enabled:selected,lineage,owner:labState.verifiedUserId,runId,model:window.WorldviewModels?.liveModel()||'gpt-live-1',history:[],priorHistory:transcript,ready:selected,autoStart:true,car:labState.mockCar.active,studyInput:selected?liveStudyInput(artifact,selection,transcript):null});
- if(selected){q('mock-learner-voice-controls').hidden=true;q('mock-learner-car').hidden=true;q('mock-learner-scroll').hidden=true;q('mock-learner-waiting').hidden=true;renderLiveResearchRecovery(selection,stage);}
+ if(selected){q('mock-learner-voice-controls').hidden=true;q('mock-learner-car').hidden=true;q('mock-learner-waiting').hidden=true;renderLiveResearchRecovery(selection,stage);}
  const mode=stage==='clarification'?labState.clarification.mode:labState.extraction.mode;
  const button=q('mock-learner-mode');
  if(selected){closeLiveModeMenu();button.removeAttribute('aria-expanded');live.paintSpeaker();}
