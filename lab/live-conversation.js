@@ -121,10 +121,25 @@ window.WorldviewLiveConversation=(()=>{
   const root=host.transcript,follow=root.scrollHeight-root.scrollTop-root.clientHeight<40,position=root.scrollTop;
   if(session&&!showCaptions){root.replaceChildren();return;}
   const clock=at=>{const d=new Date(at);const pad=n=>String(n).padStart(2,'0');return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());};
-  const groups=[];for(const turn of context.history||[])groups.push({role:turn.role,text:turn.content});
-  for(const f of fragments){if(isControlEcho(f.delta))continue;const last=groups.at(-1);const at=fragmentTimes.get(f.id);if(last?.live&&last.role===f.role){last.text+=f.delta;if(at&&!last.at)last.at=at;}else groups.push({role:f.role,text:f.delta,live:true,at});}
+  /* One transcript, assembled exactly as the copied one is. Drawing the spoken
+     fragments alone left out the conversation that happened before this study
+     opened and anything typed between voice sessions, so reopening a lesson
+     showed less of it than had actually been said. */
+  const groups=[];
+  for(const turn of context.history||[])groups.push({role:turn.role,text:turn.content});
+  for(const turn of prefix)groups.push({role:turn.role,text:turn.content});
+  const insert=seq=>{for(const group of textInsertions.filter(entry=>entry.afterSeq===seq))for(const turn of group.turns)groups.push({role:turn.role,text:turn.content});};
+  insert(0);
+  let previousNative=false;
+  for(const f of fragments){
+   if(isControlEcho(f.delta))continue;
+   const native=!f.id.startsWith('import:'),last=groups.at(-1),at=fragmentTimes.get(f.id);
+   if(native&&previousNative&&last?.live&&last.role===f.role){last.text+=f.delta;if(at&&!last.at)last.at=at;}
+   else groups.push({role:f.role,text:f.delta,live:true,at});
+   previousNative=native;insert(f.seq);
+  }
   for(const g of groups)g.text=cleanCaption(g.text);
-  root.replaceChildren();for(const g of groups){if(!g.text)continue;const item=element('li');item.className='extraction-turn '+(g.role==='user'?'is-user':'is-assistant');const label=element('small',g.role==='user'?'You':g.live?'Worldview':'Earlier in this lesson');const text=element('p',g.text);item.append(label,text);if(g.at){const stamp=element('time',clock(g.at));stamp.className='turn-time';stamp.dateTime=new Date(g.at).toISOString();item.append(stamp);}root.append(item);}
+  root.replaceChildren();for(const g of groups){if(!g.text)continue;const item=element('li');item.className='extraction-turn '+(g.role==='user'?'is-user':'is-assistant');item.dataset.role=g.role;const label=element('strong',g.role==='user'?'You':g.live?'Worldview':'Earlier in this lesson');const text=element('p',g.text);item.append(label,text);if(g.at){const stamp=element('time',clock(g.at));stamp.className='turn-time';stamp.dateTime=new Date(g.at).toISOString();item.append(stamp);}root.append(item);}
   root.scrollTop=follow?root.scrollHeight:position;
  }
  function sync(next){

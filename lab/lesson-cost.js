@@ -30,7 +30,7 @@
   return {usd,known,unknown,partial:true,saved:!unsaved.has(keyFor(owner,runId))};
  }
  function format(value){return value?.known?`Est. total $${value.usd.toFixed(3)}`:'Est. total —';}
- function describe(value){return (value?.saved===false?'Device saving is unavailable; this estimate may be lost when the page closes. ':'')+'Estimate from usage recorded on this device, including resumed sessions and recorded lesson preparation. '+(value?.unknown?'Some usage or charges are unavailable. ':'Earlier sessions, other devices and unreported charges may be missing. ')+'Provider billing is authoritative.';}
+ function describe(value){return (value?.saved===false?'Device saving is unavailable; this estimate may be lost when the page closes. ':'')+'Estimate from usage recorded on this device, including resumed sessions, recorded lesson preparation and its web searches at their list rate. '+(value?.unknown?'Some usage or charges are unavailable. ':'Earlier sessions, other devices and unreported charges may be missing. ')+'Provider billing is authoritative.';}
  function geminiUsage(metadata){
   if(!metadata||typeof metadata!=='object')return {usd:null,partial:true};
   let usd=0,known=false,partial=false;

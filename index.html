@@ -1641,7 +1641,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #home-archive-entry{margin-bottom:calc(env(safe-area-inset-bottom) + 60px)}
 </style>
 <link rel="stylesheet" href="models.css?v=2.1.37">
-<link rel="stylesheet" href="appearance.css?v=2.1.58">
+<link rel="stylesheet" href="appearance.css?v=2.1.59">
 <script src="appearance.js?v=2.1.58"></script>
 </head>
 <body>
@@ -2188,13 +2188,13 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <!-- optional: data.js is a shared lessons file — auto-loaded so browsers/devices stay in sync -->
 <script src="data.js"></script>
 <script src="models.js?v=2.1.37"></script>
-<script src="lab/lesson-cost.js?v=2.1.37"></script>
+<script src="lab/lesson-cost.js?v=2.1.59"></script>
 <script src="saved-map.js?v=2.1.57"></script>
 <script>
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.58 · Sep 18";
+const BUILD = "v2.1.59 · Sep 19";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2202,6 +2202,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.59",date:"Sep 19",changes:["Car mode is gone. A lesson is Text or Voice, and the car button no longer sits at the top of the conversation.","The bar above the conversation names the chapter and the learning outcome you are on, so you can see the lesson moving.","The Lesson Map is just the map: no instructions, no status banner and no retry button. Missing research is retried for you, and a part still waiting says so.","Learning outcomes show their titles; tap one to read what it actually means. The evidence rules and research questions behind it stay out of your way.","Reopening a lesson shows the whole conversation again, including anything typed between voice sessions.","Copying the transcript moved into the top right as an icon, and the row it used to occupy went back to the conversation.","The appearance button stays on Home instead of following you into a lesson, and the text box has that space back.","Say you have plenty of time and the lesson plans a full route rather than the shortest one. A stated time now plans about five minutes per learning outcome.","Lesson research now also looks up the obvious comparison you are likely to ask about.","From a saved lesson you can archive or delete it, with the choice named before anything happens. Archived lessons sit in the Archive drawer.","The cost estimate now includes the web searches a lesson makes, at their list rate, which it used to leave out entirely."]},
   {tag:"v2.1.58",date:"Sep 18",changes:["When a lesson moves to its next part, the tutor now opens that part itself instead of leaving you sitting in silence.","Coming back to the app after leaving it reconnects the lesson, instead of holding the microphone open and answering nothing.","Your messages sit on the right, Worldview’s on the left.","The conversation scroll wheel is gone. Swipe the conversation to scroll it.","The light and dark button is smaller and leaves more room beside the text box.","While your Lesson Map is being built you can see how many parts have been researched."]},
   {tag:"v2.1.57",date:"Sep 18",changes:["The Live speaker button now plays through the phone loudspeaker while the microphone is open, which is what was making the volume drop to the earpiece on its own. If a phone cannot do it, audio returns to normal output and says so.","The tutor no longer reads its own turn-taking notes aloud when a lesson moves to the next part.","Finishing a learning outcome moves the lesson on straight away instead of waiting for a gap in the tutor’s speech, so an accepted answer is no longer asked again."]},
   {tag:"v2.1.56",date:"Sep 18",changes:["Open a saved Lesson Map directly from Home, without opening a lesson or connecting Voice.","Voice uses one opening step through the Live connection, skips unrelated history for new lessons, and prepares independent requests together."]},
@@ -3400,6 +3401,7 @@ function applyTheme() {
 }
 window.addEventListener("worldview-appearance", event => { state.theme=event.detail; if($("set-theme"))$("set-theme").value=event.detail; applyTheme(); });
 applyTheme();
+syncAppearanceVisibility();
 // if config.js supplies a key and none is saved yet, use it — skips the Settings prompt entirely
 if (!state.apiKey && typeof window.WORLDVIEW_API_KEY === "string" && window.WORLDVIEW_API_KEY) {
   state.apiKey = window.WORLDVIEW_API_KEY;
@@ -5369,10 +5371,18 @@ function toast(msg, ms = 3500) {
 }
 // if anything crashes, say so on screen instead of silently showing a dead page
 window.addEventListener("error", e => { try { toast("App error: " + e.message, 8000); } catch (x) {} });
+/* The appearance control is a Home control. Inside a lesson it only took room
+   from the conversation, so it does not follow the learner there. Read the
+   view that is actually active rather than trusting the last show() call: at
+   startup that call may not have happened yet. */
+function syncAppearanceVisibility() {
+  document.documentElement.classList.toggle("appearance-away", !document.getElementById("view-home")?.classList.contains("active"));
+}
 function show(view) {
   if (view !== "home") cancelHomeTopicCapture();
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
   $("view-" + view).classList.add("active");
+  syncAppearanceVisibility();
 }
 /* iOS can keep the old landscape layout viewport for a frame after a device
    rotates back to portrait. Full-screen conversation shells then paint at the
@@ -8333,9 +8343,45 @@ function normalizedHomeLearnerRuns(value) {
   }
   return [...runs.values()].sort((a,b) => b.updatedAt-a.updatedAt).slice(0,250);
 }
-function homeLearnerRuns() {
+/* Archiving or deleting a lesson is recorded beside the run list rather than
+   inside it: both writers rebuild that list field by field from live state and
+   would drop a flag they do not know about. Deleting removes the lesson from
+   this account’s Home; the saved conversation on the server is untouched, so
+   this is a removal from the library, not an erasure of the record. */
+const HOME_LEARNER_REMOVALS_PREFIX = "worldview-learner-run-removals-v1:";
+function homeLearnerRunRemovals() {
+  if (!cloudAccount?.id) return {};
+  try {
+    const value = JSON.parse(localStorage.getItem(HOME_LEARNER_REMOVALS_PREFIX + cloudAccount.id) || "{}");
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    const rows = {};
+    for (const [runId, row] of Object.entries(value)) {
+      if (!["archived", "deleted"].includes(row?.state)) continue;
+      rows[runId] = { state:row.state, at:Number(row.at) || 0 };
+    }
+    return rows;
+  } catch (_) { return {}; }
+}
+function setHomeLearnerRunRemoval(runId, state) {
+  if (!cloudAccount?.id || !runId) return false;
+  const rows = homeLearnerRunRemovals();
+  if (state) rows[runId] = { state, at:Date.now() };
+  else delete rows[runId];
+  try { localStorage.setItem(HOME_LEARNER_REMOVALS_PREFIX + cloudAccount.id, JSON.stringify(rows)); return true; }
+  catch (_) { return false; }
+}
+function archivedLearnerRuns() {
+  const removals = homeLearnerRunRemovals();
+  return homeLearnerRuns({ all:true }).filter(run => removals[run.runId]?.state === "archived");
+}
+function homeLearnerRuns({ all = false } = {}) {
   if (!homeLearnerAccountAllowed() || stateAccountId !== cloudAccount.id) return [];
-  try { return normalizedHomeLearnerRuns(JSON.parse(localStorage.getItem(HOME_LEARNER_RUNS_PREFIX+cloudAccount.id) || "[]")); }
+  try {
+    const runs = normalizedHomeLearnerRuns(JSON.parse(localStorage.getItem(HOME_LEARNER_RUNS_PREFIX+cloudAccount.id) || "[]"));
+    if (all) return runs;
+    const removals = homeLearnerRunRemovals();
+    return runs.filter(run => !removals[run.runId]);
+  }
   catch (_) { return []; }
 }
 function renderHomeLearnerRuns(carousel) {
@@ -8408,7 +8454,7 @@ async function openHomeLearnerRun({topic = "",runId = "",view = "",entryMode = "
   const startingOwner = cloudAccount?.id || "", startingEpoch = accountAuthEpoch;
   homeLearnerLaunchBusy = true;
   try {
-    entryMode = ["text","voice","car"].includes(entryMode) ? entryMode : "";
+    entryMode = ["text","voice"].includes(entryMode) ? entryMode : "";
     if (view !== "map" && !entryMode) {
       entryMode = await window.WorldviewLessonEntry.choose({
         title:runId ? homeLearnerRuns().find(row => row.runId === runId)?.title || "Your saved lesson" : topic,
@@ -8424,7 +8470,7 @@ async function openHomeLearnerRun({topic = "",runId = "",view = "",entryMode = "
       if (!runId && topic && backendEntitled && backendEntitlementRecord?.access_tier === "paid") { openDirection(topic,entryMode === "text" ? "text" : "voice");return true; }
       toast("Sign in with your approved tester account to begin. If you have just joined, your tester access needs to be enabled.",6500);return false;
     }
-    if (["voice","car"].includes(entryMode)) {
+    if (entryMode === "voice") {
       if (!await window.WorldviewLessonEntry.prepareMicrophone()) return false;
       if (startingEpoch !== accountAuthEpoch || cloudAccount?.id !== startingOwner) return false;
       // Permission can return while a same-account refresh is checking access.
@@ -8439,7 +8485,7 @@ async function openHomeLearnerRun({topic = "",runId = "",view = "",entryMode = "
     const owner = cloudAccount.id;
     const packet = {ownerUserId:owner,topic,...(runId ? {runId} : {}),...(runId && view === "map" ? {view:"map"} : {}),
       ...(voiceDiscovery ? {voiceDiscovery:true} : {}),
-      ...(["voice","car"].includes(entryMode) ? {microphonePreparedAt:Date.now()} : {}),
+      ...(entryMode === "voice" ? {microphonePreparedAt:Date.now()} : {}),
       ...(entryMode ? {entryMode,entryConfirmedAt:Date.now()} : {})};
     const serialized = JSON.stringify(packet);
     sessionStorage.setItem(HOME_LEARNER_LAUNCH_KEY,serialized);
@@ -11579,14 +11625,17 @@ function renderLibraryBrowser(lesson) {
   }
   if (categoryOrganizerState.section !== "explore") return;
   const lessons = archivedLessons();
+  const runs = archivedLearnerRuns();
   if (!categoryOrganizerState.archive) {
-    host.innerHTML = '<button class="archive-drawer" id="library-archive" type="button"><span aria-hidden="true">▤</span><span><strong>Archive</strong><small>Saved, just out of the way</small></span><b>'+lessons.length+'</b><span aria-hidden="true">›</span></button>';
+    host.innerHTML = '<button class="archive-drawer" id="library-archive" type="button"><span aria-hidden="true">▤</span><span><strong>Archive</strong><small>Saved, just out of the way</small></span><b>'+(lessons.length+runs.length)+'</b><span aria-hidden="true">›</span></button>';
     $("library-archive").onclick = openLessonArchive;return;
   }
-  host.innerHTML = '<button id="library-back" type="button">← Your library</button><p class="archive-intro">Your progress and folders stay with every lesson.</p>' + (lessons.length ? '<div class="archive-carousel" aria-label="Archived lessons">'+lessons.map(item => '<article class="archive-lesson"><span class="organizer-kicker">Archived</span><h3>'+esc(item.title || item.topic || 'Lesson')+'</h3><button type="button" data-archive-open="'+attr(item.id)+'">Open lesson</button><button type="button" data-archive-restore="'+attr(item.id)+'">Move back to lessons</button></article>').join('')+'</div>' : '<div class="archive-empty"><span aria-hidden="true">▤</span><h3>Room for later</h3><p>Archive a lesson from its options when you want it off your active shelf. You can bring it back anytime.</p></div>');
+  host.innerHTML = '<button id="library-back" type="button">← Your library</button><p class="archive-intro">Your progress and folders stay with every lesson.</p>' + (lessons.length + runs.length ? '<div class="archive-carousel" aria-label="Archived lessons">'+lessons.map(item => '<article class="archive-lesson"><span class="organizer-kicker">Archived</span><h3>'+esc(item.title || item.topic || 'Lesson')+'</h3><button type="button" data-archive-open="'+attr(item.id)+'">Open lesson</button><button type="button" data-archive-restore="'+attr(item.id)+'">Move back to lessons</button></article>').join('')+runs.map(item => '<article class="archive-lesson"><span class="organizer-kicker">Archived</span><h3>'+esc(item.title)+'</h3><button type="button" data-archive-run-open="'+attr(item.runId)+'">Open lesson</button><button type="button" data-archive-run-restore="'+attr(item.runId)+'">Move back to lessons</button></article>').join('')+'</div>' : '<div class="archive-empty"><span aria-hidden="true">▤</span><h3>Room for later</h3><p>Archive a lesson from its options when you want it off your active shelf. You can bring it back anytime.</p></div>');
   $("library-back").onclick = () => {categoryOrganizerState.archive=false;renderCategoryOrganizer();$("library-archive").focus();};
   host.querySelectorAll('[data-archive-open]').forEach(button => {button.onclick=()=>{const id=button.dataset.archiveOpen;closeCategoryOrganizer();openChat(id);};});
   host.querySelectorAll('[data-archive-restore]').forEach(button => {button.onclick=()=>{if(setLessonArchived(button.dataset.archiveRestore,false)){renderCategoryOrganizer();$("library-back").focus();}};});
+  host.querySelectorAll('[data-archive-run-open]').forEach(button => {button.onclick=()=>{const runId=button.dataset.archiveRunOpen;setHomeLearnerRunRemoval(runId,"");closeCategoryOrganizer();void openHomeLearnerRun({runId});};});
+  host.querySelectorAll('[data-archive-run-restore]').forEach(button => {button.onclick=()=>{if(setHomeLearnerRunRemoval(button.dataset.archiveRunRestore,"")){renderCategoryOrganizer();renderHome();$("library-back").focus();}};});
 }
 function customCategoryCount(categoryId,section) {
   return state.lessons.filter(lesson => {

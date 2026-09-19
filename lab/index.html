@@ -17,7 +17,7 @@
   try {
     const packet = JSON.parse(sessionStorage.getItem("worldview-learner-launch-v1") || "null");
     if (packet?.ownerUserId) {
-      if (["text", "voice", "car"].includes(packet.entryMode) && Number(packet.entryConfirmedAt) > Date.now() - 900000 && Number(packet.entryConfirmedAt) <= Date.now()) root.classList.add("learner-opening-selected");
+      if (["text", "voice"].includes(packet.entryMode) && Number(packet.entryConfirmedAt) > Date.now() - 900000 && Number(packet.entryConfirmedAt) <= Date.now()) root.classList.add("learner-opening-selected");
       if (packet.runId && /^[A-Za-z0-9-]{8,128}$/.test(String(packet.runId))) kind = "saved";
       else if (!packet.runId && (String(packet.topic || "").trim() || packet.voiceDiscovery === true)) kind = "new";
       else kind = "unknown";
@@ -26,15 +26,14 @@
   root.dataset.learnerEntryKind = ["saved", "new"].includes(kind) ? kind : "unknown";
 })();
 </script>
-<link rel="stylesheet" href="./lab.css?v=2.1.58">
+<link rel="stylesheet" href="./lab.css?v=2.1.59">
 <link rel="stylesheet" href="./live-conversation.css?v=2.1.58">
-<link rel="stylesheet" href="./conversation-tools.css?v=2.1.38">
+<link rel="stylesheet" href="./conversation-tools.css?v=2.1.59">
 <link rel="stylesheet" href="../lesson-entry-popup.css?v=2.1.38">
-<link rel="stylesheet" href="../appearance.css?v=2.1.58">
+<link rel="stylesheet" href="../appearance.css?v=2.1.59">
 <script src="../appearance.js?v=2.1.58"></script>
 </head>
 <body>
-<button id="theme-toggle" type="button" aria-label="Toggle appearance"><svg id="theme-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"></svg></button>
 <aside id="lab-connection-status" class="lab-connection-status" role="status" hidden>
   <span>Connection paused. Your lesson is kept.</span>
   <button id="lab-connection-retry" type="button" class="button button-quiet">Reconnect</button>
@@ -57,20 +56,19 @@
 <section id="learner-entry-shell" class="mock-learner-shell" hidden aria-label="Worldview lesson conversation">
   <header class="mock-learner-header">
     <a class="mock-learner-back" href="../index.html" aria-label="Return to Home">×</a>
+    <button id="learner-entry-remove" class="learner-entry-remove" type="button" aria-label="Delete or archive this lesson" title="Delete or archive this lesson" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 7V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M10 11v6M14 11v6"/></svg>
+    </button>
     <h2>Worldview</h2>
   </header>
   <main class="learner-entry-conversation">
     <div id="learner-entry-opening" role="status" aria-live="polite"><span class="entry-loading-mark" aria-hidden="true"></span><h3>Opening your lesson</h3><p id="learner-entry-live-status" hidden></p><p data-entry-kind="saved">Restoring your place. You can return Home at any time.</p><p data-entry-kind="new">You can return Home at any time.</p></div>
     <div class="learner-entry-choice" aria-labelledby="learner-entry-title">
-      <p id="learner-entry-topic" class="learner-entry-topic" hidden></p>
       <h3 id="learner-entry-title">How would you like to chat?</h3>
       <p>You can switch at any time.</p>
       <div class="learner-entry-modes" role="group" aria-label="Conversation mode">
         <button id="learner-entry-text" type="button" aria-pressed="false"><strong>Text</strong><span>Read and type</span></button>
-        <div id="learner-entry-voice-group" class="learner-entry-voice-group" role="group" aria-label="Voice options">
-          <button id="learner-entry-voice" type="button" aria-pressed="false"><strong>Voice</strong><span>Listen and talk</span></button>
-          <button id="learner-entry-car" type="button" aria-pressed="false"><strong>Car</strong><span>Larger voice controls</span></button>
-        </div>
+        <button id="learner-entry-voice" type="button" aria-pressed="false"><strong>Voice</strong><span>Listen and talk</span></button>
       </div>
       <div id="learner-entry-path" class="learner-entry-modes learner-entry-path" role="group" aria-label="Lesson path" hidden>
         <button type="button" aria-pressed="true"><strong>Continue</strong><span>Pick up where you left off</span></button>
@@ -79,6 +77,16 @@
       <p id="learner-entry-status" role="status" aria-live="polite">Connecting…</p>
     </div>
   </main>
+  <div id="learner-entry-remove-sheet" class="learner-entry-remove-sheet" role="dialog" aria-modal="true" aria-labelledby="learner-entry-remove-title" hidden>
+    <div class="learner-entry-remove-card">
+      <h3 id="learner-entry-remove-title">Remove this lesson?</h3>
+      <p id="learner-entry-remove-copy">Archiving keeps the lesson and its progress, out of the way on Home. Deleting removes it from your lessons on this account.</p>
+      <button id="learner-entry-archive-confirm" type="button">Archive it</button>
+      <button id="learner-entry-delete-confirm" type="button" class="is-destructive">Delete it</button>
+      <button id="learner-entry-remove-cancel" type="button" class="is-quiet">Keep it</button>
+      <p id="learner-entry-remove-status" role="status" aria-live="polite"></p>
+    </div>
+  </div>
   <footer class="mock-learner-composer">
     <div class="learner-entry-actions">
       <button id="learner-entry-continue" class="mock-learner-send" type="button" disabled>Start lesson</button>
@@ -174,18 +182,12 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
         <span id="mock-learner-density-status" class="sr-only" role="status" aria-live="polite"></span>
         <div class="mock-learner-header-actions">
           <button id="mock-learner-mode" class="mock-learner-tool" type="button" aria-label="Switch to Voice" title="Switch conversation mode">Voice</button>
-          <button id="mock-learner-car" class="mock-learner-tool mock-car-entry" type="button" aria-label="Enter Car mode" title="Low-distraction Voice">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16h14l-1.2-5.1a2 2 0 0 0-1.9-1.5H8.1a2 2 0 0 0-1.9 1.5L5 16Z"/><path d="M7.5 16v2M16.5 16v2M3.8 13.5h2.1M18.1 13.5h2.1"/><circle cx="8" cy="14.2" r=".7"/><circle cx="16" cy="14.2" r=".7"/></svg>
+          <button id="mock-learner-copy" class="mock-learner-tool mock-learner-copy" type="button" aria-label="Copy entire conversation transcript" title="Copy the entire conversation">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>
           </button>
         </div>
+        <span id="mock-learner-copy-status" class="mock-learner-copy-status" role="status" aria-live="polite"></span>
       </header>
-      <div class="mock-learner-reading-tools">
-        <span id="mock-learner-copy-status" role="status" aria-live="polite"></span>
-        <button id="mock-learner-copy" class="mock-learner-copy" type="button" aria-label="Copy entire conversation transcript" title="Copy the entire conversation">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>
-          Copy transcript
-        </button>
-      </div>
       <div id="mock-learner-progress" class="mock-learner-progress" hidden aria-label="Lesson chapters"></div>
       <main class="mock-learner-conversation">
         <div id="mock-voice-cue" class="mock-voice-cue" role="status" hidden><span class="mock-voice-dot" aria-hidden="true"></span><span id="mock-voice-cue-text">Listening</span><span class="mock-voice-meter" aria-hidden="true"><i></i></span></div>
@@ -221,40 +223,6 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
         </div>
       </section>
     </section>
-    <section id="mock-car-surface" class="mock-car-surface" hidden role="dialog" aria-modal="true" aria-label="Low-distraction voice controls">
-      <div class="mock-car-toolbar" role="group" aria-label="Conversation display">
-        <button id="mock-car-live-exit" class="mock-car-toolbar-button" type="button" hidden>Exit Car</button>
-        <button id="mock-car-text" class="mock-car-toolbar-button" type="button" aria-label="Leave Car mode and switch to Text"><span aria-hidden="true">Aa</span></button>
-        <div id="mock-car-chapters" class="mock-car-chapters" hidden aria-label="Lesson chapters"></div>
-        <button id="mock-car-map" class="button button-quiet" type="button" aria-expanded="false" aria-controls="pipeline-extraction-map-dialog" hidden>Map</button>
-        <button id="mock-car-speaker" class="mock-car-toolbar-button mock-car-speaker" type="button" aria-label="Choose Phone speaker or Phone receiver" aria-expanded="false" aria-controls="mock-car-output-choices" aria-describedby="mock-car-speaker-status">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path class="speaker-waves" d="M15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/><path class="speaker-muted" d="m15 9 6 6m0-6-6 6"/></svg>
-          <span data-speaker-label aria-hidden="true">Speaker</span>
-        </button>
-      </div>
-      <div id="mock-car-output-choices" class="mock-car-output-choices" role="group" aria-label="Phone audio output" hidden>
-        <button id="mock-car-output-speaker" class="button button-quiet" type="button" aria-pressed="false">Phone speaker</button>
-        <button id="mock-car-output-receiver" class="button button-quiet" type="button" aria-pressed="false">Phone receiver</button>
-        <p id="mock-car-output-note" role="status" aria-live="polite">Choose where you want to hear the reply.</p>
-      </div>
-      <div id="mock-car-live" hidden></div>
-      <p id="mock-car-status" class="mock-car-status" role="status" aria-live="polite">Hold, wait for the tone, then talk</p>
-      <p id="mock-car-speaker-status" class="mock-car-speaker-status" role="status" aria-live="polite" hidden></p>
-      <div class="mock-recording-row mock-car-recording-row">
-        <button id="mock-car-ptt" class="mock-car-ptt" type="button" aria-label="Hold and wait for the ready tone to talk">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M8.5 21h7"/></svg>
-          <span aria-hidden="true">Hold to talk</span>
-        </button>
-        <button id="mock-car-recording-toggle" class="mock-recording-toggle" type="button" role="switch" aria-label="Tap recording" aria-checked="false" aria-describedby="mock-car-status"><span class="mock-recording-lever" aria-hidden="true"></span><span data-recording-label>Tap to record</span></button>
-      </div>
-      <div class="mock-car-recovery-actions">
-        <button id="mock-car-replay" class="button button-quiet mock-car-replay" type="button" aria-label="Repeat the last reply" hidden>Repeat</button>
-        <button id="mock-car-stop-audio" class="button button-quiet" type="button" hidden>Stop audio</button>
-        <button id="mock-car-discard" class="button button-quiet" type="button" hidden>Discard recording</button>
-        <button id="mock-car-retry" class="button button-quiet mock-car-retry" type="button" hidden>Try again</button>
-      </div>
-      <p class="mock-car-safety">Slide away to discard. Keep holding and slide back to restart.<br>Set this mode before driving. Keep your attention on the road.</p>
-    </section>
     <div class="pipeline-run-browser" aria-label="Saved lesson runs">
       <label class="sr-only" for="pipeline-run-select">Selected lesson run</label>
       <select id="pipeline-run-select" aria-label="Selected lesson run"><option value="">New lesson run</option></select>
@@ -284,9 +252,6 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
             <button id="clarification-mode-toggle" class="clarification-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3.5 19c.9-3.3 3-5 5.5-5s4.6 1.7 5.5 5M16 8.5c1.8.5 3 2.1 3 4s-1.2 3.5-3 4"/><path d="M18.5 6c2.4 1.4 3.8 3.8 3.8 6.5S20.9 17.6 18.5 19"/></svg>
             </button>
-            <button id="clarification-car-mode" class="mock-car-entry" type="button" hidden aria-label="Enter Car mode" aria-pressed="false" title="Low-distraction Voice">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16h14l-1.2-5.1a2 2 0 0 0-1.9-1.5H8.1a2 2 0 0 0-1.9 1.5L5 16Z"/><path d="M7.5 16v2M16.5 16v2M3.8 13.5h2.1M18.1 13.5h2.1"/><circle cx="8" cy="14.2" r=".7"/><circle cx="16" cy="14.2" r=".7"/></svg>
-            </button>
             <button id="clarification-focus-toggle" class="clarification-focus-toggle" type="button" aria-pressed="false">Full screen</button>
           </div>
         </div>
@@ -307,11 +272,10 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
           <div id="clarification-mode-step" class="clarification-mode-step" hidden>
             <button id="clarification-mode-back" class="clarification-cancel" type="button">Back</button>
             <p class="eyebrow">How would you like to talk?</p>
-            <h3>Text, Voice, or Car?</h3>
+            <h3>Text or Voice?</h3>
             <p>Voice opens the conversation and asks for microphone access immediately.</p>
           <div class="clarification-mode-grid">
             <button id="clarification-voice" class="clarification-mode" type="button"><strong>Voice</strong><span>Open the chat, allow the mic, then hold and begin after the tone.</span></button>
-            <button id="clarification-car" class="clarification-mode" type="button"><strong>Car</strong><span>Listen and reply with larger voice controls.</span></button>
             <button id="clarification-text" class="clarification-mode" type="button"><strong>Text</strong><span>Have the same conversation by typing.</span></button>
           </div>
           </div>
@@ -482,7 +446,7 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
       </div>
       <section id="pipeline-extraction-stage" class="lab-card pipeline-extraction-stage" hidden>
         <div class="extraction-stage-head">
-          <div class="extraction-stage-title"><div class="conversation-mode-actions"><button id="pipeline-extraction-mode-toggle" class="extraction-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">Voice</button><button id="pipeline-extraction-car-mode" class="mock-car-entry" type="button" hidden aria-label="Enter Car mode" aria-pressed="false" title="Low-distraction Voice"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16h14l-1.2-5.1a2 2 0 0 0-1.9-1.5H8.1a2 2 0 0 0-1.9 1.5L5 16Z"/><path d="M7.5 16v2M16.5 16v2M3.8 13.5h2.1M18.1 13.5h2.1"/><circle cx="8" cy="14.2" r=".7"/><circle cx="16" cy="14.2" r=".7"/></svg></button></div><div><p class="eyebrow">Feynman overview · Extraction phase</p><h3>Worldview</h3></div></div>
+          <div class="extraction-stage-title"><div class="conversation-mode-actions"><button id="pipeline-extraction-mode-toggle" class="extraction-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">Voice</button></div><div><p class="eyebrow">Feynman overview · Extraction phase</p><h3>Worldview</h3></div></div>
           <div class="extraction-stage-actions"><button id="pipeline-extraction-retry" class="button button-quiet" type="button" title="Start a fresh test conversation. Save an attempt later if you want Lesson to use it.">Retry Extraction</button><button id="pipeline-extraction-demo-map-ready" class="extraction-demo-toggle" type="button" aria-pressed="false">Demo: map ready</button><span class="extraction-authority">not progress</span></div>
         </div>
         <button id="pipeline-extraction-progress" class="extraction-progress" type="button" aria-controls="pipeline-extraction-map-dialog" aria-expanded="false" aria-haspopup="dialog"><span class="extraction-progress-dot" aria-hidden="true"></span><span class="extraction-progress-copy" aria-live="polite"><strong id="pipeline-extraction-progress-title">Preparing your Lesson Map</strong><small id="pipeline-extraction-progress-detail">The route will keep generating in the background while you explain what you know.</small></span><span id="pipeline-extraction-progress-action" class="extraction-progress-action">View status</span></button>
@@ -508,7 +472,7 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
         <div class="inline-actions"><button id="pipeline-extraction-open-map" class="button button-quiet" type="button">Review Lesson Map</button></div>
       </section>
       <section id="pipeline-lesson-stage" class="lab-card pipeline-extraction-stage pipeline-lesson-stage" hidden>
-        <div class="pipeline-card-head lesson-stage-head"><div class="lesson-stage-title"><div class="conversation-mode-actions"><button id="pipeline-lesson-mode-toggle" class="extraction-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">Voice</button><button id="pipeline-lesson-car-mode" class="mock-car-entry" type="button" hidden aria-label="Enter Car mode" aria-pressed="false" title="Low-distraction Voice"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16h14l-1.2-5.1a2 2 0 0 0-1.9-1.5H8.1a2 2 0 0 0-1.9 1.5L5 16Z"/><path d="M7.5 16v2M16.5 16v2M3.8 13.5h2.1M18.1 13.5h2.1"/><circle cx="8" cy="14.2" r=".7"/><circle cx="16" cy="14.2" r=".7"/></svg></button></div><div><p class="eyebrow">Guided conversation · Lesson phase</p><h3>Worldview</h3></div></div><span class="extraction-authority">Lab only</span></div>
+        <div class="pipeline-card-head lesson-stage-head"><div class="lesson-stage-title"><div class="conversation-mode-actions"><button id="pipeline-lesson-mode-toggle" class="extraction-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">Voice</button></div><div><p class="eyebrow">Guided conversation · Lesson phase</p><h3>Worldview</h3></div></div><span class="extraction-authority">Lab only</span></div>
         <p class="pipeline-lesson-intro">Choose a completed saved roadmap, then reason through one learning outcome at a time. This text experiment is question-led; it does not create progress or mastery.</p>
         <p id="pipeline-lesson-output" class="form-message" role="status"></p>
         <section id="pipeline-lesson-conversation" class="lesson-conversation" hidden>
@@ -525,7 +489,7 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
         <div class="inline-actions"><button id="pipeline-lesson-start" class="button button-primary" type="button">To Start</button><button id="pipeline-lesson-open-map" class="button button-quiet" type="button">Choose roadmap</button><button id="pipeline-lesson-open-extraction" class="button button-quiet" type="button">Review Extraction input</button></div>
       </section>
       <section id="pipeline-quiz-stage" class="lab-card pipeline-extraction-stage pipeline-quiz-stage" hidden>
-        <div class="pipeline-card-head quiz-stage-head"><div class="quiz-stage-title lesson-stage-title"><div class="conversation-mode-actions"><button id="pipeline-quiz-mode-toggle" class="extraction-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">Voice</button><button id="pipeline-quiz-car-mode" class="mock-car-entry" type="button" hidden aria-label="Enter Car mode" aria-pressed="false" title="Low-distraction Voice"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16h14l-1.2-5.1a2 2 0 0 0-1.9-1.5H8.1a2 2 0 0 0-1.9 1.5L5 16Z"/><path d="M7.5 16v2M16.5 16v2M3.8 13.5h2.1M18.1 13.5h2.1"/><circle cx="8" cy="14.2" r=".7"/><circle cx="16" cy="14.2" r=".7"/></svg></button></div><div><p class="eyebrow">Final understanding · Quiz phase</p><h3>Worldview</h3></div></div><span class="extraction-authority">teach-back</span></div>
+        <div class="pipeline-card-head quiz-stage-head"><div class="quiz-stage-title lesson-stage-title"><div class="conversation-mode-actions"><button id="pipeline-quiz-mode-toggle" class="extraction-mode-toggle" type="button" hidden aria-label="Switch to Voice" title="Switch to Voice">Voice</button></div><div><p class="eyebrow">Final understanding · Quiz phase</p><h3>Worldview</h3></div></div><span class="extraction-authority">teach-back</span></div>
         <p class="pipeline-lesson-intro">Explain the lesson in your own words. Worldview may ask up to two neutral follow-ups, using the frozen Lesson Map as the checklist.</p>
         <p id="pipeline-quiz-output" class="form-message" role="status"></p>
         <section id="pipeline-quiz-conversation" class="lesson-conversation quiz-conversation">
@@ -785,14 +749,14 @@ Use the saved briefing as grounding. Search only for a new, recent, or explicitl
 
 </script>
 <script src="../models.js?v=2.1.37"></script>
-<script src="./lesson-cost.js?v=2.1.37"></script>
+<script src="./lesson-cost.js?v=2.1.59"></script>
 <script src="./gemini-live.js?v=2.1.58"></script>
 <script src="./live-audio-output.js?v=2.1.58"></script>
-<script src="./live-conversation.js?v=2.1.58"></script>
+<script src="./live-conversation.js?v=2.1.59"></script>
 <script src="./conversation-tools.js?v=2.1.38"></script>
 <script src="../lesson-entry-popup.js?v=2.1.38"></script>
 <script src="../saved-map.js?v=2.1.58"></script>
-<script src="./lab.js?v=2.1.58" defer></script>
+<script src="./lab.js?v=2.1.59" defer></script>
 <script src="./conversation-clock.js?v=2.1.12" defer></script>
 </body>
 </html>

@@ -25,21 +25,18 @@
 #theme-toggle svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
 #theme-toggle::before { position:absolute; inset:-3px; border-radius:50%; content:""; }
 #theme-toggle:focus-visible { outline:3px solid var(--wv-accent); outline-offset:3px; }
+/* The appearance control is a Home control. Lab is a lesson from its first
+   frame, so the button is not placed there at all, and Home hides it as soon
+   as the learner leaves Home. */
+:root.appearance-away #theme-toggle { display:none; }
 #models-button { position:fixed; left:10px; right:auto; bottom:calc(env(safe-area-inset-bottom) + 68px); min-height:44px; }
 .rail-settings { position:fixed; left:10px; bottom:calc(env(safe-area-inset-bottom) + 12px); min-height:44px; }
-.learner-entry-actions { padding-right:52px; }
-.mock-learner-shell .mock-learner-text-controls { padding-right:52px; }
-.mock-learner-voice-controls, .mock-learner-utilities { padding-right:46px; }
 .mock-learner-send { color:#241f1a; }
 .mock-learner-header h2 { color:var(--wv-text); }
 .mock-learner-voice-controls p, .mock-learner-source-panel p,
 .learner-route #lab-gate-message { color:var(--wv-muted); }
-.mock-car-surface .mock-recording-toggle { color:var(--wv-text); background:var(--wv-card); }
-#mock-car-text, #mock-car-speaker:not(.is-active) { color:var(--wv-text); }
-#chat-input-row { padding-right:52px; }
 #settings-save, #version-close, #models-close { max-width:calc(100% - 48px); }
 :root[data-appearance="light"] .mock-chapter-menu > summary { color:var(--wv-muted); }
-.mock-car-surface { padding-bottom:calc(env(safe-area-inset-bottom) + 72px)!important; }
 #intro-replay { display:none!important; }
 #set-speechlanguage, #set-speechlanguage + .hint { display:none; }
 #settings [hidden] { display:none!important; }
