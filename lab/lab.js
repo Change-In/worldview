@@ -1028,6 +1028,8 @@ const labState = {
   mapAutoRetryStarting: new Set(),
   mapAutoRetryHandled: new Set(),
   researchAutoRetries: new Map(),
+  lessonMapAutoStarts: new Map(),
+  lessonMapAutoStarting: "",
   learnerAutoRecovery: new Map(),
   extractionDetailRequests: new Set(),
   lessonDetailRequests: new Set(),
@@ -1655,6 +1657,8 @@ function resetWorkspaceContents() {
   labState.mapAutoRetryStarting = new Set();
   labState.mapAutoRetryHandled = new Set();
   labState.researchAutoRetries = new Map();
+  labState.lessonMapAutoStarts = new Map();
+  labState.lessonMapAutoStarting = "";
   labState.learnerAutoRecovery = new Map();
   labState.extractionDetailRequests = new Set();
   labState.lessonDetailRequests = new Set();
@@ -12618,18 +12622,28 @@ function renderPipelineExtractionMapDialog(artifact = selectedPipelineArtifact()
   dialog.hidden = !labState.extraction.mapDialogOpen;
   if (!labState.extraction.mapDialogOpen) return;
   const mapState = pipelineExtractionMapViewState(artifact);
-  status.textContent = mapState.message;
+  const learnerView = typeof LAB_LEARNER !== "undefined" && LAB_LEARNER;
+  /* A learner can act on exactly one thing: asking for the route again. While
+     an automatic attempt is still available the app is already doing that, so
+     the alert stays off and the dialog remains just the map. */
+  const learnerAlert = learnerView && ["deferred", "needs-attention"].includes(mapState.state)
+    && !lessonMapAutoRecoveryActive(artifact);
+  dialog.dataset.learnerAlert = learnerAlert ? "true" : "";
+  status.textContent = learnerAlert
+    ? "This lesson's route did not finish building, so the tutor has no researched material to teach from yet."
+    : mapState.message;
   if (retry) {
     const retryable = Boolean(artifact && !labState.preview && !labState.extraction.mapDialogSavedOnly
       && (["starting", "needs-attention", "deferred"].includes(mapState.state) || mapState.supportNeedsAttention));
-    retry.hidden = !retryable;
+    retry.hidden = !retryable || (learnerView && !learnerAlert);
     const allowanceBlocked = mapState.diagnostic?.errorType === "allowance_exhausted";
     retry.disabled = labState.extraction.mapRetryBusy || labState.busy || labState.createStarting;
     const researchOnly = mapState.selection?.meta?.routeReady && !mapState.selection.meta.researchComplete;
     retry.textContent = allowanceBlocked ? "Retry after allowance renewal"
       : labState.extraction.mapRetryBusy ? "Retrying…"
-        : mapState.state === "deferred" && !mapState.job ? "Generate Lesson Map"
-          : researchOnly ? "Retry missing research" : "Retry Lesson Map";
+        : learnerAlert ? "Build the lesson route"
+          : mapState.state === "deferred" && !mapState.job ? "Generate Lesson Map"
+            : researchOnly ? "Retry missing research" : "Retry Lesson Map";
   }
   const attemptHistory = (typeof LAB_LEARNER === "undefined" || !LAB_LEARNER) && typeof pipelineMapAttemptHistory === "function"
     ? pipelineMapAttemptHistory(artifact, mapState.job) : [];
@@ -15148,6 +15162,53 @@ function liveStudyInput(artifact,selection,transcript){
  const current=labState.clarification,runId=artifact?.runId||current.runId;
  return {runId,stage,prompts:{clarification:q('clarification-prompt')?.value||CLARIFICATION_PROMPT,extraction:EXTRACTION_PROMPT+"\n\nWhen the researched map is ready, continue with this policy: "+MAP_AWARE_EXTRACTION_PROMPT+"\n\n"+EXTRACTION_PACING_POLICY,lesson:lessonTutorPrompt(),quiz:QUIZ_INTERVIEWER_PROMPT,evaluator:lessonEvaluatorPrompt(),assessor:QUIZ_ASSESSOR_PROMPT},brain:{provider:mockStageConfig('brain').provider,model:mockStageConfig('brain').model},context:{research:liveResearchState(selection,stage),topic:artifact?.topic||current.topic,scope:artifact?.scopeSummary||'',outcomes:outcomes.map(o=>({...o,sourceLinks:lessonSourceLinks(o.verifiedSupport)})),map:usable?{jobId:selection.job.id,recordId:selection.recordKey,fingerprint:selection.fingerprint}:null,sourceClarificationFingerprint:artifact?fingerprint(pipelineExtractionPacket(artifact)):'',recentConversation:transcript.slice(-20),mockRunSettings:artifact?.mockRunSettings||{runConfig:sanitizedMockRunConfig(labState.mockRunActiveConfig||labState.mockRunConfig),clarificationBoundaries:labState.mockBoundaryActive||null}}};
 }
+/* The map is started from the Live phase rather than from a Lab shortcut, so
+   the learner has no other way to ask for it. Starting it only on the phase
+   change meant one lost attempt was final: a reload restores the run with the
+   map marked deferred, which is deliberately excluded from automatic retry,
+   and the manual control is not on the learner route. This runs on every study
+   application instead, bounded per run, and only while the lesson is at the
+   phase that needs the map. It cannot move the stage or open a second
+   conversation: startMapThenExtraction sets the stage it is already in, and
+   the extraction opening returns immediately during a Live lesson. */
+const LESSON_MAP_AUTO_START_LIMIT = 3;
+function lessonMapAutoStartsLeft(runId) {
+  if (!runId) return 0;
+  return Math.max(0, LESSON_MAP_AUTO_START_LIMIT - (labState.lessonMapAutoStarts?.get?.(runId) || 0));
+}
+/* True while the application is going to ask for the route by itself. Past
+   Extraction it never will, because starting the map moves the stage back,
+   so the learner is the only one who can ask and must be able to see how. */
+function lessonMapAutoRecoveryActive(artifact) {
+  if (typeof LAB_LEARNER === "undefined" || !LAB_LEARNER) return false;
+  const runId = artifact?.runId || "";
+  if (!runId) return false;
+  if (labState.lessonMapAutoStarting === runId) return true;
+  const study = labState.liveJourney;
+  if (!study || study.runId !== runId || study.phase !== "extraction") return false;
+  return lessonMapAutoStartsLeft(runId) > 0;
+}
+
+function maybeAutoStartLessonMap(study) {
+  if (typeof LAB_LEARNER === "undefined" || !LAB_LEARNER) return false;
+  if (!study?.runId || study.phase !== "extraction" || !study.clarification) return false;
+  if (labState.preview || labState.learnerEntryPending || labState.createStarting) return false;
+  if (labState.lessonMapAutoStarting === study.runId) return false;
+  if (pipelineMapJobs(study.clarification).length || pendingCreateForComponent("lesson", study.runId)) return false;
+  if (!lessonMapAutoStartsLeft(study.runId)) return false;
+  const tracker = labState.lessonMapAutoStarts ||= new Map();
+  tracker.set(study.runId, (tracker.get(study.runId) || 0) + 1);
+  labState.lessonMapAutoStarting = study.runId;
+  void startMapThenExtraction()
+    .catch((error) => logFlow(`Automatic Lesson Map start failed: ${clip(error?.message, 120)}`, "map workflow"))
+    .finally(() => {
+      if (labState.lessonMapAutoStarting === study.runId) labState.lessonMapAutoStarting = "";
+      if (labState.extraction.mapDialogOpen) renderPipelineExtractionMapDialog();
+      renderMockLearnerShell();
+    });
+  return true;
+}
+
 async function applyLiveJourney(study){
  const active=selectedPipelineArtifact()?.runId||labState.clarification.runId;if(study.runId!==active)return;
  const changed=labState.liveJourney?.id!==study.id||labState.liveJourney?.phaseVersion!==study.phaseVersion;
@@ -15157,10 +15218,10 @@ async function applyLiveJourney(study){
  labState.clarification.liveResumeRunId=study.runId;
  if(study.clarification){labState.clarification.finalized=study.clarification;labState.clarification.finalizedStorage='server';labState.pipelineSelectedRunId=study.runId;rememberClarificationArtifact(study.clarification,'server');}
  if(study.extraction)rememberExtractionArtifact(study.extraction,'server');
+ maybeAutoStartLessonMap(study);
  if(changed){
   const target=study.phase==='complete'?'quiz':study.phase;
   if(target!==labState.pipelineStage)setPipelineStage(target);
-  if(target==='extraction'&&study.clarification&&!pipelineMapJobs(study.clarification).length&&!pendingCreateForComponent('lesson',study.runId))void startMapThenExtraction().catch(()=>setMessage('mock-learner-status','The map needs a retry. Your Live conversation is saved.'));
   if(study.complete){labState.quiz.status='complete';labState.quiz.completionMessage='Your final teach-back covered the researched lesson. This Live conversation and its evidence are saved.';}
   const saved=persistClarificationSettings();
   if(saved&&typeof LAB_LEARNER!=='undefined'&&LAB_LEARNER){

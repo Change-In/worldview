@@ -1998,12 +1998,14 @@ body.mock-learner-shell-active #panel-pipeline { inset:auto; top:var(--lab-viewp
 #learner-entry-remove-status:empty { display:none; }
 
 /* The Lesson Map a learner opens is the map: no instructions they already
-   followed, and no repair controls for work the application retries itself. */
+   followed, and no repair controls while the application is still retrying.
+   Once those attempts are spent the learner is the only one who can ask for
+   the route again, so the status and the control come back. */
 .learner-route .map-checkpoint-instruction,
 .learner-route .map-research-progress,
 .learner-route .map-size-advisory,
-.learner-route #pipeline-extraction-map-dialog-status,
-.learner-route #pipeline-extraction-map-dialog-retry,
+.learner-route #pipeline-extraction-map-dialog:not([data-learner-alert="true"]) #pipeline-extraction-map-dialog-status,
+.learner-route #pipeline-extraction-map-dialog:not([data-learner-alert="true"]) #pipeline-extraction-map-dialog-retry,
 .learner-route .map-roadmap-head { display:none; }
 .learner-route .map-goal h4 { font:600 17px/1.25 Georgia,serif; }
 .learner-route .extraction-map-dialog-head .eyebrow { display:none; }
