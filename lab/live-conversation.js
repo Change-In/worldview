@@ -134,7 +134,7 @@ window.WorldviewLiveConversation=(()=>{
   for(const f of fragments){
    if(isControlEcho(f.delta))continue;
    const native=!f.id.startsWith('import:'),last=groups.at(-1),at=fragmentTimes.get(f.id);
-   if(native&&previousNative&&last?.live&&last.role===f.role){last.text+=f.delta;if(at&&!last.at)last.at=at;}
+   if(native&&previousNative&&last?.live&&last.role===f.role){last.text=joinDelta(last.text,f.delta);if(at&&!last.at)last.at=at;}
    else groups.push({role:f.role,text:f.delta,live:true,at});
    previousNative=native;insert(f.seq);
   }
@@ -540,6 +540,18 @@ window.WorldviewLiveConversation=(()=>{
   s.closeTimer=setTimeout(()=>{if(session===s){cleanup(s);message(reason);maybeStart();}},8000);paint();
  }
  function cleanup(s){stopVoiceCost(s);clearTimeout(s.openingTimer);clearTimeout(s.speakingTimer);s.speaking=false;clearTimeout(s.disconnectTimer);clearTimeout(s.quietTimer);clearTimeout(s.slowTimer);clearTimeout(restoreTimer);s.closing=true;clearTimeout(s.startup);clearTimeout(s.closeTimer);clearInterval(s.checkTimer);s.mic?.getTracks().forEach(t=>t.stop());s.gemini?.dispose();detachOutput(s);s.channel?.close();s.peer?.close();if(session===s){session=null;output?.stop();captureAudioType('auto');ui.audio.pause?.();ui.audio.srcObject=null;ui.audio.hidden=true;ui.enableAudio.hidden=true;paint();}}
+ /* Two replies in one Live session arrive as adjacent native deltas and merge
+    into one turn, so a finished sentence runs straight into the next reply:
+    "...late nineties?Moving into our first chapter...". A delta that opens a
+    new sentence immediately after a finished one, with no whitespace at the
+    join, is a new reply rather than a continuation. Within a single streamed
+    reply the delta carries its own leading space, so that case is untouched. */
+ function joinDelta(text,delta){
+  if(!text)return delta;
+  if(/\s$/.test(text)||/^\s/.test(delta))return text+delta;
+  if(/[.!?\"\')\]]$/.test(text)&&/^[\"\'(\[]?[A-Z]/.test(delta))return text+String.fromCharCode(10,10)+delta;
+  return text+delta;
+ }
  function transcriptTurns(expectedLineage,currentHistory){
   if(!expectedLineage||scope!==expectedLineage||context?.lineage!==expectedLineage||!(study||exportStudyId))return null;
   if(!enabled&&Array.isArray(currentHistory))rememberTextHistory(currentHistory,true);
@@ -549,7 +561,7 @@ window.WorldviewLiveConversation=(()=>{
   insert(0);
   // Imports are complete turns; only adjacent native deltas share a turn.
   // Text typed between voice sessions stays at that exact fragment boundary.
-  for(const f of fragments){if(isControlEcho(f.delta))continue;const native=!f.id.startsWith('import:'),last=turns.at(-1);if(native&&previousNative&&last?.role===f.role)last.content+=f.delta;else turns.push({role:f.role,content:f.delta});previousNative=native;insert(f.seq);}
+  for(const f of fragments){if(isControlEcho(f.delta))continue;const native=!f.id.startsWith('import:'),last=turns.at(-1);if(native&&previousNative&&last?.role===f.role)last.content=joinDelta(last.content,f.delta);else turns.push({role:f.role,content:f.delta});previousNative=native;insert(f.seq);}
   for(const t of turns)t.content=cleanCaption(t.content);
   return turns.filter(t=>t.content);
  }

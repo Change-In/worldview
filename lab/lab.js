@@ -1785,6 +1785,8 @@ function persistWorkspace(successMessage = "") {
     if (successMessage) setMessage("workspace-message", successMessage, "ok");
     return true;
   } catch (error) {
+    const quota = /quota|exceeded|storage/i.test(String(error?.name || "") + " " + String(error?.message || ""));
+    labState.workspaceWriteFailure = { reason:clip(quota ? `Browser storage is full (${error?.name || "QuotaExceededError"}).` : `Browser storage refused the write: ${error?.message || error?.name || "unknown"}`, 200), at:new Date().toISOString() };
     setMessage("workspace-message", "This browser could not save more Lab material. Remove an older kept comparison or prompt version and try again.", "error");
     return false;
   }
@@ -6171,12 +6173,30 @@ async function runTextExperiment(kind, options = {}) {
       },
       samples,
     };
-    const pending = rememberPendingCreate(request);
-    if (!pending) throw new Error("The exact create request could not be saved safely, so it was not sent.");
+    /* The local record exists so an uncertain create can be retried without
+       sending twice. When it cannot be written - a full origin quota is the
+       usual reason, and a lesson's saved voice drafts fill one - the request
+       itself is still safe to send: it carries idempotencyKey run.runId, so the
+       server refuses a duplicate. Losing the record costs client-side retry.
+       Refusing to build the lesson's route costs the lesson. */
+    let pending = rememberPendingCreate(request);
+    let unsavedPending = false;
+    if (!pending) {
+      pending = sanitizePendingCreate({
+        component:request?.component, ownerUserId:labState.verifiedUserId,
+        idempotencyKey:request?.idempotencyKey, createdAt:now(), request,
+      });
+      if (!pending) throw new Error("The create request failed its own integrity check and was not sent.");
+      unsavedPending = true;
+      noteLessonCreateFailure(kind, "This device could not save the local retry record, so the request was sent without one. A full browser storage quota is the usual cause.");
+      logFlow(`Sent ${kind} create without a saved retry record; local storage refused the write.`, "local create safety gate");
+    }
     await submitPendingCreate(pending, messageId);
+    if (unsavedPending) forgetPendingCreate(pending.id);
   } catch (error) {
     setMessage(messageId, error.message || "The job request could not be prepared.", "error");
     logFlow(`Did not send durable ${kind} job: ${clip(error.message, 120)}`, "local create safety gate");
+    noteLessonCreateFailure(kind, error.message || "The job request could not be prepared.");
   } finally {
     setBusy(false);
     renderResults();
@@ -12653,6 +12673,9 @@ function lessonRouteReport(artifact = selectedPipelineArtifact()) {
   say("create failure at", labState.lessonCreateFailure?.at);
   const pendingLesson = pendingCreateForComponent("lesson", artifact.runId);
   say("pending create", pendingLesson ? `${pendingLesson.id} (attempts ${pendingLesson.attempts ?? "?"})` : "none");
+  say("pending create slots", `${labState.pendingCreates.length} of ${LAB_MAX_PENDING_CREATES} used`);
+  say("workspace loaded", labState.workspaceLoaded);
+  say("workspace write failure", clip(labState.workspaceWriteFailure?.reason, 200));
   say("pipeline mode", labState.pipelineMode);
   const mapRoute = mockStageConfig("map");
   say("map route", `${mapRoute?.provider} / ${mapRoute?.model} / ${mapRoute?.outputTokens} tokens / research ${mapRoute?.research}`);

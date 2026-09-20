@@ -2194,7 +2194,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.65 · Sep 20";
+const BUILD = "v2.1.66 · Sep 20";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2202,6 +2202,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.66",date:"Sep 20",changes:["Fixed the real reason the Lesson Map would not build: if this browser could not save a small local retry record — a full storage quota is the usual cause — the app silently refused to send the request at all. It now sends it anyway, because the request is already protected against duplicates on the server.","That last silent failure now records its reason too, so nothing about a route that will not build is invisible any more.","Fixed the transcript copy running two replies together with no break between them."]},
   {tag:"v2.1.65",date:"Sep 20",changes:["The Lesson Map now tells you why it could not be built, in the app, instead of only saying that it wasn't. Six different failures were being computed and thrown away, which is why the last four fixes argued about retrying instead of the cause.","The route report adds the create failure, any unconfirmed earlier request, the model route the map uses and which providers the server says are ready."]},
   {tag:"v2.1.64",date:"Sep 20",changes:["The Lesson Map has a Copy route report button. If a route does not build, tap it and send me the text — it says exactly what failed and costs nothing to produce.","New: pick the lesson language next to the Text/Voice control. The tutor now stays in that language even when speech recognition mislabels a word, which is what was switching lessons into Spanish.","Fixed: the map no longer says the route is being prepared while the conversation offers to retry it."]},
   {tag:"v2.1.63",date:"Sep 20",changes:["Fixed: one part of a lesson whose research failed was stopping the whole lesson from starting, even when the first chapter was researched and ready. The lesson now begins on what is verified, says plainly when it reaches a part that is not ready, and keeps retrying the rest.","The Lesson Map no longer shows developer wording when it has no route to draw yet."]},
