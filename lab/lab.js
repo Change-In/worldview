@@ -1029,6 +1029,7 @@ const labState = {
   mapAutoRetryHandled: new Set(),
   researchAutoRetries: new Map(),
   lessonCreateFailure: null,
+  researchRecordFailure: null,
   lessonMapAutoStarts: new Map(),
   lessonMapAutoStarting: "",
   learnerAutoRecovery: new Map(),
@@ -1659,6 +1660,7 @@ function resetWorkspaceContents() {
   labState.mapAutoRetryHandled = new Set();
   labState.researchAutoRetries = new Map();
   labState.lessonCreateFailure = null;
+  labState.researchRecordFailure = null;
   labState.lessonMapAutoStarts = new Map();
   labState.lessonMapAutoStarting = "";
   labState.learnerAutoRecovery = new Map();
@@ -6044,6 +6046,13 @@ async function retryPendingCreate(id) {
 /* Why the last Lesson Map create did not produce a job. Written at every point
    runTextExperiment gives up, so the callers can report the cause instead of
    the fact. */
+/* Research that had to be sent without a local retry record. Not a failure -
+   the request went - but the one fact that explains a run where some outcomes
+   research and others do not. */
+function noteResearchSendWithoutRecord(reason) {
+  labState.researchRecordFailure = { reason:clip(reason, 240), at:new Date().toISOString() };
+}
+
 function noteLessonCreateFailure(kind, reason) {
   if (kind !== "lesson") return false;
   labState.lessonCreateFailure = { reason:clip(reason, 240), at:new Date().toISOString() };
@@ -8854,13 +8863,33 @@ async function ensurePipelineMapChapterResearch(plannerJob, artifact = selectedP
         || selectedPipelineArtifact()?.runId !== artifact.runId) return false;
       const batch = requests.slice(index, index + 3);
       await Promise.all(batch.map(async ({ request, pending:existingPending }) => {
-        const pending = existingPending || rememberPendingCreate(request);
+        /* The local record buys client-side retry, not send safety: every
+           research request carries a deterministic idempotencyKey built from
+           the planner job, plan fingerprint, chapter and outcome, so the server
+           refuses a duplicate. rememberPendingCreate returns null both when the
+           storage write fails and when the four pending slots are full, and
+           research dispatches in batches of three - so a run with several
+           outcomes could silently drop the rest. Send either way. */
+        let pending = existingPending || rememberPendingCreate(request);
+        let unsavedPending = false;
         if (!pending) {
-          const key = pipelineMapResearchRequestKey(request, ownerUserId);
-          (labState.mapResearchCreateFailures ||= new Map()).set(key, "Research was not sent because this device could not preserve another request safely. Recover pending requests, then retry missing research.");
-          return;
+          pending = sanitizePendingCreate({
+            component:request?.component, ownerUserId,
+            idempotencyKey:request?.idempotencyKey, createdAt:now(), request,
+          });
+          if (!pending) {
+            const key = pipelineMapResearchRequestKey(request, ownerUserId);
+            (labState.mapResearchCreateFailures ||= new Map()).set(key, "This research request failed its own integrity check and was not sent.");
+            noteResearchSendWithoutRecord("A research request failed its own integrity check and was not sent.");
+            return;
+          }
+          unsavedPending = true;
+          noteResearchSendWithoutRecord(labState.pendingCreates.length >= LAB_MAX_PENDING_CREATES
+            ? `All ${LAB_MAX_PENDING_CREATES} local request slots were in use, so research was sent without a retry record.`
+            : "This device could not save a local retry record, so research was sent without one. A full browser storage quota is the usual cause.");
         }
         await submitPendingMapResearchCreate(pending);
+        if (unsavedPending) forgetPendingCreate(pending.id);
       }));
     }
     if (starting !== labState.mapResearchStarting || ownerUserId !== labState.verifiedUserId || ownerUserId !== labState.workspaceOwnerId) return false;
@@ -12676,6 +12705,10 @@ function lessonRouteReport(artifact = selectedPipelineArtifact()) {
   say("pending create slots", `${labState.pendingCreates.length} of ${LAB_MAX_PENDING_CREATES} used`);
   say("workspace loaded", labState.workspaceLoaded);
   say("workspace write failure", clip(labState.workspaceWriteFailure?.reason, 200));
+  say("research sent without record", clip(labState.researchRecordFailure?.reason, 240));
+  const researchFailureNotes = [...(labState.mapResearchCreateFailures?.values?.() || [])];
+  say("research create refusals", researchFailureNotes.length ? researchFailureNotes.map(note => clip(note, 120)).join(" | ") : "none");
+  say("research in flight", labState.mapResearchCreateFlights?.size ?? 0);
   say("pipeline mode", labState.pipelineMode);
   const mapRoute = mockStageConfig("map");
   say("map route", `${mapRoute?.provider} / ${mapRoute?.model} / ${mapRoute?.outputTokens} tokens / research ${mapRoute?.research}`);
