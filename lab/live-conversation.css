@@ -1,10 +1,7 @@
 .live-conversation{width:100%;text-align:left}.live-conversation[hidden]{display:none}.live-conversation p{font-size:12px;line-height:1.5;margin:6px 0}.live-conversation-actions{display:flex;gap:8px;flex-wrap:wrap}.live-conversation button{min-height:44px;padding:9px 14px;border:1px solid color-mix(in srgb,var(--wv-text,#392e26) 20%,transparent);border-radius:12px;background:var(--wv-card,#faf7f1);color:var(--wv-text,#392e26);font:inherit}.live-conversation small{font-size:11px;opacity:.75}.live-conversation audio{max-width:100%;height:36px}.live-conversation-progress{opacity:.75}.live-mode-menu{position:absolute;right:12px;top:60px;z-index:30;width:min(320px,calc(100vw - 24px));padding:8px;border:1px solid color-mix(in srgb,var(--wv-text,#392e26) 20%,transparent);border-radius:16px;background:var(--wv-card,#faf7f1);box-shadow:0 8px 35px #0002}.live-mode-menu[hidden]{display:none}.live-mode-menu button{display:block;width:100%;min-height:48px;padding:9px 12px;text-align:left;border:0;border-radius:10px;background:none;color:var(--wv-text,#392e26);font:inherit}.live-mode-menu button:hover,.live-mode-menu button:focus-visible{background:var(--wv-hover,#eee5db)}.live-mode-menu small{display:block;font-size:11px;opacity:.7;line-height:1.4}.live-mode-menu button[aria-pressed=true]{background:var(--wv-hover,#eee5db)}.live-mode-menu p{font-size:11px;line-height:1.4;padding:4px 12px;margin:4px 0;color:var(--wv-muted,#75675c)}
 
-.live-conversation .live-conversation-cost{display:flex;gap:6px 14px;align-items:baseline;flex-wrap:wrap}.live-conversation-cost strong{font-weight:600;white-space:nowrap}.live-conversation.is-car .live-conversation-cost{justify-content:center}
-#mock-learner-mode{width:auto;min-width:44px;max-width:105px;padding:6px 9px;font-size:12px;white-space:nowrap}.live-conversation-progress{padding-right:58px}.live-mode-menu button:disabled{opacity:.55}.live-mode-menu{max-height:calc(100dvh - 110px);overflow-y:auto}
-
-#mock-car-surface[data-live="true"] .mock-car-recording-row,#mock-car-surface[data-live="true"] .mock-car-recovery-actions,#mock-car-surface[data-live="true"] .mock-car-safety,#mock-car-surface[data-live="true"] #mock-car-status,#mock-car-surface[data-live="true"] #mock-car-speaker,#mock-car-surface[data-live="true"] #mock-car-speaker-status,#mock-car-surface[data-live="true"] #mock-car-output-choices,#mock-car-surface[data-live="true"] #mock-car-chapters,#mock-car-surface[data-live="true"] #mock-car-map{display:none!important}
-#mock-car-live{width:min(560px,100%);margin:auto}#mock-car-live[hidden]{display:none}.live-conversation.is-car{text-align:center}.live-conversation.is-car .live-conversation-actions{justify-content:center}.live-conversation.is-car button{min-height:64px;min-width:130px;font-size:20px}.live-conversation.is-car p{font-size:18px}.live-conversation audio[hidden],.live-conversation-progress[hidden]{display:none}
+.live-conversation .live-conversation-cost{display:flex;gap:6px 14px;align-items:baseline;flex-wrap:wrap}.live-conversation-cost strong{font-weight:600;white-space:nowrap}
+#mock-learner-mode{width:auto;min-width:44px;max-width:105px;padding:6px 9px;font-size:12px;white-space:nowrap}.live-conversation-progress{padding-right:58px}.live-mode-menu button:disabled{opacity:.55}.live-mode-menu{max-height:calc(100dvh - 110px);overflow-y:auto}.live-conversation audio[hidden],.live-conversation-progress[hidden]{display:none}
 
 /* Mute, Pause and the transcript toggle are icon-only. The 44px floor keeps the
    tap target at size once the words are gone; the slash appears only on mute. */
@@ -12,8 +9,6 @@
 .live-conversation .live-icon-button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .live-conversation .live-icon-button .live-icon-slash{display:none}
 .live-conversation .live-icon-button.is-muted .live-icon-slash{display:inline}
-.live-conversation.is-car .live-icon-button{min-width:64px;min-height:64px}
-.live-conversation.is-car .live-icon-button svg{width:28px;height:28px}
 
 /* The header controls the actual Live output; Text remains in the action row. */
 #mock-learner-mode.live-speaker-button{width:44px;min-width:44px;height:44px;padding:10px;display:inline-flex;align-items:center;justify-content:center}

@@ -1040,7 +1040,6 @@ const labState = {
   extractionBusy: false,
   extractionTurnToken: "",
   extractionArtifacts: [],
-  mockCar: { active:false, status:"idle", message:"Hold, wait for the tone, then talk", errorKey:"", returnFocus:null },
   topicVoice: {
     busy:false, recorder:null, stream:null, chunks:[], captureToken:"", acquireToken:"",
     recordingStartedAt:0, recordingStopTimer:0, operationId:"", sourceValue:"", transcriptionAbortController:null,
@@ -1263,9 +1262,9 @@ let labFieldRevealGeneration = 0;
 function syncLabViewportLayout() {
   // Native magnification owns panning and scaling until the user pinches back.
   if (Number(globalThis.window?.visualViewport?.scale) > 1.01) return;
-  // Car has no keyboard. Screenshot/permission sheets can briefly pan the
-  // visual viewport; applying those offsets moves the entire fixed surface.
-  const viewport = document.body.classList.contains("mock-car-active") ? null : window.visualViewport;
+  // Screenshot/permission sheets can briefly pan the visual viewport;
+  // applying those offsets moves the entire fixed surface.
+  const viewport = window.visualViewport;
   const width = Math.max(1, Math.round(Number(viewport?.width) || window.innerWidth || document.documentElement.clientWidth || 1));
   const height = Math.max(1, Math.round(Number(viewport?.height) || window.innerHeight || document.documentElement.clientHeight || 1));
   const offsetTop = Math.max(0, Math.round(Number(viewport?.offsetTop) || 0));
@@ -1307,7 +1306,7 @@ window.visualViewport?.addEventListener("scroll", () => {
   // browsers. The repaint loop exists only for the fixed learner shell; on the
   // Lab controls homepage it needlessly rewrites layout variables and forces a
   // layout read during the gesture, producing visible scroll jitter.
-  if (labLearnerViewportActive() && !document.body.classList.contains("mock-car-active")) scheduleLabViewportLayout();
+  if (labLearnerViewportActive()) scheduleLabViewportLayout();
 }, { passive:true });
 window.addEventListener("pageshow", scheduleLabViewportLayout, { passive:true });
 syncLabViewportLayout();
@@ -1317,7 +1316,6 @@ syncLabViewportLayout();
    animation so typed text/caret never sit behind the keyboard. */
 function labLearnerViewportActive() {
   return document.body.classList.contains("mock-learner-shell-active")
-    || document.body.classList.contains("mock-car-active")
     || document.body.classList.contains("clarification-focus")
     || document.body.classList.contains("extraction-learner-active")
     || document.body.classList.contains("lesson-learner-active")
@@ -1691,7 +1689,6 @@ function resetWorkspaceContents() {
   labState.artifactRefreshToken = makeId();
   labState.mockBoundaryActive = null;
   labState.mockRunActiveConfig = null;
-  Object.assign(labState.mockCar, { active:false, entryToken:"", status:"idle", message:"Hold, wait for the tone, then talk", errorKey:"", returnFocus:null });
   Object.assign(labState.quiz, { busy:false, attempt:0, probeCount:0, status:"idle", startedRunId:"", startedMapKey:"", mapKey:"", lastSpokenJobId:"", reviewOutcomeId:"", completionMessage:"", completionChoice:"", completionSpeechId:"", reviewReprompt:"", reviewRepromptChoice:"", reviewRepromptSpeechId:"", turnToken:"", reviewToken:"" });
   labState.newRunDraftActive = false;
   labState.resumeRestoring = false;
@@ -3588,8 +3585,6 @@ function prepareSavedMockRunLaunch(row) {
   labState.clarification.mode = "text";
   labState.extraction.mode = "text";
   labState.extraction.modeInheritedFromClarification = false;
-  labState.mockCar.active = false;
-  labState.mockCar.returnFocus = null;
   setClarificationView("learner");
   renderPipelineMode();
   return { artifact };
@@ -3828,8 +3823,6 @@ function setMockRunConfigCollapsed(collapsed) {
 
 function stopMockRunLearnerMedia() {
   void window.WorldviewLiveConversation?.stop("Live stopped when leaving the lesson.");
-  labState.mockCar.active = false;
-  labState.mockCar.errorKey = "";
   if (labState.clarification.focusMode) setClarificationFocus(false);
   stopClarificationCaptureForModeChange();
   stopClarificationSpeech();
@@ -4161,13 +4154,13 @@ function lockLabAccount(message = "Sign in to your administrator account to open
     try { controller.abort(labAccountError("identity_changed")); } catch (_) { /* Already complete. */ }
   }
   labState.requestControllers.clear();
-  stopMockCarMedia();
+  stopMockConversationMedia();
   clearVerifiedLabUser();
   labState.configured = {};
   labState.artifactRefreshToken = makeId();
   labState.pipelineMode = "controls";
   labState.mockSetupActive = false;
-  document.body.classList.remove("mock-run", "mock-setup", "mock-car-active", "mock-learner-shell-active", "clarification-focus", "clarification-learner-active", "extraction-learner-active", "lesson-learner-active", "quiz-learner-active");
+  document.body.classList.remove("mock-run", "mock-setup", "mock-learner-shell-active", "clarification-focus", "clarification-learner-active", "extraction-learner-active", "lesson-learner-active", "quiz-learner-active");
   document.documentElement.classList.remove("lab-viewport-locked");
   for (const node of document.querySelectorAll("#lab-shell input:not([type=checkbox]):not([type=radio]), #lab-shell textarea")) node.value = "";
   for (const id of ["results-list", "comparison-list", "jobs-list", "flow-list", "mock-learner-transcript", "pipeline-extraction-map-dialog-content"]) q(id)?.replaceChildren();
@@ -10925,7 +10918,6 @@ function maybeSpeakPipelineLessonReply(job, output) {
   if (labState.pipelineMode !== "mock" || labState.pipelineStage !== "lesson" || q("panel-pipeline")?.hidden || state.mode !== "voice" || !job?.id || !output?.assistantMessage || state.lastSpokenJobId === job.id || state.speaking) return;
   state.lastSpokenJobId = job.id;
   const speakingToken = beginMockSpeaking(state);
-  renderMockCarMode();
   void playPipelineExtractionSpeech(output.assistantMessage, { timingId:job.id })
     .catch((error) => reportMockSpeechFailure("pipeline-lesson-output", error))
     .finally(() => {
@@ -11514,7 +11506,6 @@ function maybeSpeakPipelineQuizReply(job, record) {
   labState.quiz.lastSpokenJobId = job.id;
   const speakingToken = beginMockSpeaking(state);
   state.lastSpeechText = record.assistantMessage;
-  renderMockCarMode();
   void playPipelineExtractionSpeech(record.assistantMessage, { timingId:job.id })
     .catch((error) => reportMockSpeechFailure("pipeline-quiz-output", error))
     .finally(() => { if (finishMockSpeaking(state, speakingToken)) renderPipelineExtractionModeControls(); });
@@ -12739,7 +12730,6 @@ function openPipelineExtractionMapDialog({ savedOnly = false } = {}) {
   q("pipeline-extraction-progress")?.setAttribute("aria-expanded", "true");
   q("mock-learner-map-progress")?.setAttribute("aria-expanded", "true");
   renderPipelineExtractionMapDialog();
-  if (labState.mockCar.active) renderMockCarMode();
   requestAnimationFrame(() => q("pipeline-extraction-map-dialog-close")?.focus());
 }
 
@@ -12756,7 +12746,6 @@ function closePipelineExtractionMapDialog({ restoreFocus = true } = {}) {
   }
   if (progress) progress.setAttribute("aria-expanded", "false");
   q("mock-learner-map-progress")?.setAttribute("aria-expanded", "false");
-  if (labState.mockCar.active) { setMockCarIsolation(false); renderMockCarMode(); }
   if (labState.learnerEntryMapOpening) {
     labState.learnerEntryMapOpening = false;
     document.documentElement.classList.remove("learner-opening-selected");
@@ -12858,7 +12847,6 @@ function reviewInterruptedLabTranscript(state, transcript, stage) {
   if (q("mock-learner-reply")) q("mock-learner-reply").value = transcript;
   const message = "Microphone audio was interrupted. Review the captured words and add anything missing before sending.";
   setMessage(stage === "clarification" ? "clarification-message" : pipelineVoiceStatusId(), message, "error");
-  setMockCarStatus("paused", message, "recording-interrupted");
   if (stage === "clarification") setClarificationConversationMode("text");
   else renderPipelineExtractionModeControls();
 }
@@ -13176,10 +13164,8 @@ function adoptPipelineExtractionMicStream(stream, { capture = false } = {}) {
       releaseLabMicrophoneStream(state, stream);
       state.recordingPointerActive = false;
       pipelineVoicePtt()?.classList.remove("is-listening");
-      q("mock-car-ptt")?.classList.remove("is-listening");
       setPipelineExtractionAudioSession("playback");
       setMessage(pipelineVoiceStatusId(), "The phone stopped delivering microphone audio. Hold again to reconnect.", "error");
-      setMockCarStatus("paused", "I didn’t hear that. Hold again.", "microphone-route");
       renderPipelineExtractionModeControls();
     };
     watchLabMicrophoneTrack(track, () => state.micStream === stream, disconnect);
@@ -13208,11 +13194,9 @@ async function ensurePipelineExtractionMicStream({ fresh = false, capture = fals
     return adoptPipelineExtractionMicStream(stream, { capture });
   })();
   state.micAcquirePromise = request;
-  renderMockCarMode();
   try { return await request; }
   finally {
     if (state.micAcquirePromise === request) state.micAcquirePromise = null;
-    renderMockCarMode();
   }
 }
 
@@ -13272,7 +13256,6 @@ function renderPipelineExtractionModeControls() {
     if (quizHear) quizHear.hidden = state.mode !== "voice" || !state.lastSpeechText;
   }
   syncPipelineExtractionSaveControl();
-  renderMockCarMode();
 }
 
 function extractionShouldCarryClarificationVoice() {
@@ -13304,7 +13287,6 @@ async function requestPipelineExtractionVoice() {
   syncPipelineExtractionSendControl();
   syncPipelineExtractionSaveControl();
   setMessage(statusId, "Voice ready. Hold the conversation or tap the switch to record.");
-  setMockCarStatus("thinking", "Opening microphone…");
   try {
     stopPipelineExtractionSpeech();
     releaseLabMicrophoneStream(state);
@@ -13315,12 +13297,10 @@ async function requestPipelineExtractionVoice() {
     const latest = pipelineExtractionJobs().at(-1);
     state.lastSpokenJobId = latest?.id || "";
     setMessage(statusId, "Voice mode is ready. Hold, wait for the tone, then talk.", "ok");
-    setMockCarStatus("idle", "Hold, wait for the tone, then talk");
     return true;
   } catch (error) {
     setPipelineExtractionConversationMode("text");
     setMessage(statusId, `Microphone unavailable: ${error.message || "permission was not granted"}. Text mode remains available.`, "error");
-    setMockCarStatus("paused", "Microphone unavailable", "microphone-permission");
     return false;
   } finally {
     setPipelineExtractionAudioSession("playback");
@@ -13352,104 +13332,11 @@ function setMockSpeakerStatus(status, token = "") {
   if (status === "playing") state.verified = true;
   if (status === "starting" || status === "error" || status === "interrupted") state.verified = false;
   state.status = state.enabled ? status : "off";
-  if (labState.mockCar.active) renderMockCarMode();
-  else renderMockSpeakerButton();
 }
 
-function renderMockSpeakerButton() {
-  const button = q("mock-car-speaker");
-  if (!button) return;
-  const state = mockSpeakerState();
-  const label = state.route === "receiver" ? "Receiver" : "Speaker";
-  button.dataset.audioState = state.status;
-  button.setAttribute("aria-expanded", String(!q("mock-car-output-choices")?.hidden));
-  button.setAttribute("aria-label", "Choose Phone speaker or Phone receiver");
-  button.setAttribute("aria-busy", String(state.status === "starting"));
-  button.classList.toggle("is-active", state.enabled && state.verified);
-  const recording = labState.pipelineStage === "clarification" ? labState.clarification : labState.extraction;
-  button.disabled = Boolean(recording?.recorder?.state === "recording" || recording?.recordingPointerActive || recording?.recordingPointerStartedAt || (recording?.micAcquirePromise && !recording?.mockMicWarm));
-  const caption = button.querySelector("[data-speaker-label]");
-  if (caption) caption.textContent = label;
-  const feedback = q("mock-car-speaker-status");
-  const choicesOpen = q("mock-car-output-choices")?.hidden === false;
-  const routeNote = q("mock-car-output-note");
-  if (routeNote) routeNote.textContent = state.routeMessage || "Choose where you want to hear the reply.";
-  if (feedback) {
-    feedback.hidden = choicesOpen || !["starting", "playing", "error", "interrupted"].includes(state.status);
-    feedback.textContent = state.status === "starting" ? "Starting audio…" : state.status === "playing" ? "Playing reply" : "Audio paused. Tap Repeat to retry.";
-  }
-  for (const route of ["speaker", "receiver"]) {
-    const choice = q(`mock-car-output-${route}`);
-    choice?.setAttribute("aria-pressed", String(state.route === route));
-    if (choice) choice.disabled = state.selecting || button.disabled;
-  }
-}
 
-async function toggleMockCarSpeaker() {
-  if (!labState.mockCar.active || q("mock-car-speaker")?.disabled) return;
-  const choices = q("mock-car-output-choices");
-  if (choices) choices.hidden = !choices.hidden;
-  renderMockSpeakerButton();
-}
 
-function mockOutputDeviceMatches(device, route) {
-  if (device.kind !== "audiooutput" || !device.deviceId || ["default", "communications"].includes(device.deviceId)) return false;
-  const label = String(device.label || "");
-  if (/bluetooth|airpods|headphone|headset|carplay|hdmi|display|usb/i.test(label)) return false;
-  return route === "receiver" ? /receiver|earpiece/i.test(label) : /speaker/i.test(label) && !/receiver|earpiece/i.test(label);
-}
 
-async function chooseMockPhoneOutput(route) {
-  if (!["speaker", "receiver"].includes(route) || !labState.mockCar.active || q("mock-car-speaker")?.disabled) return;
-  const state = mockSpeakerState();
-  if (state.selecting) return;
-  const epoch = labState.authEpoch;
-  let hearReply = false;
-  state.selecting = true;
-  state.routeMessage = "Checking available phone audio…";
-  renderMockSpeakerButton();
-  try {
-    const audio = sharedMockVoiceAudio();
-    // Unlock the actual player during the tap, before device enumeration can
-    // consume iOS user activation. A silent primer is not playback evidence.
-    if (route === "speaker" || typeof audio.setSinkId === "function") void primeMockVoiceAudio();
-    const devices = typeof audio.setSinkId === "function" && navigator.mediaDevices?.enumerateDevices
-      ? await navigator.mediaDevices.enumerateDevices() : [];
-    if (epoch !== labState.authEpoch || !labState.mockCar.active) return;
-    const output = devices.find(device => mockOutputDeviceMatches(device, route));
-    if (!output) {
-      // AudioSession playback is a category hint, never evidence of a selected
-      // physical speaker. No invented receiver/default device IDs.
-      if (route === "receiver") { state.routeMessage = "Receiver switching is unavailable in this browser."; return; }
-      stopClarificationSpeech();
-      stopPipelineExtractionSpeech();
-      if (typeof audio.setSinkId === "function") await audio.setSinkId("");
-      if (epoch !== labState.authEpoch || !labState.mockCar.active) return;
-      state.sinkId = ""; state.route = "";
-      setPipelineExtractionAudioSession("playback");
-      state.routeMessage = "Using your phone’s current audio output.";
-      q("mock-car-output-choices")?.setAttribute("hidden", "");
-      hearReply = true;
-    } else {
-      stopClarificationSpeech();
-      stopPipelineExtractionSpeech();
-      await audio.setSinkId(output.deviceId);
-      if (epoch !== labState.authEpoch || !labState.mockCar.active) return;
-      state.sinkId = output.deviceId;
-      state.route = route;
-      state.verified = false;
-      state.routeMessage = `${route === "receiver" ? "Receiver" : "Speaker"} selected.`;
-      q("mock-car-output-choices")?.setAttribute("hidden", "");
-      hearReply = true;
-    }
-  } catch (_) {
-    if (epoch === labState.authEpoch) state.routeMessage = "The audio output could not switch. Check your phone’s audio controls and try again.";
-  } finally {
-    state.selecting = false;
-    if (epoch === labState.authEpoch) renderMockSpeakerButton();
-  }
-  if (hearReply && epoch === labState.authEpoch && labState.mockCar.active) await replayMockCarReply({repeat:true});
-}
 
 async function applyMockPhoneOutput(audio, voiceToken) {
   const state = mockSpeakerState();
@@ -13591,10 +13478,6 @@ function reportMockSpeechFailure(statusId, error) {
   if (stage) state.speechFailureKey = mockSpeechReplyKey(stage);
   setMockSpeakerStatus("error");
   setMessage(statusId, "The reply is available, but speech did not play: " + clip(error?.message || "audio is unavailable", 150), "error");
-  if (labState.mockCar.active) {
-    try { navigator.vibrate?.([80, 50, 80]); } catch (_) { /* Vibration is optional and unavailable on iPhone. */ }
-    setMockCarStatus("paused", "Audio unavailable. Tap the speaker to retry, or use Text.", "speech");
-  }
 }
 
 function beginMockSpeaking(state) {
@@ -13900,7 +13783,6 @@ function stopPipelineExtractionVoice() {
   q("pipeline-extraction-ptt")?.classList.remove("is-listening");
   q("pipeline-lesson-ptt")?.classList.remove("is-listening");
   q("pipeline-quiz-ptt")?.classList.remove("is-listening");
-  q("mock-car-ptt")?.classList.remove("is-listening");
   stopPipelineExtractionSpeech();
   setPipelineExtractionAudioSession("playback");
 }
@@ -13931,7 +13813,6 @@ async function switchPipelineExtractionConversationMode() {
     && !q("mock-learner-shell")?.hidden;
   if (labState.extractionBusy || labState.lessonBusy || labState.quiz.busy || state.saveBusy || state.modeSwitching || (!learnerShellActive && activeConversation?.hidden)) return;
   if (state.mode === "voice") {
-    labState.mockCar.active = false;
     stopPipelineExtractionVoice();
     setPipelineExtractionConversationMode("text");
     return;
@@ -14176,7 +14057,6 @@ async function startPipelineExtractionRecording(event, options = {}) {
     const pointerId = state.recordingPointerId;
     const captureRequestToken = state.captureToken;
     setMessage(pipelineVoiceStatusId(), "Opening the microphone… keep holding and begin after the tone.");
-    setMockCarStatus("thinking", "Opening microphone. Wait for tone.");
     let stream = null;
     try { stream = await ensurePipelineExtractionMicStream({ fresh:!reusePreparedMic, capture:true }); }
     catch (error) {
@@ -14187,7 +14067,6 @@ async function startPipelineExtractionRecording(event, options = {}) {
         releaseLabMicrophoneStream(state);
         setPipelineExtractionAudioSession("playback");
         setMessage(pipelineVoiceStatusId(), `The microphone could not reconnect: ${clip(error.message || "permission was not granted", 150)}.`, "error");
-        setMockCarStatus("paused", "Microphone unavailable", "microphone-reconnect");
       }
       return;
     }
@@ -14228,7 +14107,6 @@ async function startPipelineExtractionRecording(event, options = {}) {
       if (state.recorder === recorder) state.recorder = null;
       state.activeCaptureStream = null;
       capturePtt?.classList.remove("is-listening");
-      q("mock-car-ptt")?.classList.remove("is-listening");
       releaseLabMicrophoneStream(state, captureStream);
       setPipelineExtractionAudioSession("playback");
       if (labState.pipelineStage !== captureStage) {
@@ -14238,19 +14116,16 @@ async function startPipelineExtractionRecording(event, options = {}) {
       const heldMs = Number.isFinite(Number(recorder.wvHeldMs)) ? Number(recorder.wvHeldMs) : performance.now() - recordingStartedAt;
       if (heldMs < 220) {
         setMessage(captureStatusId, "Hold a little longer, then release to send.", "error");
-        setMockCarStatus("idle", "Hold a little longer");
         return;
       }
       const blob = labRecorderBlob(recorder, chunks);
       if (!blob || blob.size < 128) {
         setMessage(captureStatusId, recorder?.wvIncompleteAudio ? "The phone retained only part of this recording. It was not sent as a complete answer. Please record it again." : "The phone returned no microphone audio, so its route was reset. Hold again to reconnect.", "error");
-        setMockCarStatus("paused", "I didn’t hear that. Hold again.", "empty-audio");
         renderPipelineExtractionModeControls();
         return;
       }
       captureContext.reviewRequired = recorder.wvInterrupted === true;
       captureContext.turnStartedAt = Number(recorder.wvReleasedAt) || performance.now();
-      setMockCarStatus("transcribing", "Transcribing");
       try {
         if (captureStage === "quiz") await transcribePipelineQuizRecording(blob, makeId(), captureContext);
         else if (captureStage === "lesson") await transcribePipelineLessonRecording(blob, makeId(), captureContext);
@@ -14264,7 +14139,6 @@ async function startPipelineExtractionRecording(event, options = {}) {
         setMessage(captureStatusId, error?.type === "transcription_timeout"
           ? timeoutCopy
           : `The recording could not be transcribed: ${clip(error.message, 150)}`, "error");
-        setMockCarStatus("paused", error?.type === "transcription_timeout" ? "Transcription took too long. Hold again." : "Transcription unavailable", "transcription");
       }
     };
     const handleError = (item) => {
@@ -14274,11 +14148,9 @@ async function startPipelineExtractionRecording(event, options = {}) {
       capturePtt?.classList.remove("is-listening");
       state.recordingPointerActive = false;
       state.recordingPointerId = null;
-      q("mock-car-ptt")?.classList.remove("is-listening");
       setPipelineExtractionAudioSession("playback");
       const message = clip(item?.error?.message || "the phone recorder stopped", 150);
       setMessage(captureStatusId, `Recording stopped: ${message}. Hold again to reconnect.`, "error");
-      setMockCarStatus("paused", "Recorder stopped. Hold again.", "recorder-error");
     };
     recorder = startLabMediaRecorder(captureStream, {
       ondataavailable:(item) => { if (state.captureToken === captureToken && item.data?.size) chunks.push(item.data); },
@@ -14294,14 +14166,10 @@ async function startPipelineExtractionRecording(event, options = {}) {
         if (!isCurrent()) return;
         startMockVoiceMeter(state, recorder, isCurrent);
         capturePtt?.classList.add("is-listening");
-        q("mock-car-ptt")?.classList.add("is-listening");
         setMessage(captureStatusId, "Recorder ready… wait for the tone.");
-        setMockCarStatus("listening", "Recorder ready. Wait for tone.");
         announceLabRecordingReady(state, captureStream, recorder, isCurrent, (played) => {
           setMessage(captureStatusId, played ? "Listening… tone played. Speak now, then release to send." : "Listening… speak now, then release to send.");
-          setMockCarStatus("listening", played ? "Tone played. Speak now." : "Listening. Speak now.");
         }, () => {
-          setMockCarStatus("listening", "Microphone audio paused. Waiting for the connection; your recording is kept.");
         });
       },
     });
@@ -14314,7 +14182,6 @@ async function startPipelineExtractionRecording(event, options = {}) {
     releaseLabMicrophoneStream(state);
     setPipelineExtractionAudioSession("playback");
     setMessage(pipelineVoiceStatusId(), `Recording could not start: ${clip(error.message, 150)}`, "error");
-    setMockCarStatus("paused", "Recording unavailable", "recording-start");
   }
 }
 
@@ -14334,15 +14201,12 @@ function stopPipelineExtractionRecording(event) {
     invalidateLabCapture(state);
     releaseLabMicrophoneStream(state);
     setPipelineExtractionAudioSession("playback");
-    setMockCarStatus("idle", "Microphone start cancelled. Hold again when ready.");
     renderPipelineExtractionModeControls();
     return;
   }
   if (recorder?.state === "recording") {
     pipelineVoicePtt()?.classList.remove("is-listening");
-    q("mock-car-ptt")?.classList.remove("is-listening");
     setMessage(pipelineVoiceStatusId(), "Finishing your recording…");
-    setMockCarStatus("transcribing", "Finishing…");
     scheduleLabRecorderStop(state, recorder, state.captureToken);
     event?.preventDefault?.();
   }
@@ -14359,10 +14223,8 @@ function cancelPipelineExtractionRecording(event) {
   invalidateLabCapture(state, captureStream);
   releaseLabMicrophoneStream(state, captureStream);
   pipelineVoicePtt()?.classList.remove("is-listening");
-  q("mock-car-ptt")?.classList.remove("is-listening");
   setPipelineExtractionAudioSession("playback");
   setMessage(pipelineVoiceStatusId(), "Recording cancelled. Hold again when you are ready.");
-  setMockCarStatus("idle", "Recording cancelled. Hold again.");
   renderPipelineExtractionModeControls();
   event?.preventDefault?.();
 }
@@ -14376,7 +14238,6 @@ function maybeSpeakPipelineExtractionReply(job, output) {
   if (labState.pipelineMode !== "mock" || labState.pipelineStage !== "extraction" || q("panel-pipeline")?.hidden || state.mode !== "voice" || !job?.id || !output?.assistantMessage || state.lastSpokenJobId === job.id || state.speaking) return;
   state.lastSpokenJobId = job.id;
   const speakingToken = beginMockSpeaking(state);
-  renderMockCarMode();
   void playPipelineExtractionSpeech(output.assistantMessage, { timingId:job.id })
     .catch((error) => reportMockSpeechFailure("pipeline-extraction-output", error))
     .finally(() => {
@@ -14549,7 +14410,7 @@ function renderPipelineExtraction() {
   maybeSpeakPipelineExtractionReply(latest, visibleOutput);
 }
 
-function mockCarConversationReady() {
+function mockConversationReady() {
   if (labState.pipelineMode !== "mock") return false;
   if (labState.pipelineStage === "clarification") {
     const state = labState.clarification;
@@ -14571,8 +14432,8 @@ function mockCarConversationReady() {
 function mockRecordingControlState() {
   const state = labState.pipelineStage === "clarification" ? labState.clarification : labState.extraction;
   const latched = state.recordingLatched === true;
-  const ready = mockCarConversationReady() && state.mode === "voice" && !document.hidden;
-  const derived = mockCarDerivedStatus();
+  const ready = mockConversationReady() && state.mode === "voice" && !document.hidden;
+  const derived = mockRecordingDerivedStatus();
   const shell = q("mock-learner-shell");
   const conversationBlocked = shell && !shell.hidden && (q("mock-learner-reply")?.disabled || q("mock-learner-reply")?.dataset.replyBlocked === "true");
   const blocked = !ready || conversationBlocked || labState.extraction.mapDialogOpen || state.saveBusy || state.modeSwitching
@@ -14586,7 +14447,7 @@ function startMockVoiceMeter(state, recorder, isCurrent) {
   const pcm = recorder?.wvPcmCapture;
   const shell = q("mock-learner-shell");
   shell?.style?.setProperty("--voice-level", "0");
-  if (!pcm || state.recordingLatched || labState.mockCar.active) return;
+  if (!pcm || state.recordingLatched) return;
   const epoch = labState.authEpoch;
   const owner = labState.verifiedUserId;
   const stage = labState.pipelineStage;
@@ -14622,11 +14483,10 @@ function renderMockRecordingControls() {
     if (text) text.textContent = actualListening ? "Listening" : arming ? "Opening microphone…" : "Transcribing…";
   }
   const label = latched ? (listening ? "Tap to send" : (capturing ? "Stop recording" : "Cancel start")) : holdActive ? (actualListening ? "Recording" : "Opening…") : "Tap to record";
-  for (const [id, car] of [["mock-learner-recording-toggle", false], ["mock-car-recording-toggle", true]]) {
-    const toggle = q(id);
-    if (!toggle) continue;
+  const toggle = q("mock-learner-recording-toggle");
+  if (toggle) {
     // Arming can always be cancelled, including while a permission prompt is open.
-    toggle.disabled = (car && !labState.mockCar.active) || (!latched && (blocked || holdActive));
+    toggle.disabled = !latched && (blocked || holdActive);
     toggle.setAttribute("aria-checked", String(latched));
     toggle.dataset.captureState = captureState;
     toggle.setAttribute("aria-busy", String(latched && !listening));
@@ -14641,7 +14501,7 @@ function renderMockRecordingControls() {
   }
   const message = latched
     ? listening ? "Listening. Tap the switch to send." : capturing ? "Waiting for microphone audio. Your recording is kept; tap to stop." : "Opening microphone. Wait for the tone; tap the switch to cancel."
-    : derived.status === "paused" ? labState.mockCar.errorKey === "speech" ? derived.message : `${derived.message}. Tap to try recording again.`
+    : derived.status === "paused" ? `${derived.message}. Tap to try recording again.`
     : derived.status === "thinking" || derived.status === "transcribing" ? derived.message
     : holdActive ? actualListening ? "Listening. Release to send." : "Opening microphone. Keep holding; speak after the tone."
     : ready ? "Hold the conversation to talk, or tap the switch. Wait for the tone." : "Recording is unavailable while the conversation is preparing.";
@@ -14655,8 +14515,7 @@ function toggleMockRecording(event) {
   if (event?.currentTarget?.disabled) return;
   if (control.latched) {
     if (!control.listening && !control.state.recorder?.wvReadyAnnounced) {
-      cancelMockCarCapture();
-      setMockCarStatus("idle", "Recording cancelled");
+      cancelMockRecordingCapture();
     } else {
       // Only this explicit second tap can release the private pointer owner.
       const release = { pointerId:"tap-toggle", preventDefault() {} };
@@ -14688,35 +14547,14 @@ function cancelBackgroundMockRecording() {
     return;
   }
   labState.mockRecordingGesture = null;
-  cancelMockCarCapture();
-  setMockCarStatus("idle", "Recording cancelled when the page went into the background");
+  cancelMockRecordingCapture();
 }
 
-function mockCarConversationAvailable() {
-  if (mockCarConversationReady()) return true;
-  // Once entered, Car mode is a continuous safety surface. Automatic phase
-  // openings may temporarily hide their ordinary transcript/composer while a
-  // job starts, but must not reveal that text or eject focus back into it.
-  return Boolean(labState.pipelineMode === "mock"
-    && labState.mockCar.active
-    && ["clarification", "extraction", "lesson", "quiz"].includes(labState.pipelineStage));
-}
 
-function setMockCarStatus(status = "idle", message = "", errorKey = "") {
-  const state = labState.mockCar;
-  if (status !== "paused") state.retryError = "";
-  state.status = status;
-  state.message = message || ({ listening:"Listening", transcribing:"Transcribing", thinking:"Thinking", speaking:"Speaking", paused:"Paused" }[status] || "Hold, wait for the tone, then talk");
-  state.errorKey = errorKey || "";
-  renderMockCarMode();
-}
 
-function mockCarDerivedStatus() {
+function mockRecordingDerivedStatus() {
   const artifact = selectedPipelineArtifact();
   const waiting = mockConversationWaitMessage(labState.pipelineStage, artifact, artifact ? selectedPipelineMapRecord(artifact) : null);
-  if (labState.mockCar.active && !mockCarConversationReady()) {
-    return { status:"thinking", message:"Preparing the next question" };
-  }
   if (labState.pipelineStage === "clarification") {
     const state = labState.clarification;
     if (state.micAcquirePromise && !state.mockMicWarm) return { status:"thinking", message:"Opening microphone" };
@@ -14736,250 +14574,20 @@ function mockCarDerivedStatus() {
     if (state.speaking) return { status:"speaking", message:labState.mockSpeaker?.status === "playing" ? "Speaking" : "Starting audio…" };
     if (labState.extractionBusy || labState.lessonBusy || labState.quiz.busy || state.modeSwitching) return { status:"thinking", message:"Thinking" };
   }
-  if (labState.mockCar.errorKey) return { status:"paused", message:labState.mockCar.message || "Paused" };
   return { status:"idle", message:"Hold, wait for the tone, then talk" };
 }
 
-function mockCarLastSpeechText() {
-  if (labState.pipelineStage === "clarification") {
-    if (clarificationCommitAcknowledgementSuppressed()) return "";
-    return labState.clarification.latest?.assistant_message || labState.clarification.lastSpeechText || "";
-  }
-  return labState.extraction.lastSpeechText || "";
-}
 
-function setMockCarIsolation(active, surface) {
-  if (!active || !surface) {
-    for (const target of document.querySelectorAll("[data-mock-car-isolated]")) {
-      target.inert = target.dataset.mockCarWasInert === "true";
-      const previousAria = target.dataset.mockCarPreviousAriaHidden;
-      if (previousAria === "__missing__") target.removeAttribute("aria-hidden");
-      else target.setAttribute("aria-hidden", previousAria);
-      delete target.dataset.mockCarIsolated;
-      delete target.dataset.mockCarWasInert;
-      delete target.dataset.mockCarPreviousAriaHidden;
-    }
-    return;
-  }
-  let current = surface;
-  while (current && current !== document.body) {
-    const parent = current.parentElement;
-    if (!parent) break;
-    for (const sibling of parent.children) {
-      if (sibling === current || sibling.dataset.mockCarIsolated) continue;
-      sibling.dataset.mockCarIsolated = "true";
-      sibling.dataset.mockCarWasInert = String(Boolean(sibling.inert));
-      sibling.dataset.mockCarPreviousAriaHidden = sibling.hasAttribute("aria-hidden") ? sibling.getAttribute("aria-hidden") : "__missing__";
-      sibling.inert = true;
-      sibling.setAttribute("aria-hidden", "true");
-    }
-    current = parent;
-  }
-}
 
-function mockCarFocusables() {
-  const surface = q(labState.extraction.mapDialogOpen ? "pipeline-extraction-map-dialog" : "mock-car-surface");
-  if (!surface || surface.hidden) return [];
-  return [...surface.querySelectorAll("button, summary, [href], input, select, textarea, [tabindex]")]
-    .filter((item) => {
-      if (item.disabled || item.hidden || item.getAttribute("tabindex") === "-1" || item.closest("[hidden], [inert], [aria-hidden='true']")) return false;
-      const style = getComputedStyle(item);
-      return style.display !== "none" && style.visibility !== "hidden" && item.getClientRects().length > 0;
-    });
-}
 
-function trapMockCarFocus(event) {
-  if (!labState.mockCar.active) return;
-  if (labState.extraction.mapDialogOpen && event.key === "Escape") return;
-  if (event.key === "Escape") {
-    event.preventDefault();
-    exitMockCarMode();
-    return;
-  }
-  if (event.key !== "Tab") return;
-  const focusable = mockCarFocusables();
-  if (!focusable.length) return;
-  const first = focusable[0];
-  const last = focusable.at(-1);
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault();
-    first.focus();
-  }
-}
 
-function mockCarReturnFocusTarget(preferred = null) {
-  const isAvailable = (item) => {
-    if (!item?.isConnected || item.hidden || item.disabled || item.getAttribute?.("tabindex") === "-1"
-      || !item.matches?.("button, [href], input, select, textarea, [tabindex]")
-      || item.closest?.("[hidden], [inert], [aria-hidden='true']")) return false;
-    const style = getComputedStyle(item);
-    return style.display !== "none" && style.visibility !== "hidden" && item.getClientRects().length > 0;
-  };
-  if (isAvailable(preferred)) return preferred;
-  const ids = {
-    clarification:"clarification-car-mode",
-    extraction:"pipeline-extraction-car-mode",
-    lesson:"pipeline-lesson-car-mode",
-    quiz:"pipeline-quiz-car-mode",
-  };
-  const persistentEntry = q("mock-learner-car");
-  if (isAvailable(persistentEntry)) return persistentEntry;
-  const currentEntry = q(ids[labState.pipelineStage]);
-  if (isAvailable(currentEntry)) return currentEntry;
-  return [q("pipeline-learner-exit"), q("pipeline-mode-mock")].find(isAvailable) || null;
-}
 
-function placeLabConnectionNotice(active, surface) {
-  const connection = q("lab-connection-status");
-  if (!connection || !surface) return;
-  const parent = active ? surface : document.body;
-  if (connection.parentElement === parent) return;
-  connection.inert = false;
-  connection.removeAttribute("aria-hidden");
-  delete connection.dataset.mockCarIsolated;
-  delete connection.dataset.mockCarWasInert;
-  delete connection.dataset.mockCarPreviousAriaHidden;
-  parent.append(connection);
-}
 
-function renderMockCarMode() {
-  if (!q("mock-car-surface")) return;
-  const nativeLive=liveLessonSelected();
-  const available = nativeLive?mockLearnerConversationActive():mockCarConversationAvailable();
-  const ready = mockCarConversationReady();
-  const active = available && labState.mockCar.active;
-  document.body.classList.toggle("mock-car-active", active);
-  const surface = q("mock-car-surface");
-  placeLabConnectionNotice(active, surface);
-  if (surface) surface.hidden = !active;
-  if (active && labState.extraction.mapDialogOpen) {
-    setMockCarIsolation(false, surface);
-    setMockCarIsolation(true, q("pipeline-extraction-map-dialog"));
-  } else setMockCarIsolation(active, surface);
-  if(surface)surface.dataset.live=String(nativeLive);
-  const liveHost=q('mock-car-live');if(liveHost)liveHost.hidden=!(nativeLive&&active);
-  const exit=q('mock-car-live-exit');if(exit)exit.hidden=!nativeLive;
-  window.WorldviewLiveConversation?.place?.(nativeLive&&active?liveHost:q('mock-learner-composer'),nativeLive&&active);
-  if(nativeLive)return;
-  const ids = {
-    clarification:"clarification-car-mode",
-    extraction:"pipeline-extraction-car-mode",
-    lesson:"pipeline-lesson-car-mode",
-    quiz:"pipeline-quiz-car-mode",
-  };
-  for (const [stage, id] of Object.entries(ids)) {
-    const button = q(id);
-    if (!button) continue;
-    const stageAvailable = ready && labState.pipelineStage === stage;
-    button.hidden = !stageAvailable;
-    button.setAttribute("aria-pressed", String(active && stageAvailable));
-  }
-  const persistentEntry = q("mock-learner-car");
-  if (persistentEntry) {
-    persistentEntry.hidden = !ready;
-    persistentEntry.setAttribute("aria-pressed", String(active && ready));
-  }
-  const derived = mockCarDerivedStatus();
-  const recovery = active ? mockCarRecoveryState() : null;
-  const status = q("mock-car-status");
-  if (status) status.textContent = labState.mockCar.retryBusy ? "Retrying the saved step…"
-    : labState.mockCar.retryError || (recovery?.error ? recovery.text : derived.message);
-  if (surface) surface.dataset.status = derived.status;
-  const ptt = q("mock-car-ptt");
-  if (ptt) {
-    const blocked = !ready || derived.status === "thinking" || derived.status === "transcribing" || (derived.status === "paused" && labState.mockCar.errorKey === "microphone-permission");
-    ptt.disabled = !active || (blocked && !labState.mockRecordingGesture);
-    ptt.setAttribute("aria-label", derived.status === "listening" ? "Release to send" : "Hold and wait for the ready tone to talk");
-    ptt.classList.toggle("is-listening", derived.status === "listening");
-    // Async readiness must not repeatedly move iOS focus/viewport while idle.
-  }
-  const replay = q("mock-car-replay");
-  if (replay) {
-    replay.hidden = !active || !mockCarLastSpeechText();
-    replay.disabled = derived.status === "listening" || derived.status === "transcribing" || derived.status === "thinking";
-    replay.textContent = "Repeat";
-  }
-  const stopAudio = q("mock-car-stop-audio");
-  if (stopAudio) stopAudio.hidden = !active || derived.status !== "speaking";
-  const chapterSelection = active ? selectedPipelineMapRecord() : null;
-  renderMockChapterMenu(chapterSelection, active ? labState.pipelineStage : "clarification", mockLearnerLessonChapterState(chapterSelection), "mock-car-chapters");
-  const map = q("mock-car-map");
-  if (map) { map.hidden = !active || !q("mock-car-chapters")?.hidden || !["extraction", "lesson", "quiz"].includes(labState.pipelineStage); map.setAttribute("aria-expanded", String(labState.extraction.mapDialogOpen)); }
-  const retry = q("mock-car-retry");
-  if (retry) { retry.hidden = !active || !recovery?.retry; retry.disabled = labState.mockCar.retryBusy === true; }
-  renderMockRecordingControls();
-  renderMockRecordingGesture();
-  renderMockSpeakerButton();
-}
 
-function mockCarRecoveryState() {
-  const artifact = selectedPipelineArtifact();
-  const selection = artifact ? selectedPipelineMapRecord(artifact) : null;
-  return mockLearnerStatus(labState.pipelineStage, artifact, selection);
-}
 
-async function retryMockCarAction() {
-  if (!labState.mockCar.active || labState.mockCar.retryBusy) return;
-  const recovery = mockCarRecoveryState();
-  const retry = q("mock-learner-retry");
-  if (!recovery?.retry || !retry) return;
-  retry.dataset.retry = recovery.retry;
-  labState.mockCar.retryBusy = true;
-  labState.mockCar.retryError = "";
-  renderMockCarMode();
-  try { await retryMockLearnerAction(recovery.retry); }
-  catch (_) { labState.mockCar.retryError = "This saved step could not reconnect. Your conversation is kept. Try again when connected."; }
-  finally { labState.mockCar.retryBusy = false; renderMockCarMode(); }
-}
 
-async function enterMockCarMode() {
-  /* Car is retired. Its surface, its controls and every way in are removed.
-     This entry point stays only until the unreachable code behind it is
-     taken out in its own pass; it must never activate again. */
-  return false;
-  if(liveVoiceAvailable()){
-    labState.mockCar.returnFocus=document.activeElement;
-    const state=labState.pipelineStage==='clarification'?labState.clarification:labState.extraction;
-    state.mode='voice';labState.mockCar.active=true;persistClarificationSettings();
-    renderMockLearnerShell();q('mock-car-live-exit')?.focus({preventScroll:true});return true;
-  }
-  if (!mockCarConversationAvailable()) return false;
-  const entryToken = makeId();
-  labState.mockCar.entryToken = entryToken;
-  if (!labState.clarification.speaking && !labState.extraction.speaking) primeMockVoiceAudio();
-  labState.mockCar.returnFocus = document.activeElement;
-  const stage = labState.pipelineStage;
-  const runId = labState.clarification.runId || selectedPipelineArtifact()?.runId || "";
-  let ready = true;
-  if (stage === "clarification" && labState.clarification.mode !== "voice") {
-    setClarificationConversationMode("voice");
-    persistClarificationSettings();
-    ready = labState.clarification.mode === "voice";
-  } else if (["extraction", "lesson", "quiz"].includes(stage) && labState.extraction.mode !== "voice") {
-    setPipelineExtractionConversationMode("voice");
-    ready = labState.extraction.mode === "voice";
-  }
-  const stillCurrent = labState.mockCar.entryToken === entryToken
-    && labState.pipelineMode === "mock"
-    && labState.pipelineStage === stage
-    && (labState.clarification.runId || selectedPipelineArtifact()?.runId || "") === runId
-    && mockCarConversationAvailable();
-  if (!ready || !stillCurrent) {
-    labState.mockCar.active = false;
-    renderMockCarMode();
-    return false;
-  }
-  labState.mockCar.active = true;
-  setMockCarStatus("idle", "Hold, wait for the tone, then talk");
-  void prepareMockMicrophone();
-  q("mock-car-ptt")?.focus({ preventScroll:true });
-  return true;
-}
 
-function cancelMockCarCapture() {
+function cancelMockRecordingCapture() {
   if(liveLessonSelected())return;
   labState.mockRecordingGesture = null;
   if (labState.pipelineStage === "clarification") {
@@ -14998,107 +14606,13 @@ function cancelMockCarCapture() {
     pipelineVoicePtt()?.classList.remove("is-listening");
     setPipelineExtractionAudioSession("playback");
   }
-  q("mock-car-ptt")?.classList.remove("is-listening");
 }
 
-function exitMockCarMode({ switchToText = false } = {}) {
-  if(liveLessonSelected()){
-    labState.mockCar.active=false;
-    if(switchToText){void chooseLiveConversationMode('text');return;}
-    renderMockLearnerShell();q('mock-learner-car')?.focus({preventScroll:true});return;
-  }
-  const returnFocus = labState.mockCar.returnFocus;
-  labState.mockCar.entryToken = makeId();
-  cancelMockCarCapture();
-  labState.mockCar.active = false;
-  labState.mockCar.errorKey = "";
-  labState.mockCar.returnFocus = null;
-  q("mock-car-ptt")?.classList.remove("is-listening");
-  if (switchToText) {
-    if (labState.pipelineStage === "clarification" && labState.clarification.mode === "voice") {
-      stopClarificationCaptureForModeChange();
-      stopClarificationSpeech();
-      setClarificationConversationMode("text");
-    } else if (["extraction", "lesson", "quiz"].includes(labState.pipelineStage) && labState.extraction.mode === "voice") {
-      stopPipelineExtractionVoice();
-      setPipelineExtractionConversationMode("text");
-    }
-  }
-  renderMockCarMode();
-  mockCarReturnFocusTarget(returnFocus)?.focus?.({ preventScroll:true });
-}
 
-function startMockCarRecording(event) {
-  if(liveLessonSelected())return;
-  if (!labState.mockCar.active || !mockCarConversationReady()) return;
-  const control = mockRecordingControlState();
-  if (control.latched) { beginMockRecordingGesture(event, true); return; }
-  if (control.blocked || control.holdActive) return;
-  beginMockRecordingGesture(event);
-  try { event?.currentTarget?.setPointerCapture?.(event.pointerId); } catch (_) { /* Pointer capture is optional. */ }
-  if (labState.pipelineStage === "clarification") armClarificationRecording(event);
-  else if (["extraction", "lesson", "quiz"].includes(labState.pipelineStage)) void startPipelineExtractionRecording(event);
-}
 
-function stopMockCarRecording(event) {
-  if(liveLessonSelected())return;
-  if (!labState.mockCar.active) return;
-  const cancelled = ["pointercancel", "lostpointercapture"].includes(event?.type);
-  if (labState.pipelineStage === "clarification") {
-    if (cancelled) cancelClarificationRecording(event);
-    else stopClarificationRecording(event);
-  } else if (["extraction", "lesson", "quiz"].includes(labState.pipelineStage)) {
-    if (cancelled) cancelPipelineExtractionRecording(event);
-    else stopPipelineExtractionRecording(event);
-  }
-}
 
-async function replayMockCarReply({ repeat = false } = {}) {
-  if (labState.pipelineMode === "mock" && repeat) {
-    const speaker = mockSpeakerState();
-    speaker.enabled = true;
-    try { localStorage.setItem("worldview.mock.spokenReplies", "on"); } catch (_) { /* Keep the session choice. */ }
-  }
-  if (labState.mockCar.active && (labState.pipelineStage === "clarification" ? labState.clarification.speaking : labState.extraction.speaking)) {
-    if (labState.pipelineStage === "clarification") stopClarificationSpeech();
-    else stopPipelineExtractionSpeech();
-    setMockCarStatus("idle", "Hold, wait for the tone, then talk");
-    if (!repeat) return;
-  }
-  const text = mockCarLastSpeechText();
-  if (!text || !labState.mockCar.active) return;
-  labState.mockCar.retryError = "";
-  const replayStage = labState.pipelineStage;
-  const speakingState = labState.pipelineStage === "clarification" ? labState.clarification : labState.extraction;
-  const speakingToken = makeId();
-  speakingState.speakingToken = speakingToken;
-  speakingState.speaking = true;
-  setMockCarStatus("speaking", "Speaking");
-  const primePromise = primeMockVoiceAudio();
-  if (labState.pipelineMode === "mock") setMockSpeakerStatus("starting");
-  try {
-    await primePromise;
-    if (!labState.mockCar.active || labState.pipelineStage !== replayStage || speakingState.speakingToken !== speakingToken) {
-      if (speakingState.speakingToken === speakingToken) speakingState.speaking = false;
-      return;
-    }
-    if (labState.pipelineStage === "clarification") await playClarificationSpeech(text);
-    else await playPipelineExtractionSpeech(text);
-  } catch (_) {
-    if (speakingState.speakingToken === speakingToken) {
-      speakingState.speaking = false;
-      if (labState.mockCar.active && labState.pipelineStage === replayStage) { setMockSpeakerStatus("error"); setMockCarStatus("paused", "Audio unavailable. Tap the speaker to retry.", "speech"); }
-    }
-    return;
-  }
-  if (speakingState.speakingToken === speakingToken) {
-    speakingState.speaking = false;
-    if (labState.mockCar.active && labState.pipelineStage === replayStage) setMockCarStatus("idle", "Hold, wait for the tone, then talk");
-    void prepareMockMicrophone();
-  }
-}
 
-function stopMockCarMedia() {
+function stopMockConversationMedia() {
   if (labState.pipelineStage === "clarification") {
     stopClarificationCaptureForModeChange();
     stopClarificationSpeech();
@@ -15106,7 +14620,6 @@ function stopMockCarMedia() {
     stopPipelineExtractionVoice();
   }
   if (typeof releaseClarificationTopicCapture === "function") releaseClarificationTopicCapture();
-  setMockCarStatus("idle", "Hold, wait for the tone, then talk");
 }
 
 function mockLearnerShellVisibility(mode, setup) {
@@ -15378,7 +14891,7 @@ function renderMockChapterMenu(selection, stage, chapterState, rootId = "mock-le
     button.addEventListener("click", () => {
       details.open = false;
       const turn = [...q("mock-learner-transcript").children].find((item) => item.dataset.chapterId === id);
-      if (turn && rootId !== "mock-car-chapters") { turn.scrollIntoView({ block:"start", behavior:"smooth" }); turn.tabIndex = -1; turn.focus({ preventScroll:true }); return; }
+      if (turn) { turn.scrollIntoView({ block:"start", behavior:"smooth" }); turn.tabIndex = -1; turn.focus({ preventScroll:true }); return; }
       openPipelineExtractionMapDialog();
       labState.extraction.mapDialogReturnFocus = summary;
       requestAnimationFrame(() => {
@@ -15674,13 +15187,12 @@ function syncLiveLesson(){
  const runId=artifact?.runId||labState.clarification.runId;
  const lineage=[labState.verifiedUserId,runId].join('|');
  recordLessonJobCosts(runId);
- live.sync({enabled:selected,lineage,owner:labState.verifiedUserId,runId,model:window.WorldviewModels?.liveModel()||'gpt-live-1',history:[],priorHistory:transcript,ready:selected,autoStart:true,car:labState.mockCar.active,studyInput:selected?liveStudyInput(artifact,selection,transcript):null});
+ live.sync({enabled:selected,lineage,owner:labState.verifiedUserId,runId,model:window.WorldviewModels?.liveModel()||'gpt-live-1',history:[],priorHistory:transcript,ready:selected,autoStart:true,studyInput:selected?liveStudyInput(artifact,selection,transcript):null});
  if(selected){q('mock-learner-voice-controls').hidden=true;q('mock-learner-waiting').hidden=true;renderLiveResearchRecovery(selection,stage);}
  const mode=stage==='clarification'?labState.clarification.mode:labState.extraction.mode;
  const button=q('mock-learner-mode');
  if(selected){closeLiveModeMenu();button.removeAttribute('aria-expanded');live.paintSpeaker();}
  else{const label=mode==='voice'?'Voice':'Text';button.classList.remove('live-speaker-button');button.removeAttribute('aria-pressed');button.removeAttribute('aria-busy');button.disabled=false;button.textContent=label+' ⌄';button.setAttribute('aria-label','Conversation mode: '+label);button.title='Switch conversation mode';}
- renderMockCarMode();
 }
 /* A topic-free Voice lesson saves the placeholder as its topic, and the code that
    replaces it with the real one only ever ran on the typed reply path. Voice runs
@@ -15716,15 +15228,12 @@ async function chooseLiveConversationMode(choice){
  const state=labState.pipelineStage==='clarification'?labState.clarification:labState.extraction;
  if(choice==='text'){
   stopClarificationCaptureForModeChange();stopClarificationSpeech();stopPipelineExtractionVoice();
-  state.mode='text';labState.mockCar.active=false;persistClarificationSettings();
+  state.mode='text';persistClarificationSettings();
   void window.WorldviewLiveConversation?.stop('Voice paused.',{pause:true});
  }else if(liveVoiceAvailable()){
   state.mode='voice';persistClarificationSettings();
-  if(choice==='car'){await enterMockCarMode();return;}
-  labState.mockCar.active=false;
  }else{
   if(state.mode!=='voice')await switchMockLearnerConversationMode();
-  if(choice==='car')await enterMockCarMode();
  }
  renderMockLearnerShell();
 }
@@ -15927,7 +15436,7 @@ function bindMockLearnerDensity() {
 function beginMockRecordingGesture(event, latched = false) {
   if (liveLessonSelected()) return;
   if (labState.pipelineMode !== "mock" || event?.pointerId == null || event.isPrimary === false || labState.extraction.mapDialogOpen) return;
-  const surface = q(labState.mockCar.active ? "mock-car-surface" : "mock-learner-shell");
+  const surface = q("mock-learner-shell");
   const rect = surface?.getBoundingClientRect();
   if (!rect) return;
   labState.mockRecordingGesture = { pointerId:event.pointerId, stage:labState.pipelineStage, runId:labState.clarification.runId, x:event.clientX, y:event.clientY, rect, latched, discarded:false, target:event.currentTarget };
@@ -15936,13 +15445,11 @@ function beginMockRecordingGesture(event, latched = false) {
 
 function renderMockRecordingGesture() {
   const gesture = labState.mockRecordingGesture;
-  for (const id of ["mock-car-surface", "mock-learner-shell"]) q(id)?.classList.toggle("is-discarding", Boolean(gesture?.discarded));
+  q("mock-learner-shell")?.classList.toggle("is-discarding", Boolean(gesture?.discarded));
   const message = gesture?.discarded ? "Recording discarded. Keep holding and return to where you started to record again." : "";
   if (message) {
     if (q("mock-learner-recording-status")) q("mock-learner-recording-status").textContent = message;
   }
-  const discard = q("mock-car-discard");
-  if (discard) discard.hidden = !labState.mockCar.active || !(labState.extraction.recordingLatched || labState.clarification.recordingLatched);
 }
 
 function moveMockRecordingGesture(event) {
@@ -15950,22 +15457,20 @@ function moveMockRecordingGesture(event) {
   if (!gesture || gesture.pointerId !== event.pointerId) return;
   event.stopPropagation();
   event.preventDefault();
-  if (gesture.stage !== labState.pipelineStage || gesture.runId !== labState.clarification.runId) { cancelMockCarCapture(); return; }
+  if (gesture.stage !== labState.pipelineStage || gesture.runId !== labState.clarification.runId) { cancelMockRecordingCapture(); return; }
   const { left, right, top, bottom } = gesture.rect;
   const distance = Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y);
   const atEdge = event.clientX <= left + 28 || event.clientX >= right - 28 || event.clientY <= top + 28 || event.clientY >= bottom - 28;
   const away = distance >= Math.max(90, Math.min(150, (right - left) * .32));
   if (!gesture.discarded && ((atEdge && distance > 32) || away)) {
-    cancelMockCarCapture(); // Drop encoder chunks and invalidate late mic results.
+    cancelMockRecordingCapture(); // Drop encoder chunks and invalidate late mic results.
     gesture.discarded = true;
     labState.mockRecordingGesture = gesture;
-    renderMockCarMode();
   } else if (gesture.discarded && distance < 48) {
     gesture.discarded = false;
     const press = { pointerId:gesture.latched ? "tap-toggle" : gesture.pointerId, pointerType:event.pointerType, button:0, clientX:event.clientX, clientY:event.clientY, preventDefault() {} };
     if (gesture.stage === "clarification") armClarificationRecording(press, { latched:gesture.latched });
     else void startPipelineExtractionRecording(press, { latched:gesture.latched });
-    renderMockCarMode();
   }
   renderMockRecordingGesture();
 }
@@ -15977,13 +15482,11 @@ function finishMockRecordingGesture(event) {
   event.stopImmediatePropagation();
   labState.mockRecordingGesture = null;
   if (gesture.discarded || event.type !== "pointerup") {
-    cancelMockCarCapture();
-    setMockCarStatus("idle", "Recording discarded. Hold or tap to start again.");
+    cancelMockRecordingCapture();
   } else if (!gesture.latched) {
     if (gesture.stage === "clarification") stopClarificationRecording(event);
     else stopPipelineExtractionRecording(event);
   }
-  renderMockCarMode();
 }
 
 function startMockLearnerRecording(event) {
@@ -16123,7 +15626,6 @@ async function retryMockLearnerAction(requestedAction = "") {
     try { await retryMockExtractionConversation(); }
     catch (error) {
       setMessage("mock-learner-status", "The saved reply could not reconnect. Your conversation is kept; try again when connected.", "error");
-      if (labState.mockCar.active) throw error;
     }
     return;
   }
@@ -16181,7 +15683,6 @@ function renderPipelineMode() {
   const combinedButton = q("clarification-open-map-extraction");
   if (combinedButton) combinedButton.textContent = mock ? "Map, then Extraction" : "Map, then Extraction";
   renderMockLearnerShell();
-  renderMockCarMode();
 }
 
 function setPipelineMode(mode = "controls") {
@@ -16230,8 +15731,7 @@ function setPipelineStage(stage = "clarification") {
   }
   const previous = labState.pipelineStage;
   if (previous !== next) {
-    labState.mockCar.entryToken = makeId();
-    cancelMockCarCapture();
+    cancelMockRecordingCapture();
     if (previous === "clarification") {
       if (labState.clarification.transcriptionToken || labState.clarification.transcriptionAbortController) stopClarificationCaptureForModeChange();
       stopClarificationSpeech();
@@ -16274,7 +15774,6 @@ function setPipelineStage(stage = "clarification") {
   renderPipelineArtifactSelect();
   renderPipelineMode();
   renderMockLearnerShell();
-  renderMockCarMode();
   if (!labState.resumeRestoring && !labState.pendingMockResume) persistClarificationSettings();
 }
 
@@ -16783,7 +16282,6 @@ function setClarificationBusy(busy, label = "") {
   q("clarification-job-status").className = `job-status ${(busy || pending) ? "is-pending" : (state.runError ? "is-failed" : (state.latestJobId ? "is-complete" : ""))}`;
   renderMockRunConfig();
   renderMockLearnerShell();
-  renderMockCarMode();
 }
 
 function renderClarificationModeToggle() {
@@ -16799,7 +16297,6 @@ function renderClarificationModeToggle() {
   button.innerHTML = switchToVoice
     ? '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3.5 19c.9-3.3 3-5 5.5-5s4.6 1.7 5.5 5M16 8.5c1.8.5 3 2.1 3 4s-1.2 3.5-3 4"/><path d="M18.5 6c2.4 1.4 3.8 3.8 3.8 6.5S20.9 17.6 18.5 19"/></svg>'
     : '<span aria-hidden="true">Aa</span>';
-  renderMockCarMode();
 }
 
 function setClarificationConversationMode(mode) {
@@ -16825,7 +16322,6 @@ function stopClarificationCaptureForModeChange() {
     setClarificationBusy(false);
   }
   q("clarification-surface").classList.remove("is-listening");
-  q("mock-car-ptt")?.classList.remove("is-listening");
   setClarificationAudioSession("playback");
 }
 
@@ -16833,7 +16329,6 @@ async function switchClarificationConversationMode() {
   const state = labState.clarification;
   if (state.busy || q("clarification-conversation").hidden) return;
   if (state.mode === "voice") {
-    labState.mockCar.active = false;
     stopClarificationCaptureForModeChange();
     stopClarificationSpeech();
     setClarificationMicStatus();
@@ -16997,7 +16492,6 @@ function armClarificationRecording(event, options = {}) {
   setClarificationAudioSession("play-and-record");
   primeLabRecordingReadyCue();
   setMessage("clarification-message", "Opening the microphone… keep holding and begin after the tone.");
-  setMockCarStatus("thinking", "Opening microphone. Wait for tone.");
   const pointerStartedAt = state.recordingPointerStartedAt;
   const activeRunId = state.runId;
   void ensureClarificationMicStream(activeRunId, { fresh:!reusePreparedMic, capture:true })
@@ -17013,7 +16507,6 @@ function armClarificationRecording(event, options = {}) {
       if (state.recordingPointerStartedAt !== pointerStartedAt || error?.name === "AbortError") return;
       clearClarificationRecordingArm();
       setMessage("clarification-message", `The microphone could not reconnect: ${error.message || "permission was not granted"}. Switch to Text or hold again.`, "error");
-      setMockCarStatus("paused", "Microphone unavailable", "microphone-reconnect");
     });
 }
 
@@ -17054,10 +16547,8 @@ function adoptClarificationMicStream(stream, runId, { capture = false } = {}) {
       releaseLabMicrophoneStream(state, stream);
       clearClarificationRecordingArm(false);
       q("clarification-surface")?.classList.remove("is-listening");
-      q("mock-car-ptt")?.classList.remove("is-listening");
       setClarificationAudioSession("playback");
       setMessage("clarification-message", "The phone stopped delivering microphone audio. Hold again to reconnect.", "error");
-      setMockCarStatus("paused", "I didn’t hear that. Hold again.", "microphone-route");
     };
     watchLabMicrophoneTrack(track, () => state.micStream === stream && state.runId === runId, disconnect);
   }
@@ -17085,11 +16576,9 @@ async function ensureClarificationMicStream(runId = labState.clarification.runId
     return adoptClarificationMicStream(stream, runId, { capture });
   })();
   state.micAcquirePromise = request;
-  renderMockCarMode();
   try { return await request; }
   finally {
     if (state.micAcquirePromise === request) state.micAcquirePromise = null;
-    renderMockCarMode();
   }
 }
 
@@ -17596,9 +17085,6 @@ function startNewPipelineRun(seed = "") {
   labState.newRunDraftActive = true;
   labState.mockResumeToken = makeId();
   labState.artifactRefreshToken = makeId();
-  labState.mockCar.active = false;
-  labState.mockCar.errorKey = "";
-  labState.mockCar.returnFocus = null;
   labState.mockTurnTimings = new Map();
   releaseClarificationTopicCapture();
   stopPipelineExtractionVoice();
@@ -17687,9 +17173,6 @@ function restoreActiveClarificationResume(value) {
   labState.pipelineSelectedRunId = "";
   labState.pipelineSelectedMapJobId = "";
   labState.pipelineSelectedMapRecordId = "";
-  labState.mockCar.active = false;
-  labState.mockCar.errorKey = "";
-  labState.mockCar.returnFocus = null;
   applyClarificationEditorSettings(resume.editor, resume.promptSource);
   if (resume.pipelineMode === "mock") {
     labState.mockRunActiveConfig = sanitizedMockRunConfig(labState.mockRunConfig || resume.runConfig);
@@ -18067,8 +17550,6 @@ async function resumeSavedMockRun(resumeValue = labState.pendingMockResume) {
     labState.clarification.promptSource = labState.mockBoundaryActive.promptSource;
     labState.pipelineSelectedMapJobId = resume.mapJobId;
     labState.pipelineSelectedMapRecordId = resume.mapRecordId;
-    labState.mockCar.active = false;
-    labState.mockCar.returnFocus = null;
     labState.clarification.mode = resume.conversationMode;
     labState.extraction.mode = resume.conversationMode;
     labState.extraction.modeInheritedFromClarification = resume.conversationMode === "voice";
@@ -18528,10 +18009,9 @@ async function runScriptedClarificationOpening(timingId = "") {
   persistClarificationSettings();
   if (willSpeak) {
     const speakingToken = beginMockSpeaking(state);
-    renderMockCarMode();
     try { await playClarificationSpeech(clarificationSpeechText(output), { timingId }); }
     catch (error) { reportMockSpeechFailure("clarification-message", error); }
-    finally { if (finishMockSpeaking(state, speakingToken)) { q("clarification-hear").hidden = false; renderMockCarMode(); } }
+    finally { if (finishMockSpeaking(state, speakingToken)) q("clarification-hear").hidden = false; }
   }
   return true;
 }
@@ -18736,13 +18216,11 @@ async function runClarificationModel(timingId = "") {
     if (willSpeak) {
       setClarificationBusy(false);
       const speakingToken = beginMockSpeaking(state);
-      renderMockCarMode();
       try { await playClarificationSpeech(clarificationSpeechText(output), { timingId:created.job.id }); }
       catch (error) { reportMockSpeechFailure("clarification-message", error); }
       finally {
         if (finishMockSpeaking(state, speakingToken)) {
           q("clarification-hear").hidden = false;
-          renderMockCarMode();
         }
       }
     }
@@ -19099,29 +18577,24 @@ function startClarificationRecording(event, options = {}) {
       q("clarification-surface").classList.remove("is-listening");
       clearClarificationRecordingArm(false);
       state.recordingReadyForSpeech = false;
-      q("mock-car-ptt")?.classList.remove("is-listening");
       releaseLabMicrophoneStream(state, captureStream);
       setClarificationAudioSession("playback");
       const heldMs = Number.isFinite(Number(recorder.wvHeldMs)) ? Number(recorder.wvHeldMs) : performance.now() - recordingStartedAt;
       if (heldMs < 220) {
         setMessage("clarification-message", "Hold a little longer, then release to send.", "error");
-        setMockCarStatus("idle", "Hold a little longer");
         return;
       }
       const blob = labRecorderBlob(recorder, chunks);
       if (!blob || blob.size < 128) {
         setMessage("clarification-message", recorder?.wvIncompleteAudio ? "The phone retained only part of this recording. It was not sent as a complete answer. Please record it again." : "The phone returned no microphone audio, so its route was reset. Hold again to reconnect.", "error");
-        setMockCarStatus("paused", "I didn’t hear that. Hold again.", "empty-audio");
         return;
       }
       captureContext.reviewRequired = recorder.wvInterrupted === true;
       captureContext.turnStartedAt = Number(recorder.wvReleasedAt) || performance.now();
-      setMockCarStatus("transcribing", "Transcribing");
       try {
         await transcribeClarificationRecording(blob, makeId(), captureContext);
       } catch (error) {
         setMessage("clarification-message", `The recording is kept on this screen, but it could not be transcribed: ${error.message}`, "error");
-        setMockCarStatus("paused", "Transcription unavailable", "transcription");
       }
     };
     const handleError = (item) => {
@@ -19130,11 +18603,9 @@ function startClarificationRecording(event, options = {}) {
       releaseLabMicrophoneStream(state, captureStream);
       q("clarification-surface")?.classList.remove("is-listening");
       clearClarificationRecordingArm(false);
-      q("mock-car-ptt")?.classList.remove("is-listening");
       setClarificationAudioSession("playback");
       const message = clip(item?.error?.message || "the phone recorder stopped", 150);
       setMessage("clarification-message", `Recording stopped: ${message}. Hold again to reconnect.`, "error");
-      setMockCarStatus("paused", "Recorder stopped. Hold again.", "recorder-error");
     };
     recorder = startLabMediaRecorder(captureStream, {
       ondataavailable:(item) => { if (state.captureToken === captureToken && item.data?.size) chunks.push(item.data); },
@@ -19150,14 +18621,10 @@ function startClarificationRecording(event, options = {}) {
         if (!isCurrent()) return;
         startMockVoiceMeter(state, recorder, isCurrent);
         q("clarification-surface")?.classList.add("is-listening");
-        q("mock-car-ptt")?.classList.add("is-listening");
         setMessage("clarification-message", "Recorder ready… wait for the tone.");
-        setMockCarStatus("listening", "Recorder ready. Wait for tone.");
         announceLabRecordingReady(state, captureStream, recorder, isCurrent, (played) => {
           setMessage("clarification-message", played ? "Listening… tone played. Speak now, then release to send." : "Listening… speak now, then release to send.");
-          setMockCarStatus("listening", played ? "Tone played. Speak now." : "Listening. Speak now.");
         }, () => {
-          setMockCarStatus("listening", "Microphone audio paused. Waiting for the connection; your recording is kept.");
         });
       },
     });
@@ -19169,7 +18636,6 @@ function startClarificationRecording(event, options = {}) {
     setClarificationAudioSession("playback");
     setMessage("clarification-message", `Recording could not start: ${error.message}`, "error");
     clearClarificationRecordingArm(false);
-    setMockCarStatus("paused", "Recording unavailable", "recording-start");
   }
 }
 
@@ -19185,9 +18651,7 @@ function stopClarificationRecording(event) {
   const recorder = state.recorder;
   if (recorder?.state === "recording") {
     q("clarification-surface")?.classList.remove("is-listening");
-    q("mock-car-ptt")?.classList.remove("is-listening");
     setMessage("clarification-message", "Finishing your recording…");
-    setMockCarStatus("transcribing", "Finishing…");
     scheduleLabRecorderStop(state, recorder, state.captureToken);
     event?.preventDefault?.();
   }
@@ -19203,10 +18667,8 @@ function cancelClarificationRecording(event) {
   invalidateLabCapture(state, captureStream);
   releaseLabMicrophoneStream(state, captureStream);
   q("clarification-surface")?.classList.remove("is-listening");
-  q("mock-car-ptt")?.classList.remove("is-listening");
   setClarificationAudioSession("playback");
   setMessage("clarification-message", "Recording cancelled. Hold again when you are ready.");
-  setMockCarStatus("idle", "Recording cancelled. Hold again.");
   event?.preventDefault?.();
 }
 
@@ -19709,22 +19171,21 @@ function bindEvents() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && q("mock-learner-source-panel")?.hidden === false) closeMockLearnerSources({ restoreFocus:true });
   });
-  q("mock-learner-car")?.addEventListener("click", () => { void enterMockCarMode(); });
   q("mock-learner-send")?.addEventListener("click", () => { void submitMockLearnerReply(); });
   q("mock-learner-reply")?.addEventListener("input", renderMockLearnerShell);
   q("mock-learner-reply")?.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submitMockLearnerReply(); }
   });
   // Whole-surface push-to-talk. On a phone the small Hold button is an awkward
-  // target, so the learner shell and the Car surface are themselves the control:
-  // holding anywhere that is not an actual control starts the microphone. Each
+  // target, so the learner shell is itself the control: holding anywhere that
+  // is not an actual control starts the microphone. Each
   // phase keeps its own arm and cancel rules through startMockLearnerRecording,
   // and Clarification already owns its own surface, so it is left alone here.
   const mockSurfaceHold = (event, start) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     const excluded = event.target?.closest?.(MOCK_SURFACE_CONTROL_SELECTOR);
-    if (excluded && excluded !== q("mock-car-surface")) return;
-    if (event.isPrimary === false) { cancelMockCarCapture(); return; }
+    if (excluded) return;
+    if (event.isPrimary === false) { cancelMockRecordingCapture(); return; }
     start(event);
   };
   // An outside press belongs to the open chapter menu, including its release
@@ -19770,15 +19231,13 @@ function bindEvents() {
   for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) window.addEventListener(type, finishMockRecordingGesture, { capture:true });
   q("mock-learner-shell")?.addEventListener("pointerdown", (event) => mockSurfaceHold(event, startMockLearnerRecording));
   q("mock-learner-shell")?.addEventListener("pointermove", cancelClarificationRecordingArmOnMove);
-  q("mock-car-surface")?.addEventListener("pointerdown", (event) => mockSurfaceHold(event, startMockCarRecording));
   for (const eventName of ["pointerup", "pointercancel"]) {
     window.addEventListener(eventName, (event) => {
       // The dedicated buttons and Clarification keep their existing handlers;
       // releasing over them must not stop the same hold twice.
-      if (event.target?.closest?.("#mock-learner-ptt, #mock-car-ptt")) return;
+      if (event.target?.closest?.("#mock-learner-ptt")) return;
       if (labState.pipelineStage === "clarification") return;
-      if (q("mock-car-surface")?.hidden === false) stopMockCarRecording(event);
-      else if (q("mock-learner-shell")?.hidden === false) stopMockLearnerRecording(event);
+      if (q("mock-learner-shell")?.hidden === false) stopMockLearnerRecording(event);
     });
   }
   q("mock-learner-ptt")?.addEventListener("pointerdown", startMockLearnerRecording);
@@ -19792,22 +19251,6 @@ function bindEvents() {
   });
   q("mock-learner-retry")?.addEventListener("click", () => { void retryMockLearnerAction(); });
   q("mock-learner-map-progress")?.addEventListener("click", () => openPipelineExtractionMapDialog());
-  for (const id of ["clarification-car-mode", "pipeline-extraction-car-mode", "pipeline-lesson-car-mode", "pipeline-quiz-car-mode"]) {
-    q(id)?.addEventListener("click", () => { void enterMockCarMode(); });
-  }
-  q("mock-car-live-exit")?.addEventListener("click",()=>exitMockCarMode());
-  q("mock-car-text")?.addEventListener("click", () => exitMockCarMode({ switchToText:true }));
-  q("mock-car-speaker")?.addEventListener("click", () => { void toggleMockCarSpeaker(); });
-  for (const route of ["speaker", "receiver"]) q(`mock-car-output-${route}`)?.addEventListener("click", () => { void chooseMockPhoneOutput(route); });
-  q("mock-car-replay")?.addEventListener("click", () => { void replayMockCarReply({ repeat:true }); });
-  q("mock-car-stop-audio")?.addEventListener("click", () => { void replayMockCarReply(); });
-  q("mock-car-map")?.addEventListener("click", () => { cancelMockCarCapture(); openPipelineExtractionMapDialog(); });
-  q("mock-car-discard")?.addEventListener("click", () => { cancelMockCarCapture(); setMockCarStatus("idle", "Recording discarded. Hold or tap to start again."); });
-  q("mock-car-retry")?.addEventListener("click", () => { void retryMockCarAction(); });
-  window.addEventListener("keydown", trapMockCarFocus);
-  q("mock-car-ptt")?.addEventListener("pointerdown", startMockCarRecording);
-  q("mock-car-recording-toggle")?.addEventListener("click", toggleMockRecording);
-  for (const eventName of ["pointerup", "pointercancel", "lostpointercapture"]) q("mock-car-ptt")?.addEventListener(eventName, stopMockCarRecording);
   q("mock-run-config-toggle")?.addEventListener("click", () => setMockRunConfigCollapsed(!labState.mockRunConfigCollapsed));
   q("mock-run-reset-all")?.addEventListener("click", () => resetMockRunConfig("all"));
   for (const id of ["mock-setup-launch", "mock-setup-launch-top"]) q(id)?.addEventListener("click", launchNewMockRun);
@@ -20007,7 +19450,7 @@ function bindEvents() {
   document.querySelectorAll(".lab-tab").forEach((button) => button.addEventListener("click", () => activateTab(button.dataset.tab)));
   window.addEventListener("pagehide", () => {
     stopSpeechComparison();
-    stopMockCarMedia();
+    stopMockConversationMedia();
     if (workspaceSaveTimer) persistWorkspace();
   });
   document.addEventListener("visibilitychange", cancelBackgroundMockRecording);

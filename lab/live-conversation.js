@@ -108,7 +108,7 @@ window.WorldviewLiveConversation=(()=>{
   if(enabled)output?.paint();
   ui.start.textContent=paused?'Resume voice':'Try microphone again';
   ui.rate.hidden=true;
-  ui.captions.hidden=!session?.ready||context?.car;const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.setAttribute('aria-label',capsLabel);ui.captions.title=capsLabel;ui.captions.setAttribute('aria-pressed',String(showCaptions));
+  ui.captions.hidden=!session?.ready;const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.setAttribute('aria-label',capsLabel);ui.captions.title=capsLabel;ui.captions.setAttribute('aria-pressed',String(showCaptions));
   ui.end.hidden=!session;ui.mute.hidden=!session?.ready;const muteLabel=session?.muted?'Unmute mic':'Mute mic';ui.mute.setAttribute('aria-label',muteLabel);ui.mute.title=muteLabel;ui.mute.classList.toggle('is-muted',!!session?.muted);ui.mute.setAttribute('aria-pressed',String(!!session?.muted));
   ui.retry.hidden=!saveError;ui.retry.disabled=!!saving;
   if(saveError)message(saveError);
@@ -182,7 +182,7 @@ window.WorldviewLiveConversation=(()=>{
   if(!s.dispatched||s.receiptClose)return;
   releasing=s.receiptClose=s.request({action:'close',requestId:s.id}).catch(()=>{}).finally(()=>{if(releasing===s.receiptClose){releasing=null;maybeStart();}});
  }
- function place(container,car=false){if(!ui||!container)return;if(ui.root.parentElement!==container)container.append(ui.root);ui.root.classList.toggle('is-car',car);paint();}
+ function place(container){if(!ui||!container)return;if(ui.root.parentElement!==container)container.append(ui.root);paint();}
  function captureAudioType(type='play-and-record'){try{if(navigator.audioSession&&'type' in navigator.audioSession&&navigator.audioSession.type!==type)navigator.audioSession.type=type;}catch{/* Browsers without this control choose their own route. */}}
  async function resumeAudio(s){
   if(s.gemini)return s.gemini.resumeAudio();

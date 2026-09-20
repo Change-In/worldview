@@ -2194,7 +2194,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.60 · Sep 20";
+const BUILD = "v2.1.61 · Sep 20";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2202,6 +2202,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.61",date:"Sep 20",changes:["Housekeeping only. The code behind Car mode, which was retired in v2.1.59, is now removed as well. Nothing about using Worldview changes."]},
   {tag:"v2.1.60",date:"Sep 20",changes:["Housekeeping only. The code behind the conversation scroll wheel, which was taken off the screen in v2.1.58, is now removed as well. Nothing about using Worldview changes."]},
   {tag:"v2.1.59",date:"Sep 19",changes:["Car mode is gone. A lesson is Text or Voice, and the car button no longer sits at the top of the conversation.","The bar above the conversation names the chapter and the learning outcome you are on, so you can see the lesson moving.","The Lesson Map is just the map: no instructions, no status banner and no retry button. Missing research is retried for you, and a part still waiting says so.","Learning outcomes show their titles; tap one to read what it actually means. The evidence rules and research questions behind it stay out of your way.","Reopening a lesson shows the whole conversation again, including anything typed between voice sessions.","Copying the transcript moved into the top right as an icon, and the row it used to occupy went back to the conversation.","The appearance button stays on Home instead of following you into a lesson, and the text box has that space back.","Say you have plenty of time and the lesson plans a full route rather than the shortest one. A stated time now plans about five minutes per learning outcome.","Lesson research now also looks up the obvious comparison you are likely to ask about.","From a saved lesson you can archive or delete it, with the choice named before anything happens. Archived lessons sit in the Archive drawer.","The cost estimate now includes the web searches a lesson makes, at their list rate, which it used to leave out entirely."]},
   {tag:"v2.1.58",date:"Sep 18",changes:["When a lesson moves to its next part, the tutor now opens that part itself instead of leaving you sitting in silence.","Coming back to the app after leaving it reconnects the lesson, instead of holding the microphone open and answering nothing.","Your messages sit on the right, Worldview’s on the left.","The conversation scroll wheel is gone. Swipe the conversation to scroll it.","The light and dark button is smaller and leaves more room beside the text box.","While your Lesson Map is being built you can see how many parts have been researched."]},
