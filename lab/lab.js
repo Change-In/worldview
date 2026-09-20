@@ -12680,7 +12680,11 @@ function renderPipelineExtractionMapDialog(artifact = selectedPipelineArtifact()
     if (organization && !labState.extraction.mapDialogSavedOnly) content.append(organization);
     if (typeof LAB_LEARNER === "undefined" || !LAB_LEARNER) content.append(renderMapResearchSpend(artifact));
   } else {
-    content.append(element("div", { className:"extraction-map-dialog-placeholder", text:mapState.message }));
+    /* A learner reads this box when there is no route to draw yet, so it must
+       not carry wording written for the Lab. */
+    content.append(element("div", { className:"extraction-map-dialog-placeholder", text:learnerAlert
+      ? "This lesson does not have a route yet. Use the button above to build it."
+      : learnerView ? "Your lesson route is still being prepared." : mapState.message }));
   }
   if (attemptHistory.length) {
     const attempts = element("section", { className:"extraction-map-attempts" });
@@ -15137,10 +15141,19 @@ function liveResearchState(selection, stage=labState.pipelineStage) {
  const retryAvailable=!ready&&(meta?.researchRetryAvailable===true||meta?.workflowState==='needs-attention'
   ||Boolean(planner&&!LAB_ACTIVE_JOB_STATES.has(planner.status)&&planner.status!=='completed')
   ||Boolean(artifact?.runId&&labState.extraction.mapStartFailureRunId===artifact.runId));
- return {state:ready?'ready':retryAvailable?'needs-attention':'working',firstOutcomeReady:first?.verifiedSupport?.status==='verified',retryAvailable,
+ const verified=outcomes.filter(outcome=>outcome.verifiedSupport?.status==='verified').length;
+ /* A later chapter that could not be researched must not hold the lesson shut.
+    The workflow already decides this: teachingReady means the route validated
+    and the first chapter verified. It was never passed on, because the tutor is
+    only told the overall state, and workflowState tests researchFailures before
+    teachingReady - so one failed outcome anywhere read as "wait". */
+ const teachable=!ready&&meta?.teachingReady===true&&first?.verifiedSupport?.status==='verified';
+ return {state:ready?'ready':teachable?'partial':retryAvailable?'needs-attention':'working',firstOutcomeReady:first?.verifiedSupport?.status==='verified',retryAvailable,teachable,
   autoLeft:researchAutoRetriesLeft(planner),
-  verified:outcomes.filter(outcome=>outcome.verifiedSupport?.status==='verified').length,total:outcomes.length,
-  message:ready?'Verified lesson research is ready.':retryAvailable?'Some chapter research could not be verified. Retry missing research; keep completed support and the saved conversation.':'Lesson research is still running. Preserve any agreement to begin.'};
+  verified,total:outcomes.length,
+  message:ready?'Verified lesson research is ready.'
+   :teachable?'The lesson route is ready and its first chapter is verified, so begin teaching now rather than waiting. '+verified+' of '+outcomes.length+' parts are researched. Teach only parts whose support is verified; when the lesson reaches a part that is not, say plainly that its research is not ready and do not teach it from memory.'
+   :retryAvailable?'Some chapter research could not be verified. Retry missing research; keep completed support and the saved conversation.':'Lesson research is still running. Preserve any agreement to begin.'};
 }
 function renderLiveResearchRecovery(selection, stage=labState.pipelineStage) {
  const research=liveResearchState(selection,stage),retry=q('mock-learner-retry'),status=q('mock-learner-status');
@@ -15152,10 +15165,13 @@ function renderLiveResearchRecovery(selection, stage=labState.pipelineStage) {
  // Building a Lesson Map takes real time. Silence during it reads as a stall,
  // so the counted progress the workflow already tracks is said out loud here.
  const building=!failed&&research?.state==='working';
- status.textContent=failed?(retrying?'Finishing the last of your lesson research.':'Some lesson research needs a retry. Your answers and verified chapters are saved.')
+ const teachable=research?.teachable===true;
+ status.textContent=failed?(retrying?'Finishing the last of your lesson research.'
+   :teachable?'Your lesson can start. '+research.verified+' of '+research.total+' parts are researched; the rest are still being prepared.'
+   :'Some lesson research needs a retry. Your answers and verified chapters are saved.')
   :building?(research.total?'Building your lesson map - '+research.verified+' of '+research.total+' parts researched.':'Building your lesson map.')
   :'';
- status.classList.toggle('is-error',!!failed&&!retrying);
+ status.classList.toggle('is-error',!!failed&&!retrying&&!teachable);
 }
 function liveStudyInput(artifact,selection,transcript){
  const stage=labState.pipelineStage,usable=pipelineMapSelectionIsUsable(selection),outcomes=usable?pipelineLessonOutcomes(selection):[];

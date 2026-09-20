@@ -2194,7 +2194,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.62 · Sep 20";
+const BUILD = "v2.1.63 · Sep 20";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2202,6 +2202,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.63",date:"Sep 20",changes:["Fixed: one part of a lesson whose research failed was stopping the whole lesson from starting, even when the first chapter was researched and ready. The lesson now begins on what is verified, says plainly when it reaches a part that is not ready, and keeps retrying the rest.","The Lesson Map no longer shows developer wording when it has no route to draw yet."]},
   {tag:"v2.1.62",date:"Sep 20",changes:["Fixed: a lesson whose route failed to build could never recover, and the map screen showed a developer message. Worldview now retries building the route by itself, and if it still cannot, the Lesson Map says so plainly and offers one button to build it."]},
   {tag:"v2.1.61",date:"Sep 20",changes:["Housekeeping only. The code behind Car mode, which was retired in v2.1.59, is now removed as well. Nothing about using Worldview changes."]},
   {tag:"v2.1.60",date:"Sep 20",changes:["Housekeeping only. The code behind the conversation scroll wheel, which was taken off the screen in v2.1.58, is now removed as well. Nothing about using Worldview changes."]},
