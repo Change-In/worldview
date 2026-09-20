@@ -1028,6 +1028,7 @@ const labState = {
   mapAutoRetryStarting: new Set(),
   mapAutoRetryHandled: new Set(),
   researchAutoRetries: new Map(),
+  lessonCreateFailure: null,
   lessonMapAutoStarts: new Map(),
   lessonMapAutoStarting: "",
   learnerAutoRecovery: new Map(),
@@ -1657,6 +1658,7 @@ function resetWorkspaceContents() {
   labState.mapAutoRetryStarting = new Set();
   labState.mapAutoRetryHandled = new Set();
   labState.researchAutoRetries = new Map();
+  labState.lessonCreateFailure = null;
   labState.lessonMapAutoStarts = new Map();
   labState.lessonMapAutoStarting = "";
   labState.learnerAutoRecovery = new Map();
@@ -6037,12 +6039,22 @@ async function retryPendingCreate(id) {
   }
 }
 
+/* Why the last Lesson Map create did not produce a job. Written at every point
+   runTextExperiment gives up, so the callers can report the cause instead of
+   the fact. */
+function noteLessonCreateFailure(kind, reason) {
+  if (kind !== "lesson") return false;
+  labState.lessonCreateFailure = { reason:clip(reason, 240), at:new Date().toISOString() };
+  return false;
+}
+
 async function runTextExperiment(kind, options = {}) {
   if (labState.preview) {
     setMessage(`${kind}-run-message`, "Preview mode is local only; durable server jobs are disabled.", "error");
-    return;
+    return noteLessonCreateFailure(kind, "Preview mode has no durable job server.");
   }
   const messageId = options.messageId || `${kind}-run-message`;
+  if (kind === "lesson") labState.lessonCreateFailure = null;
   const intendedPipelineRunId = kind === "lesson" ? String(options.pipelineArtifact?.runId || "") : "";
   if (labState.busy || labState.createStarting) {
     if (!intendedPipelineRunId) return false;
@@ -6053,27 +6065,28 @@ async function runTextExperiment(kind, options = {}) {
       if (selectedPipelineArtifact()?.runId !== intendedPipelineRunId) return false;
       if (performance.now() - waitStarted > 120000) {
         setMessage(messageId, "The previous create did not release the queue. Retry this run’s Lesson Map from View status.", "error");
-        return false;
+        return noteLessonCreateFailure(kind, "A previous durable create held the queue for two minutes and did not release it.");
       }
     }
   }
-  if (selectedPipelineArtifact()?.runId !== intendedPipelineRunId && intendedPipelineRunId) return false;
+  if (selectedPipelineArtifact()?.runId !== intendedPipelineRunId && intendedPipelineRunId) return noteLessonCreateFailure(kind, "The selected lesson changed while the Lesson Map request was starting.");
   labState.createStarting = true;
   try { await accessToken(false); }
   catch (error) {
     labState.createStarting = false;
     setMessage(messageId, `Could not verify the Lab account: ${error.message || "reload and try again"}`, "error");
-    return;
+    return noteLessonCreateFailure(kind, `Account check failed: ${error.message || "no detail"}`);
   }
   const unresolved = pendingCreateForComponent(kind, intendedPipelineRunId);
   if (unresolved) {
     labState.createStarting = false;
+    noteLessonCreateFailure(kind, `An earlier unconfirmed create for this lesson was retried instead of starting a new one (pending ${unresolved.id}).`);
     await retryPendingCreate(unresolved.id);
     return;
   }
   let run;
   try { run = buildRun(kind, options); }
-  catch (error) { labState.createStarting = false; setMessage(messageId, error.message, "error"); return; }
+  catch (error) { labState.createStarting = false; setMessage(messageId, error.message, "error"); return noteLessonCreateFailure(kind, error.message); }
   setBusy(true);
   labState.createStarting = false;
   setMessage(messageId, `Creating a durable job for ${run.total} sample${run.total === 1 ? "" : "s"}…`);
@@ -7893,7 +7906,9 @@ async function retryPipelineMapFromExtraction(options = {}) {
       // the independent Map request did not return a durable job.
       retryState.mapStartFailureRunId = artifact.runId;
       retryState.mapStartFailureJobId = currentMapJob?.id || "";
-      retryState.mapStartFailureMessage = "The Lesson Map retry could not be started.";
+      retryState.mapStartFailureMessage = labState.lessonCreateFailure?.reason
+        ? `The Lesson Map retry could not be started: ${labState.lessonCreateFailure.reason}`
+        : "The Lesson Map retry could not be started.";
       setMessage("pipeline-extraction-output", "The Lesson Map retry could not be started. Extraction remains available; open the Map stage to review the Lab error.", "error");
       return false;
     }
@@ -12634,6 +12649,14 @@ function lessonRouteReport(artifact = selectedPipelineArtifact()) {
   say("deferred", labState.extraction.mapDeferredRunId === artifact.runId);
   say("start failure", clip(labState.extraction.mapStartFailureMessage, 160));
   say("auto starts left", lessonMapAutoStartsLeft(artifact.runId));
+  say("create failure", clip(labState.lessonCreateFailure?.reason, 240));
+  say("create failure at", labState.lessonCreateFailure?.at);
+  const pendingLesson = pendingCreateForComponent("lesson", artifact.runId);
+  say("pending create", pendingLesson ? `${pendingLesson.id} (attempts ${pendingLesson.attempts ?? "?"})` : "none");
+  say("pipeline mode", labState.pipelineMode);
+  const mapRoute = mockStageConfig("map");
+  say("map route", `${mapRoute?.provider} / ${mapRoute?.model} / ${mapRoute?.outputTokens} tokens / research ${mapRoute?.research}`);
+  say("provider configured", Object.entries(labState.configured || {}).map(([name, ready]) => `${name}=${ready}`).join(", ") || "none reported");
 
   const jobs = pipelineMapJobs(artifact);
   lines.push("", `planner jobs: ${jobs.length}`);
@@ -12722,8 +12745,13 @@ function renderPipelineExtractionMapDialog(artifact = selectedPipelineArtifact()
   const learnerAlert = learnerView && ["deferred", "needs-attention"].includes(mapState.state)
     && !lessonMapAutoRecoveryActive(artifact);
   dialog.dataset.learnerAlert = learnerAlert ? "true" : "";
+  /* When the application knows why the route did not build, say that instead of
+     a general sentence. The reason was always computed and always discarded. */
+  const createReason = labState.lessonCreateFailure?.reason || "";
   status.textContent = learnerAlert
-    ? "This lesson's route did not finish building, so the tutor has no researched material to teach from yet."
+    ? (createReason
+      ? `This lesson's route could not be built. ${createReason}`
+      : "This lesson's route did not finish building, so the tutor has no researched material to teach from yet.")
     : mapState.message;
   if (retry) {
     const retryable = Boolean(artifact && !labState.preview && !labState.extraction.mapDialogSavedOnly
@@ -16022,7 +16050,8 @@ async function startMapThenExtraction() {
     const exactFailure = mapResult?.status === "rejected" ? clip(mapResult.reason?.message || mapResult.reason, 180) : "";
     labState.extraction.mapStartFailureRunId = artifact.runId;
     labState.extraction.mapStartFailureJobId = "";
-    labState.extraction.mapStartFailureMessage = exactFailure ? `This run’s Lesson Map did not start: ${exactFailure}` : "This run’s Lesson Map did not start.";
+    const captured = exactFailure || labState.lessonCreateFailure?.reason || "";
+    labState.extraction.mapStartFailureMessage = captured ? `This run’s Lesson Map did not start: ${captured}` : "This run’s Lesson Map did not start.";
     persistClarificationSettings();
     setMessage("pipeline-extraction-output", "The broad overview can continue, but this run’s Lesson Map did not start. Open View status and retry the Map before beginning the Lesson.", "error");
   }
