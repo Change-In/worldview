@@ -12733,7 +12733,6 @@ function openPipelineExtractionMapDialog({ savedOnly = false } = {}) {
        and a stable parent. */
     document.body.append(dialog);
   }
-  cancelMockLearnerScrollMotion();
   labState.extraction.mapDialogReturnFocus = document.activeElement || progress;
   labState.extraction.mapDialogOpen = true;
   dialog.hidden = false;
@@ -14948,7 +14947,6 @@ async function enterMockCarMode() {
     renderMockLearnerShell();q('mock-car-live-exit')?.focus({preventScroll:true});return true;
   }
   if (!mockCarConversationAvailable()) return false;
-  cancelMockLearnerScrollMotion();
   const entryToken = makeId();
   labState.mockCar.entryToken = entryToken;
   if (!labState.clarification.speaking && !labState.extraction.speaking) primeMockVoiceAudio();
@@ -15380,7 +15378,7 @@ function renderMockChapterMenu(selection, stage, chapterState, rootId = "mock-le
     button.addEventListener("click", () => {
       details.open = false;
       const turn = [...q("mock-learner-transcript").children].find((item) => item.dataset.chapterId === id);
-      if (turn && rootId !== "mock-car-chapters") { cancelMockLearnerScrollMotion(); turn.scrollIntoView({ block:"start", behavior:"smooth" }); turn.tabIndex = -1; turn.focus({ preventScroll:true }); return; }
+      if (turn && rootId !== "mock-car-chapters") { turn.scrollIntoView({ block:"start", behavior:"smooth" }); turn.tabIndex = -1; turn.focus({ preventScroll:true }); return; }
       openPipelineExtractionMapDialog();
       labState.extraction.mapDialogReturnFocus = summary;
       requestAnimationFrame(() => {
@@ -15476,7 +15474,6 @@ function renderMockLearnerSources(stage, selection) {
 function toggleMockLearnerSources(event) {
   const panel = q("mock-learner-source-panel");
   if (!panel?.hidden) { closeMockLearnerSources({ restoreFocus:true }); return; }
-  cancelMockLearnerScrollMotion();
   const selection = selectedPipelineMapRecord();
   labState.sourcePanelKey = mockLearnerSourceContext(labState.pipelineStage, selection).key;
   panel.hidden = false;
@@ -15747,7 +15744,7 @@ function renderMockLearnerShell() {
   const active = mockLearnerConversationActive();
   shell.hidden = !active;
   document.body.classList.toggle("mock-learner-shell-active", active);
-  if (!active) { window.WorldviewLiveConversation?.sync({enabled:false,lineage:""}); cancelMockLearnerScrollMotion(); closeMockLearnerSources(); return; }
+  if (!active) { window.WorldviewLiveConversation?.sync({enabled:false,lineage:""}); closeMockLearnerSources(); return; }
 
   const artifact = selectedPipelineArtifact();
   const selection = artifact ? selectedPipelineMapRecord(artifact) : null;
@@ -15755,8 +15752,6 @@ function renderMockLearnerShell() {
   const transcript = mockLearnerTranscript(stage, artifact);
   const transcriptRoot = q("mock-learner-transcript");
   const changed = renderExtractionTranscriptList(transcriptRoot, transcript);
-  if (changed || shell.dataset.scrollStage !== stage) cancelMockLearnerScrollMotion();
-  shell.dataset.scrollStage = stage;
   if (changed && transcript.length) requestAnimationFrame(() => { if (transcriptRoot?.isConnected) transcriptRoot.scrollTop = transcriptRoot.scrollHeight; });
 
   const chapterState = mockLearnerLessonChapterState(selection, stage);
@@ -15817,7 +15812,6 @@ function renderMockLearnerShell() {
   renderMockRecordingControls();
   shell.dataset.voice = String(mode === "voice");
   syncLiveLesson();
-  requestAnimationFrame(syncMockLearnerScroll);
 }
 
 async function submitMockLearnerReply() {
@@ -15901,7 +15895,6 @@ function applyMockLearnerDensity(value, { persist = false, preserveScroll = fals
   const density = MOCK_LEARNER_DENSITIES.includes(value) ? value : "standard";
   const transcript = q("mock-learner-transcript");
   const anchor = preserveScroll ? mockLearnerReadingAnchor(transcript) : null;
-  if (preserveScroll) cancelMockLearnerScrollMotion();
   // Reflow the text itself; browser zoom and the surrounding controls retain their size.
   shell.dataset.density = density;
   restoreMockLearnerReadingAnchor(transcript, anchor);
@@ -15915,7 +15908,6 @@ function applyMockLearnerDensity(value, { persist = false, preserveScroll = fals
   if (persist) {
     try { localStorage.setItem(MOCK_LEARNER_DENSITY_KEY, density); } catch (_) { /* Keep the current view when device storage is unavailable. */ }
   }
-  syncMockLearnerScroll();
   return density;
 }
 
@@ -15930,123 +15922,6 @@ function bindMockLearnerDensity() {
   try { saved = localStorage.getItem(MOCK_LEARNER_DENSITY_KEY) || saved; } catch (_) { /* Use the original text size. */ }
   applyMockLearnerDensity(saved);
   q("mock-learner-density")?.addEventListener("click", cycleMockLearnerDensity);
-}
-
-function syncMockLearnerScroll() {
-  const transcript = q("mock-learner-transcript"), scroll = q("mock-learner-scroll");
-  if (!transcript || !scroll) return;
-  const max = Math.max(0, transcript.scrollHeight - transcript.clientHeight);
-  scroll.hidden = max <= 1;
-  const position = max ? Math.round(Math.max(0, Math.min(max, transcript.scrollTop)) / max * 100) : 100;
-  scroll.setAttribute("aria-valuenow", String(position));
-  scroll.setAttribute("aria-valuetext", max ? `${position}% through conversation` : "Conversation fits on screen");
-  scroll.style.setProperty("--wheel-offset", `${(transcript.scrollTop / 2) % 8}px`);
-}
-
-function cancelMockLearnerScrollMotion() {
-  q("mock-learner-scroll")?.wvCancelScrollMotion?.();
-}
-
-function bindMockLearnerScroll() {
-  const scroll = q("mock-learner-scroll"), transcript = q("mock-learner-transcript");
-  if (!scroll || !transcript) return;
-  let pointerId = null, lastY = 0, lastMoveAt = 0, velocity = 0, frame = 0;
-  const now = () => performance.now();
-  const scope = () => `${labState.verifiedUserId}|${labState.pipelineStage}|${labState.clarification.runId}`;
-  const stopMomentum = () => {
-    if (frame) cancelAnimationFrame(frame);
-    frame = 0;
-    velocity = 0;
-    delete scroll.dataset.spinning;
-  };
-  const move = (delta) => {
-    if (!Number.isFinite(delta)) return 0;
-    const max = Math.max(0, transcript.scrollHeight - transcript.clientHeight);
-    const before = transcript.scrollTop;
-    transcript.scrollTop = Math.max(0, Math.min(max, transcript.scrollTop + delta));
-    syncMockLearnerScroll();
-    return transcript.scrollTop - before;
-  };
-  const release = (coast = false) => {
-    const id = pointerId;
-    const releaseVelocity = velocity;
-    const age = now() - lastMoveAt;
-    pointerId = null;
-    delete scroll.dataset.dragging;
-    try { if (id !== null && scroll.hasPointerCapture(id)) scroll.releasePointerCapture(id); } catch (_) { /* Capture may already have ended. */ }
-    stopMomentum();
-    if (!coast || age > 90 || Math.abs(releaseVelocity) < .15 || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    velocity = releaseVelocity;
-    const initialScope = scope();
-    let lastFrameAt = now();
-    scroll.dataset.spinning = "true";
-    const tick = () => {
-      frame = 0;
-      if (document.hidden || scroll.hidden || q("mock-learner-shell")?.hidden
-        || q("mock-car-surface")?.hidden === false || q("pipeline-extraction-map-dialog")?.hidden === false
-        || q("mock-learner-source-panel")?.hidden === false || initialScope !== scope()) { stopMomentum(); return; }
-      const timestamp = now();
-      const elapsed = Math.max(1, Math.min(40, timestamp - lastFrameAt));
-      lastFrameAt = timestamp;
-      const travelled = move(velocity * elapsed);
-      velocity *= Math.exp(-elapsed / 240);
-      if (Math.abs(velocity) < .02 || Math.abs(travelled) < .01) { stopMomentum(); return; }
-      frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-  };
-  scroll.wvCancelScrollMotion = () => release(false);
-  scroll.addEventListener("pointerdown", (event) => {
-    event.stopPropagation();
-    if (event.isPrimary === false) { release(false); return; }
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    event.preventDefault();
-    release(false);
-    pointerId = event.pointerId;
-    lastY = event.clientY;
-    lastMoveAt = now();
-    scroll.dataset.dragging = "true";
-    scroll.focus({ preventScroll:true });
-    try { scroll.setPointerCapture(pointerId); } catch (_) { /* Window release still ends the gesture. */ }
-  });
-  scroll.addEventListener("pointermove", (event) => {
-    if (event.pointerId !== pointerId) return;
-    event.preventDefault();
-    event.stopPropagation();
-    // Relative travel makes every stroke useful, regardless of where it starts.
-    const timestamp = now();
-    const elapsed = Math.max(8, timestamp - lastMoveAt);
-    const delta = (event.clientY - lastY) * 2;
-    move(delta);
-    const nextVelocity = Math.max(-8, Math.min(8, delta / elapsed));
-    velocity = elapsed > 100 || Math.sign(nextVelocity) !== Math.sign(velocity) ? nextVelocity : velocity * .25 + nextVelocity * .75;
-    lastY = event.clientY;
-    lastMoveAt = timestamp;
-  });
-  for (const name of ["pointerup", "pointercancel", "lostpointercapture"]) {
-    scroll.addEventListener(name, (event) => {
-      event.stopPropagation();
-      if (event.pointerId === pointerId) release(name === "pointerup");
-    });
-  }
-  for (const name of ["pointerup", "pointercancel"]) window.addEventListener(name, (event) => { if (event.pointerId === pointerId) release(name === "pointerup"); });
-  window.addEventListener("blur", () => release(false));
-  document.addEventListener("visibilitychange", () => { if (document.hidden) release(false); });
-  scroll.addEventListener("wheel", (event) => {
-    if (event.ctrlKey) return; // Preserve browser pinch/zoom gestures.
-    event.preventDefault();
-    event.stopPropagation();
-    release(false);
-    move(event.deltaY * (event.deltaMode === 1 ? 20 : event.deltaMode === 2 ? transcript.clientHeight : 1));
-  }, { passive:false });
-  scroll.addEventListener("keydown", (event) => {
-    const deltas = { ArrowUp:-24, ArrowDown:24, PageUp:-transcript.clientHeight * .8, PageDown:transcript.clientHeight * .8, Home:-transcript.scrollHeight, End:transcript.scrollHeight };
-    if (!(event.key in deltas) || event.ctrlKey || event.metaKey || event.altKey) return;
-    event.preventDefault();
-    event.stopPropagation();
-    release(false);
-    move(deltas[event.key]);
-  });
 }
 
 function beginMockRecordingGesture(event, latched = false) {
@@ -19891,11 +19766,8 @@ function bindEvents() {
     if (event.key !== "Escape") return;
     for (const menu of document.querySelectorAll(".mock-response-sources[open], .mock-chapter-menu[open]")) { menu.open = false; menu.querySelector("summary")?.focus(); }
   });
-  bindMockLearnerScroll();
   window.addEventListener("pointermove", moveMockRecordingGesture, { capture:true, passive:false });
   for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) window.addEventListener(type, finishMockRecordingGesture, { capture:true });
-  q("mock-learner-transcript")?.addEventListener("scroll", syncMockLearnerScroll, { passive:true });
-  window.addEventListener("resize", syncMockLearnerScroll, { passive:true });
   q("mock-learner-shell")?.addEventListener("pointerdown", (event) => mockSurfaceHold(event, startMockLearnerRecording));
   q("mock-learner-shell")?.addEventListener("pointermove", cancelClarificationRecordingArmOnMove);
   q("mock-car-surface")?.addEventListener("pointerdown", (event) => mockSurfaceHold(event, startMockCarRecording));
