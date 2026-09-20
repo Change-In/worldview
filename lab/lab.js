@@ -12613,6 +12613,99 @@ function renderMissingResearchStatus(rows) {
   return section;
 }
 
+/* Everything the application knows about why a route did or did not finish,
+   as plain text. The learner route hides the planner attempts and the research
+   rows that carry the actual provider error, so a failure that happens on a
+   phone has been invisible to everyone who could act on it. Reading it costs
+   nothing: every value here is already in memory. */
+function lessonRouteReport(artifact = selectedPipelineArtifact()) {
+  const lines = [];
+  const say = (label, value) => lines.push(`${label}: ${value === undefined || value === null || value === "" ? "-" : value}`);
+  lines.push("WORLDVIEW ROUTE REPORT", new Date().toISOString(), "");
+  if (!artifact) { lines.push("No lesson is selected."); return lines.join("\n"); }
+  say("run", artifact.runId);
+  say("topic", clip(artifact.topic, 80));
+  say("stage", labState.pipelineStage);
+  const study = labState.liveJourney;
+  say("live phase", study?.runId === artifact.runId ? `${study.phase} (version ${study.phaseVersion})` : "no live study for this run");
+  const state = pipelineExtractionMapViewState(artifact);
+  say("map state", state.state);
+  say("map message", clip(state.message, 160));
+  say("deferred", labState.extraction.mapDeferredRunId === artifact.runId);
+  say("start failure", clip(labState.extraction.mapStartFailureMessage, 160));
+  say("auto starts left", lessonMapAutoStartsLeft(artifact.runId));
+
+  const jobs = pipelineMapJobs(artifact);
+  lines.push("", `planner jobs: ${jobs.length}`);
+  for (const job of jobs) {
+    const detail = labState.jobDetails.get(job.id);
+    lines.push(`  - ${job.id} · ${job.scenario?.pipelineStage || "?"} · status ${job.status} · detail ${detail ? "loaded" : "NOT LOADED"}`);
+    for (const sample of detail?.samples || []) {
+      if (sample.error?.type || sample.error?.message) lines.push(`      error ${sample.error.type || "?"}: ${clip(sample.error.message, 140)}`);
+      if (sample.finishReason) lines.push(`      finish ${sample.finishReason}`);
+    }
+    for (const attempt of detail?.attempts || []) {
+      if (attempt.error?.type || attempt.error?.message) lines.push(`      attempt error ${attempt.error.type || "?"}: ${clip(attempt.error.message, 140)}`);
+    }
+  }
+
+  const selection = state.selection || selectedPipelineMapRecord(artifact);
+  const meta = selection?.meta;
+  lines.push("", "selection");
+  say("  record", selection?.record ? "present" : "ABSENT");
+  say("  routeReady", meta?.routeReady);
+  say("  teachingReady", meta?.teachingReady);
+  say("  researchApplied", meta?.researchApplied);
+  say("  researchComplete", meta?.researchComplete);
+  say("  researchRetryAvailable", meta?.researchRetryAvailable);
+  say("  workflowState", meta?.workflowState);
+  say("  workflowMessage", clip(meta?.workflowMessage, 200));
+  say("  progress", `${meta?.workflowProgress?.completed ?? "?"} of ${meta?.workflowProgress?.total ?? "?"}`);
+  for (const failure of meta?.researchFailures || []) {
+    lines.push(`  research failure · chapter ${failure.chapterIndex} (${failure.chapterId}): ${clip(failure.reason, 200)}`);
+  }
+
+  const chapters = selection?.map?.chapters || [];
+  lines.push("", `chapters: ${chapters.length}`);
+  for (const [index, chapter] of chapters.entries()) {
+    lines.push(`  ${index + 1}. ${clip(chapter.title, 70)}`);
+    for (const outcome of chapter.outcomes || []) {
+      const support = outcome.verifiedSupport;
+      lines.push(`      ${clip(outcome.title, 60)} — support ${support?.status || "none"}, claims ${support?.claims?.length || 0}, sources ${support?.sources?.length || 0}`);
+    }
+  }
+
+  const research = liveResearchState(selection, labState.pipelineStage);
+  lines.push("", "what the tutor is told");
+  if (!research) lines.push("  (no research packet is sent at this phase)");
+  say("  state", research?.state);
+  say("  teachable", research?.teachable);
+  say("  firstOutcomeReady", research?.firstOutcomeReady);
+  say("  retryAvailable", research?.retryAvailable);
+  say("  autoLeft", research?.autoLeft);
+  say("  verified/total", research ? `${research.verified}/${research.total}` : "-");
+  say("  message", clip(research?.message, 220));
+
+  for (const row of missingResearchStatus(artifact, selection)) {
+    lines.push(`  missing · ${clip(row.title, 60)} — ${row.status}: ${clip(row.reason, 160)}`);
+  }
+  return lines.join("\n");
+}
+
+async function copyLessonRouteReport() {
+  const status = q("pipeline-extraction-map-dialog-report-status");
+  const report = lessonRouteReport();
+  try {
+    await navigator.clipboard.writeText(report);
+    if (status) status.textContent = "Route report copied. Paste it in a message.";
+  } catch (_) {
+    // A phone that refuses the clipboard still has to be able to hand this over.
+    const box = q("mock-learner-reply");
+    if (box) { box.value = report; box.focus(); if (status) status.textContent = "Clipboard unavailable. The report is in the message box - select all and copy."; }
+    else if (status) status.textContent = "Clipboard unavailable.";
+  }
+}
+
 function renderPipelineExtractionMapDialog(artifact = selectedPipelineArtifact()) {
   const dialog = q("pipeline-extraction-map-dialog");
   const status = q("pipeline-extraction-map-dialog-status");
@@ -12684,7 +12777,11 @@ function renderPipelineExtractionMapDialog(artifact = selectedPipelineArtifact()
        not carry wording written for the Lab. */
     content.append(element("div", { className:"extraction-map-dialog-placeholder", text:learnerAlert
       ? "This lesson does not have a route yet. Use the button above to build it."
-      : learnerView ? "Your lesson route is still being prepared." : mapState.message }));
+      : learnerView
+        ? (["needs-attention", "deferred"].includes(mapState.state)
+          ? "This lesson's route did not finish building. Copy the route report below and send it on."
+          : "Your lesson route is still being prepared.")
+        : mapState.message }));
   }
   if (attemptHistory.length) {
     const attempts = element("section", { className:"extraction-map-attempts" });
@@ -15173,10 +15270,36 @@ function renderLiveResearchRecovery(selection, stage=labState.pipelineStage) {
   :'';
  status.classList.toggle('is-error',!!failed&&!retrying&&!teachable);
 }
+/* The language the lesson is conducted in. A transcription's own language label
+   is a guess made on one utterance, and a two-word utterance is the worst
+   possible evidence for it; the learner's explicit choice outranks it. */
+const LEARNER_LANGUAGE_KEY = "worldview-lesson-language-v1";
+const LEARNER_LANGUAGES = ["English", "Spanish", "French", "German", "Portuguese", "Italian"];
+function learnerLanguage() {
+  let saved = "";
+  try { saved = localStorage.getItem(LEARNER_LANGUAGE_KEY) || ""; } catch (_) { /* A device that refuses storage still gets a language. */ }
+  return LEARNER_LANGUAGES.includes(saved) ? saved : "English";
+}
+function setLearnerLanguage(value) {
+  const language = LEARNER_LANGUAGES.includes(value) ? value : "English";
+  try { localStorage.setItem(LEARNER_LANGUAGE_KEY, language); } catch (_) { /* The choice still applies to this session. */ }
+  const select = q("mock-learner-language");
+  if (select && select.value !== language) select.value = language;
+  // The language reaches the tutor with the next phase packet, so a mid-lesson
+  // change applies from the next turn rather than needing a restart.
+  syncLiveLesson();
+  return language;
+}
+function learnerLanguageRule() {
+  const language = learnerLanguage();
+  return `\n\nLANGUAGE: This lesson is conducted in ${language}. Speak and write every reply in ${language}, including your first turn. Speech recognition labels each utterance with a language of its own and is often wrong about short or unclear ones; treat any other language label as a mishearing, not as a request. Do not switch languages, comment on the language, or ask which language to use. Change language only if the learner asks for it in plain words.`;
+}
+
 function liveStudyInput(artifact,selection,transcript){
  const stage=labState.pipelineStage,usable=pipelineMapSelectionIsUsable(selection),outcomes=usable?pipelineLessonOutcomes(selection):[];
  const current=labState.clarification,runId=artifact?.runId||current.runId;
- return {runId,stage,prompts:{clarification:q('clarification-prompt')?.value||CLARIFICATION_PROMPT,extraction:EXTRACTION_PROMPT+"\n\nWhen the researched map is ready, continue with this policy: "+MAP_AWARE_EXTRACTION_PROMPT+"\n\n"+EXTRACTION_PACING_POLICY,lesson:lessonTutorPrompt(),quiz:QUIZ_INTERVIEWER_PROMPT,evaluator:lessonEvaluatorPrompt(),assessor:QUIZ_ASSESSOR_PROMPT},brain:{provider:mockStageConfig('brain').provider,model:mockStageConfig('brain').model},context:{research:liveResearchState(selection,stage),topic:artifact?.topic||current.topic,scope:artifact?.scopeSummary||'',outcomes:outcomes.map(o=>({...o,sourceLinks:lessonSourceLinks(o.verifiedSupport)})),map:usable?{jobId:selection.job.id,recordId:selection.recordKey,fingerprint:selection.fingerprint}:null,sourceClarificationFingerprint:artifact?fingerprint(pipelineExtractionPacket(artifact)):'',recentConversation:transcript.slice(-20),mockRunSettings:artifact?.mockRunSettings||{runConfig:sanitizedMockRunConfig(labState.mockRunActiveConfig||labState.mockRunConfig),clarificationBoundaries:labState.mockBoundaryActive||null}}};
+ const language=learnerLanguageRule();
+ return {runId,stage,prompts:{clarification:(q('clarification-prompt')?.value||CLARIFICATION_PROMPT)+language,extraction:EXTRACTION_PROMPT+"\n\nWhen the researched map is ready, continue with this policy: "+MAP_AWARE_EXTRACTION_PROMPT+"\n\n"+EXTRACTION_PACING_POLICY+language,lesson:lessonTutorPrompt()+language,quiz:QUIZ_INTERVIEWER_PROMPT+language,evaluator:lessonEvaluatorPrompt(),assessor:QUIZ_ASSESSOR_PROMPT},brain:{provider:mockStageConfig('brain').provider,model:mockStageConfig('brain').model},context:{research:liveResearchState(selection,stage),language:learnerLanguage(),topic:artifact?.topic||current.topic,scope:artifact?.scopeSummary||'',outcomes:outcomes.map(o=>({...o,sourceLinks:lessonSourceLinks(o.verifiedSupport)})),map:usable?{jobId:selection.job.id,recordId:selection.recordKey,fingerprint:selection.fingerprint}:null,sourceClarificationFingerprint:artifact?fingerprint(pipelineExtractionPacket(artifact)):'',recentConversation:transcript.slice(-20),mockRunSettings:artifact?.mockRunSettings||{runConfig:sanitizedMockRunConfig(labState.mockRunActiveConfig||labState.mockRunConfig),clarificationBoundaries:labState.mockBoundaryActive||null}}};
 }
 /* The map is started from the Live phase rather than from a Lab shortcut, so
    the learner has no other way to ask for it. Starting it only on the phase
@@ -19378,6 +19501,9 @@ function bindEvents() {
   q("pipeline-extraction-mode-toggle").addEventListener("click", switchPipelineExtractionConversationMode);
   q("pipeline-extraction-progress").addEventListener("click", openPipelineExtractionMapDialog);
   q("pipeline-extraction-map-dialog-close").addEventListener("click", () => closePipelineExtractionMapDialog());
+  q("pipeline-extraction-map-dialog-report")?.addEventListener("click", () => { void copyLessonRouteReport(); });
+  const languageSelect = q("mock-learner-language");
+  if (languageSelect) { languageSelect.value = learnerLanguage(); languageSelect.addEventListener("change", (event) => setLearnerLanguage(event.target.value)); }
   q("pipeline-extraction-map-dialog-retry").addEventListener("click", () => {
     const artifact = selectedPipelineArtifact();
     if (artifact?.runId && labState.extraction.mapDeferredRunId === artifact.runId) {

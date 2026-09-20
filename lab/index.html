@@ -26,7 +26,7 @@
   root.dataset.learnerEntryKind = ["saved", "new"].includes(kind) ? kind : "unknown";
 })();
 </script>
-<link rel="stylesheet" href="./lab.css?v=2.1.62">
+<link rel="stylesheet" href="./lab.css?v=2.1.64">
 <link rel="stylesheet" href="./live-conversation.css?v=2.1.61">
 <link rel="stylesheet" href="./conversation-tools.css?v=2.1.59">
 <link rel="stylesheet" href="../lesson-entry-popup.css?v=2.1.38">
@@ -181,6 +181,14 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
         <h2><button id="mock-learner-density" class="mock-learner-density" type="button" aria-label="Worldview. Text size: Standard. Activate for Compact." title="Change conversation text size">Worldview</button></h2>
         <span id="mock-learner-density-status" class="sr-only" role="status" aria-live="polite"></span>
         <div class="mock-learner-header-actions">
+          <select id="mock-learner-language" class="mock-learner-tool mock-learner-language" aria-label="Lesson language" title="The language this lesson is taught in">
+            <option value="English">EN</option>
+            <option value="Spanish">ES</option>
+            <option value="French">FR</option>
+            <option value="German">DE</option>
+            <option value="Portuguese">PT</option>
+            <option value="Italian">IT</option>
+          </select>
           <button id="mock-learner-mode" class="mock-learner-tool" type="button" aria-label="Switch to Voice" title="Switch conversation mode">Voice</button>
           <button id="mock-learner-copy" class="mock-learner-tool mock-learner-copy" type="button" aria-label="Copy entire conversation transcript" title="Copy the entire conversation">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>
@@ -218,7 +226,8 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
         <div class="extraction-map-dialog-card">
           <header class="extraction-map-dialog-head"><div><p class="eyebrow">Generated in the background</p><h3 id="pipeline-extraction-map-dialog-title">Your Lesson Map</h3></div><button id="pipeline-extraction-map-dialog-close" class="extraction-map-dialog-close" type="button" aria-label="Close Lesson Map">×</button></header>
           <p id="pipeline-extraction-map-dialog-status" class="extraction-map-dialog-status" role="status"></p>
-          <div class="extraction-map-dialog-actions"><button id="pipeline-extraction-map-dialog-retry" class="button button-primary" type="button" hidden>Retry Lesson Map</button></div>
+          <div class="extraction-map-dialog-actions"><button id="pipeline-extraction-map-dialog-retry" class="button button-primary" type="button" hidden>Retry Lesson Map</button><button id="pipeline-extraction-map-dialog-report" class="text-button extraction-map-dialog-report" type="button">Copy route report</button></div>
+          <p id="pipeline-extraction-map-dialog-report-status" class="extraction-map-dialog-status" role="status"></p>
           <div id="pipeline-extraction-map-dialog-content" class="extraction-map-dialog-content"></div>
         </div>
       </section>
@@ -756,7 +765,7 @@ Use the saved briefing as grounding. Search only for a new, recent, or explicitl
 <script src="./conversation-tools.js?v=2.1.38"></script>
 <script src="../lesson-entry-popup.js?v=2.1.38"></script>
 <script src="../saved-map.js?v=2.1.58"></script>
-<script src="./lab.js?v=2.1.63" defer></script>
+<script src="./lab.js?v=2.1.64" defer></script>
 <script src="./conversation-clock.js?v=2.1.12" defer></script>
 </body>
 </html>
