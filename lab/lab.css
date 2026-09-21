@@ -980,6 +980,9 @@ body.mock-run #pipeline-map-stage .map-workspace-bar { display:none; }
 .map-roadmap-node:not(:last-child)::after { position:absolute; top:28px; bottom:0; left:14px; width:2px; background:linear-gradient(rgba(237,152,95,.64),rgba(237,152,95,.3)); content:""; }
 .map-roadmap-marker { z-index:1; display:block; width:29px; height:29px; border:3px solid #fff5e5; border-radius:50%; background:#251f19; box-shadow:0 0 0 4px rgba(35,29,24,.92); }
 .map-roadmap-node.is-goal .map-roadmap-marker { border-color:var(--lab-mint); box-shadow:0 0 0 4px rgba(35,29,24,.92); }
+.map-roadmap-node.is-current .map-roadmap-marker { border-color:#8fd8c0; background:#8fd8c0; box-shadow:0 0 0 4px rgba(143,216,192,.18); }
+.map-roadmap-node.is-current .map-chapter-head strong { color:#8fd8c0; }
+.map-current-label { display:inline-block; margin:5px 0; color:#8fd8c0; font-size:10px; font-weight:700; }
 .map-roadmap-copy { min-width:0; padding-top:1px; }
 .map-chapter-head { display:block; min-height:32px; }
 .map-chapter-head > span { min-width:0; }
@@ -999,6 +1002,7 @@ body.mock-run #pipeline-map-stage .map-workspace-bar { display:none; }
 .map-chapter-outcomes { display:grid; gap:7px; margin-top:3px; }
 .map-chapter-outcomes h5 { margin:4px 0 1px; color:#edb18a; font-size:8px; font-weight:850; letter-spacing:.1em; text-transform:uppercase; }
 .map-outcome { overflow:hidden; border:1px solid rgba(255,255,255,.09); border-radius:10px; background:rgba(16,13,11,.22); }
+.map-outcome.is-current { border-color:#8fd8c0; background:rgba(143,216,192,.12); box-shadow:inset 3px 0 #8fd8c0; }
 .map-outcome > summary { display:grid; grid-template-columns:31px minmax(0,1fr) auto; gap:8px; align-items:start; min-height:42px; padding:9px; cursor:pointer; list-style:none; }
 .map-outcome > summary::-webkit-details-marker { display:none; }
 .map-outcome > summary strong { color:#fff8ec; font:650 1rem/1.25 Georgia,serif; }

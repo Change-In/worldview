@@ -73,7 +73,7 @@ window.WorldviewGeminiLive=(()=>{
      if(audio.state==='suspended'||outputAudio?.paused)onStatus('Tap Enable audio.');
      // Give a fresh conversation its opening; resumed lessons continue from the
      // saved current phase/question rather than running Clarification again.
-     if(initiate){modelActive=true;send({clientContent:{turns:[{role:'user',parts:[{text:'APP_START. Begin or resume the saved lesson now. Use the saved phase and conversation. Do not re-ask a question already answered. Speak first now in English. If no subject is chosen, ask what they would like to explore today. Ask at most one relevant next question, then listen.'}]}],turnComplete:true}});}
+     if(initiate){modelActive=true;send({clientContent:{turns:[{role:'user',parts:[{text:'APP_START. Begin or resume the saved lesson now. Use the saved phase and conversation. Do not re-ask a question already answered. Speak first now in the selected language. If no subject is chosen, ask what they would like to explore today. Ask at most one relevant next question, then listen.'}]}],turnComplete:true}});}
     }else onStatus('Listening');
     flushContext();
    }
