@@ -92,7 +92,7 @@ window.WorldviewLiveAudioOutput=(()=>{
     if(!wanted){
      route='';chosen='';choices.hidden=true;
      if(sinkSupported()&&audio.sinkId!=='')await audio.setSinkId('').catch(()=>{});
-     tell('Following your phone’s own audio output.');return;
+     tell('');return;
     }
     if(kind==='hardware'){route='hardware';chosen='';choices.hidden=true;tell('Playing out loud.');return;}
     // No hardware route. Fall back to an exposed output device where one exists.

@@ -12,7 +12,7 @@ window.WorldviewLiveConversation=(()=>{
   const note=element('p'),rate=element('span','$0.05/min'),total=element('strong','Est. total —');note.className='live-conversation-cost';note.append(rate,total);
   const actions=element('div');actions.className='live-conversation-actions';
   const enableAudio=element('button','Enable audio');enableAudio.hidden=true;
-  const start=element('button','Start GPT Live'),retry=element('button','Retry saving');
+  const start=element('button','Start GPT Live'),retry=element('button','Retry saving');retry.hidden=true;
   // Mute, Pause and the transcript toggle are icon-only. Each keeps a real
   // aria-label and title, kept in sync by paint(), so the control is still
   // named for screen readers and on hover once the words are gone.
@@ -23,7 +23,10 @@ window.WorldviewLiveConversation=(()=>{
   };
   const iconButton=(name,label)=>{const b=element('button');b.className='live-icon-button';b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+ICONS[name]+'</svg>';b.setAttribute('aria-label',label);b.title=label;return b;};
   const mute=iconButton('mic','Mute mic'),end=iconButton('pause','Pause voice'),captions=iconButton('transcript','Show transcript'),textMode=element('button','Aa');
-  textMode.className='live-icon-button';textMode.setAttribute('aria-label','Switch to Text');textMode.title='Switch to Text';textMode.onclick=()=>host.onTextMode?.();
+  /* Voice is the only mode being taken to release, so the switch to Text and
+     the manual save retry are not on the learner's screen. Both stay built so
+     nothing that references them breaks, and both stay hidden. */
+  textMode.className='live-icon-button';textMode.hidden=true;textMode.setAttribute('aria-label','Switch to Text');textMode.title='Switch to Text';textMode.onclick=()=>host.onTextMode?.();
   for(const b of [start,enableAudio,mute,end,retry,captions,textMode])b.type='button';actions.append(start,enableAudio,mute,end,retry,captions,textMode);
   const status=element('p','Connecting…');status.setAttribute('role','status');
   const usage=element('small'),progress=element('p');progress.className='live-conversation-progress';
@@ -91,7 +94,29 @@ window.WorldviewLiveConversation=(()=>{
    return {...draft,prefix:exportTurns(draft.prefix),textSnapshot:Array.isArray(draft.textSnapshot)?exportTurns(draft.textSnapshot):null,textInsertions:Array.isArray(draft.textInsertions)?draft.textInsertions.filter(s=>Number.isInteger(s?.afterSeq)&&s.afterSeq>=0&&Array.isArray(s.turns)).map(s=>({afterSeq:s.afterSeq,turns:exportTurns(s.turns)})):[]};
   }catch{return null;}
  }
- function stash(){if(!draftKey||!(study?.id||exportStudyId))return;try{localStorage.setItem(draftKey,JSON.stringify({studyId:study?.id||exportStudyId,fragments,prefix,textInsertions,textSnapshot,textMode:exportWasText}));}catch{saveError='Device backup is unavailable. Keep this page open until the transcript is saved.';}}
+ /* Every finished lesson leaves its whole transcript in a draft entry and
+    nothing ever removed one, so the origin quota fills and every later write
+    fails - including the ones that create a Lesson Map and its research. When a
+    write is refused, drop the drafts belonging to other lessons, oldest first,
+    and try again. Only this lesson's own draft is ever kept. */
+ function sweepOtherDrafts(){
+  let removed=0;
+  try{
+   const keys=[];
+   for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith('worldview-live-draft-v2:')&&k!==draftKey)keys.push(k);}
+   for(const k of keys){try{localStorage.removeItem(k);removed++;}catch{/* Keep sweeping the rest. */}}
+  }catch{/* A browser that will not enumerate storage cannot be swept. */}
+  return removed;
+ }
+ function stash(){
+  if(!draftKey||!(study?.id||exportStudyId))return;
+  const payload=JSON.stringify({studyId:study?.id||exportStudyId,fragments,prefix,textInsertions,textSnapshot,textMode:exportWasText});
+  try{localStorage.setItem(draftKey,payload);return;}catch{/* Fall through to the sweep. */}
+  if(sweepOtherDrafts()){
+   try{localStorage.setItem(draftKey,payload);return;}catch{/* Still refused. */}
+  }
+  saveError='This transcript is not saved on the device yet. It is still saved on the server.';
+ }
  function rememberTextHistory(value,collect=false){
   const next=exportTurns(value);
   if(collect&&textSnapshot){
@@ -110,7 +135,7 @@ window.WorldviewLiveConversation=(()=>{
   ui.rate.hidden=true;
   ui.captions.hidden=!session?.ready;const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.setAttribute('aria-label',capsLabel);ui.captions.title=capsLabel;ui.captions.setAttribute('aria-pressed',String(showCaptions));
   ui.end.hidden=!session;ui.mute.hidden=!session?.ready;const muteLabel=session?.muted?'Unmute mic':'Mute mic';ui.mute.setAttribute('aria-label',muteLabel);ui.mute.title=muteLabel;ui.mute.classList.toggle('is-muted',!!session?.muted);ui.mute.setAttribute('aria-pressed',String(!!session?.muted));
-  ui.retry.hidden=!saveError;ui.retry.disabled=!!saving;
+  ui.retry.hidden=true;ui.retry.disabled=!!saving;
   if(saveError)message(saveError);
   const count=Object.keys(study?.assessment||{}).length,total=study?.packet?.roadmap?.length||0;const phaseName={clarification:'Your direction',extraction:'Your starting point',lesson:'Lesson',quiz:'Final teach-back',complete:'Complete'}[study?.phase]||'Lesson';
   ui.progress.hidden=true;paintCosts();

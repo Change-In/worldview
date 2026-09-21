@@ -2194,7 +2194,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.67 · Sep 21";
+const BUILD = "v2.1.68 · Sep 21";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2202,6 +2202,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.68",date:"Sep 21",changes:["The tutor no longer says \"Exactly\" to something it did not actually hear. Speech that comes back garbled is now named as unheard and you are asked to repeat it, instead of being confirmed as a correct answer while the lesson quietly refuses to move on — which is what was causing the same question to come back over and over.","The tutor will not explain something and then ask you to explain the same thing back, and every turn now ends with a real question or a named next step instead of a statement you have to say \"okay\" to.","Lesson routes for theoretical topics now open with why anyone believes the idea in the first place, before how it works.","Voice mode is simpler at the bottom: no language button, no device-backup or audio-route lines, no Retry saving, no Text button, and the controls are centred.","Old lesson transcripts are cleared from this device when storage runs out, instead of the app quietly failing to save or build anything."]},
   {tag:"v2.1.67",date:"Sep 21",changes:["Fixed research the same way the Lesson Map was fixed yesterday: it had the identical hidden gate one layer down. If this browser could not save a small local record — or if its four request slots were already full, which a multi-part lesson fills on its own — research was silently not sent. It now sends either way.","The route report says when research had to be sent without a local record, lists any research refusals, and shows how many research requests are in flight."]},
   {tag:"v2.1.66",date:"Sep 20",changes:["Fixed the real reason the Lesson Map would not build: if this browser could not save a small local retry record — a full storage quota is the usual cause — the app silently refused to send the request at all. It now sends it anyway, because the request is already protected against duplicates on the server.","That last silent failure now records its reason too, so nothing about a route that will not build is invisible any more.","Fixed the transcript copy running two replies together with no break between them."]},
   {tag:"v2.1.65",date:"Sep 20",changes:["The Lesson Map now tells you why it could not be built, in the app, instead of only saying that it wasn't. Six different failures were being computed and thrown away, which is why the last four fixes argued about retrying instead of the cause.","The route report adds the create failure, any unconfirmed earlier request, the model route the map uses and which providers the server says are ready."]},

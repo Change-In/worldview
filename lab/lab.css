@@ -1968,6 +1968,9 @@ body.mock-learner-shell-active #panel-pipeline { inset:auto; top:var(--lab-viewp
 /* Copying moved into the header, where Car used to sit, so the row it had to
    itself goes back to the conversation. The result line floats under the
    header instead of reserving a second row that is empty almost always. */
+.mock-learner-utilities { display:flex; justify-content:center; align-items:center; gap:10px; flex-wrap:wrap; margin:0; }
+.mock-learner-voice-controls .mock-recording-row { justify-content:center; }
+.live-conversation-actions { justify-content:center; }
 #mock-learner-language.mock-learner-language { flex:none; box-sizing:border-box; width:46px; min-width:46px; height:38px; padding:0 3px; border-radius:999px; font:700 11px/1 system-ui,sans-serif; letter-spacing:.04em; text-align:center; text-align-last:center; appearance:none; -webkit-appearance:none; cursor:pointer; }
 .mock-learner-header-actions .mock-learner-tool { flex:none; }
 .extraction-map-dialog-report { margin-left:auto; font-size:13px; opacity:.85; }
