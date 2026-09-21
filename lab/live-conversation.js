@@ -354,7 +354,11 @@ window.WorldviewLiveConversation=(()=>{
   const f={seq:fragments.length+1,id:String(event.event_id||state.id+':'+fragments.length),role,delta:event.delta,start_ms:Number.isFinite(event.start_ms)?event.start_ms:null,end_ms:Number.isFinite(event.end_ms)?event.end_ms:null};
   fragments.push(f);state.lastTranscriptAt=performance.now();
   if(role==='user')state.lastUserTranscriptAt=state.lastTranscriptAt;
-  else{state.speaking=true;state.lastAssistantAt=state.lastTranscriptAt;clearTimeout(state.speakingTimer);state.speakingTimer=setTimeout(()=>{state.speaking=false;},900);}
+  else{state.speaking=true;state.lastAssistantAt=state.lastTranscriptAt;clearTimeout(state.speakingTimer);state.speakingTimer=setTimeout(()=>{state.speaking=false;if(state.deferredStudy&&!unansweredQuestion()&&deliverStudy(state)&&state.pendingOpeningStep===studyStep(study))schedulePhaseOpening(state);},900);}
+  // Deliver deferred reference data when the learner takes their next turn,
+  // before the tutor answers. Otherwise a tutor that always ends in a question
+  // could prevent an accepted outcome from ever reaching the speaking model.
+  if(role==='user'){state.pendingOpeningStep=null;if(state.deferredStudy){state.speaking=false;deliverStudy(state);}}
   // The first thing the learner actually says is what a topic-free Voice lesson
   // is about. Report it once so the saved card can stop carrying a placeholder.
   if(role==='user'&&!fragments.some(other=>other.seq!==f.seq&&other.role==='user'))host?.onLearnerTopic?.(f.delta);
@@ -384,8 +388,25 @@ window.WorldviewLiveConversation=(()=>{
   for(const char of content){if(encoder.encode(piece+char).length>400){send(state,{type:'session.thinking.append',delegation_id:delegationId,content:piece});piece='';}piece+=char;}
   if(piece)send(state,{type:'session.thinking.append',delegation_id:delegationId,content:piece});
  }
+ function studyStep(value){
+  if(!value)return '';
+  return JSON.stringify([value.id,value.phaseVersion,value.phase,value.currentIndex,value.packet?.currentOutcome?.id||'',value.complete===true,value.phase==='extraction'?value.packet?.research?.firstOutcomeReady===true:null]);
+ }
+ function studyPublication(value){
+  // Captions/revision changes alone must not inject another packet into a model
+  // that has just asked a question. Only a new decision or research changes it.
+  const packet={...value.packet};delete packet.conversationState;
+  return JSON.stringify({step:studyStep(value),instructions:value.instructions,packet,focus:value.packet?.conversationState?.nextFocus||'',waiting:value.packet?.conversationState?.waitingForResearch===true});
+ }
+ function unansweredQuestion(){
+  let text='';
+  for(let i=fragments.length-1;i>=0&&fragments[i].role==='assistant';i--)text=fragments[i].delta+text;
+  return /[?？]/.test(text)||/\b(?:tell me|explain in your|describe in your|walk me through)\b/i.test(text);
+ }
  async function applyPhase(){
-  if(!study||study.phaseVersion===appliedPhase)return;appliedPhase=study.phaseVersion;
+  if(!study)return;
+  const signature=JSON.stringify([studyStep(study),study.checkedRevision,study.checkError,study.packet?.lastCheck]);
+  if(signature===appliedPhase)return;appliedPhase=signature;
   await host.onStudy?.(study);
  }
 /* The turn-taking policy is static and is already in the session instructions
@@ -404,7 +425,9 @@ window.WorldviewLiveConversation=(()=>{
  }
  function publishStudy(state,delegationId=null){
   if(session!==state||state.closing)return false;
-  const signature=JSON.stringify({version:study.phaseVersion,instructions:study.instructions,packet:study.packet});
+  if(unansweredQuestion()||state.speaking){state.deferredStudy=true;return false;}
+  state.deferredStudy=false;
+  const signature=studyPublication(study);
   if(state.publishedStudy===signature)return false;
   const phaseChanged=state.publishedPhase!==study.phaseVersion;
   if(state.gemini){
@@ -427,12 +450,21 @@ window.WorldviewLiveConversation=(()=>{
   clearTimeout(restoreTimer);
   restoreTimer=setTimeout(()=>{if(session===state&&!state.closing&&!saveError&&!state.checking)message(paused?'Paused':'Listening');},8000);
  }
+ function deliverStudy(state){
+  const pending=[...state.pendingDelegations],first=pending.shift()||null;
+  const published=publishStudy(state,first);
+  if(state.deferredStudy)return false;
+  state.pendingDelegations.clear();
+  if(!published&&first)inject(state,'Application state received. Continue from the saved state; this is not a new learner turn.',first);
+  for(const id of pending)inject(state,'Application state received. Use the latest saved phase; this is not a new learner turn.',id);
+  return published;
+ }
  async function check(delegationId=null){
   const s=session;if(!s?.ready||s.closing)return;
   if(delegationId)s.pendingDelegations.add(delegationId);
   if(checkDelay(s)>0){scheduleCheck(s);return;}
   if(s.checking)return;
-  s.checking=true;const expected=scope,id=study.id,captured=request,input=context.studyInput,startedPhase=study.phaseVersion,startedUserSeq=s.lastUserSeq||0;
+  s.checking=true;const expected=scope,id=study.id,captured=request,input=context.studyInput,startedStep=studyStep(study),startedUserSeq=s.lastUserSeq||0;
   // A routine check is fast and should stay invisible. Only say something once the learner has
   // actually been left waiting, so the status never flickers on every answer.
   clearTimeout(s.slowTimer);s.slowTimer=setTimeout(()=>{if(s.checking&&session===s&&!s.closing&&!saveError)message('Checking in…');},1500);
@@ -450,7 +482,7 @@ window.WorldviewLiveConversation=(()=>{
    const result=needsCheck?await captured({action:'journey_check',studyId:id}):prepared;
    host.onCheckerUsage?.(s.costOwner,s.costRunId,result.checkerUsage);if(scope!==expected||session!==s||s.closing)return;
    study={...result.study,fragments};
-   const advanced=study.phaseVersion!==startedPhase;
+   const advanced=studyStep(study)!==startedStep;
    // The saved phase is what the lesson has actually reached, so the roadmap and
    // the visible move to the next outcome follow it straight away. Only the
    // model-facing update is held back, and only for newer learner speech: a focus
@@ -461,11 +493,8 @@ window.WorldviewLiveConversation=(()=>{
    if(session!==s||s.closing)return;
    if(advanced)announceTransition(s);
    if((s.lastUserSeq||0)!==startedUserSeq){scheduleCheck(s);return;}
-   const pending=[...s.pendingDelegations];s.pendingDelegations.clear();
-   const firstDelegation=pending.shift()||null,published=publishStudy(s,firstDelegation);
-   if(!published&&firstDelegation)inject(s,'Application state received. The saved phase is unchanged. Continue the current conversation; this is not a new learner turn.',firstDelegation);
-   for(const id of pending)inject(s,'Application state received. Use the latest saved phase; this is not a new learner turn.',id);
-   if(advanced)schedulePhaseOpening(s);
+   deliverStudy(s);
+   if(advanced||s.pendingOpeningStep===studyStep(study))schedulePhaseOpening(s);
    if(study.checkError)message('Conversation saved. The understanding check could not finish; Live can keep teaching.');
    else if(!advanced&&!saveError)message(paused?'Paused':'Listening');
    paint();
@@ -480,17 +509,23 @@ window.WorldviewLiveConversation=(()=>{
     is sent per phase, and only when nobody has spoken since the change. */
  const PHASE_OPENING_INSTRUCTION='PHASE OPENING. The application has moved the lesson to its next part and the learner is waiting in silence. Speak one short opening for the new part now, in English, continuing from what they last said. Do not greet again, re-introduce yourself, or repeat an answered question. Then stop and listen.';
  function schedulePhaseOpening(state){
-  if(!study||state.openedPhase===study.phaseVersion)return;
-  state.openedPhase=study.phaseVersion;
-  const version=study.phaseVersion,changedAt=performance.now(),seq=state.lastUserSeq||0;
+  if(!study||state.openedPhase===studyStep(study))return;
+  if(study.phase==='extraction'&&!study.packet?.research?.firstOutcomeReady)return;
+  state.pendingOpeningStep=studyStep(study);
+  const version=studyStep(study),changedAt=performance.now(),seq=state.lastUserSeq||0;
   clearTimeout(state.openingTimer);
   state.openingTimer=setTimeout(()=>{
    if(session!==state||state.closing||!state.ready||!study)return;
-   if(study.phaseVersion!==version||(state.lastUserSeq||0)!==seq)return;
+   if(studyStep(study)!==version||(state.lastUserSeq||0)!==seq)return;
+   // A question asked BEFORE map completion still belongs to the learner.
+   // Silence while they think is not permission for a second opening.
+   if(unansweredQuestion()){state.openedPhase=version;state.pendingOpeningStep=null;return;}
    // Somebody is already talking, so the handoff is not a dead end after all.
    if(state.speaking||(state.lastAssistantAt||0)>changedAt)return;
-   if(state.gemini){state.gemini.prompt?.(PHASE_OPENING_INSTRUCTION);return;}
-   send(state,{type:'session.instructions.append',event_id:state.id+':phase-opening:'+version,delegation_id:null,content:PHASE_OPENING_INSTRUCTION});
+   if(state.gemini){if(state.gemini.prompt?.(PHASE_OPENING_INSTRUCTION)){state.openedPhase=version;state.pendingOpeningStep=null;}return;}
+   state.openingCount=(state.openingCount||0)+1;
+   send(state,{type:'session.instructions.append',event_id:state.id+':phase-opening:'+state.openingCount,delegation_id:null,content:PHASE_OPENING_INSTRUCTION});
+   state.openedPhase=version;state.pendingOpeningStep=null;
   },3000);
  }
  const VOICE_ENTRY_INSTRUCTION='VOICE ENTRY. Speak first now in English; do not wait for learner speech. Keep the saved phase and instructions. If topic is unknown or "Topic to be chosen by voice", ask "What would you like to explore today?" Otherwise give one brief opening or continuation from saved context; never repeat answered questions. Then pause and listen. If speech has begun, do not start a second opening.';
@@ -507,7 +542,7 @@ window.WorldviewLiveConversation=(()=>{
   // Caption tails may describe already-captured speech. Retain them for export
   // while closing, but never let them trigger another check or audio operation.
   if(state.closing&&!['session.started','session.input_transcript.delta','session.output_transcript.delta','session.usage.updated','session.closed'].includes(e.type))return;
-  if(e.type==='session.started'){if(state.closing){send(state,{type:'session.close'});return;}if(state.ready)return;state.ready=true;autoAttempts=0;state.publishedPhase=study.phaseVersion;state.publishedStudy=JSON.stringify({version:study.phaseVersion,instructions:study.instructions,packet:study.packet});clearTimeout(state.startup);message('Listening');requestOpening(state);state.checkTimer=setInterval(()=>{if(session===state&&!state.closing)void check();},25000);paint();}
+  if(e.type==='session.started'){if(state.closing){send(state,{type:'session.close'});return;}if(state.ready)return;state.ready=true;autoAttempts=0;state.publishedPhase=study.phaseVersion;state.publishedStudy=studyPublication(study);clearTimeout(state.startup);message('Listening');requestOpening(state);state.checkTimer=setInterval(()=>{if(session===state&&!state.closing)void check();},25000);paint();}
   else if(e.type==='session.instructions.appended'&&state.openingEventId&&e.client_event_id===state.openingEventId){state.openingAcknowledged=true;if(state.lastTranscriptAt==null)message('Listening');}
   else if(e.type==='session.input_transcript.delta')append(state,e,'user');
   else if(e.type==='session.output_transcript.delta')append(state,e,'assistant');

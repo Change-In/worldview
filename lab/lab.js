@@ -749,6 +749,8 @@ Follow the learner's own organizing principle. The clarificationConversation is 
 
 Carry the learner's actual words. Before returning, cross-check the complete frozenScope, every interests entry, and the full clarificationConversation against the route. Every requested subject or boundary must remain represented; a short time target may make coverage concise but never silently removes requested scope.
 
+Plan the missing foundation explicitly. For each outcome, supportNeeds must include the everyday context and causal prerequisites a beginner needs before reasoning about it: what people could observe, what explanations or tools were available, or the ordinary physical starting situation. Historical beliefs need the contemporary explanatory context, not only dates and descriptions. Teach and check the relationship, not a list of names or dates. Keep successEvidence focused on the actual learning outcome so a correct explanation does not fail on incidental detail.
+
 Open on the grounds, not the mechanism. When a subject is theoretical, contested, predictive, or otherwise something a reasonable learner might doubt exists, the first chapter establishes why anyone takes it seriously at all: where the idea came from, what problem it was invented to solve, and what standing it currently has. Do not open with how the thing works. A learner who does not know why a claim is entertained has no way to judge anything taught afterwards, and will spend the lesson accepting statements rather than weighing them. The learner asking whether something is real or confirmed is an explicit request for this chapter; plan it whether or not they ask.
 
 State no facts. This Map contains no dates, names, numbers, events, quantities, or factual claims of any kind, including ones you are confident about. A later research pass establishes every specific. Chapter and outcome text says what the learner will be able to do, never what is true.
@@ -12707,6 +12709,13 @@ function lessonRouteReport(artifact = selectedPipelineArtifact()) {
   say("stage", labState.pipelineStage);
   const study = labState.liveJourney;
   say("live phase", study?.runId === artifact.runId ? `${study.phase} (version ${study.phaseVersion})` : "no live study for this run");
+  if(study?.runId === artifact.runId){
+    say("live outcome", study.packet?.currentOutcome?.title || study.currentIndex);
+    say("understanding check", study.checkError || study.packet?.lastCheck?.applied || "not yet checked");
+    say("check reason", clip(study.packet?.lastCheck?.reason, 500));
+    say("remaining focus", clip(study.packet?.conversationState?.nextFocus, 400));
+    say("demonstrated outcomes", study.packet?.demonstratedUnderstanding?.demonstratedIds?.length || 0);
+  }
   const state = pipelineExtractionMapViewState(artifact);
   say("map state", state.state);
   say("map message", clip(state.message, 160));
@@ -15449,7 +15458,7 @@ function maybeAutoStartLessonMap(study) {
 
 async function applyLiveJourney(study){
  const active=selectedPipelineArtifact()?.runId||labState.clarification.runId;if(study.runId!==active)return;
- const changed=labState.liveJourney?.id!==study.id||labState.liveJourney?.phaseVersion!==study.phaseVersion;
+ const changed=labState.liveJourney?.id!==study.id||labState.liveJourney?.phaseVersion!==study.phaseVersion||labState.liveJourney?.currentIndex!==study.currentIndex||labState.liveJourney?.complete!==study.complete;
  labState.liveJourney=study;
  // This marker permits a browser resume before the first spoken fragment. It
  // carries no phase authority: journey_prepare still restores the server row.
@@ -19886,4 +19895,3 @@ window.WorldviewTimingHost = {
 };
 void boot();
 setTimeout(() => scheduleConversationDeliveryRecovery(), 2000);
-
