@@ -1276,6 +1276,18 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .worldview-stat strong { display: block; font-family: Georgia, "Times New Roman", serif; font-size: 25px; font-weight: 500; }
   .worldview-stat span { display: block; margin-top: 3px; color: var(--ink-soft); font-size: 11px; line-height: 1.25; }
   .worldview-section { margin-bottom: 26px; }
+  /* BUS-050 welcome for signed-out visitors */
+  #account-welcome[hidden] { display:none; }
+  .welcome-steps { list-style:none; counter-reset:step; margin:6px 0 16px; padding:0; display:grid; gap:14px; }
+  .welcome-steps li { counter-increment:step; display:grid; grid-template-columns:30px 1fr; column-gap:12px; align-items:start; }
+  .welcome-steps li::before { content:counter(step); grid-row:span 2; display:grid; place-items:center; width:28px; height:28px; border-radius:50%; background:#e2895a; color:#241f1a; font:700 14px/1 system-ui,sans-serif; }
+  .welcome-steps strong { font:700 15.5px/1.3 system-ui,sans-serif; }
+  .welcome-steps span { color:var(--ink-soft); font-size:14px; line-height:1.45; }
+  .welcome-note { margin:0 0 16px; color:var(--ink-soft); font-size:13.5px; }
+  #account-welcome .account-primary { width:100%; }
+  .welcome-secondary { width:100%; min-height:46px; margin-top:10px; border:1px solid color-mix(in srgb,var(--ink) 22%,transparent); border-radius:14px; background:transparent; color:var(--ink); font:600 15px system-ui,sans-serif; }
+  .account-legal { margin:14px 0 0; text-align:center; font-size:12.5px; color:var(--ink-soft); }
+  .account-legal a { color:inherit; }
   #source-page #source-carousel-wrap { display:none; }
   #source-page { justify-content:center; }
   #source-page #home-archive-entry { margin-top:auto; margin-bottom:auto; }
@@ -1697,6 +1709,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     <div class="account-topbar"><button id="password-account-back" type="button" aria-label="Back" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6M8 12h12"/></svg></button><div class="intro-wordmark">Worldview</div></div>
     <h2 id="account-dialog-title">Sign in</h2>
     <p id="account-dialog-copy">Your lessons, wherever you return.</p>
+    <section id="account-welcome" hidden aria-label="About Worldview">
+      <ol class="welcome-steps">
+        <li><strong>Say what you are curious about.</strong><span>AI data centers, the 2008 crisis, how stars keep burning, anything.</span></li>
+        <li><strong>Worldview prepares a short lesson.</strong><span>It maps what is worth knowing and checks it against real sources.</span></li>
+        <li><strong>Talk it through.</strong><span>Out loud or in text. It shares the key ideas, then helps you explain them in your own words.</span></li>
+      </ol>
+      <p class="welcome-note">Free during early access.</p>
+      <button id="account-welcome-start" class="account-primary" type="button">Start free: create an account</button>
+      <button id="account-welcome-signin" class="welcome-secondary" type="button">I already have an account</button>
+    </section>
     <section id="account-summary" hidden aria-label="Account details">
       <div class="account-identity"><span id="account-avatar" aria-hidden="true"></span><div><strong id="account-email"></strong><span class="account-verified">Verified email</span></div></div>
       <div class="account-menu">
@@ -1733,6 +1755,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       <button id="password-account-close" type="button" hidden>Done</button>
       <button id="password-account-signout" type="button" hidden>Sign out</button>
     </div>
+    <p class="account-legal"><a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a></p>
   </section>
 </dialog>
 
@@ -2235,7 +2258,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.71 · Sep 22";
+const BUILD = "v2.1.72 · Sep 22";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2243,6 +2266,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.72",date:"Sep 22",changes:["New visitors see what Worldview is before the sign-in box: three steps, a free early-access note, and one button to start.","Privacy and Terms pages, in plain language, linked from the sign-in screen. They are early-access versions."]},
   {tag:"v2.1.71",date:"Sep 22",changes:["Voice keeps its place when you glance away: pulling down notifications, checking the time or a low-battery alert no longer ends the conversation.","\"Try microphone again\" works after a dropped connection. The server used to refuse a new voice session for up to 15 minutes while the old one was still marked open.","Each new part of the lesson starts on a fresh connection with its own instructions, so the tutor stops drifting back into an earlier phase or running its own teach-back. The switch is about a second, with a soft chime.","A thin progress strip shows where you are from the first second: your question, preparing, lesson, teach-back. When teaching starts you see and hear \"Your lesson has begun\" with the chapter name.","The tutor now shares what is worth knowing first, then asks you to use it, instead of only asking questions.","If you answer one part several times without it being accepted, the tutor fills in the missing piece and offers to move on.","After a quiet minute, voice pauses to save cost. Just start talking and it reconnects.","When lesson research fails, a second research provider tries before the part is left unprepared.","Copy is now a small labelled button: copy the whole transcript, or just your own ideas as points.","Lesson cards have Voice and Text buttons, show how long you have talked, and have an Archive button. Lessons that never got past the opening questions move to Archive after 12 hours.","Your profile shows a bar chart of lessons started and completed over the last two weeks.","You can delete your account and all its data from the account screen.","Removed: the Car option and the Sources placeholder. The third Home page is now the Archive."]},
   {tag:"v2.1.70",date:"Sep 21",changes:["Accepted explanations can move the conversation forward without another word to release the handoff; unclear fragments cannot move a lesson on by themselves.","The chapter, learning outcome, open map and Sources panel follow the same saved position.","Preparation explores your starting perspective while research runs and carries your first approval into the lesson.","New maps plan a broader journey around your question. Teaching asks for your own explanation, explores consequences and alternatives, and uses simpler language.","The final teach-back has a clearer beginning and ending, without repeated offers to start it."]},
   {tag:"v2.1.69",date:"Sep 21",changes:["Live understanding checks can combine explanations across several answers, instead of forgetting them when your latest reply is a short acknowledgement.","Moving to another learning outcome updates the lesson header and the speaking model, even within the same chapter.","Saved explanations carry into later lesson conversations. The final teach-back still requires fresh answers.","Map completion waits for an outstanding answer instead of forcing another opening. Clarification ends with a brief preparation message.","Lesson research now asks for the everyday context and causal foundations needed before a question depends on them."]},
@@ -16112,19 +16136,22 @@ function renderPasswordAccount() {
   const reset = mode === "reset";
   const manage = mode === "manage";
   const checking = mode === "checking";
+  const welcome = mode === "welcome";
   const verifyPassword = verify && accountPending?.mode !== "email_change";
   const needsPassword = ["signin","signup","update"].includes(mode) || verifyPassword;
   dialog.dataset.mode = mode;
   $("account-summary").hidden = !manage;
+  $("account-welcome").hidden = !welcome;
   $("account-email").textContent = cloudAccount?.email || "";
   $("account-avatar").textContent = (cloudAccount?.email || "")[0] || "";
-  $("password-account-back").hidden = checking || accountRecoveryRequired() || (["signin","verify"].includes(mode) && accountEntryNeeded());
+  $("password-account-back").hidden = checking || accountRecoveryRequired() || (["welcome","signin","verify"].includes(mode) && accountEntryNeeded());
   $("password-account-back").disabled = passwordAccountBusy;
   $("password-account-back").setAttribute("aria-label",manage ? "Close account" : "Back");
   $("password-account-back").querySelector("path").setAttribute("d",manage ? "M6 6l12 12M18 6 6 18" : "m14 6-6 6 6 6M8 12h12");
-  $("password-account-form").hidden = manage || checking;
-  $("account-dialog-title").textContent = checking ? "Checking your account…" : update ? (accountRecoveryRequired() ? "Set your password" : "Change password") : upgrade ? "Keep your existing library" : verify ? "Check your email" : reset ? "Reset your password" : signup ? "Create account" : manage ? "Your account" : "Sign in";
-  $("account-dialog-copy").textContent = checking ? "Restoring your secure session."
+  $("password-account-form").hidden = manage || checking || welcome;
+  $("account-dialog-title").textContent = welcome ? "Learn anything by talking it through" : checking ? "Checking your account…" : update ? (accountRecoveryRequired() ? "Set your password" : "Change password") : upgrade ? "Keep your existing library" : verify ? "Check your email" : reset ? "Reset your password" : signup ? "Create account" : manage ? "Your account" : "Sign in";
+  $("account-dialog-copy").textContent = welcome ? "Worldview is a tutor you talk with. Bring a question and it builds a researched lesson around it, then works through it with you."
+    : checking ? "Restoring your secure session."
     : upgrade ? "Connect an email to this device's existing account. Verify it first, then choose a password. Your lessons stay with the same account."
     : update ? "Choose a password of at least 12 characters. A memorable phrase works well."
     : verify ? (verifyPassword ? "Confirm your email, then enter your password here to open your library on this device." : "Open the confirmation email, then return here to continue.")
@@ -16144,6 +16171,7 @@ function renderPasswordAccount() {
   $("password-account-submit").hidden = manage || checking;
   $("password-account-submit").textContent = update ? "Save password" : upgrade ? "Send confirmation" : verify ? "Continue" : reset ? "Send reset link" : signup ? "Create account" : "Sign in";
   $("password-account-signup").hidden = !["signin","upgrade"].includes(mode);
+  if (welcome) $("password-account-forgot").hidden = true;
   $("password-account-signup").textContent = "Create account";
   $("password-account-forgot").hidden = !["signin","verify"].includes(mode);
   $("password-account-signin").hidden = !["signup","reset","verify","upgrade"].includes(mode);
@@ -16151,7 +16179,7 @@ function renderPasswordAccount() {
   $("password-account-close").hidden = true; // The header arrow is the single return control.
   $("password-account-signout").hidden = (!cloudAccount && !accountSignoutPending()) || checking || cloudAccount?.is_anonymous === true;
   $("password-account-signout").textContent = accountSignoutPending() ? "Retry sign out" : "Sign out";
-  $("password-account-remember").hidden = checking || manage;
+  $("password-account-remember").hidden = checking || manage || welcome;
   $("password-account-fields").disabled = passwordAccountBusy || checking;
   dialog.querySelectorAll(".account-dialog-actions button").forEach(button => { button.disabled = passwordAccountBusy; });
   $("password-account-form").setAttribute("aria-busy",String(passwordAccountBusy));
@@ -16159,13 +16187,18 @@ function renderPasswordAccount() {
   renderDeviceAccounts();
   syncCredentialFieldInteractivity();
 }
+/* The welcome is shown to a visitor until they choose to create an account or
+   sign in; after that this device goes straight to the form. */
+const WELCOME_DISMISSED_KEY = "worldview-welcome-dismissed-v1";
+function welcomeDismissed() { try { return localStorage.getItem(WELCOME_DISMISSED_KEY) === "1"; } catch (_) { return false; } }
+function dismissWelcome() { try { localStorage.setItem(WELCOME_DISMISSED_KEY,"1"); } catch (_) { /* The welcome may simply show again. */ } }
 function openPasswordAccount(mode = "", message = "", isError = false) {
   // A device holding an anonymous library still opens on ordinary sign-in.
   // Connecting that library to an email is reached through Create account,
   // which keeps the common path to one screen and one decision.
   if (mode === "upgrade") mode = "signin";
   if (!mode) mode = accountRecoveryRequired() ? "update" : permanentAccountVerified() ? "manage"
-    : accountPending ? "verify" : "signin";
+    : accountPending ? "verify" : !cloudAccount && !welcomeDismissed() ? "welcome" : "signin";
   if (passwordAccountBusy) { renderPasswordAccount();return; }
   if (passwordAccountMode !== mode) clearPasswordFields();
   passwordAccountMode = mode;
@@ -16194,7 +16227,7 @@ function reconcileAccountEntry() {
     if (deviceAccountAddingFrom === cloudAccount.id && ["signin","signup","verify","reset"].includes(passwordAccountMode)) return;
     deviceAccountAddingFrom = "";
     if (accountPending?.mode !== "email_change" || accountPending?.originalUserId === cloudAccount.id) setAccountPending(null);
-    if (["signin","signup","verify","upgrade","checking"].includes(passwordAccountMode)) closePasswordAccount();
+    if (["welcome","signin","signup","verify","upgrade","checking"].includes(passwordAccountMode)) closePasswordAccount();
     if (accountReturnToLab) {
       if (ownerToolsAvailable()) { accountReturnToLab = false;location.assign(new URL("lab/",location.href).href);return; }
       openPasswordAccount("manage","Signed in. This account does not have developer access.",true);
@@ -16206,7 +16239,7 @@ function reconcileAccountEntry() {
     if ($("account-dialog").open && passwordAccountMode === "checking") { $("account-dialog").close();syncCredentialFieldInteractivity(); }
     return;
   }
-  openPasswordAccount(accountPending ? "verify" : "signin");
+  openPasswordAccount(accountPending ? "verify" : "");
 }
 function renderAccountSetupUI() {
   const connected = $("intro-account-connected");
@@ -16592,6 +16625,8 @@ function handleAccountAuthChange(event, session) {
 }
 $("password-account-form").addEventListener("submit",event => { event.preventDefault();submitPasswordAccount(); });
 $("password-account-signup").onclick = () => openPasswordAccount("signup");
+$("account-welcome-start").onclick = () => { dismissWelcome();openPasswordAccount("signup"); };
+$("account-welcome-signin").onclick = () => { dismissWelcome();openPasswordAccount("signin"); };
 $("password-account-signin").onclick = () => openPasswordAccount("signin");
 $("password-account-forgot").onclick = () => openPasswordAccount("reset");
 $("password-account-resend").onclick = resendAccountConfirmation;
