@@ -1,4 +1,4 @@
-/* PRO-001: a simple daily bar chart on the profile. Each bar is the lessons
+/* PRO-008: a simple daily bar chart on the profile. Each bar is the lessons
    started that day; the filled part is the ones completed that day. Built from
    the saved lesson list only; no new data is collected. */
 window.WorldviewProfileChart=(()=>{
