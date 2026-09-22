@@ -5,11 +5,21 @@ window.WorldviewGeminiLive=(()=>{
  const endpoint='wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained';
  function encodePcm(buffer){let bytes='';for(const value of new Uint8Array(buffer))bytes+=String.fromCharCode(value);return btoa(bytes);}
  function decodePcm(data){const raw=atob(data),view=new DataView(new ArrayBuffer(raw.length));for(let i=0;i<raw.length;i++)view.setUint8(i,raw.charCodeAt(i));const samples=new Float32Array(Math.floor(raw.length/2));for(let i=0;i<samples.length;i++)samples[i]=view.getInt16(i*2,true)/32768;return samples;}
- async function connect({transport,mic,outputAudio,initiate=true,onEvent,onUsage,onStatus,onTransport,isCurrent}){
+ async function connect({transport,mic,outputAudio,initiate=true,openingText='',onEvent,onUsage,onStatus,onTransport,isCurrent}){
   if(transport?.type!=='gemini-websocket'||transport.setup?.model!==`models/${model}`||!transport.token?.startsWith('auth_tokens/'))throw Error('Gemini authorization was invalid.');
   const Audio=window.AudioContext||window.webkitAudioContext;
   if(!Audio||!window.AudioWorkletNode)throw Error('Gemini Live needs a browser with AudioWorklet support.');
   const audio=new Audio({latencyHint:'interactive'}),sources=new Set();
+  /* A phone alert (low battery, a call, Siri) interrupts the page's audio and
+     can leave the context suspended after the alert is gone, so the tutor is
+     heard no more although the connection is fine. Ask for it back while the
+     page is visible; a browser that insists on a tap gets the existing prompt. */
+  let revive=null;
+  audio.addEventListener?.('statechange',()=>{
+   if(closed||audio.state==='running'||audio.state==='closed'){clearInterval(revive);revive=null;return;}
+   if(revive)return;let tries=0;
+   revive=setInterval(()=>{if(closed||audio.state==='running'||++tries>40){clearInterval(revive);revive=null;return;}if(!document.hidden)void audio.resume().catch(()=>{});},500);
+  });
   let socket,ready=false,closed=false,started=false,muted=false,modelActive=false,processor,input,silent,playAt=0,resumeHandle='',resumeAttempts=0,closingReason='connection_lost',expiryTimer,openTimer;
   let received=Promise.resolve(),pendingContext='',connectResolve,connectReject,output,mix,hardGain,elementGain;
   const connected=new Promise((resolve,reject)=>{connectResolve=resolve;connectReject=reject;});
@@ -31,7 +41,7 @@ window.WorldviewGeminiLive=(()=>{
   }
   function clearAudio(){for(const source of sources){try{source.stop();}catch{}}sources.clear();playAt=audio.currentTime;}
   function finish(reason){
-   if(closed)return;closed=true;ready=false;clearTimeout(expiryTimer);clearTimeout(openTimer);clearAudio();
+   if(closed)return;closed=true;clearInterval(revive);ready=false;clearTimeout(expiryTimer);clearTimeout(openTimer);clearAudio();
    processor?.disconnect();input?.disconnect();silent?.disconnect();if(processor)processor.port.onmessage=null;
    if(outputAudio){outputAudio.removeEventListener?.('error',outputError);if(ownsOutput()){outputAudio.pause();outputAudio.srcObject=null;}}
    output?.stream.getTracks().forEach(track=>track.stop());output?.disconnect();
@@ -73,7 +83,7 @@ window.WorldviewGeminiLive=(()=>{
      if(audio.state==='suspended'||outputAudio?.paused)onStatus('Tap Enable audio.');
      // Give a fresh conversation its opening; resumed lessons continue from the
      // saved current phase/question rather than running Clarification again.
-     if(initiate){modelActive=true;send({clientContent:{turns:[{role:'user',parts:[{text:'APP_START. Begin or resume the saved lesson now. Use the saved phase and conversation. Do not re-ask a question already answered. Speak first now in the selected language. If no subject is chosen, ask what they would like to explore today. Ask at most one relevant next question, then listen.'}]}],turnComplete:true}});}
+     if(initiate){modelActive=true;send({clientContent:{turns:[{role:'user',parts:[{text:openingText||'APP_START. Begin or resume the saved lesson now. Use the saved phase and conversation. Do not re-ask a question already answered. Speak first now in the selected language. If no subject is chosen, ask what they would like to explore today. Ask at most one relevant next question, then listen.'}]}],turnComplete:true}});}
     }else onStatus('Listening');
     flushContext();
    }

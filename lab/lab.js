@@ -1803,7 +1803,16 @@ function persistWorkspace(successMessage = "") {
   const storageKey = labWorkspaceStorageKey();
   if (!storageKey || !labState.workspaceLoaded) return false;
   try {
-    localStorage.setItem(storageKey, JSON.stringify(workspacePayload()));
+    const payload = JSON.stringify(workspacePayload());
+    try { localStorage.setItem(storageKey, payload); }
+    catch (error) {
+      // BUG-430: a full device store blocked sending a typed message. Old voice
+      // transcripts from other lessons are the usual cause and are also saved
+      // on the server, so free them and try once more before refusing.
+      if (!/quota|exceeded|storage/i.test(String(error?.name || "") + " " + String(error?.message || ""))) throw error;
+      if (!window.WorldviewLiveConversation?.freeStorage?.()) throw error;
+      localStorage.setItem(storageKey, payload);
+    }
     if (successMessage) setMessage("workspace-message", successMessage, "ok");
     return true;
   } catch (error) {
@@ -15594,7 +15603,7 @@ async function chooseLiveConversationMode(choice){
 function toggleLiveModeMenu(){
  let menu=q('live-mode-menu');if(menu&&!menu.hidden){closeLiveModeMenu();return;}
  if(!menu){menu=document.createElement('div');menu.id='live-mode-menu';menu.className='live-mode-menu';menu.setAttribute('aria-label','Conversation modes');q('mock-learner-header').append(menu);document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLiveModeMenu();q('mock-learner-mode')?.focus();}});document.addEventListener('click',e=>{if(!menu.contains(e.target)&&!q('mock-learner-mode')?.contains(e.target))closeLiveModeMenu();});}
- menu.replaceChildren();const gemini=window.WorldviewModels?.liveModel()==='gemini-3.8-live';const options=[['text','Text',''],[labState.verifiedAdmin?'live':'voice',labState.verifiedAdmin?(window.WorldviewModels?.liveLabel()||'GPT Live'):'Voice',labState.verifiedAdmin?(gemini?'Usage-based pricing':'$0.05/min'):''],['car','Car','']];
+ menu.replaceChildren();const gemini=window.WorldviewModels?.liveModel()==='gemini-3.8-live';const options=[['text','Text',''],[labState.verifiedAdmin?'live':'voice',labState.verifiedAdmin?(window.WorldviewModels?.liveLabel()||'GPT Live'):'Voice',labState.verifiedAdmin?(gemini?'Usage-based pricing':'$0.05/min'):'']];
  for(const [choice,title,note]of options){const b=document.createElement('button');b.type='button';b.textContent=title;const small=document.createElement('small');small.textContent=note;b.append(small);b.onclick=()=>void chooseLiveConversationMode(choice);menu.append(b);}
  menu.hidden=false;q('mock-learner-mode').setAttribute('aria-expanded','true');menu.querySelector('button')?.focus();
 }
@@ -15619,6 +15628,7 @@ function renderMockLearnerShell() {
 
   const chapterState = mockLearnerLessonChapterState(selection, stage);
   renderMockChapterMenu(selection,stage,chapterState);
+  window.WorldviewJourneyStrip?.render(selection, stage);
 
   const mode = stage === "clarification" ? labState.clarification.mode : labState.extraction.mode;
   const stageBusy = Boolean(mockConversationWaitMessage(stage, artifact, selection));
@@ -16106,6 +16116,7 @@ function setPipelineStage(stage = "clarification") {
     labState.extraction.modeInheritedFromClarification = true;
   }
   labState.pipelineStage = next;
+  if (typeof LAB_LEARNER !== "undefined" && LAB_LEARNER) window.WorldviewJourneyStrip?.stageChanged(previous, next, { voice:liveLessonSelected(next) });
   if (labState.pipelineMode === "mock" && ["extraction", "lesson", "quiz"].includes(next) && previous !== next) {
     setMockRunConfigCollapsed(true);
   }
@@ -19516,6 +19527,13 @@ function bindEvents() {
     const native = window.WorldviewLiveConversation?.transcriptTurns?.(lineage,ordinary);
     const turns = native ?? ordinary;
     return window.WorldviewConversationTools.serializeTurns(turns);
+  },getIdeas:()=>{
+    if(!labState.accessVerified||!labState.verifiedUserId)return '';
+    const artifact=selectedPipelineArtifact(),ordinary=mockLearnerTranscript('quiz',artifact);
+    const lineage=[labState.verifiedUserId,artifact?.runId||labState.clarification.runId].join('|');
+    const turns=window.WorldviewLiveConversation?.transcriptTurns?.(lineage,ordinary)??ordinary;
+    const topic=labState.clarification.topic===VOICE_TOPIC_PLACEHOLDER?'':labState.clarification.topic;
+    return window.WorldviewConversationTools.ideasText(turns,topic||'');
   }});
   q("mock-learner-mode")?.addEventListener("click", () => { if(liveLessonSelected())window.WorldviewLiveConversation?.toggleSpeaker();else toggleLiveModeMenu(); });
   q("mock-learner-sources")?.addEventListener("click", toggleMockLearnerSources);

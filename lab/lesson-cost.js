@@ -44,5 +44,17 @@
   // Missing modality data is unknown rather than pricing every token as text.
   return {usd:known?usd:null,partial};
  }
- root.WorldviewLessonCost={report,summary,format,describe,geminiUsage,prefix:PREFIX};
+ /* Minutes spent talking in a lesson, per voice session so a repeated update
+    never counts twice. Shown on lesson cards in place of a dollar estimate. */
+ const TALK='worldview-talk-time-v1:';
+ const talkKey=(owner,runId)=>owner&&runId?TALK+encodeURIComponent(owner)+':'+encodeURIComponent(runId):'';
+ function readTalk(key){try{const v=JSON.parse(root.localStorage.getItem(key)||'null');return v&&typeof v.sessions==='object'?v:{sessions:{}};}catch{return {sessions:{}};}}
+ function recordTalk(owner,runId,sessionId,seconds){
+  const key=talkKey(owner,runId);if(!key||!sessionId||!(seconds>=0))return;
+  const value=readTalk(key);if((value.sessions[sessionId]||0)>=seconds)return;
+  value.sessions[sessionId]=Math.round(seconds);
+  try{root.localStorage.setItem(key,JSON.stringify(value));}catch{}
+ }
+ function talk(owner,runId){const key=talkKey(owner,runId);if(!key)return 0;return Object.values(readTalk(key).sessions).reduce((n,v)=>n+(Number(v)||0),0);}
+ root.WorldviewLessonCost={report,summary,format,describe,geminiUsage,recordTalk,talk,prefix:PREFIX};
 })(typeof window!=='undefined'?window:globalThis);

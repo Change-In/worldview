@@ -15,7 +15,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 </script>
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="lesson-entry-popup.css?v=2.1.38">
-<script src="lesson-entry-popup.js?v=2.1.38"></script>
+<script src="lesson-entry-popup.js?v=2.1.71"></script>
 <link rel="apple-touch-icon" href="icon.png">
 <style>
   :root {
@@ -1169,6 +1169,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .quiz-button[hidden] { display:none; }
   .quiz-button:active { transform:scale(.95); background:rgba(189,90,48,.12); }
   .card-path-button { position:absolute;right:8px;top:8px;width:44px;height:44px;z-index:3;background:color-mix(in srgb,var(--card) 88%,transparent);touch-action:manipulation; }
+  /* Saved lesson cards start Voice or Text directly and move to Archive in one tap. */
+  .card-mode-actions { position:absolute;left:12px;right:12px;bottom:12px;z-index:3;display:flex;gap:8px;align-items:center; }
+  .card-mode-button { flex:1;min-height:40px;padding:0 10px;border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);border-radius:999px;background:color-mix(in srgb,var(--card) 88%,transparent);color:var(--ink);font:600 max(12px,calc(var(--cardW,262px) * .05))/1 system-ui,sans-serif;cursor:pointer;touch-action:manipulation; }
+  .card-mode-button:active { transform:scale(.97);background:color-mix(in srgb,var(--accent) 14%,var(--card)); }
+  .card-archive-button { flex:none;display:grid;place-items:center;width:40px;height:40px;padding:0;border:1px solid color-mix(in srgb,var(--ink) 18%,transparent);border-radius:50%;background:transparent;color:var(--ink-soft);cursor:pointer;touch-action:manipulation; }
+  .card-archive-button svg { width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round; }
+  .card-mode-button:focus-visible,.card-archive-button:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
+  .card .card-cost[hidden] { display:none; }
   .card-path-button svg { width:20px;height:20px; }
   .card.lesson-card .lesson-mastery-dot { right:59px; top:22px; }
   /* side breathing room; on wide screens the conversation stays a centered readable column */
@@ -1268,6 +1276,37 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .worldview-stat strong { display: block; font-family: Georgia, "Times New Roman", serif; font-size: 25px; font-weight: 500; }
   .worldview-stat span { display: block; margin-top: 3px; color: var(--ink-soft); font-size: 11px; line-height: 1.25; }
   .worldview-section { margin-bottom: 26px; }
+  #source-page #source-carousel-wrap { display:none; }
+  #source-page { justify-content:center; }
+  #source-page #home-archive-entry { margin-top:auto; margin-bottom:auto; }
+  .account-menu .account-delete-entry strong { color:#d2644f; }
+  #account-delete-dialog { position:fixed; inset:0; margin:auto; height:fit-content; max-height:calc(100% - 32px); overflow:auto; width:min(420px,calc(100% - 32px)); padding:22px; border:1px solid color-mix(in srgb,var(--ink) 16%,transparent); border-radius:18px; background:var(--card); color:var(--ink); }
+  #account-delete-dialog::backdrop { background:#0009; }
+  #account-delete-dialog h2 { margin:0 0 10px; font:700 20px/1.2 Georgia,serif; }
+  #account-delete-dialog p { margin:0 0 14px; color:var(--ink-soft); font-size:14.5px; line-height:1.5; }
+  #account-delete-dialog label { display:block; margin-bottom:6px; font-size:13px; font-weight:600; }
+  #account-delete-dialog input { width:100%; min-height:44px; padding:10px 12px; border:1px solid color-mix(in srgb,var(--ink) 22%,transparent); border-radius:12px; background:transparent; color:var(--ink); font:600 16px system-ui,sans-serif; letter-spacing:.08em; }
+  #account-delete-status:empty { display:none; }
+  #account-delete-status { margin-top:12px!important; }
+  .account-delete-actions { display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; margin-top:16px; }
+  .account-delete-actions button { min-height:44px; padding:0 16px; border-radius:999px; border:1px solid color-mix(in srgb,var(--ink) 22%,transparent); background:transparent; color:var(--ink); font:600 14px system-ui,sans-serif; }
+  #account-delete-go { border-color:#c4533e; background:#c4533e; color:#fff; }
+  #account-delete-go:disabled { opacity:.45; }
+  /* PRO-001 daily lesson chart */
+  .profile-chart-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .profile-chart-head h3 { margin:0; }
+  .profile-chart-summary { margin:0; color:var(--ink-soft); font-size:12.5px; }
+  .profile-chart-svg { display:block; width:100%; height:auto; max-width:520px; margin-top:12px; overflow:visible; }
+  .profile-chart-grid { stroke:color-mix(in srgb,var(--ink) 10%,transparent); stroke-width:1; }
+  .profile-chart-axis { stroke:color-mix(in srgb,var(--ink) 28%,transparent); stroke-width:1; }
+  .profile-chart-tick { fill:var(--ink-soft); font:500 9px system-ui,sans-serif; font-variant-numeric:tabular-nums; }
+  .profile-chart-started { fill:color-mix(in srgb,var(--accent) 32%,transparent); }
+  .profile-chart-completed { fill:var(--accent); }
+  .profile-chart-legend { display:flex; align-items:center; gap:6px; margin:8px 0 0; color:var(--ink-soft); font-size:12px; }
+  .profile-chart-key { display:inline-block; width:10px; height:10px; border-radius:2px; margin-left:8px; }
+  .profile-chart-key:first-child { margin-left:0; }
+  .profile-chart-key.is-started { background:color-mix(in srgb,var(--accent) 32%,transparent); }
+  .profile-chart-key.is-completed { background:var(--accent); }
   .worldview-section h3 { margin-bottom: 10px; color: var(--ink-soft); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
   .worldview-categories { display: flex; flex-wrap: wrap; gap: 8px; }
   .worldview-category {
@@ -1663,6 +1702,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       <div class="account-menu">
         <button id="account-settings" type="button"><span aria-hidden="true">⚙</span><span><strong>Settings</strong><small>Appearance, voice and saving</small></span><span aria-hidden="true">›</span></button>
         <button id="account-password" type="button"><span aria-hidden="true"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg></span><span><strong>Change password</strong><small>Keep your account secure</small></span><span aria-hidden="true">›</span></button>
+        <button id="account-delete" class="account-delete-entry" type="button"><span aria-hidden="true"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></span><span><strong>Delete account</strong><small>Permanently remove your lessons and data</small></span><span aria-hidden="true">›</span></button>
       </div>
       <p class="account-device-note">Signed in on this device. Your library belongs to this account.</p>
     </section>
@@ -1802,7 +1842,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   <nav class="section-rail" aria-label="Home sections">
     <button id="rail-profile" class="rail-item" type="button">Profile</button>
     <button id="rail-explore" class="rail-item active" type="button">Explore</button>
-    <button id="rail-sources" class="rail-item" type="button">Upload</button>
+    <button id="rail-sources" class="rail-item" type="button">Archive</button>
   </nav>
   <button id="mobile-category-button" type="button" hidden disabled>All lessons</button>
   <button id="models-button" type="button" aria-haspopup="dialog" hidden>Models</button>
@@ -2188,13 +2228,14 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <!-- optional: data.js is a shared lessons file — auto-loaded so browsers/devices stay in sync -->
 <script src="data.js"></script>
 <script src="models.js?v=2.1.37"></script>
-<script src="lab/lesson-cost.js?v=2.1.59"></script>
+<script src="lab/lesson-cost.js?v=2.1.71"></script>
 <script src="saved-map.js?v=2.1.57"></script>
+<script src="profile-chart.js?v=2.1.71"></script>
 <script>
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.70 · Sep 21";
+const BUILD = "v2.1.71 · Sep 22";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2202,6 +2243,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.71",date:"Sep 22",changes:["Voice keeps its place when you glance away: pulling down notifications, checking the time or a low-battery alert no longer ends the conversation.","\"Try microphone again\" works after a dropped connection. The server used to refuse a new voice session for up to 15 minutes while the old one was still marked open.","Each new part of the lesson starts on a fresh connection with its own instructions, so the tutor stops drifting back into an earlier phase or running its own teach-back. The switch is about a second, with a soft chime.","A thin progress strip shows where you are from the first second: your question, preparing, lesson, teach-back. When teaching starts you see and hear \"Your lesson has begun\" with the chapter name.","The tutor now shares what is worth knowing first, then asks you to use it, instead of only asking questions.","If you answer one part several times without it being accepted, the tutor fills in the missing piece and offers to move on.","After a quiet minute, voice pauses to save cost. Just start talking and it reconnects.","When lesson research fails, a second research provider tries before the part is left unprepared.","Copy is now a small labelled button: copy the whole transcript, or just your own ideas as points.","Lesson cards have Voice and Text buttons, show how long you have talked, and have an Archive button. Lessons that never got past the opening questions move to Archive after 12 hours.","Your profile shows a bar chart of lessons started and completed over the last two weeks.","You can delete your account and all its data from the account screen.","Removed: the Car option and the Sources placeholder. The third Home page is now the Archive."]},
   {tag:"v2.1.70",date:"Sep 21",changes:["Accepted explanations can move the conversation forward without another word to release the handoff; unclear fragments cannot move a lesson on by themselves.","The chapter, learning outcome, open map and Sources panel follow the same saved position.","Preparation explores your starting perspective while research runs and carries your first approval into the lesson.","New maps plan a broader journey around your question. Teaching asks for your own explanation, explores consequences and alternatives, and uses simpler language.","The final teach-back has a clearer beginning and ending, without repeated offers to start it."]},
   {tag:"v2.1.69",date:"Sep 21",changes:["Live understanding checks can combine explanations across several answers, instead of forgetting them when your latest reply is a short acknowledgement.","Moving to another learning outcome updates the lesson header and the speaking model, even within the same chapter.","Saved explanations carry into later lesson conversations. The final teach-back still requires fresh answers.","Map completion waits for an outstanding answer instead of forcing another opening. Clarification ends with a brief preparation message.","Lesson research now asks for the everyday context and causal foundations needed before a question depends on them."]},
   {tag:"v2.1.68",date:"Sep 21",changes:["The tutor no longer says \"Exactly\" to something it did not actually hear. Speech that comes back garbled is now named as unheard and you are asked to repeat it, instead of being confirmed as a correct answer while the lesson quietly refuses to move on — which is what was causing the same question to come back over and over.","The tutor will not explain something and then ask you to explain the same thing back, and every turn now ends with a real question or a named next step instead of a statement you have to say \"okay\" to.","Lesson routes for theoretical topics now open with why anyone believes the idea in the first place, before how it works.","Voice mode is simpler at the bottom: no language button, no device-backup or audio-route lines, no Retry saving, no Text button, and the controls are centred.","Old lesson transcripts are cleared from this device when storage runs out, instead of the app quietly failing to save or build anything."]},
@@ -6357,7 +6399,7 @@ function homeFolderAtPoint(card,x,y) {
 }
 function renderHome() {
   cancelHomeTopicCapture();
-  if ($("home-archive-count")) $("home-archive-count").textContent = archivedLessons().length;
+  if ($("home-archive-count")) $("home-archive-count").textContent = archivedLessons().length + archivedLearnerRuns().length;
   syncDeveloperLauncherVisibility();
   const selectedLayerIndex = categoryLayerEntries().findIndex(entry => entry.key === wheel.layerCategory);
   if (wheel.layerCategory && selectedLayerIndex < 0) { wheel.layerCategory = null; wheel.layerIndex = 0; }
@@ -6630,14 +6672,16 @@ function pathControlAtPoint(x, y) {
     const card = wheel.cards[index];
     if (!card) return;
     if (!wheel.ids[index] || card.style.pointerEvents === "none") return;
-    const button = card.querySelector(".card-path-button");
-    if (!button) return;
-    const rect = button.getBoundingClientRect();
-    if (x < rect.left - hitSlop || x > rect.right + hitSlop || y < rect.top - hitSlop || y > rect.bottom + hitSlop) return;
-    const z = parseInt(card.style.zIndex || "0", 10);
-    if (z > bestZ) {
-      bestZ = z;
-      best = { lessonId: wheel.ids[index], button };
+    // Saved lesson cards also carry Voice, Text and Archive; the carousel owns
+    // the pointer, so those taps are resolved here by position like the map.
+    for (const button of card.querySelectorAll(".card-path-button,.card-mode-button,.card-archive-button")) {
+      const rect = button.getBoundingClientRect();
+      if (!rect.width || x < rect.left - hitSlop || x > rect.right + hitSlop || y < rect.top - hitSlop || y > rect.bottom + hitSlop) continue;
+      const z = parseInt(card.style.zIndex || "0", 10);
+      if (z > bestZ) {
+        bestZ = z;
+        best = { lessonId: wheel.ids[index], button };
+      }
     }
   });
   return best;
@@ -6678,7 +6722,7 @@ function pathControlAtPoint(x, y) {
     if (e.target && e.target.closest && e.target.closest(".category-add-button")) return;
     const pathHit = pathControlAtPoint(e.clientX, e.clientY);
     if (pathHit) {
-      pathPress = { pointerId:e.pointerId, x:e.clientX, y:e.clientY, lessonId:pathHit.lessonId, canceled:false };
+      pathPress = { pointerId:e.pointerId, x:e.clientX, y:e.clientY, lessonId:pathHit.lessonId, button:pathHit.button, canceled:false };
       try { area.setPointerCapture(e.pointerId); } catch (error) {}
       return;
     }
@@ -6744,7 +6788,10 @@ function pathControlAtPoint(x, y) {
       const press = pathPress;
       pathPress = null;
       try { area.releasePointerCapture(e.pointerId); } catch (error) {}
-      if (!press.canceled) openLessonPath(press.lessonId);
+      if (!press.canceled) {
+        if (press.button && !press.button.classList.contains("card-path-button")) press.button.click();
+        else openLessonPath(press.lessonId);
+      }
       return;
     }
     /* A finger must be forgotten on the way out through EVERY branch. Two of
@@ -8324,6 +8371,12 @@ function homeLearnerRunTitle(item) {
     : "Saved lesson";
 }
 
+/* A start time is either epoch milliseconds or an ISO string. Anything before
+   Worldview existed is a missing value misread (Date.parse("0") is the year 2000). */
+function learnerRunStart(value) {
+  const time = typeof value === "number" ? value : typeof value === "string" && value ? Date.parse(value) : 0;
+  return Number.isFinite(time) && time > Date.UTC(2026,0,1) ? time : 0;
+}
 function normalizedHomeLearnerRuns(value) {
   if (!Array.isArray(value)) return [];
   const runs = new Map();
@@ -8336,7 +8389,8 @@ function normalizedHomeLearnerRuns(value) {
       lessonTitleMapJobId:String(item.lessonTitleMapJobId || "").slice(0,128),
       lessonTitleUpdatedAt:Number(item.lessonTitleUpdatedAt) || Date.parse(item.lessonTitleUpdatedAt) || 0} : {}),
       phase:["clarification","map","extraction","lesson","quiz","complete"].includes(item.phase) ? item.phase : "clarification",
-      updatedAt:Number(item.updatedAt) || Date.parse(item.updatedAt) || 0};
+      updatedAt:Number(item.updatedAt) || Date.parse(item.updatedAt) || 0,
+      startedAt:learnerRunStart(item.startedAt)};
     const previous = runs.get(runId);
     // Display metadata can arrive separately from phase updates (including
     // older clients). Missing metadata must not erase the map's saved name.
@@ -8348,6 +8402,9 @@ function normalizedHomeLearnerRuns(value) {
     if (named) Object.assign(merged,{lessonTitle:named.lessonTitle,lessonTitleMapJobId:named.lessonTitleMapJobId,
       lessonTitleUpdatedAt:named.lessonTitleUpdatedAt});
     if (!merged.topic && other?.topic) merged.topic = other.topic;
+    // The earliest known start is the day the lesson began (profile chart).
+    const starts = [latest.startedAt, other?.startedAt].map(learnerRunStart).filter(value => value > 0);
+    merged.startedAt = starts.length ? Math.min(...starts) : 0;
     // Title freshness follows the map, independently of conversation activity.
     merged.title = homeLearnerRunTitle(merged);
     runs.set(runId,merged);
@@ -8367,7 +8424,7 @@ function homeLearnerRunRemovals() {
     if (!value || typeof value !== "object" || Array.isArray(value)) return {};
     const rows = {};
     for (const [runId, row] of Object.entries(value)) {
-      if (!["archived", "deleted"].includes(row?.state)) continue;
+      if (!["archived", "deleted", "kept"].includes(row?.state)) continue;
       rows[runId] = { state:row.state, at:Number(row.at) || 0 };
     }
     return rows;
@@ -8381,9 +8438,13 @@ function setHomeLearnerRunRemoval(runId, state) {
   try { localStorage.setItem(HOME_LEARNER_REMOVALS_PREFIX + cloudAccount.id, JSON.stringify(rows)); return true; }
   catch (_) { return false; }
 }
+/* A lesson that never got past its opening questions is clutter after half a
+   day. It moves to Archive rather than disappearing. */
+const UNFINISHED_LESSON_MS = 12 * 60 * 60 * 1000;
+function unfinishedLearnerRun(run) { return run?.phase === "clarification" && run.updatedAt > 0 && Date.now() - run.updatedAt > UNFINISHED_LESSON_MS; }
 function archivedLearnerRuns() {
   const removals = homeLearnerRunRemovals();
-  return homeLearnerRuns({ all:true }).filter(run => removals[run.runId]?.state === "archived");
+  return homeLearnerRuns({ all:true }).filter(run => removals[run.runId]?.state === "archived" || !removals[run.runId] && unfinishedLearnerRun(run));
 }
 function homeLearnerRuns({ all = false } = {}) {
   if (!homeLearnerAccountAllowed() || stateAccountId !== cloudAccount.id) return [];
@@ -8391,7 +8452,10 @@ function homeLearnerRuns({ all = false } = {}) {
     const runs = normalizedHomeLearnerRuns(JSON.parse(localStorage.getItem(HOME_LEARNER_RUNS_PREFIX+cloudAccount.id) || "[]"));
     if (all) return runs;
     const removals = homeLearnerRunRemovals();
-    return runs.filter(run => !removals[run.runId]);
+    return runs.filter(run => {
+      const removal = removals[run.runId]?.state;
+      return removal !== "archived" && removal !== "deleted" && (removal === "kept" || !unfinishedLearnerRun(run));
+    });
   }
   catch (_) { return []; }
 }
@@ -8404,8 +8468,24 @@ function renderHomeLearnerRuns(carousel) {
     card.dataset.kind = "learner-run";
     const stage = {clarification:"Your direction",map:"Lesson Map",extraction:"Your starting point",lesson:"Lesson",quiz:"Quiz",complete:"Completed"}[run.phase];
     card.setAttribute("aria-label",`${run.title}. ${stage}. Tap to continue.`);
-    const costs=window.WorldviewLessonCost,cost=costs?.summary(cloudAccount.id,run.runId);
-    card.innerHTML = `<div class="card-cat">${esc(stage)}</div><div class="card-cost" data-run-cost="${esc(run.runId)}" title="${esc(costs?.describe(cost)||'Cost estimate unavailable.')}">${esc(costs?.format(cost)||'Est. total —')}</div><div class="card-title serif ${cardTitleSizeClass(run.title)}">${cardTitleHtml(run.title)}</div><div class="card-hint">tap to continue</div>`;
+    card.innerHTML = `<div class="card-cat">${esc(stage)}</div><div class="card-cost" data-run-cost="${esc(run.runId)}"></div><div class="card-title serif ${cardTitleSizeClass(run.title)}">${cardTitleHtml(run.title)}</div>`;
+    paintHomeLessonUsage(card.querySelector(".card-cost"),run.runId);
+    /* Voice and Text start the lesson directly; tapping the card still offers the choice. */
+    const actions = document.createElement("div");actions.className = "card-mode-actions";
+    for (const [mode,label] of [["voice","Voice"],["text","Text"]]) {
+      const button = document.createElement("button");button.type = "button";button.className = "card-mode-button";button.textContent = label;
+      button.setAttribute("aria-label",label + " lesson: " + run.title);
+      guardCardControl(button);
+      button.onclick = event => { event.stopPropagation();openHomeLearnerRun({runId:run.runId,entryMode:mode}); };
+      actions.appendChild(button);
+    }
+    const archive = document.createElement("button");archive.type = "button";archive.className = "card-archive-button";
+    archive.setAttribute("aria-label","Move " + run.title + " to Archive");archive.title = "Archive";
+    archive.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M6 7v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7M9 11h6M5 4h14v3H5z"/></svg>';
+    guardCardControl(archive);
+    archive.onclick = event => { event.stopPropagation();archiveHomeLearnerRun(run); };
+    actions.appendChild(archive);
+    card.appendChild(actions);
     const mapButton = document.createElement("button");
     mapButton.type = "button";
     mapButton.className = "lesson-path-button card-path-button";
@@ -8420,10 +8500,27 @@ function renderHomeLearnerRuns(carousel) {
     carousel.appendChild(card);wheel.cards.push(card);wheel.ids.push(card.dataset.id);
   }
 }
+/* A learner sees how long they have talked. The dollar estimate stays visible
+   to the owner only, until pricing is decided (BUS-049). */
+function paintHomeLessonUsage(node,runId){
+  if(!node||!cloudAccount?.id)return;
+  const costs=window.WorldviewLessonCost,seconds=costs?.talk?.(cloudAccount.id,runId)||0;
+  const parts=[];if(seconds>=60)parts.push(Math.round(seconds/60)+" min talked");
+  if(backendEntitlementRecord?.access_tier==="admin"&&costs){const value=costs.summary(cloudAccount.id,runId);if(value.known)parts.push("$"+value.usd.toFixed(2));node.title=costs.describe(value);}
+  node.textContent=parts.join(" · ");node.hidden=!parts.length;
+}
+function guardCardControl(button){
+  button.addEventListener("pointerdown",event=>{wheel.methodInteracting=true;event.stopPropagation();});
+  button.addEventListener("pointerup",event=>{event.stopPropagation();setTimeout(()=>{wheel.methodInteracting=false;},0);});
+  button.addEventListener("pointercancel",()=>{wheel.methodInteracting=false;});
+}
+function archiveHomeLearnerRun(run){
+  if(!setHomeLearnerRunRemoval(run.runId,"archived")){toast("This device could not save that change. Try again.",4000);return;}
+  renderHome();toast("Moved to Archive. It is still yours.",3500);
+}
 function refreshHomeLessonCosts(){
   if(!homeLearnerAccountAllowed()||stateAccountId!==cloudAccount.id)return;
-  const costs=window.WorldviewLessonCost;if(!costs)return;
-  document.querySelectorAll('[data-run-cost]').forEach(node=>{const value=costs.summary(cloudAccount.id,node.dataset.runCost);node.textContent=costs.format(value);node.title=costs.describe(value);});
+  document.querySelectorAll("[data-run-cost]").forEach(node=>paintHomeLessonUsage(node,node.dataset.runCost));
 }
 window.addEventListener('worldview-lesson-cost-updated',refreshHomeLessonCosts);
 window.addEventListener('storage',event=>{if(event.key?.startsWith(window.WorldviewLessonCost?.prefix))refreshHomeLessonCosts();});
@@ -11438,8 +11535,23 @@ function renderProfile(resetSelection = false) {
   const scroll = $("profile-scroll");
   if (resetSelection) profileCategory = null;
   scroll.innerHTML = "";
-  if (!state.lessons.length) {
+  /* Current lessons live in the saved lesson list, not in state.lessons, so the
+     profile counts both and charts the list day by day. */
+  const removals = typeof homeLearnerRunRemovals === "function" ? homeLearnerRunRemovals() : {};
+  const learnerRuns = typeof homeLearnerRuns === "function" ? homeLearnerRuns({ all:true }).filter(run => removals[run.runId]?.state !== "deleted") : [];
+  if (!state.lessons.length && !learnerRuns.length) {
     scroll.innerHTML = `<div id="profile-empty">Nothing here yet.<br><br>Start a lesson and your worldview will begin to take shape &mdash; every conversation gets categorized automatically.</div>`;
+    return;
+  }
+  if (!state.lessons.length) {
+    const done = learnerRuns.filter(run => run.phase === "complete").length;
+    const stats = document.createElement("div");
+    stats.className = "worldview-stats";
+    stats.innerHTML = `<div class="worldview-stat"><strong>${state.notes.length}</strong><span>note${state.notes.length === 1 ? "" : "s"}</span></div>`
+      + `<div class="worldview-stat"><strong>${learnerRuns.length}</strong><span>lesson${learnerRuns.length === 1 ? "" : "s"}</span></div>`
+      + `<div class="worldview-stat${done < learnerRuns.length ? " worldview-stat-open" : ""}"><strong>${done}</strong><span>completed</span></div>`;
+    scroll.appendChild(stats);
+    window.WorldviewProfileChart?.render(scroll, learnerRuns);
     return;
   }
   const cats = {};
@@ -11460,6 +11572,7 @@ function renderProfile(resetSelection = false) {
     + `<div class="worldview-stat"><strong>${state.lessons.length}</strong><span>conversation${state.lessons.length === 1 ? "" : "s"}</span></div>`
     + `<div class="worldview-stat${finished.length < state.lessons.length ? " worldview-stat-open" : ""}"><strong>${finished.length}</strong><span>completed</span></div>`;
   scroll.appendChild(stats);
+  if (learnerRuns.length) window.WorldviewProfileChart?.render(scroll, learnerRuns);
 
   /* Completed lessons, grouped by the category they already carry. Tap a
      category to see what is inside it. The old "where your curiosity has gone"
@@ -11549,7 +11662,9 @@ $("rail-settings").onclick = openSettings;
 function scrollHomeSection(id) { show("home"); $(id).scrollIntoView({ behavior:"smooth", block:"start" }); }
 $("rail-profile").onclick = () => { renderProfile(true); scrollHomeSection("profile-page"); };
 $("rail-explore").onclick = () => scrollHomeSection("carousel-page");
-$("rail-sources").onclick = openSourceSheet;
+/* Sources is not built yet, so its page carries only the Archive (it no longer
+   shows a placeholder card). The Sources code stays in place for later. */
+$("rail-sources").onclick = () => scrollHomeSection("source-page");
 // Land the deck on Explore (the middle page) rather than Profile (the top page)
 // whenever home is entered fresh — otherwise opening the app would show Profile.
 function homeLandOnExplore() {
@@ -11645,8 +11760,8 @@ function renderLibraryBrowser(lesson) {
   $("library-back").onclick = () => {categoryOrganizerState.archive=false;renderCategoryOrganizer();$("library-archive").focus();};
   host.querySelectorAll('[data-archive-open]').forEach(button => {button.onclick=()=>{const id=button.dataset.archiveOpen;closeCategoryOrganizer();openChat(id);};});
   host.querySelectorAll('[data-archive-restore]').forEach(button => {button.onclick=()=>{if(setLessonArchived(button.dataset.archiveRestore,false)){renderCategoryOrganizer();$("library-back").focus();}};});
-  host.querySelectorAll('[data-archive-run-open]').forEach(button => {button.onclick=()=>{const runId=button.dataset.archiveRunOpen;setHomeLearnerRunRemoval(runId,"");closeCategoryOrganizer();void openHomeLearnerRun({runId});};});
-  host.querySelectorAll('[data-archive-run-restore]').forEach(button => {button.onclick=()=>{if(setHomeLearnerRunRemoval(button.dataset.archiveRunRestore,"")){renderCategoryOrganizer();renderHome();$("library-back").focus();}};});
+  host.querySelectorAll('[data-archive-run-open]').forEach(button => {button.onclick=()=>{const runId=button.dataset.archiveRunOpen;setHomeLearnerRunRemoval(runId,"kept");closeCategoryOrganizer();void openHomeLearnerRun({runId});};});
+  host.querySelectorAll('[data-archive-run-restore]').forEach(button => {button.onclick=()=>{if(setHomeLearnerRunRemoval(button.dataset.archiveRunRestore,"kept")){renderCategoryOrganizer();renderHome();$("library-back").focus();}};});
 }
 function customCategoryCount(categoryId,section) {
   return state.lessons.filter(lesson => {
@@ -16490,6 +16605,54 @@ $("password-account-back").onclick = () => {
 $("account-settings").onclick = () => { if (closePasswordAccount()) openSettings("account"); };
 $("device-account-add").onclick = addDeviceAccount;
 $("account-password").onclick = () => { if (permanentAccountVerified()) openPasswordAccount("update"); };
+/* BUS-050: permanent account deletion. The server deletes the account and
+   everything it owns only after the learner types DELETE; this device then
+   forgets that account's saved copies and returns to sign-in. */
+$("account-delete").onclick = () => { if (permanentAccountVerified()) openAccountDeletion(); };
+function openAccountDeletion() {
+  let dialog = $("account-delete-dialog");
+  if (!dialog) {
+    dialog = document.createElement("dialog");
+    dialog.id = "account-delete-dialog";
+    dialog.setAttribute("aria-labelledby","account-delete-title");
+    dialog.innerHTML = `<h2 id="account-delete-title">Delete your account?</h2>
+      <p>This permanently deletes your Worldview account and everything saved with it: lessons, lesson maps, conversations, progress and Notes. It cannot be undone.</p>
+      <label for="account-delete-confirm">Type DELETE to confirm</label>
+      <input id="account-delete-confirm" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      <p id="account-delete-status" role="status" aria-live="polite"></p>
+      <div class="account-delete-actions"><button id="account-delete-cancel" type="button">Keep my account</button><button id="account-delete-go" type="button" disabled>Delete permanently</button></div>`;
+    document.body.append(dialog);
+    const field = $("account-delete-confirm"), go = $("account-delete-go");
+    field.addEventListener("input",() => { go.disabled = field.value.trim() !== "DELETE"; });
+    $("account-delete-cancel").onclick = () => dialog.close();
+    go.onclick = () => void confirmAccountDeletion();
+  }
+  $("account-delete-confirm").value = "";$("account-delete-go").disabled = true;$("account-delete-status").textContent = "";
+  dialog.showModal();$("account-delete-confirm").focus();
+}
+async function confirmAccountDeletion() {
+  const go = $("account-delete-go"), status = $("account-delete-status"), ownerId = cloudAccount?.id || "";
+  if (!ownerId || go.disabled) return;
+  go.disabled = true;$("account-delete-cancel").disabled = true;status.textContent = "Deleting your account…";
+  try {
+    const response = await backendFetch("account-delete",{headers:{"content-type":"application/json"},body:JSON.stringify({confirm:"DELETE"}),signal:AbortSignal.timeout(30000)});
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.deleted !== true) throw new Error(payload?.error?.message || "Your account could not be deleted right now. Try again shortly.");
+    // The account is gone on the server. Forget this device's copies of it.
+    try {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) { const key = localStorage.key(i); if (key && key.includes(ownerId)) keys.push(key); }
+      for (const key of keys) localStorage.removeItem(key);
+      forgetDeviceAccount(ownerId);
+    } catch (_) { /* The server copy is already deleted. */ }
+    try { await backendClient?.auth.signOut({scope:"local"}); } catch (_) { /* The session belongs to a deleted account. */ }
+    status.textContent = "Your account and its data were deleted.";
+    setTimeout(() => location.reload(), 1600);
+  } catch (error) {
+    status.textContent = error?.message || "Your account could not be deleted right now. Try again shortly.";
+    go.disabled = $("account-delete-confirm").value.trim() !== "DELETE";$("account-delete-cancel").disabled = false;
+  }
+}
 $("password-account-signout").onclick = signOutAccount;
 $("account-dialog").addEventListener("cancel",event => { if (!closePasswordAccount()) event.preventDefault(); });
 $("account-dialog").addEventListener("close",() => { clearPasswordFields();syncCredentialFieldInteractivity(); });

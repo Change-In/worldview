@@ -29,6 +29,7 @@
 <link rel="stylesheet" href="./lab.css?v=2.1.70">
 <link rel="stylesheet" href="./live-conversation.css?v=2.1.70">
 <link rel="stylesheet" href="./conversation-tools.css?v=2.1.59">
+<link rel="stylesheet" href="./lesson-cues.css?v=2.1.71">
 <link rel="stylesheet" href="../lesson-entry-popup.css?v=2.1.38">
 <link rel="stylesheet" href="../appearance.css?v=2.1.59">
 <script src="../appearance.js?v=2.1.58"></script>
@@ -182,12 +183,13 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
         <span id="mock-learner-density-status" class="sr-only" role="status" aria-live="polite"></span>
         <div class="mock-learner-header-actions">
           <button id="mock-learner-mode" class="mock-learner-tool" type="button" aria-label="Switch to Voice" title="Switch conversation mode">Voice</button>
-          <button id="mock-learner-copy" class="mock-learner-tool mock-learner-copy" type="button" aria-label="Copy entire conversation transcript" title="Copy the entire conversation">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>
+          <button id="mock-learner-copy" class="mock-learner-tool mock-learner-copy" type="button" aria-label="Copy transcript or your ideas" title="Copy">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg><span>Copy</span>
           </button>
         </div>
         <span id="mock-learner-copy-status" class="mock-learner-copy-status" role="status" aria-live="polite"></span>
       </header>
+      <div id="mock-learner-journey" class="mock-learner-journey" hidden></div>
       <div id="mock-learner-progress" class="mock-learner-progress" hidden aria-label="Lesson chapters"></div>
       <main class="mock-learner-conversation">
         <div id="mock-voice-cue" class="mock-voice-cue" role="status" hidden><span class="mock-voice-dot" aria-hidden="true"></span><span id="mock-voice-cue-text">Listening</span><span class="mock-voice-meter" aria-hidden="true"><i></i></span></div>
@@ -750,14 +752,16 @@ Use the saved briefing as grounding. Search only for a new, recent, or explicitl
 
 </script>
 <script src="../models.js?v=2.1.37"></script>
-<script src="./lesson-cost.js?v=2.1.59"></script>
-<script src="./gemini-live.js?v=2.1.70"></script>
+<script src="./lesson-cost.js?v=2.1.71"></script>
+<script src="./gemini-live.js?v=2.1.71"></script>
 <script src="./live-audio-output.js?v=2.1.70"></script>
-<script src="./live-conversation.js?v=2.1.70"></script>
-<script src="./conversation-tools.js?v=2.1.38"></script>
-<script src="../lesson-entry-popup.js?v=2.1.38"></script>
+<script src="./live-conversation.js?v=2.1.71"></script>
+<script src="./conversation-tools.js?v=2.1.71"></script>
+<script src="../lesson-entry-popup.js?v=2.1.71"></script>
 <script src="../saved-map.js?v=2.1.58"></script>
-<script src="./lab.js?v=2.1.70" defer></script>
+<script src="./lesson-cues.js?v=2.1.71"></script>
+<script src="./lab.js?v=2.1.71" defer></script>
+<script src="./journey-strip.js?v=2.1.71" defer></script>
 <script src="./conversation-clock.js?v=2.1.12" defer></script>
 </body>
 </html>

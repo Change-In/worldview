@@ -15,8 +15,7 @@
         <p id="home-entry-hint" class="entry-hint">You can switch during your lesson.</p>
         <div class="entry-options" role="group" aria-label="Lesson mode">
           <button class="entry-mode" data-mode="text" type="button" aria-pressed="false"><strong>Text</strong><span>Read and type</span></button>
-          <div role="group" aria-label="Voice options"><button class="entry-mode" data-mode="voice" type="button" aria-pressed="false"><strong>Voice</strong><span>Listen and talk</span></button>
-          <button class="entry-mode entry-car" data-mode="car" type="button" aria-pressed="false">Car · larger voice controls</button></div>
+          <div role="group" aria-label="Voice options"><button class="entry-mode" data-mode="voice" type="button" aria-pressed="false"><strong>Voice</strong><span>Listen and talk</span></button></div>
         </div><button class="entry-continue" type="button" disabled></button>`;
       dialog.querySelector(".entry-topic").textContent = title;
       const next = dialog.querySelector(".entry-continue");
