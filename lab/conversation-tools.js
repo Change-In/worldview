@@ -20,7 +20,7 @@ window.WorldviewConversationTools = (() => {
     return (title ? 'My ideas: ' + title : 'My ideas') + '\n\n' + points.map(point => '• ' + point).join('\n');
   }
 
-  function mount({ button, status, getText, getIdeas = null, getScope = () => '' }) {
+  function mount({ button, status, getText, getIdeas = null, getCard = null, onCard = null, getScope = () => '' }) {
     if (!button || typeof getText !== 'function') return null;
     let busy = false, dialog = null, field = null, dialogScope = '', noticeTimer = 0;
     const announce = text => { if (status) status.textContent = text; };
@@ -98,10 +98,19 @@ window.WorldviewConversationTools = (() => {
           item.addEventListener('click', () => { closeMenu(); void copy(kind); });
           menu.append(item);
         }
+        // LES-236: once a lesson is complete its card is one tap away here too.
+        const card = document.createElement('button');
+        card.type = 'button'; card.setAttribute('role', 'menuitem'); card.dataset.lessonCard = 'true'; card.hidden = true;
+        const cardNote = document.createElement('small'); cardNote.textContent = 'What you figured out, in your words';
+        card.append('Lesson card', cardNote);
+        card.addEventListener('click', () => { closeMenu(); onCard?.(); });
+        menu.append(card);
         (button.closest('header') || button.parentElement).append(menu);
         document.addEventListener('click', event => { if (!menu.hidden && !menu.contains(event.target) && !button.contains(event.target)) closeMenu(); });
         document.addEventListener('keydown', event => { if (event.key === 'Escape' && !menu.hidden) { closeMenu(); button.focus(); } });
       }
+      const cardItem = menu.querySelector('[data-lesson-card]');
+      if (cardItem) cardItem.hidden = !(getCard && onCard && getCard());
       menu.hidden = false; button.setAttribute('aria-expanded', 'true');
       menu.querySelector('button')?.focus({ preventScroll:true });
     }

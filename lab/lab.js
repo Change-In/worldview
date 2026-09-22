@@ -15524,7 +15524,7 @@ async function applyLiveJourney(study){
  if(changed){
   const target=study.phase==='complete'?'quiz':study.phase;
   if(target!==labState.pipelineStage)setPipelineStage(target);
-  if(study.complete){labState.quiz.status='complete';labState.quiz.completionMessage='Your final teach-back covered the researched lesson. This Live conversation and its evidence are saved.';}
+  if(study.complete){labState.quiz.status='complete';labState.quiz.completionMessage='Your final teach-back covered the researched lesson. This Live conversation and its evidence are saved.';setTimeout(()=>window.WorldviewLessonCard?.maybeShow(),1500);}
   const saved=persistClarificationSettings();
   if(saved&&typeof LAB_LEARNER!=='undefined'&&LAB_LEARNER){
    const launch=readLearnerLaunch();
@@ -19527,7 +19527,7 @@ function bindEvents() {
     const native = window.WorldviewLiveConversation?.transcriptTurns?.(lineage,ordinary);
     const turns = native ?? ordinary;
     return window.WorldviewConversationTools.serializeTurns(turns);
-  },getIdeas:()=>{
+  },getCard:()=>window.WorldviewLessonCard?.data?.(),onCard:()=>window.WorldviewLessonCard?.show?.(),getIdeas:()=>{
     if(!labState.accessVerified||!labState.verifiedUserId)return '';
     const artifact=selectedPipelineArtifact(),ordinary=mockLearnerTranscript('quiz',artifact);
     const lineage=[labState.verifiedUserId,artifact?.runId||labState.clarification.runId].join('|');

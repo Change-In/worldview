@@ -28,3 +28,20 @@
 .conversation-copy-menu button{display:grid;gap:2px;min-height:48px;padding:9px 11px;border:0;border-radius:9px;background:transparent;color:var(--wv-text);font:600 14px/1.25 system-ui,sans-serif;text-align:left;cursor:pointer;}
 .conversation-copy-menu button:hover,.conversation-copy-menu button:focus-visible{background:var(--wv-hover);outline:none;}
 .conversation-copy-menu small{color:var(--wv-muted);font:400 12px/1.3 system-ui,sans-serif;}
+
+/* LES-236 lesson card */
+.lesson-card-sheet{position:fixed;inset:0;z-index:2147482000;display:grid;place-items:center;padding:16px;background:#0009;}
+.lesson-card-sheet[hidden]{display:none;}
+.lesson-card-box{width:min(520px,100%);max-height:calc(100dvh - 32px);overflow:auto;padding:22px 20px 18px;border-radius:20px;background:var(--wv-card);color:var(--wv-text);border:1px solid color-mix(in srgb,var(--wv-text) 14%,transparent);box-shadow:0 18px 40px #0007;}
+.lesson-card-kicker{margin:0;color:var(--wv-accent);font:700 11px/1.3 system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;}
+.lesson-card-box h2{margin:6px 0 14px;font:700 22px/1.2 Georgia,serif;}
+.lesson-card-parts{margin:0;padding-left:20px;display:grid;gap:14px;}
+.lesson-card-parts strong{font:600 15px/1.35 system-ui,sans-serif;}
+.lesson-card-parts blockquote{margin:6px 0 0;padding:8px 12px;border-left:3px solid var(--wv-accent);border-radius:0 10px 10px 0;background:color-mix(in srgb,var(--wv-text) 5%,transparent);font:400 14.5px/1.5 system-ui,sans-serif;}
+.lesson-card-gap{margin:6px 0 0;color:var(--wv-muted);font-size:13.5px;}
+.lesson-card-sources{margin-top:16px;font-size:14px;}
+.lesson-card-sources summary{cursor:pointer;color:var(--wv-muted);}
+.lesson-card-sources a{display:block;margin-top:6px;color:var(--wv-accent);overflow-wrap:anywhere;}
+.lesson-card-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:18px;}
+.lesson-card-actions button{min-height:44px;padding:0 16px;border-radius:999px;border:1px solid color-mix(in srgb,var(--wv-text) 20%,transparent);background:transparent;color:var(--wv-text);font:600 14px system-ui,sans-serif;}
+.lesson-card-actions .is-primary{background:#e2895a;border-color:#e2895a;color:#241f1a;}
