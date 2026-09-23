@@ -195,7 +195,8 @@ window.WorldviewLiveConversation=(()=>{
   let collectText=!enabled;
   if(session&&(changed||!next.enabled||context?.model!==next.model))void stop('Live ended because the lesson or voice model changed.');
   if(changed){openingPending=true;paused=false;startError=false;autoAttempts=0;appliedPhase=0;loadToken++;loading=false;study=null;fragments=[];prefix=[];textInsertions=[];textSnapshot=null;exportWasText=false;exportStudyId='';ack=0;loading=false;saveError='';scope='';draftKey='';collectText=false;
-   if(next.lineage){const key='worldview-live-draft-v2:'+next.lineage,draft=exportDraft(key);if(draft){scope=next.lineage;draftKey=key;exportStudyId=draft.studyId;fragments=draft.fragments;prefix=draft.prefix;textInsertions=draft.textInsertions;textSnapshot=draft.textSnapshot;collectText=draft.textMode===true;}}
+   if(next.lineage){const key='worldview-live-draft-v2:'+next.lineage,draft=exportDraft(key);if(draft){scope=next.lineage;draftKey=key;exportStudyId=draft.studyId;fragments=draft.fragments;prefix=draft.prefix;textInsertions=draft.textInsertions;textSnapshot=draft.textSnapshot;collectText=draft.textMode===true;if(!next.enabled)setTimeout(()=>host.onTranscript?.(),0);}
+    else if(!next.enabled&&next.runId)void readSaved(next);}
   }
   // Hydrated phase artifacts can contain the same native speech. Only a saved
   // ordinary-mode snapshot permits collecting their growth as new Text turns.
@@ -321,6 +322,23 @@ window.WorldviewLiveConversation=(()=>{
   try{return await navigator.mediaDevices.getUserMedia({audio:true});}
   catch(error){if(!/AudioSession category/i.test(error.message||'')||session!==s||s.closing||document.hidden)throw error;
    captureAudioType('auto');captureAudioType();return await navigator.mediaDevices.getUserMedia({audio:true});}
+ }
+ /* A lesson reopened in text mode on a device without this lesson's voice
+    draft (another phone, or the draft was cleared to free space) still shows
+    everything said by voice: read the server copy without opening voice. */
+ async function readSaved(next){
+  const token=loadToken,expected=next.lineage;let result;
+  try{result=await host.requestForCurrentAccount()({action:'journey_read',runId:next.runId});}catch{return;}
+  const saved=result?.study;
+  if(token!==loadToken||context?.lineage!==expected||enabled||study||exportStudyId||!Array.isArray(saved?.fragments)||!saved.fragments.some(f=>!String(f.id).startsWith('import:')))return;
+  const earlier=exportTurns(context.priorHistory||[]),imported=saved.fragments.filter(f=>f.id.startsWith('import:'));
+  let at=-1;for(let i=earlier.length-imported.length;i>=0;i--){if(imported.every((f,j)=>earlier[i+j]?.role===f.role&&earlier[i+j]?.content===f.delta)){at=i;break;}}
+  // Text turns before the voice started lead; any after it follow the voice.
+  // With no clean match, keep every text turn first rather than lose any.
+  const before=at<0?earlier:earlier.slice(0,at),after=at<0?[]:earlier.slice(at+imported.length);
+  scope=expected;draftKey='worldview-live-draft-v2:'+expected;exportStudyId=saved.id;fragments=saved.fragments.slice();prefix=before;
+  textInsertions=after.length?[{afterSeq:fragments.at(-1)?.seq||0,turns:after}]:[];textSnapshot=earlier;exportWasText=true;stash();
+  host.onTranscript?.();
  }
  async function prepare(){
   const token=++loadToken,expected=context.lineage,input=context.studyInput,model=context.model||'gpt-live-1',captured=host.requestForCurrentAccount(),began=performance.now();loading=true;message('Opening the saved research and conversation…');paint();

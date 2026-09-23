@@ -746,6 +746,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .card.new-card .new-card-actions #start-btn,
   .card.new-card .new-card-actions #start-voice-btn { flex:1; min-width:0; min-height:44px; padding:10px 6px; font-size:12px; white-space:nowrap; }
   .card.new-card .new-card-actions #start-voice-btn { background:transparent; color:var(--ink); border:1px solid var(--line); border-radius:999px; }
+  .card.new-card .new-card-actions #start-voice-btn.send { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .card.new-card .new-card-actions #start-btn[hidden] { display:none; }
   /* Folders lives on the Ask Anything card's bottom-right corner (moved off the
      old floating pill that made Explore feel cluttered). */
   #new-card-folders, #new-card-leave-folder {
@@ -2257,7 +2259,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.77 · Sep 23";
+const BUILD = "v2.1.78 · Sep 23";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2265,6 +2267,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.78",date:"Sep 23",changes:["The Ask Anything card has one button: Voice while the box is empty, Send once you type something.","Reopening a voice lesson in text now shows the whole conversation, including everything said by voice, even on another phone."]},
   {tag:"v2.1.77",date:"Sep 23",changes:["Rename a lesson: tap ••• on its card and choose Rename."]},
   {tag:"v2.1.76",date:"Sep 23",changes:["The ••• on lesson cards is now just three dots, with no circle around it."]},
   {tag:"v2.1.75",date:"Sep 23",changes:["Lesson cards are cleaner: the Voice, Text and Archive buttons are gone. Tap a card to choose Voice or Text as before.","A ••• button at the top left of every lesson card lets you organize it into folders, archive it, or delete it.","Organizing opens a new folder view: your lessons sit at the bottom (swipe between them) and your folders arc above. Tap a folder to file the lesson in the middle; tap again to take it out. With many folders, drag sideways to turn the arc.","Opening a folder now shows the saved lessons you filed there."]},
@@ -6341,7 +6344,16 @@ function syncStartButton() {
   $("topic-input").disabled = atPilotLimit || startStatus.blocksInput || Boolean(homeTopicCapture?.busy);
   $("start-btn").textContent = atPilotLimit ? "10/10 created" : startStatus.label || "Text";
   $("start-btn").disabled = atPilotLimit || startStatus.busy || Boolean(homeTopicCapture?.busy) || !$("topic-input").value.trim();
-  if ($("start-voice-btn")) $("start-voice-btn").disabled = atPilotLimit || startStatus.busy || Boolean(homeTopicCapture?.busy);
+  /* One button: Voice while the box is empty, Send once something is typed.
+     The hidden Text button keeps the status text other code relies on. */
+  const voice = $("start-voice-btn");
+  if (voice) {
+    const typed = !!$("topic-input").value.trim();
+    voice.disabled = atPilotLimit || startStatus.busy || Boolean(homeTopicCapture?.busy);
+    voice.textContent = atPilotLimit ? "10/10 created" : startStatus.label || (typed ? "Send" : "Voice");
+    voice.classList.toggle("send", typed);
+    voice.setAttribute("aria-label", typed ? "Start a lesson about what you typed" : "Start a voice conversation and say what you want to learn");
+  }
   const mic = $("home-topic-mic");
   if (mic) {
     mic.dataset.captureState = homeTopicCapture?.phase || "idle";
@@ -6468,7 +6480,7 @@ function renderHome() {
       <div class="card-cat">${insidePersonalCategory && !homeLearnerAccountAllowed() ? `ask &middot; filed in ${esc(layerName)}` : "ask anything"}${pilotLabel}</div>
       <input id="topic-input" type="text" autocomplete="off" autocapitalize="sentences" autocorrect="on" spellcheck="true" placeholder="${pilotAtLimit ? "Reopen a saved lesson" : "What are you curious about?"}" enterkeyhint="go"${pilotAtLimit || startStatus.blocksInput ? " disabled" : ""}>
       <div class="new-card-actions">
-        <button id="start-btn" type="button"${startStatus.busy ? " disabled" : ""}>${pilotAtLimit ? "10/10 created" : startStatus.label || "Text"}</button>
+        <button id="start-btn" type="button" hidden${startStatus.busy ? " disabled" : ""}>${pilotAtLimit ? "10/10 created" : startStatus.label || "Text"}</button>
         <button id="start-voice-btn" type="button" aria-label="Start a voice conversation and say what you want to learn"${pilotAtLimit || startStatus.busy ? " disabled" : ""}>Voice</button>
       </div>
       ${insidePersonalCategory
@@ -6545,7 +6557,7 @@ function renderHome() {
 
   if (!nc) return;
   $("start-btn").onclick = startLesson;
-  $("start-voice-btn").onclick = startVoiceLesson;
+  $("start-voice-btn").onclick = startFromAskCard;
   $("topic-input").onkeydown = e => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); startLesson(); }
   };
@@ -6858,7 +6870,7 @@ function pathControlAtPoint(x, y) {
             .find(id => !$(id)?.hidden && !$(id)?.disabled && hit(id));
           wheel.pos = idx; layoutWheel();
           if (control === "start-btn") startLesson();
-          else if (control === "start-voice-btn") startVoiceLesson();
+          else if (control === "start-voice-btn") startFromAskCard();
           else if (control === "new-card-folders") openCategoryOrganizer(null, "explore");
           else if (control === "new-card-leave-folder") applyCategoryKey(null);
           return;
@@ -8641,6 +8653,7 @@ async function startLesson() {
   await openHomeLearnerRun({topic,entryMode:"text"});
 }
 
+function startFromAskCard() { return $("topic-input")?.value.trim() ? startLesson() : startVoiceLesson(); }
 async function startVoiceLesson() {
   if (homeTopicCapture?.busy || $("start-voice-btn")?.disabled) return;
   if (Date.now() - (startVoiceLesson._t || 0) < 500) return;

@@ -15557,6 +15557,7 @@ function syncLiveLesson(){
  const live=window.WorldviewLiveConversation;if(!live||!q('mock-learner-composer'))return;
  if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),speakerButton:q('mock-learner-mode'),onTextMode:()=>void chooseLiveConversationMode('text'),onStudy:applyLiveJourney,onLearnerTopic:applyLiveLearnerTopic,onCheckerUsage:recordLiveCheckerCost,onConnectionState:handleLearnerLiveEntryState,
   requestForCurrentAccount:liveTrialRequest,
+  onTranscript:()=>renderMockLearnerShell(),
   releaseMedia:()=>{stopClarificationCaptureForModeChange();stopClarificationSpeech();stopPipelineExtractionVoice();if(typeof releaseClarificationTopicCapture==='function')releaseClarificationTopicCapture();}
  });}
  const stage=labState.pipelineStage,artifact=selectedPipelineArtifact(),selection=artifact?selectedPipelineMapRecord(artifact):null;
@@ -15636,7 +15637,12 @@ function renderMockLearnerShell() {
   const artifact = selectedPipelineArtifact();
   const selection = artifact ? selectedPipelineMapRecord(artifact) : null;
   renderMockLearnerSources(stage, selection);
-  const transcript = mockLearnerTranscript(stage, artifact);
+  /* Text mode shows the whole lesson, voice included: the same merged
+     conversation the Copy button produces. Typed turns keep their sources. */
+  const ordinaryTranscript = mockLearnerTranscript(stage, artifact);
+  const merged = liveLessonSelected(stage) ? null : window.WorldviewLiveConversation?.transcriptTurns?.([labState.verifiedUserId, artifact?.runId || labState.clarification.runId].join("|"), ordinaryTranscript);
+  const typed = new Map(ordinaryTranscript.map((turn) => [turn.role + "|" + turn.content, turn]));
+  const transcript = merged ? merged.map((turn) => typed.get(turn.role + "|" + turn.content) || turn) : ordinaryTranscript;
   const transcriptRoot = q("mock-learner-transcript");
   const changed = renderExtractionTranscriptList(transcriptRoot, transcript);
   if (changed && transcript.length) requestAnimationFrame(() => { if (transcriptRoot?.isConnected) transcriptRoot.scrollTop = transcriptRoot.scrollHeight; });
