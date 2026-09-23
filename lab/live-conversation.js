@@ -9,8 +9,12 @@ window.WorldviewLiveConversation=(()=>{
     each of those a full reconnect, so a short absence is now ridden out and
     only a real departure stops the session. */
  const BACKGROUND_GRACE_MS=30000,IDLE_PAUSE_MS=60000,IDLE_LISTEN_MS=10*60*1000,REFRESH_WAIT_MS=45000;
- let hiddenAt=0,hiddenTimer=null,idleListen=null,nextStart=null;
+ let hiddenAt=0,hiddenTimer=null,nextStart=null,starting=null,prepareTiming=null;const timingLog=[];
  const fragmentTimes=new Map();
+ // VOI-144: a spoken fragment keeps the clock time it arrived (start_ms, epoch
+ // milliseconds, when the provider sends no timing of its own), so a reopened
+ // lesson and the copied transcript both show when each thing was said.
+ const fragmentAt=f=>fragmentTimes.get(f.id)||(Number.isFinite(f.start_ms)&&f.start_ms>1e12?f.start_ms:null);
  let fragments=[],prefix=[],textInsertions=[],textSnapshot=null,exportWasText=false,exportStudyId='',ack=0,saveError='',request,scope='',draftKey='';
  const element=(tag,text)=>{const n=document.createElement(tag);if(text)n.textContent=text;return n;};
  function mount(adapter){
@@ -42,8 +46,8 @@ window.WorldviewLiveConversation=(()=>{
   output=window.WorldviewLiveAudioOutput?.create({audio,button:adapter.speakerButton,container:root});
   enableAudio.onclick=()=>{const s=session;if(!s||s.closing)return;const version=s.outputVersion;void output?.apply({user:true});void resumeAudio(s).then(()=>{if(session===s&&!s.closing&&s.outputVersion===version){enableAudio.hidden=true;message('Listening');}}).catch(()=>{if(session===s&&!s.closing&&s.outputVersion===version)message('Audio is blocked. Check the browser’s audio permission.');});};
   captions.onclick=()=>{showCaptions=!showCaptions;paint();};
-  start.onclick=()=>{const kept=stopIdleListen({keepMic:true});if(kept)nextStart={mic:kept,transport:null,id:null,opening:''};openingPending=true;paused=false;startError=false;autoAttempts=0;void(study?begin():prepare());};end.onclick=()=>{paused=true;void stop('Voice paused.',{pause:true});};retry.onclick=()=>void flush();
-  mute.onclick=()=>{const s=session;if(!s?.ready||s.closing)return;s.muted=!s.muted;s.mic?.getAudioTracks().forEach(t=>t.enabled=!s.muted);s.gemini?.mute(s.muted);message(s.muted?'Mic muted':'Listening');paint();};
+  start.onclick=()=>{if(session?.softPaused){softResume(session);return;}openingPending=true;paused=false;startError=false;autoAttempts=0;void(study?begin():prepare());};end.onclick=()=>{paused=true;void stop('Voice paused.',{pause:true});};retry.onclick=()=>void flush();
+  mute.onclick=()=>{const s=session;if(!s?.ready||s.closing)return;if(s.softPaused){s.softPaused=false;s.lastActivityAt=performance.now();}s.muted=!s.muted;s.mic?.getAudioTracks().forEach(t=>t.enabled=!s.muted);s.gemini?.mute(s.muted);message(s.muted?'Mic muted':'Listening');paint();};
   document.addEventListener('visibilitychange',()=>{
    if(document.hidden){
     if(!session||paused)return;
@@ -58,7 +62,7 @@ window.WorldviewLiveConversation=(()=>{
    if(session&&away>=BACKGROUND_GRACE_MS)void stop('Voice reconnecting.');
    resumeFromBackground();
   });
-  window.addEventListener('pagehide',()=>{stash();stopIdleListen();void stop('Live ended when you left the lesson.');});
+  window.addEventListener('pagehide',()=>{stash();void stop('Live ended when you left the lesson.');});
   window.addEventListener('worldview-lesson-cost-updated',paintCosts);
   window.addEventListener('storage',e=>{if(e.key?.startsWith(window.WorldviewLessonCost?.prefix))paintCosts();});
   return api;
@@ -148,10 +152,10 @@ window.WorldviewLiveConversation=(()=>{
   textSnapshot=next;stash();
  }
  function paint(){
-  if(!ui)return;ui.root.hidden=!enabled;ui.start.hidden=!!session||(!paused&&!startError);ui.start.disabled=loading||!!session||!context?.ready||document.hidden;
+  if(!ui)return;ui.root.hidden=!enabled;ui.start.hidden=session?!session.softPaused:(!paused&&!startError);ui.start.disabled=!session?.softPaused&&(loading||!!session||!context?.ready||document.hidden);
   if(enabled)output?.paint();
-  ui.start.textContent=paused?'Resume voice':'Try microphone again';
-  ui.rate.hidden=true;
+  ui.start.textContent=paused||session?.softPaused?'Resume voice':'Try microphone again';
+  ui.rate.hidden=true;ui.note.hidden=!context?.showCost;
   ui.captions.hidden=!session?.ready;const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.setAttribute('aria-label',capsLabel);ui.captions.title=capsLabel;ui.captions.setAttribute('aria-pressed',String(showCaptions));
   ui.end.hidden=!session;ui.mute.hidden=!session?.ready;const muteLabel=session?.muted?'Unmute mic':'Mute mic';ui.mute.setAttribute('aria-label',muteLabel);ui.mute.title=muteLabel;ui.mute.classList.toggle('is-muted',!!session?.muted);ui.mute.setAttribute('aria-pressed',String(!!session?.muted));
   ui.retry.hidden=true;ui.retry.disabled=!!saving;
@@ -177,7 +181,7 @@ window.WorldviewLiveConversation=(()=>{
   let previousNative=false;
   for(const f of fragments){
    if(isControlEcho(f.delta))continue;
-   const native=!f.id.startsWith('import:'),last=groups.at(-1),at=fragmentTimes.get(f.id);
+   const native=!f.id.startsWith('import:'),last=groups.at(-1),at=fragmentAt(f);
    if(native&&previousNative&&last?.live&&last.role===f.role){last.text=joinDelta(last.text,f.delta);if(at&&!last.at)last.at=at;}
    else groups.push({role:f.role,text:f.delta,live:true,at});
    previousNative=native;insert(f.seq);
@@ -190,7 +194,6 @@ window.WorldviewLiveConversation=(()=>{
   const changed=context?.lineage!==next.lineage;
   let collectText=!enabled;
   if(session&&(changed||!next.enabled||context?.model!==next.model))void stop('Live ended because the lesson or voice model changed.');
-  if(changed||!next.enabled)stopIdleListen();
   if(changed){openingPending=true;paused=false;startError=false;autoAttempts=0;appliedPhase=0;loadToken++;loading=false;study=null;fragments=[];prefix=[];textInsertions=[];textSnapshot=null;exportWasText=false;exportStudyId='';ack=0;loading=false;saveError='';scope='';draftKey='';collectText=false;
    if(next.lineage){const key='worldview-live-draft-v2:'+next.lineage,draft=exportDraft(key);if(draft){scope=next.lineage;draftKey=key;exportStudyId=draft.studyId;fragments=draft.fragments;prefix=draft.prefix;textInsertions=draft.textInsertions;textSnapshot=draft.textSnapshot;collectText=draft.textMode===true;}}
   }
@@ -320,12 +323,13 @@ window.WorldviewLiveConversation=(()=>{
    captureAudioType('auto');captureAudioType();return await navigator.mediaDevices.getUserMedia({audio:true});}
  }
  async function prepare(){
-  const token=++loadToken,expected=context.lineage,input=context.studyInput,model=context.model||'gpt-live-1',captured=host.requestForCurrentAccount();loading=true;message('Opening the saved research and conversation…');paint();
+  const token=++loadToken,expected=context.lineage,input=context.studyInput,model=context.model||'gpt-live-1',captured=host.requestForCurrentAccount(),began=performance.now();loading=true;message('Opening the saved research and conversation…');paint();
   try{
    // Capability and saved-lesson preparation use the same captured account and
    // do not depend on one another. Voice creation waits for both to succeed.
    const [ready,result]=await Promise.all([captured({action:'check',model}),captured({action:'journey_prepare',...input})]);
    if(token!==loadToken||context.lineage!==expected)return;
+   prepareTiming={start:Math.round(began),end:Math.round(performance.now())};
    if(!ready.journeyMode)throw Error('Natural Live lessons are awaiting the server update. Standard voice remains available.');
    study=result.study;fragments=study.fragments.slice();ack=fragments.length;request=captured;scope=expected;draftKey='worldview-live-draft-v2:'+expected;
    const imported=fragments.filter(f=>f.id.startsWith('import:')),earlier=context.priorHistory||[];
@@ -378,8 +382,8 @@ window.WorldviewLiveConversation=(()=>{
   if(session!==state||state.scope!==scope)return;
   if(typeof event.delta!=='string'||!event.delta)return;
   if(isControlEcho(event.delta))return;
-  const f={seq:fragments.length+1,id:String(event.event_id||state.id+':'+fragments.length),role,delta:event.delta,start_ms:Number.isFinite(event.start_ms)?event.start_ms:null,end_ms:Number.isFinite(event.end_ms)?event.end_ms:null};
-  fragments.push(f);state.lastTranscriptAt=performance.now();state.lastActivityAt=state.lastTranscriptAt;
+  const f={seq:fragments.length+1,id:String(event.event_id||state.id+':'+fragments.length),role,delta:event.delta,start_ms:Number.isFinite(event.start_ms)?event.start_ms:Date.now(),end_ms:Number.isFinite(event.end_ms)?event.end_ms:null};
+  fragments.push(f);if(role==='assistant')mark(state,'words');state.lastTranscriptAt=performance.now();state.lastActivityAt=state.lastTranscriptAt;
   if(role==='user')state.lastUserTranscriptAt=state.lastTranscriptAt;
   else{
    state.speaking=true;state.lastAssistantAt=state.lastTranscriptAt;
@@ -615,55 +619,50 @@ window.WorldviewLiveConversation=(()=>{
   openingPending=true;autoAttempts=0;startError=false;
   void begin();
  }
- /* After a quiet minute the paid connection closes. The microphone stays with
-    this page, listening locally and sending nothing, so starting to talk again
-    reconnects on its own; after ten quiet minutes it is released too. */
+ /* VOI-136 revised (v2.1.74). After a quiet minute a Gemini session holds
+    the microphone: nothing is sent, so nothing is billed, but the capture that
+    already works keeps measuring the room. Speaking resumes at once on the same
+    connection, and the held second and a half is sent first so the opening
+    words are heard. A separate listener started for this in v2.1.71 could not
+    run on iPhone Safari without a tap, which is why "start talking" failed.
+    GPT Live bills by the minute, so it closes and asks for a tap instead. After
+    ten held minutes the connection closes too. */
+ const RESUME_INSTRUCTION='RESUMING THE SAVED LESSON after a pause. In the selected language, begin with a two-word welcome back. If the learner spoke last, respond briefly to what they said. If you spoke last and asked a question they have not answered, repeat that one question in one short sentence; do not turn it into a new question. Otherwise remind them in one sentence where you left off and invite them to carry on. Never start a new topic. Then listen.';
  function recordTalk(s){if(s?.talkStartedAt)window.WorldviewLessonCost?.recordTalk?.(s.costOwner||context?.owner,s.costRunId||context?.runId,s.id,(Date.now()-s.talkStartedAt)/1000);}
  function idleCheck(s){
   recordTalk(s);
   if(session!==s||s.closing||!s.ready||document.hidden)return;
+  if(s.softPaused){if(performance.now()-s.softPausedAt>IDLE_LISTEN_MS)void stop('Voice paused. Tap Resume voice when you are ready.',{pause:true});return;}
   if(s.speaking||s.checking||s.refreshStep===studyStep(study))return;
   if(performance.now()-(s.lastActivityAt||0)<IDLE_PAUSE_MS)return;
   void idlePause(s);
  }
  async function idlePause(s){
   if(session!==s||s.closing)return;
-  const mic=s.mic;s.keepMic=true;
-  await stop('Paused after a quiet minute. Start talking to carry on, or tap Resume voice.',{pause:true});
   window.WorldviewLessonCues?.chime('pause');
-  listenForReturn(mic);
+  if(s.gemini&&!s.muted){
+   s.softPaused=true;s.softPausedAt=performance.now();s.levelFloor=[];s.loudSince=0;
+   s.gemini.mute(true,{hold:true});
+   message('Paused after a quiet minute. Just start talking to carry on.');paint();return;
+  }
+  await stop('Paused after a quiet minute. Tap Resume voice to carry on.',{pause:true});
  }
- function stopIdleListen({keepMic=false}={}){
-  const l=idleListen;if(!l)return null;idleListen=null;
-  clearInterval(l.timer);try{l.source.disconnect();}catch{}void l.ctx.close().catch(()=>{});
-  if(!keepMic){l.mic.getTracks().forEach(t=>t.stop());return null;}
-  return l.mic;
+ function softResume(s){
+  if(session!==s||!s.softPaused)return;
+  s.softPaused=false;s.lastActivityAt=performance.now();
+  s.gemini?.mute(false,{flush:true});
+  message(s.muted?'Mic muted':'Listening');paint();
  }
- function listenForReturn(mic){
-  stopIdleListen();
-  const Audio=window.AudioContext||window.webkitAudioContext;
-  if(!mic?.getAudioTracks().some(t=>t.readyState==='live')||!Audio){mic?.getTracks().forEach(t=>t.stop());return;}
-  let ctx,source,analyser;
-  try{ctx=new Audio();source=ctx.createMediaStreamSource(mic);analyser=ctx.createAnalyser();analyser.fftSize=1024;source.connect(analyser);}
-  catch{mic.getTracks().forEach(t=>t.stop());return;}
-  const data=new Float32Array(analyser.fftSize),started=performance.now(),floor=[];let loud=0;
-  const timer=setInterval(()=>{
-   if(!paused||session){stopIdleListen();return;}
-   if(document.hidden)return;
-   if(ctx.state!=='running')void ctx.resume().catch(()=>{});
-   if(performance.now()-started>IDLE_LISTEN_MS){stopIdleListen();message('Voice paused. Tap Resume voice when you are ready.');return;}
-   analyser.getFloatTimeDomainData(data);let sum=0;for(const v of data)sum+=v*v;const level=Math.sqrt(sum/data.length);
-   // The first second measures the room, so a noisy car does not count as speech.
-   if(floor.length<10){floor.push(level);return;}
-   const threshold=Math.max(.035,floor.slice().sort((a,b)=>a-b)[5]*3.5);
-   loud=level>threshold?loud+1:0;
-   if(loud<5)return;
-   const kept=stopIdleListen({keepMic:true});
-   paused=false;startError=false;autoAttempts=0;openingPending=true;
-   nextStart={mic:kept,transport:null,id:null,opening:'RESUMING AFTER A QUIET PAUSE. The learner has just started talking again and those first words were not captured. Say only a short, warm "I\'m here, go ahead" in the selected language, then listen. Do not repeat your last question unless they ask for it.'};
-   message('Reconnecting…');void begin();
-  },100);
-  idleListen={ctx,source,timer,mic};
+ // Speech is judged against the room measured in the first second of the
+ // pause, so steady road noise does not count as talking.
+ function inputLevel(s,level){
+  if(session!==s||!s.softPaused)return;
+  if(s.levelFloor.length<10){s.levelFloor.push(level);return;}
+  const threshold=Math.max(.02,s.levelFloor.slice().sort((a,b)=>a-b)[5]*3);
+  const now=performance.now();
+  if(level<=threshold){s.loudSince=0;return;}
+  if(!s.loudSince)s.loudSince=now;
+  if(now-s.loudSince>=250)softResume(s);
  }
  // One entry cue, not a learner turn. Acknowledgment is not playback proof.
  /* The application moves the lesson to its next part, but nothing asks the tutor
@@ -714,7 +713,7 @@ window.WorldviewLiveConversation=(()=>{
   // Caption tails may describe already-captured speech. Retain them for export
   // while closing, but never let them trigger another check or audio operation.
   if(state.closing&&!['session.started','session.input_transcript.delta','session.output_transcript.delta','session.usage.updated','session.closed'].includes(e.type))return;
-  if(e.type==='session.started'){if(state.closing){send(state,{type:'session.close'});return;}if(state.ready)return;state.ready=true;autoAttempts=0;state.publishedPhase=study.phaseVersion;state.publishedStudy=studyPublication(study);state.publishedStep=studyStep(study);
+  if(e.type==='session.started'){if(state.closing){send(state,{type:'session.close'});return;}if(state.ready)return;state.ready=true;mark(state,'ready');autoAttempts=0;state.publishedPhase=study.phaseVersion;state.publishedStudy=studyPublication(study);state.publishedStep=studyStep(study);
    // A refreshed connection opens its phase itself; do not schedule a second opening.
    if(state.openingText)state.openedPhase=studyStep(study);
    state.lastActivityAt=performance.now();state.talkStartedAt=Date.now();state.idleTimer=setInterval(()=>idleCheck(state),5000);
@@ -727,7 +726,9 @@ window.WorldviewLiveConversation=(()=>{
   else if(e.type==='session.usage.updated'||e.type==='session.closed'){
    if(Number.isFinite(e.usage?.seconds)&&e.usage.seconds>=0)state.seconds=Math.max(state.seconds,e.usage.seconds);if(state.seconds>=60)autoAttempts=0;
    recordVoiceCost(state,{seconds:e.usage?.seconds,final:e.type==='session.closed'});
-   if(e.type==='session.closed'){void flush();if(state.model==='gemini-3.8-live')closeGeminiReceipt(state);if(!state.closing&&!['expired','connection_lost'].includes(e.reason))startError=true;cleanup(state);message(paused?'Voice paused.':startError?'Voice stopped. Your conversation is saved.':'Reconnecting…');maybeStart();}
+   // A held pause that the provider ends becomes an ordinary pause, never a
+   // spoken reconnect in a quiet car.
+   if(e.type==='session.closed'){if(state.softPaused)paused=true;void flush();if(state.model==='gemini-3.8-live')closeGeminiReceipt(state);if(!state.closing&&!['expired','connection_lost'].includes(e.reason))startError=true;cleanup(state);message(paused?'Voice paused. Tap Resume voice when you are ready.':startError?'Voice stopped. Your conversation is saved.':'Reconnecting…');maybeStart();}
   }else if(e.type==='error'){startError=true;void stop('Voice had a connection error. Try again.');}
  }
  async function begin(){
@@ -739,11 +740,29 @@ window.WorldviewLiveConversation=(()=>{
   const release=()=>{start?.mic?.getTracks().forEach(t=>t.stop());if(start?.id)void request?.({action:'close',requestId:start.id}).catch(()=>{});};
   if(!enabled||loading||!study||session||(releasing&&!start)||!context?.ready||document.hidden){release();return;}
   if(autoAttempts>=3){release();startError=true;message('Voice could not reconnect. Try again.');paint();return;}autoAttempts++;
-  const s={id:start?.id||crypto.randomUUID(),initiate:openingPending,openingText:start?.opening||'',refreshed:!!start?.phase,request,scope,model:context.model||'gpt-live-1',connectedAt:Date.now(),studyId:study.id,seen:new Set(),delegations:new Set(),pendingDelegations:new Set(),lastUserSeq:fragments.findLast(f=>f.role==='user')?.seq||0,seconds:0,ready:false,closing:false,dispatched:false,muted:false};session=s;paint();
+  // Voice that returns after a pause, or on a lesson reopened later, says a
+  // short welcome back and repeats its own unanswered question once; it does
+  // not open the phase again.
+  const resuming=!start&&fragments.some(f=>!f.id.startsWith('import:'));
+  const s={id:start?.id||crypto.randomUUID(),initiate:openingPending,openingText:start?.opening||(resuming?RESUME_INSTRUCTION:''),refreshed:!!start?.phase,resumed:resuming,request,scope,model:context.model||'gpt-live-1',connectedAt:Date.now(),studyId:study.id,seen:new Set(),delegations:new Set(),pendingDelegations:new Set(),lastUserSeq:fragments.findLast(f=>f.role==='user')?.seq||0,seconds:0,ready:false,closing:false,dispatched:false,muted:false,t0:performance.now(),marks:{}};session=s;paint();
   try{
    host.releaseMedia();captureAudioType();output?.start();
    let mic=start?.mic?.getAudioTracks().some(t=>t.readyState==='live')?start.mic:null;
+   // VOI-142: a Gemini lesson asks the server for its connection while the
+   // microphone opens, instead of one after the other.
+   let created=null;
+   if(s.model==='gemini-3.8-live'&&!start?.transport){
+    created=(async()=>{
+     if(!await flush())throw Error('Transcript save is pending.');
+     if(session!==s||s.closing)return null;
+     s.dispatched=true;startVoiceCost(s);
+     const result=await s.request({action:'create',mode:'study',model:s.model,requestId:s.id,studyId:s.studyId,consent:'paid-gemini-3.8-live-whole-lesson'});
+     s.serverAt=Date.now();mark(s,'server');return result;
+    })();
+    created.catch(()=>{});
+   }
    if(!mic){start?.mic?.getTracks().forEach(t=>t.stop());message('Waiting for microphone permission…');mic=await acquireMic(s);}
+   mark(s,'mic');
    if(session!==s||s.closing){mic.getTracks().forEach(t=>t.stop());if(start?.id)void s.request({action:'close',requestId:s.id}).catch(()=>{});return;}s.mic=mic;void output?.refresh();
    message(start?.phase?{lesson:'Starting your lesson…',quiz:'Starting the final teach-back…',complete:'Wrapping up…'}[start.phase]||'Moving on…':'Connecting voice…');
    s.startup=setTimeout(()=>{if(session!==s||s.closing)return;startError=true;void stop('Voice could not connect. Try again.');},45000);
@@ -752,12 +771,13 @@ window.WorldviewLiveConversation=(()=>{
     let result=start?.transport?{transport:start.transport}:null;
     if(result){s.dispatched=true;startVoiceCost(s);}
     else{
-     if(!await flush())throw Error('Transcript save is pending.');if(session!==s||s.closing||document.hidden)return;
-     s.dispatched=true;startVoiceCost(s);
-     result=await s.request({action:'create',mode:'study',model:s.model,requestId:s.id,studyId:s.studyId,consent:'paid-gemini-3.8-live-whole-lesson'});
+     result=await created;if(!result||session!==s||s.closing)return;
+     // A connection has to open within a minute of being authorized, and a
+     // long microphone prompt can outlast that.
+     if(Date.now()-s.serverAt>45000)throw Error('The microphone took a while to open. Tap Try microphone again.');
     }
     if(session!==s||s.closing){void s.request({action:'close',requestId:s.id}).catch(()=>{});return;}
-    await window.WorldviewGeminiLive.connect({transport:result.transport,mic,outputAudio:ui.audio,initiate:s.initiate,openingText:s.openingText,isCurrent:()=>session===s&&!s.closing,onTransport:value=>{s.gemini=value;output?.attach({applyRoute:loud=>value.applyRoute?value.applyRoute(loud):'unavailable'});},onEvent:e=>event(s,e),onUsage:metadata=>recordVoiceCost(s,{metadata,usageId:s.usageTurn||0}),onStatus:text=>{if(session===s){message(text);if(text.includes('Tap Enable audio.'))ui.enableAudio.hidden=false;}}});
+    await window.WorldviewGeminiLive.connect({transport:result.transport,mic,outputAudio:ui.audio,initiate:s.initiate,openingText:s.openingText,onInputLevel:level=>inputLevel(s,level),isCurrent:()=>session===s&&!s.closing,onTransport:value=>{s.gemini=value;output?.attach({applyRoute:loud=>value.applyRoute?value.applyRoute(loud):'unavailable'});},onEvent:e=>event(s,e),onUsage:metadata=>recordVoiceCost(s,{metadata,usageId:s.usageTurn||0}),onStatus:text=>{if(session===s){message(text);if(text.includes('Tap Enable audio.'))ui.enableAudio.hidden=false;}}});
     return;
    }
    const peer=s.peer=new RTCPeerConnection();mic.getAudioTracks().forEach(t=>{peer.addTrack(t,mic);t.addEventListener('ended',()=>{if(session===s&&!s.closing)void stop('Microphone disconnected.');});});
@@ -805,6 +825,64 @@ window.WorldviewLiveConversation=(()=>{
   if(/[.!?\"\')\]]$/.test(text)&&/^[\"\'(\[]?[A-Z]/.test(delta))return text+String.fromCharCode(10,10)+delta;
   return text+delta;
  }
+ /* VOI-141. The learner's Start button is their go-ahead. From "Your
+    question" one tap moves the lesson to preparation and asks, in the same tap,
+    for the lesson to begin as soon as its first part is researched; the tutor
+    keeps talking meanwhile. The server holds that go-ahead until research is
+    ready, so talking in the meantime does not cancel it. */
+ function startLesson(){
+  if(starting)return starting;
+  if(!study||!request||!['clarification','extraction'].includes(study.phase))return Promise.resolve(false);
+  const expected=scope,captured=request,id=study.id,before=studyStep(study),fromPhase=study.phase;
+  starting=(async()=>{try{
+   message('Starting your lesson…');
+   if(!await flush())throw Error('Your conversation is still saving. Try again in a moment.');
+   const once=async()=>{
+    for(let tries=0;tries<12;tries++){
+     const result=await captured({action:'journey_start',studyId:id});
+     if(scope!==expected)return null;
+     if(!result.busy)return result;
+     await new Promise(resolve=>setTimeout(resolve,1500));
+    }
+    throw Error('The lesson is still checking. Try Start again in a moment.');
+   };
+   let result=await once();if(!result)return false;
+   if(fromPhase==='clarification'&&result.study?.phase==='extraction'){const held=await once();if(held?.study)result=held;}
+   if(scope!==expected||!result?.study)return false;
+   study={...result.study,fragments};await applyPhase();
+   const s=session,advanced=studyStep(study)!==before;
+   if(advanced&&s?.ready&&!s.closing)scheduleRefresh(s);
+   else if(s?.ready&&!s.closing)message('Listening');
+   paint();return advanced||study.packet?.conversationState?.approvalSaved===true;
+  }catch(error){if(scope===expected)message(error.message||'The lesson could not start. Try again.');return false;}
+  finally{starting=null;}})();
+  return starting;
+ }
+ /* VOI-142. Where the seconds go between opening a lesson and hearing the
+    tutor. Page-relative times, kept for the last few connections, copied into
+    the transcript for the owner and testers only. */
+ function mark(s,name){
+  if(!s?.marks||s.marks[name]!=null)return;
+  s.marks[name]=performance.now();
+  if(name!=='words')return;
+  timingLog.push({kind:s.refreshed?'Next part':s.resumed?'Resumed':'Opened',model:s.model,t0:s.t0,...s.marks,prepare:timingLog.length?null:prepareTiming});
+  if(timingLog.length>6)timingLog.shift();
+ }
+ function timingSummary(){
+  if(!timingLog.length)return '';
+  const secs=ms=>(ms/1000).toFixed(1)+' s';
+  const lines=timingLog.map(t=>{
+   const steps=[];
+   if(t.prepare)steps.push('saved lesson '+secs(t.prepare.end-t.prepare.start));
+   if(t.mic!=null)steps.push('microphone '+secs(t.mic-t.t0));
+   if(t.server!=null)steps.push('voice server '+secs(t.server-t.t0));
+   if(t.ready!=null)steps.push('connected '+secs(t.ready-t.t0));
+   steps.push('first words '+secs(t.words-t.t0));
+   const lead=t.kind==='Opened'&&t.prepare?' ('+secs(t.words)+' after the page opened)':'';
+   return t.kind+lead+': '+steps.join(' · ');
+  });
+  return 'Voice start timing ('+(timingLog.at(-1).model==='gemini-3.8-live'?'Gemini Live':'GPT Live')+')\n'+lines.join('\n');
+ }
  function transcriptTurns(expectedLineage,currentHistory){
   if(!expectedLineage||scope!==expectedLineage||context?.lineage!==expectedLineage||!(study||exportStudyId))return null;
   if(!enabled&&Array.isArray(currentHistory))rememberTextHistory(currentHistory,true);
@@ -814,9 +892,9 @@ window.WorldviewLiveConversation=(()=>{
   insert(0);
   // Imports are complete turns; only adjacent native deltas share a turn.
   // Text typed between voice sessions stays at that exact fragment boundary.
-  for(const f of fragments){if(isControlEcho(f.delta))continue;const native=!f.id.startsWith('import:'),last=turns.at(-1);if(native&&previousNative&&last?.role===f.role)last.content=joinDelta(last.content,f.delta);else turns.push({role:f.role,content:f.delta});previousNative=native;insert(f.seq);}
+  for(const f of fragments){if(isControlEcho(f.delta))continue;const native=!f.id.startsWith('import:'),last=turns.at(-1);if(native&&previousNative&&last?.role===f.role)last.content=joinDelta(last.content,f.delta);else{const at=fragmentAt(f);turns.push(at?{role:f.role,content:f.delta,at}:{role:f.role,content:f.delta});}previousNative=native;insert(f.seq);}
   for(const t of turns)t.content=cleanCaption(t.content);
   return turns.filter(t=>t.content);
  }
- const api={mount,sync,stop,place,transcriptTurns,connectionState,freeStorage:sweepOtherDrafts,toggleSpeaker:()=>output?.toggle(),paintSpeaker:()=>output?.paint(),ownsAudio:()=>!!session,active:()=>!!session,enabled:()=>enabled};return api;
+ const api={mount,sync,stop,place,transcriptTurns,startLesson,timingSummary,connectionState,freeStorage:sweepOtherDrafts,toggleSpeaker:()=>output?.toggle(),paintSpeaker:()=>output?.paint(),ownsAudio:()=>!!session,active:()=>!!session,enabled:()=>enabled};return api;
 })();

@@ -15388,10 +15388,25 @@ function mockLearnerMapState(stage, artifact) {
 
 let liveConversationMounted=false, conversationTools=null;
 window.addEventListener('storage',event=>{if([window.WorldviewModels?.liveModelKey,window.WorldviewModels?.voiceRouteKey].includes(event.key))renderMockLearnerShell();});
-function liveVoiceAvailable(stage=labState.pipelineStage){return Boolean(labState.accessVerified&&labState.verifiedAdmin&&labState.pipelineMode==='mock'&&['clarification','extraction','lesson','quiz'].includes(stage)&&window.WorldviewModels?.liveEnabled(stage));}
+/* BUS-054 (v2.1.74): approved testers have saved Live voice lessons too. The
+   owner keeps the voice model choice and the running costs; testers use Gemini
+   Live, which is billed by use and can hold a quiet connection at no charge. */
+function liveVoiceAccess(){return Boolean(labState.verifiedAdmin||(labState.verifiedRole?.access_tier==='tester'&&labState.verifiedRoleUserId===labState.verifiedUserId));}
+function liveModelChoice(){return labState.verifiedAdmin?(window.WorldviewModels?.liveModel()||'gpt-live-1'):'gemini-3.8-live';}
+function liveTrialRequest(){const token=labState.verifiedAccessToken;return async body=>{const response=await fetch(SUPABASE_URL+'/functions/v1/live-trial',{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(body.action==='journey_check'?150000:body.action==='reflect'?90000:40000)});const result=await response.json();if(!response.ok)throw Error(result.error?.message||'Live lesson is unavailable.');return result;};}
+// LES-242: "Your thinking" for the open lesson, from the copy menu and the lesson card.
+function openThinking(){
+ if(!labState.accessVerified||!labState.verifiedUserId)return;
+ const artifact=selectedPipelineArtifact(),runId=artifact?.runId||labState.clarification.runId;
+ const lineage=[labState.verifiedUserId,runId].join('|');
+ const topic=labState.clarification.topic===VOICE_TOPIC_PLACEHOLDER?'':labState.clarification.topic;
+ window.WorldviewThinking?.open({owner:labState.verifiedUserId,runId,topic:topic||'',request:liveTrialRequest(),turns:()=>{const ordinary=mockLearnerTranscript('quiz',selectedPipelineArtifact());return window.WorldviewLiveConversation?.transcriptTurns?.(lineage,ordinary)??ordinary;}});
+}
+window.WorldviewOpenThinking=openThinking;
+function liveVoiceAvailable(stage=labState.pipelineStage){return Boolean(labState.accessVerified&&liveVoiceAccess()&&labState.pipelineMode==='mock'&&['clarification','extraction','lesson','quiz'].includes(stage)&&window.WorldviewModels?.liveEnabled(stage));}
 function liveLessonSelected(stage=labState.pipelineStage){
  const mode=stage==='clarification'?labState.clarification.mode:labState.extraction.mode;
- return Boolean(labState.accessVerified&&labState.verifiedAdmin&&labState.pipelineMode==='mock'&&['clarification','extraction','lesson','quiz'].includes(stage)&&mode==='voice'&&window.WorldviewModels?.liveEnabled(stage));
+ return Boolean(labState.accessVerified&&liveVoiceAccess()&&labState.pipelineMode==='mock'&&['clarification','extraction','lesson','quiz'].includes(stage)&&mode==='voice'&&window.WorldviewModels?.liveEnabled(stage));
 }
 function liveResearchState(selection, stage=labState.pipelineStage) {
  if(!['extraction','lesson','quiz'].includes(stage))return null;
@@ -15541,7 +15556,7 @@ async function applyLiveJourney(study){
 function syncLiveLesson(){
  const live=window.WorldviewLiveConversation;if(!live||!q('mock-learner-composer'))return;
  if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),speakerButton:q('mock-learner-mode'),onTextMode:()=>void chooseLiveConversationMode('text'),onStudy:applyLiveJourney,onLearnerTopic:applyLiveLearnerTopic,onCheckerUsage:recordLiveCheckerCost,onConnectionState:handleLearnerLiveEntryState,
-  requestForCurrentAccount:()=>{const token=labState.verifiedAccessToken;return async body=>{const response=await fetch(SUPABASE_URL+'/functions/v1/live-trial',{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(body.action==='journey_check'?150000:40000)});const result=await response.json();if(!response.ok)throw Error(result.error?.message||'Live lesson is unavailable.');return result;};},
+  requestForCurrentAccount:liveTrialRequest,
   releaseMedia:()=>{stopClarificationCaptureForModeChange();stopClarificationSpeech();stopPipelineExtractionVoice();if(typeof releaseClarificationTopicCapture==='function')releaseClarificationTopicCapture();}
  });}
  const stage=labState.pipelineStage,artifact=selectedPipelineArtifact(),selection=artifact?selectedPipelineMapRecord(artifact):null;
@@ -15550,7 +15565,7 @@ function syncLiveLesson(){
  const runId=artifact?.runId||labState.clarification.runId;
  const lineage=[labState.verifiedUserId,runId].join('|');
  recordLessonJobCosts(runId);
- live.sync({enabled:selected,lineage,owner:labState.verifiedUserId,runId,model:window.WorldviewModels?.liveModel()||'gpt-live-1',history:[],priorHistory:transcript,ready:selected,autoStart:true,studyInput:selected?liveStudyInput(artifact,selection,transcript):null});
+ live.sync({enabled:selected,lineage,owner:labState.verifiedUserId,runId,model:liveModelChoice(),showCost:labState.verifiedAdmin,history:[],priorHistory:transcript,ready:selected,autoStart:true,studyInput:selected?liveStudyInput(artifact,selection,transcript):null});
  if(selected){q('mock-learner-voice-controls').hidden=true;q('mock-learner-waiting').hidden=true;renderLiveResearchRecovery(selection,stage);}
  const mode=stage==='clarification'?labState.clarification.mode:labState.extraction.mode;
  const button=q('mock-learner-mode');
@@ -15587,7 +15602,7 @@ async function chooseLiveConversationMode(choice){
   if(!await window.WorldviewLessonEntry?.prepareMicrophone())return;
   if(owner!==labState.verifiedUserId||epoch!==labState.authEpoch)return;
  }
- if(choice!=='text'&&labState.verifiedAdmin)setLiveVoicePreference(true);
+ if(choice!=='text'&&liveVoiceAccess())setLiveVoicePreference(true);
  const state=labState.pipelineStage==='clarification'?labState.clarification:labState.extraction;
  if(choice==='text'){
   stopClarificationCaptureForModeChange();stopClarificationSpeech();stopPipelineExtractionVoice();
@@ -15603,7 +15618,7 @@ async function chooseLiveConversationMode(choice){
 function toggleLiveModeMenu(){
  let menu=q('live-mode-menu');if(menu&&!menu.hidden){closeLiveModeMenu();return;}
  if(!menu){menu=document.createElement('div');menu.id='live-mode-menu';menu.className='live-mode-menu';menu.setAttribute('aria-label','Conversation modes');q('mock-learner-header').append(menu);document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLiveModeMenu();q('mock-learner-mode')?.focus();}});document.addEventListener('click',e=>{if(!menu.contains(e.target)&&!q('mock-learner-mode')?.contains(e.target))closeLiveModeMenu();});}
- menu.replaceChildren();const gemini=window.WorldviewModels?.liveModel()==='gemini-3.8-live';const options=[['text','Text',''],[labState.verifiedAdmin?'live':'voice',labState.verifiedAdmin?(window.WorldviewModels?.liveLabel()||'GPT Live'):'Voice',labState.verifiedAdmin?(gemini?'Usage-based pricing':'$0.05/min'):'']];
+ menu.replaceChildren();const gemini=liveModelChoice()==='gemini-3.8-live';const options=[['text','Text',''],[liveVoiceAccess()?'live':'voice',labState.verifiedAdmin?(window.WorldviewModels?.liveLabel()||'GPT Live'):'Voice',labState.verifiedAdmin?(gemini?'Usage-based pricing':'$0.05/min'):'']];
  for(const [choice,title,note]of options){const b=document.createElement('button');b.type='button';b.textContent=title;const small=document.createElement('small');small.textContent=note;b.append(small);b.onclick=()=>void chooseLiveConversationMode(choice);menu.append(b);}
  menu.hidden=false;q('mock-learner-mode').setAttribute('aria-expanded','true');menu.querySelector('button')?.focus();
 }
@@ -19526,15 +19541,10 @@ function bindEvents() {
     const lineage=[labState.verifiedUserId,artifact?.runId||labState.clarification.runId].join('|');
     const native = window.WorldviewLiveConversation?.transcriptTurns?.(lineage,ordinary);
     const turns = native ?? ordinary;
-    return window.WorldviewConversationTools.serializeTurns(turns);
-  },getCard:()=>window.WorldviewLessonCard?.data?.(),onCard:()=>window.WorldviewLessonCard?.show?.(),getIdeas:()=>{
-    if(!labState.accessVerified||!labState.verifiedUserId)return '';
-    const artifact=selectedPipelineArtifact(),ordinary=mockLearnerTranscript('quiz',artifact);
-    const lineage=[labState.verifiedUserId,artifact?.runId||labState.clarification.runId].join('|');
-    const turns=window.WorldviewLiveConversation?.transcriptTurns?.(lineage,ordinary)??ordinary;
-    const topic=labState.clarification.topic===VOICE_TOPIC_PLACEHOLDER?'':labState.clarification.topic;
-    return window.WorldviewConversationTools.ideasText(turns,topic||'');
-  }});
+    // VOI-142: the owner and testers also see where the voice start time went.
+    const timing = liveVoiceAccess() ? window.WorldviewLiveConversation?.timingSummary?.() : '';
+    return (timing ? timing + '\n\n' : '') + window.WorldviewConversationTools.serializeTurns(turns);
+  },getCard:()=>window.WorldviewLessonCard?.data?.(),onCard:()=>window.WorldviewLessonCard?.show?.(),onThinking:openThinking});
   q("mock-learner-mode")?.addEventListener("click", () => { if(liveLessonSelected())window.WorldviewLiveConversation?.toggleSpeaker();else toggleLiveModeMenu(); });
   q("mock-learner-sources")?.addEventListener("click", toggleMockLearnerSources);
   q("mock-learner-source-close")?.addEventListener("click", () => closeMockLearnerSources({ restoreFocus:true }));

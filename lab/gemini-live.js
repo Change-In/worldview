@@ -5,7 +5,7 @@ window.WorldviewGeminiLive=(()=>{
  const endpoint='wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained';
  function encodePcm(buffer){let bytes='';for(const value of new Uint8Array(buffer))bytes+=String.fromCharCode(value);return btoa(bytes);}
  function decodePcm(data){const raw=atob(data),view=new DataView(new ArrayBuffer(raw.length));for(let i=0;i<raw.length;i++)view.setUint8(i,raw.charCodeAt(i));const samples=new Float32Array(Math.floor(raw.length/2));for(let i=0;i<samples.length;i++)samples[i]=view.getInt16(i*2,true)/32768;return samples;}
- async function connect({transport,mic,outputAudio,initiate=true,openingText='',onEvent,onUsage,onStatus,onTransport,isCurrent}){
+ async function connect({transport,mic,outputAudio,initiate=true,openingText='',onInputLevel=null,onEvent,onUsage,onStatus,onTransport,isCurrent}){
   if(transport?.type!=='gemini-websocket'||transport.setup?.model!==`models/${model}`||!transport.token?.startsWith('auth_tokens/'))throw Error('Gemini authorization was invalid.');
   const Audio=window.AudioContext||window.webkitAudioContext;
   if(!Audio||!window.AudioWorkletNode)throw Error('Gemini Live needs a browser with AudioWorklet support.');
@@ -20,7 +20,7 @@ window.WorldviewGeminiLive=(()=>{
    if(revive)return;let tries=0;
    revive=setInterval(()=>{if(closed||audio.state==='running'||++tries>40){clearInterval(revive);revive=null;return;}if(!document.hidden)void audio.resume().catch(()=>{});},500);
   });
-  let socket,ready=false,closed=false,started=false,muted=false,modelActive=false,processor,input,silent,playAt=0,resumeHandle='',resumeAttempts=0,closingReason='connection_lost',expiryTimer,openTimer;
+  let socket,ready=false,closed=false,started=false,muted=false,holding=false,held=[],modelActive=false,processor,input,silent,playAt=0,resumeHandle='',resumeAttempts=0,closingReason='connection_lost',expiryTimer,openTimer;
   let received=Promise.resolve(),pendingContext='',connectResolve,connectReject,output,mix,hardGain,elementGain;
   const connected=new Promise((resolve,reject)=>{connectResolve=resolve;connectReject=reject;});
   // Cancellation can precede the asynchronous worklet load and its later await.
@@ -130,7 +130,17 @@ window.WorldviewGeminiLive=(()=>{
    modelActive=true;send({clientContent:{turns:[{role:'user',parts:[{text:String(text)}]}],turnComplete:true}});return true;
   }
   const alive=()=>!closed&&socket?.readyState===WebSocket.OPEN;
-  const controls={context,mute(value){muted=!!value;if(muted&&ready)send({realtimeInput:{audioStreamEnd:true}});},resumeAudio,applyRoute,prompt,alive,close:()=>finish('client_closed'),dispose:()=>finish('client_closed')};
+  /* A quiet-minute pause holds the microphone instead of closing: nothing is
+     sent (so nothing is billed), the last 1.5 seconds are kept, and resuming
+     sends them first so the learner's opening words are heard. An ordinary
+     learner mute never keeps audio. */
+  function mute(value,{hold=false,flush=false}={}){
+   muted=!!value;holding=muted&&hold;
+   if(muted){if(!hold)held=[];if(ready)send({realtimeInput:{audioStreamEnd:true}});return;}
+   const kept=held;held=[];
+   if(flush&&ready)for(const chunk of kept)send({realtimeInput:{audio:{mimeType:'audio/pcm;rate=16000',data:encodePcm(chunk)}}});
+  }
+  const controls={context,mute,resumeAudio,applyRoute,prompt,alive,close:()=>finish('client_closed'),dispose:()=>finish('client_closed')};
   onTransport(controls);
   try{
    await audio.audioWorklet.addModule('./gemini-pcm-worklet.js?v=2.1.37');
@@ -154,7 +164,9 @@ window.WorldviewGeminiLive=(()=>{
    // while the media element is blocked; it never carries audible tutor audio.
    silent=audio.createGain();silent.gain.value=0;input.connect(processor);processor.connect(silent);silent.connect(audio.destination);
    processor.port.onmessage=e=>{
-    if(!ready||muted||!active())return;
+    if(!ready||!active())return;
+    if(onInputLevel){const pcm=new Int16Array(e.data);let sum=0;for(let i=0;i<pcm.length;i++){const v=pcm[i]/32768;sum+=v*v;}onInputLevel(Math.sqrt(sum/Math.max(1,pcm.length)));}
+    if(muted){if(holding){held.push(e.data);if(held.length>15)held.shift();}return;}
     if(socket.bufferedAmount>1024*1024){failure('The voice connection is too slow. Your conversation is saved.');return;}
     send({realtimeInput:{audio:{mimeType:'audio/pcm;rate=16000',data:encodePcm(e.data)}}});
    };

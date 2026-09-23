@@ -55,6 +55,8 @@ window.WorldviewLessonCard=(()=>{
   const copy=document.createElement('button');copy.type='button';copy.textContent='Copy lesson card';
   copy.onclick=async()=>{try{await navigator.clipboard.writeText(text(card));copy.textContent='Copied';}catch{copy.textContent='Copy not available here';}};
   const done=document.createElement('button');done.type='button';done.className='is-primary';done.textContent='Done';done.onclick=close;
+  // LES-242: the end of a lesson is the natural moment to see what your ideas add up to.
+  if(typeof window.WorldviewOpenThinking==='function'){const thinking=document.createElement('button');thinking.type='button';thinking.textContent='Your thinking';thinking.onclick=()=>{close();window.WorldviewOpenThinking();};actions.append(thinking);}
   actions.append(copy,done);box.append(actions);
   node.append(box);node.hidden=false;done.focus({preventScroll:true});
   try{localStorage.setItem(SHOWN+card.runId,'1');}catch{}

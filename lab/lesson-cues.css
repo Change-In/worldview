@@ -9,6 +9,35 @@
 @keyframes journey-breathe{0%,100%{opacity:1}50%{opacity:.55}}
 .journey-caption{margin:6px 0 0;color:var(--wv-muted);font:500 12px/1.35 system-ui,sans-serif;letter-spacing:.01em;}
 .journey-caption[hidden]{display:none;}
+/* VOI-141 Start button and the map link while preparing */
+.journey-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:6px;}
+.journey-row .journey-caption{margin:0;min-width:0;}
+button.journey-caption{padding:4px 0;border:0;background:none;text-align:left;cursor:pointer;text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--wv-muted) 45%,transparent);text-underline-offset:3px;}
+.journey-start{flex:none;min-height:38px;padding:0 15px;border-radius:999px;border:0;background:#e2895a;color:#241f1a;font:700 13px/1 system-ui,sans-serif;cursor:pointer;}
+.journey-start:disabled{opacity:.6;cursor:default;}
+
+/* LES-242 Your thinking */
+.thinking-sheet{position:fixed;inset:0;z-index:2147482000;display:grid;place-items:center;padding:16px;background:#0009;}
+.thinking-sheet[hidden]{display:none;}
+.thinking-box{width:min(540px,100%);max-height:calc(100dvh - 32px);overflow:auto;padding:22px 20px 18px;border-radius:20px;background:var(--wv-card);color:var(--wv-text);border:1px solid color-mix(in srgb,var(--wv-text) 14%,transparent);box-shadow:0 18px 40px #0007;}
+.thinking-kicker{margin:0;color:var(--wv-accent);font:700 11px/1.3 system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;}
+.thinking-box h2{margin:6px 0 12px;font:700 22px/1.2 Georgia,serif;}
+.thinking-tags{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px;}
+.thinking-tag{padding:5px 11px;border-radius:999px;background:color-mix(in srgb,#e2895a 22%,transparent);border:1px solid color-mix(in srgb,#e2895a 55%,transparent);font:700 12.5px/1.2 system-ui,sans-serif;}
+.thinking-summary{margin:0 0 6px;font:400 15.5px/1.55 system-ui,sans-serif;}
+.thinking-section h3{margin:16px 0 6px;color:var(--wv-muted);font:700 12px/1.3 system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;}
+.thinking-section ul{display:grid;gap:8px;margin:0;padding-left:18px;}
+.thinking-section li{font:400 14.5px/1.5 system-ui,sans-serif;}
+.thinking-section li strong{display:block;font-weight:600;}
+.thinking-section li span{display:block;color:var(--wv-muted);}
+.thinking-note,.thinking-status{margin:14px 0 0;color:var(--wv-muted);font:400 12px/1.4 system-ui,sans-serif;}
+.thinking-status:empty{display:none;}
+.thinking-loading{margin:18px 0;font:500 15px/1.5 system-ui,sans-serif;}
+@media (prefers-reduced-motion:no-preference){.thinking-loading{animation:journey-breathe 1.8s ease-in-out infinite;}}
+.thinking-error{margin:14px 0;font:500 14.5px/1.5 system-ui,sans-serif;}
+.thinking-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:18px;}
+.thinking-actions button{min-height:44px;padding:0 16px;border-radius:999px;border:1px solid color-mix(in srgb,var(--wv-text) 20%,transparent);background:transparent;color:var(--wv-text);font:600 14px system-ui,sans-serif;cursor:pointer;}
+.thinking-actions .is-primary{background:#e2895a;border-color:#e2895a;color:#241f1a;}
 
 .lesson-cue-toast{position:fixed;left:50%;top:34%;z-index:2147483000;display:grid;gap:2px;width:min(calc(100% - 32px),420px);padding:12px 16px;border-radius:14px;background:#e2895a;color:#241f1a;box-shadow:0 10px 28px #0005;transform:translateX(-50%);text-align:center;pointer-events:none;}
 .lesson-cue-toast[hidden]{display:none;}

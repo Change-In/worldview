@@ -49,5 +49,37 @@ window.WorldviewProfileChart=(()=>{
   section.append(legend);
   container.append(section);
  }
- return {render,series};
+ /* LES-242: "How you think". Recognition tags the learner earned in "Your
+    thinking", counted across lessons on this device, each with its newest
+    reason. Nothing is shown until a reading has earned one. */
+ function renderThinking(container,owner){
+  if(!owner)return;
+  const prefix='worldview-thinking-v1:'+owner+':',tags=new Map();let lessons=0;
+  try{
+   for(let i=0;i<localStorage.length;i++){
+    const key=localStorage.key(i);if(!key||!key.startsWith(prefix))continue;
+    const value=JSON.parse(localStorage.getItem(key)||'null'),list=value?.reflection?.tags;if(!Array.isArray(list))continue;
+    lessons++;const at=String(value.createdAt||'');
+    for(const tag of list){
+     if(!tag?.label)continue;const label=String(tag.label).slice(0,40),id=label.toLowerCase();
+     const entry=tags.get(id)||{label,count:0,reason:'',at:''};entry.count++;
+     if(!entry.at||at>entry.at){entry.reason=String(tag.reason||'').slice(0,300);entry.at=at;}
+     tags.set(id,entry);
+    }
+   }
+  }catch{return;}
+  if(!tags.size)return;
+  const section=document.createElement('section');section.className='worldview-section profile-thinking';
+  const head=document.createElement('div');head.className='profile-chart-head';
+  const title=document.createElement('h3');title.textContent='How you think';
+  const summary=document.createElement('p');summary.className='profile-chart-summary';summary.textContent='Earned in your own words · '+lessons+' lesson'+(lessons===1?'':'s');
+  head.append(title,summary);
+  const list=document.createElement('ul');list.className='profile-thinking-tags';
+  for(const tag of [...tags.values()].sort((a,b)=>b.count-a.count||b.at.localeCompare(a.at)).slice(0,8)){
+   const item=document.createElement('li'),name=document.createElement('strong'),why=document.createElement('span');
+   name.textContent=tag.label+(tag.count>1?' ×'+tag.count:'');why.textContent=tag.reason;item.append(name,why);list.append(item);
+  }
+  section.append(head,list);container.append(section);
+ }
+ return {render,series,renderThinking};
 })();

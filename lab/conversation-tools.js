@@ -2,11 +2,16 @@
 window.WorldviewConversationTools = (() => {
   'use strict';
 
+  // VOI-144: spoken turns carry the clock time they were said.
   function serializeTurns(turns) {
-    return (Array.isArray(turns) ? turns : [])
-      .filter(turn => ['user', 'assistant'].includes(turn?.role) && typeof turn.content === 'string' && turn.content.trim())
-      .map(turn => `${turn.role === 'user' ? 'You' : 'Worldview'}:\n${turn.content}`)
+    const list = (Array.isArray(turns) ? turns : [])
+      .filter(turn => ['user', 'assistant'].includes(turn?.role) && typeof turn.content === 'string' && turn.content.trim());
+    const clock = at => new Date(at).toLocaleTimeString([], { hour:'numeric', minute:'2-digit', second:'2-digit' });
+    const body = list
+      .map(turn => `${turn.role === 'user' ? 'You' : 'Worldview'}${Number.isFinite(turn.at) ? ' · ' + clock(turn.at) : ''}:\n${turn.content}`)
       .join('\n\n');
+    const first = list.find(turn => Number.isFinite(turn.at));
+    return first ? 'Conversation · ' + new Date(first.at).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric', year:'numeric' }) + '\n\n' + body : body;
   }
 
   /* NAV-127: 'Copy my ideas' is the learner's own side only, one point per
@@ -20,7 +25,7 @@ window.WorldviewConversationTools = (() => {
     return (title ? 'My ideas: ' + title : 'My ideas') + '\n\n' + points.map(point => '• ' + point).join('\n');
   }
 
-  function mount({ button, status, getText, getIdeas = null, getCard = null, onCard = null, getScope = () => '' }) {
+  function mount({ button, status, getText, getIdeas = null, onThinking = null, getCard = null, onCard = null, getScope = () => '' }) {
     if (!button || typeof getText !== 'function') return null;
     let busy = false, dialog = null, field = null, dialogScope = '', noticeTimer = 0;
     const announce = text => { if (status) status.textContent = text; };
@@ -90,12 +95,17 @@ window.WorldviewConversationTools = (() => {
       if (!menu) {
         menu = document.createElement('div');
         menu.className = 'conversation-copy-menu'; menu.setAttribute('role', 'menu'); menu.hidden = true;
-        for (const [kind, label, note] of [['transcript', 'Copy transcript', 'Every word, both sides'], ['ideas', 'Copy my ideas', 'Just what you said, as points']]) {
+        /* LES-242: "Your thinking", an AI reading of the learner's ideas,
+           replaces the plain copy of their own lines. */
+        const items = [['transcript', 'Copy transcript', 'Every word, both sides, with times']];
+        if (onThinking) items.push(['thinking', 'Your thinking', 'What your ideas add up to, read by AI']);
+        else if (getIdeas) items.push(['ideas', 'Copy my ideas', 'Just what you said, as points']);
+        for (const [kind, label, note] of items) {
           const item = document.createElement('button');
           item.type = 'button'; item.setAttribute('role', 'menuitem');
           const small = document.createElement('small'); small.textContent = note;
           item.append(label, small);
-          item.addEventListener('click', () => { closeMenu(); void copy(kind); });
+          item.addEventListener('click', () => { closeMenu(); if (kind === 'thinking') onThinking(); else void copy(kind); });
           menu.append(item);
         }
         // LES-236: once a lesson is complete its card is one tap away here too.
@@ -114,8 +124,9 @@ window.WorldviewConversationTools = (() => {
       menu.hidden = false; button.setAttribute('aria-expanded', 'true');
       menu.querySelector('button')?.focus({ preventScroll:true });
     }
-    if (getIdeas) { button.setAttribute('aria-haspopup', 'menu'); button.setAttribute('aria-expanded', 'false'); }
-    button.addEventListener('click', () => { if (!getIdeas) { void copy(); return; } if (menu && !menu.hidden) closeMenu(); else openMenu(); });
+    const hasMenu = Boolean(getIdeas || onThinking);
+    if (hasMenu) { button.setAttribute('aria-haspopup', 'menu'); button.setAttribute('aria-expanded', 'false'); }
+    button.addEventListener('click', () => { if (!hasMenu) { void copy(); return; } if (menu && !menu.hidden) closeMenu(); else openMenu(); });
     window.addEventListener('pagehide', () => { clearDialog(); closeMenu(); });
     return { copy, sync:() => { sync(); }, clear:clearDialog, closeMenu };
   }
