@@ -41,7 +41,11 @@ window.WorldviewLiveConversation=(()=>{
   const status=element('p','Connecting…');status.setAttribute('role','status');
   const usage=element('small'),progress=element('p');progress.className='live-conversation-progress';
   const audio=element('audio');audio.autoplay=true;audio.controls=false;audio.playsInline=true;audio.hidden=true;
-  root.append(note,actions,status,usage,progress);adapter.container.append(root);(document.body||adapter.container).append(audio);
+  /* The running cost is the owner's reference, not part of the lesson, so it
+     sits at the foot of the lesson map rather than under the conversation. */
+  const costHost=document.getElementById('mock-learner-map-cost');
+  if(costHost)costHost.append(note);
+  root.append(...(costHost?[]:[note]),actions,status,usage,progress);adapter.container.append(root);(document.body||adapter.container).append(audio);
   ui={root,note,rate,total,start,enableAudio,mute,end,retry,captions,status,usage,progress,audio};
   output=window.WorldviewLiveAudioOutput?.create({audio,button:adapter.speakerButton,container:root});
   enableAudio.onclick=()=>{const s=session;if(!s||s.closing)return;const version=s.outputVersion;void output?.apply({user:true});void resumeAudio(s).then(()=>{if(session===s&&!s.closing&&s.outputVersion===version){enableAudio.hidden=true;message('Listening');}}).catch(()=>{if(session===s&&!s.closing&&s.outputVersion===version)message('Audio is blocked. Check the browser’s audio permission.');});};
@@ -151,6 +155,10 @@ window.WorldviewLiveConversation=(()=>{
   }
   textSnapshot=next;stash();
  }
+ /* "Paused" is only true when the Resume button is showing: with no
+    session, or a Gemini session holding the microphone. A new connection
+    that is live again says Listening, whatever an earlier pause left behind. */
+ function restingStatus(){if(session?.softPaused)return 'Paused. Just start talking to carry on.';if(session&&!session.closing)return session.muted?'Mic muted':'Listening';return paused?'Paused. Tap Resume voice to carry on.':'Listening';}
  function paint(){
   if(!ui)return;ui.root.hidden=!enabled;ui.start.hidden=session?!session.softPaused:(!paused&&!startError);ui.start.disabled=!session?.softPaused&&(loading||!!session||!context?.ready||document.hidden);
   if(enabled)output?.paint();
@@ -516,7 +524,7 @@ window.WorldviewLiveConversation=(()=>{
   if(!next)return;
   message(next+' the next reply may take a few seconds.');
   clearTimeout(restoreTimer);
-  restoreTimer=setTimeout(()=>{if(session===state&&!state.closing&&!saveError&&!state.checking)message(paused?'Paused':'Listening');},8000);
+  restoreTimer=setTimeout(()=>{if(session===state&&!state.closing&&!saveError&&!state.checking)message(restingStatus());},8000);
  }
  function deliverStudy(state){
   const pending=[...state.pendingDelegations],first=pending.shift()||null;
@@ -570,12 +578,17 @@ window.WorldviewLiveConversation=(()=>{
    // A new phase gets a fresh connection whose startup carries that phase,
    // instead of a quiet note appended to a conversation that began in an
    // earlier one. Outcome changes inside a phase stay on this connection.
-   if(advanced&&(study.phase!==startedPhase||study.complete===true)){scheduleRefresh(s);paint();return;}
+   // Except the step into preparation: the tutor has usually just asked for the
+   // starting picture, so a new connection had nothing to say (the Sept 23
+   // "groan") and the learner's answer during the swap was lost. It stays on
+   // this connection and receives the new phase as an update.
+   const intoPreparation=startedPhase==='clarification'&&study.phase==='extraction'&&!study.complete;
+   if(advanced&&!intoPreparation&&(study.phase!==startedPhase||study.complete===true)){scheduleRefresh(s);paint();return;}
    if((s.lastUserSeq||0)!==startedUserSeq){s.deferredStudy=true;s.pendingOpeningStep=null;scheduleCheck(s);return;}
    deliverStudy(s);
    if(advanced||s.pendingOpeningStep===studyStep(study))schedulePhaseOpening(s);
    if(study.checkError)message('Conversation saved. The understanding check could not finish; Live can keep teaching.');
-   else if(!advanced&&!saveError)message(paused?'Paused':'Listening');
+   else if(!advanced&&!saveError)message(restingStatus());
    paint();
   }catch{if(scope===expected&&session===s&&!s.closing)message('Live can keep teaching. The background understanding check is unavailable; no new progress was recorded.');}
   finally{clearTimeout(s.slowTimer);s.checking=false;}
@@ -731,7 +744,7 @@ window.WorldviewLiveConversation=(()=>{
   // Caption tails may describe already-captured speech. Retain them for export
   // while closing, but never let them trigger another check or audio operation.
   if(state.closing&&!['session.started','session.input_transcript.delta','session.output_transcript.delta','session.usage.updated','session.closed'].includes(e.type))return;
-  if(e.type==='session.started'){if(state.closing){send(state,{type:'session.close'});return;}if(state.ready)return;state.ready=true;mark(state,'ready');autoAttempts=0;state.publishedPhase=study.phaseVersion;state.publishedStudy=studyPublication(study);state.publishedStep=studyStep(study);
+  if(e.type==='session.started'){if(state.closing){send(state,{type:'session.close'});return;}if(state.ready)return;state.ready=true;mark(state,'ready');autoAttempts=0;paused=false;startError=false;state.publishedPhase=study.phaseVersion;state.publishedStudy=studyPublication(study);state.publishedStep=studyStep(study);
    // A refreshed connection opens its phase itself; do not schedule a second opening.
    if(state.openingText)state.openedPhase=studyStep(study);
    state.lastActivityAt=performance.now();state.talkStartedAt=Date.now();state.idleTimer=setInterval(()=>idleCheck(state),5000);
@@ -810,7 +823,7 @@ window.WorldviewLiveConversation=(()=>{
    s.costConfirmed=true;recordVoiceCost(s);
    if(session!==s||s.closing){void s.request({action:'close',requestId:s.id}).catch(()=>{});return;}
    await peer.setRemoteDescription({type:'answer',sdp:result.transport.sdp});
-  }catch(error){if(session===s){startError=true;void stop(error.name==='NotAllowedError'?'Allow microphone access, then try again.':s.model==='gemini-3.8-live'?(error.message||'Gemini Live could not connect. Choose GPT Live or try again.'):'The microphone could not connect. Try again.');}}
+  }catch(error){if(session===s){startError=true;void stop(error.name==='NotAllowedError'?'Voice stopped. Tap Try microphone again to carry on.':s.model==='gemini-3.8-live'?(error.message||'Gemini Live could not connect. Choose GPT Live or try again.'):'The microphone could not connect. Try again.');}}
  }
  async function stop(reason='Voice paused.',options={}){
   if(options.pause)paused=true;
@@ -869,7 +882,7 @@ window.WorldviewLiveConversation=(()=>{
    if(scope!==expected||!result?.study)return false;
    study={...result.study,fragments};await applyPhase();
    const s=session,advanced=studyStep(study)!==before;
-   if(advanced&&s?.ready&&!s.closing)scheduleRefresh(s);
+   if(advanced&&s?.ready&&!s.closing){if(study.phase==='extraction'&&!study.complete){deliverStudy(s);s.pendingOpeningStep=studyStep(study);schedulePhaseOpening(s);}else scheduleRefresh(s);}
    else if(s?.ready&&!s.closing)message('Listening');
    paint();return advanced||study.packet?.conversationState?.approvalSaved===true;
   }catch(error){if(scope===expected)message(error.message||'The lesson could not start. Try again.');return false;}

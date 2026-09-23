@@ -15147,27 +15147,34 @@ function renderMockChapterMenu(selection, stage, chapterState, rootId = "mock-le
   if (root.hidden) { root.replaceChildren(); delete root.dataset.chapterKey; return; }
   const current = chapterState.currentIndex;
   const outcome = mockLearnerCurrentOutcome(selection, stage);
-  const key = JSON.stringify([selection.artifact?.runId,selection.fingerprint,stage,current,outcome?.id||"",chapterState.completedIndexes,chapters.map((chapter) => [chapter.id,chapter.title]),[...(q("mock-learner-transcript")?.children || [])].map(item => item.dataset.chapterId)]);
+  const outcomes = pipelineLessonOutcomes(selection);
+  const journey = mockLearnerLiveJourney(selection);
+  const currentOutcomeIndex = outcome ? outcomes.findIndex((item) => item.id === outcome.id) : -1;
+  const transcriptChapters = [...(q("mock-learner-transcript")?.children || [])].map(item => item.dataset.chapterId);
+  const key = JSON.stringify([selection.artifact?.runId,selection.fingerprint,stage,current,outcome?.id||"",chapterState.completedIndexes,chapters.map((chapter) => [chapter.id,chapter.title,(chapter.outcomes||[]).length]),Object.keys(journey?.assessment||{}),transcriptChapters]);
   if (root.dataset.chapterKey === key) return;
   const wasOpen = Boolean(root.querySelector("details")?.open);
   const details = element("details", { className:"mock-chapter-menu" });
   details.open = wasOpen;
-  const complete = mockLearnerLiveJourney(selection)?.complete || (stage === "quiz" && labState.quiz.status === "complete");
+  const complete = journey?.complete || (stage === "quiz" && labState.quiz.status === "complete");
   const chapterTitle = current >= 0 && chapters[current] ? `${current + 1}. ${chapters[current].title}` : "Lesson review";
   const title = complete ? "Lesson complete" : stage === "quiz" ? `Final teach-back · ${chapterTitle}` : chapterTitle;
   const summary = element("summary", { attrs:{ "aria-label":`${title}${outcome ? `. Now on ${outcome.number} ${outcome.title}` : ""}. Browse chapters` } });
   const where = element("span", { className:"mock-chapter-where" });
   where.append(element("span", { text:title }));
   if (outcome) where.append(element("span", { className:"mock-chapter-outcome", text:`${outcome.number} · ${outcome.title}` }));
-  summary.append(where, element("span", { className:"mock-chapter-chevron", attrs:{ "aria-hidden":"true" } }));
+  // Open, the list below already shows where the learner is, so the bar
+  // names the map instead of repeating the current chapter and outcome.
+  const openLabel = element("span", { className:"mock-chapter-open-label", text:"Lesson map" });
+  summary.append(where, openLabel, element("span", { className:"mock-chapter-chevron", attrs:{ "aria-hidden":"true" } }));
   const list = element("nav", { className:"mock-chapter-list", attrs:{ "aria-label":"Browse lesson chapters" } });
   chapters.forEach((chapter,index) => {
     const id = chapter.id || `chapter_${index + 1}`;
+    const group = element("div", { className:"mock-chapter-group" });
     const button = element("button", { text:`${index + 1}. ${chapter.title}`, attrs:{ type:"button", "data-chapter-id":id } });
-    if (index === current) button.setAttribute("aria-current", "step");
-    const visited = complete || chapterState.completedIndexes.includes(index) || (current >= 0 && index < current)
-      || [...(q("mock-learner-transcript")?.children || [])].some(item => item.dataset.chapterId === id);
-    if (!visited && index !== current) button.textContent += " · Upcoming";
+    const visited = complete || chapterState.completedIndexes.includes(index) || (current >= 0 && index < current) || transcriptChapters.includes(id);
+    if (index === current) { button.setAttribute("aria-current", "step"); group.classList.add("is-current"); }
+    else if (!visited) { group.classList.add("is-upcoming"); button.title = "Upcoming"; }
     button.addEventListener("click", () => {
       details.open = false;
       const turn = [...q("mock-learner-transcript").children].find((item) => item.dataset.chapterId === id);
@@ -15179,7 +15186,21 @@ function renderMockChapterMenu(selection, stage, chapterState, rootId = "mock-le
         card?.scrollIntoView({ block:"start" }); card?.focus({ preventScroll:true });
       });
     });
-    list.append(button);
+    group.append(button);
+    // Every learning outcome sits under its chapter; the one being taught is highlighted.
+    const items = outcomes.map((item, flat) => ({ item, flat })).filter(({ item }) => item.chapterIndex === index);
+    if (items.length) {
+      const ol = element("ol", { className:"mock-chapter-outcomes" });
+      for (const { item, flat } of items) {
+        const done = complete || Boolean(journey?.assessment?.[item.id]) || (currentOutcomeIndex >= 0 && flat < currentOutcomeIndex);
+        const li = element("li", { className:flat === currentOutcomeIndex ? "is-current" : done ? "is-done" : "is-upcoming" });
+        if (flat === currentOutcomeIndex) li.setAttribute("aria-current", "step");
+        li.append(element("span", { className:"mock-chapter-outcome-number", text:item.number }), element("span", { text:item.title }));
+        ol.append(li);
+      }
+      group.append(ol);
+    }
+    list.append(group);
   });
   details.append(summary,list);
   root.replaceChildren(details);

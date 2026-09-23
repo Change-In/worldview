@@ -1,0 +1,48 @@
+/* v2.1.80 lesson screen: Map in the header, Copy as an icon at the top of the
+   conversation, a tighter top and bottom, and a lesson map that lists every
+   learning outcome under its chapter with the current one highlighted. */
+
+/* Header: Map takes the place Copy had. */
+#mock-learner-map-progress { display:inline-flex; align-items:center; justify-content:center; width:auto; min-width:44px; min-height:38px; margin:0; padding:0 15px; border-radius:999px; color:var(--wv-accent); font:600 13px/1 system-ui,sans-serif; }
+#mock-learner-map-progress[hidden] { display:none !important; }
+#mock-learner-map-progress.is-error { color:#f2a8ad; }
+
+/* Copy: an icon at the top right of the conversation. */
+.mock-learner-copy-anchor { position:absolute; top:6px; right:max(8px,env(safe-area-inset-right)); z-index:6; }
+.mock-learner-copy-anchor .mock-learner-copy { display:grid; place-items:center; width:34px !important; height:34px; padding:0 !important; border:1px solid color-mix(in srgb, var(--wv-text) 14%, transparent); border-radius:50%; background:var(--wv-card); color:var(--wv-text); cursor:pointer; touch-action:manipulation; }
+.mock-learner-copy-anchor .mock-learner-copy svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linejoin:round; }
+.mock-learner-copy-anchor .conversation-copy-menu { top:calc(100% + 6px); right:0; }
+.mock-learner-copy-status { right:max(56px,env(safe-area-inset-right)); }
+
+/* Less space between the progress bar and the chapter line. */
+.mock-learner-journey { padding:6px 20px 0; }
+.mock-chapter-menu > summary { min-height:40px; padding:4px 20px 8px; }
+
+/* Less space at the bottom. */
+.mock-learner-composer { padding-top:4px; }
+.mock-learner-status { padding-bottom:3px; }
+.mock-learner-composer .live-conversation p { margin:3px 0; }
+.mock-learner-composer .live-conversation-actions { margin:0; }
+
+/* Open, the bar names the map instead of repeating where the learner is. */
+.mock-chapter-open-label { display:none; }
+.mock-chapter-menu[open] .mock-chapter-where { display:none; }
+.mock-chapter-menu[open] .mock-chapter-open-label { display:block; color:var(--wv-muted); font:600 12px/1.3 system-ui,sans-serif; letter-spacing:.07em; text-transform:uppercase; }
+
+/* The open list: chapters, and every learning outcome under each. */
+.mock-chapter-list { max-height:min(62dvh,560px); padding:0 16px 12px; gap:0; }
+.mock-chapter-group { padding:4px 0 6px; }
+.mock-chapter-group + .mock-chapter-group { border-top:1px solid color-mix(in srgb, var(--wv-text) 8%, transparent); }
+.mock-chapter-list .mock-chapter-group > button { min-height:40px; padding:8px 4px 4px; color:var(--wv-text); font:600 15px/1.4 system-ui,sans-serif; }
+.mock-chapter-group.is-current > button { color:var(--wv-accent); }
+.mock-chapter-group.is-upcoming { opacity:.6; }
+.mock-chapter-outcomes { display:grid; gap:2px; margin:0; padding:0 0 0 10px; list-style:none; }
+.mock-chapter-outcomes li { display:flex; gap:10px; padding:6px 10px; border-radius:10px; color:var(--wv-muted); font:400 14px/1.4 system-ui,sans-serif; }
+.mock-chapter-outcome-number { flex:none; min-width:26px; font-variant-numeric:tabular-nums; }
+.mock-chapter-outcomes li.is-current { background:color-mix(in srgb, var(--wv-accent) 17%, transparent); color:var(--wv-text); font-weight:600; }
+.mock-chapter-outcomes li.is-done .mock-chapter-outcome-number::after { content:" \2713"; color:var(--wv-accent); }
+
+/* The running cost sits at the foot of the lesson map (owner only). */
+.mock-learner-map-cost:empty { display:none; }
+.mock-learner-map-cost .live-conversation-cost { display:flex; gap:6px 14px; justify-content:flex-end; margin:12px 0 0; color:var(--wv-muted); font:500 12px/1.4 system-ui,sans-serif; }
+.mock-learner-map-cost .live-conversation-cost[hidden] { display:none; }

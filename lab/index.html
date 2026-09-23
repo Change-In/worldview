@@ -32,6 +32,7 @@
 <link rel="stylesheet" href="./lesson-cues.css?v=2.1.74">
 <link rel="stylesheet" href="../lesson-entry-popup.css?v=2.1.38">
 <link rel="stylesheet" href="../appearance.css?v=2.1.59">
+<link rel="stylesheet" href="./lesson-screen.css?v=2.1.80">
 <script src="../appearance.js?v=2.1.58"></script>
 </head>
 <body>
@@ -183,15 +184,18 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
         <span id="mock-learner-density-status" class="sr-only" role="status" aria-live="polite"></span>
         <div class="mock-learner-header-actions">
           <button id="mock-learner-mode" class="mock-learner-tool" type="button" aria-label="Switch to Voice" title="Switch conversation mode">Voice</button>
-          <button id="mock-learner-copy" class="mock-learner-tool mock-learner-copy" type="button" aria-label="Copy transcript or your ideas" title="Copy">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg><span>Copy</span>
-          </button>
+          <button id="mock-learner-map-progress" class="mock-learner-tool mock-learner-map-progress" type="button" aria-controls="pipeline-extraction-map-dialog" aria-expanded="false" aria-haspopup="dialog" hidden>Map</button>
         </div>
         <span id="mock-learner-copy-status" class="mock-learner-copy-status" role="status" aria-live="polite"></span>
       </header>
       <div id="mock-learner-journey" class="mock-learner-journey" hidden></div>
       <div id="mock-learner-progress" class="mock-learner-progress" hidden aria-label="Lesson chapters"></div>
       <main class="mock-learner-conversation">
+        <div class="mock-learner-copy-anchor">
+          <button id="mock-learner-copy" class="mock-learner-copy" type="button" aria-label="Copy transcript or your ideas" title="Copy">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>
+          </button>
+        </div>
         <div id="mock-voice-cue" class="mock-voice-cue" role="status" hidden><span class="mock-voice-dot" aria-hidden="true"></span><span id="mock-voice-cue-text">Listening</span><span class="mock-voice-meter" aria-hidden="true"><i></i></span></div>
         <ol id="mock-learner-transcript" class="mock-learner-transcript" aria-live="polite"></ol>
         <div id="mock-learner-waiting" class="mock-learner-waiting" hidden aria-hidden="true"><span></span><span></span><span></span></div>
@@ -211,9 +215,6 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
           </div>
           <button id="mock-learner-hear" class="text-button" type="button" hidden>Hear reply</button>
         </div>
-        <div class="mock-learner-utilities">
-          <button id="mock-learner-map-progress" class="text-button mock-learner-map-progress" type="button" aria-controls="pipeline-extraction-map-dialog" aria-expanded="false" aria-haspopup="dialog" hidden>View Lesson Map progress</button>
-        </div>
         <button id="mock-learner-retry" class="text-button mock-learner-retry" type="button" hidden>Try again</button>
       </footer>
       <section id="pipeline-extraction-map-dialog" class="extraction-map-dialog" role="dialog" aria-modal="true" aria-labelledby="pipeline-extraction-map-dialog-title" hidden>
@@ -223,6 +224,7 @@ if (document.documentElement.dataset.learnerEntryKind === "saved") {
           <div class="extraction-map-dialog-actions"><button id="pipeline-extraction-map-dialog-retry" class="button button-primary" type="button" hidden>Retry Lesson Map</button><button id="pipeline-extraction-map-dialog-report" class="text-button extraction-map-dialog-report" type="button">Copy route report</button></div>
           <p id="pipeline-extraction-map-dialog-report-status" class="extraction-map-dialog-status" role="status"></p>
           <div id="pipeline-extraction-map-dialog-content" class="extraction-map-dialog-content"></div>
+          <div id="mock-learner-map-cost" class="mock-learner-map-cost"></div>
         </div>
       </section>
     </section>
@@ -755,13 +757,13 @@ Use the saved briefing as grounding. Search only for a new, recent, or explicitl
 <script src="./lesson-cost.js?v=2.1.71"></script>
 <script src="./gemini-live.js?v=2.1.74"></script>
 <script src="./live-audio-output.js?v=2.1.70"></script>
-<script src="./live-conversation.js?v=2.1.78"></script>
+<script src="./live-conversation.js?v=2.1.80"></script>
 <script src="./conversation-tools.js?v=2.1.74"></script>
 <script src="./thinking.js?v=2.1.74"></script>
 <script src="../lesson-entry-popup.js?v=2.1.71"></script>
 <script src="../saved-map.js?v=2.1.58"></script>
 <script src="./lesson-cues.js?v=2.1.71"></script>
-<script src="./lab.js?v=2.1.78" defer></script>
+<script src="./lab.js?v=2.1.80" defer></script>
 <script src="./journey-strip.js?v=2.1.74" defer></script>
 <script src="./lesson-card.js?v=2.1.74" defer></script>
 <script src="./conversation-clock.js?v=2.1.12" defer></script>

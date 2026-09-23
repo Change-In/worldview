@@ -2259,7 +2259,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.79 · Sep 23";
+const BUILD = "v2.1.80 · Sep 23";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2267,6 +2267,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.80",date:"Sep 23",changes:["Map moved to the top right. Copy is now a small icon at the top of the conversation.","Open the chapter bar to see every learning outcome under its chapter, with the one you are on highlighted and finished ones ticked. The bar no longer repeats where you are while it is open.","Less empty space above and below the conversation. The running cost now sits at the bottom of the Map.","Before \"Shall we start?\" the tutor asks once whether you want a quick overview or a deeper lesson.","A one-word starting answer no longer skips straight to teaching; the tutor gets to hear a little more first.","Moving from your question to preparing no longer switches the voice connection, which is where a strange sound and a lost answer came from.","After a pause the status only says Paused when there is a way to resume, and a microphone that stops asks you to tap Try microphone again."]},
   {tag:"v2.1.79",date:"Sep 23",changes:["Saying yes to \"Shall we start?\" now starts the lesson. The tutor no longer asks whether you want a quick overview or a fuller lesson after you have agreed.","Jev is set up to decide when the lesson moves on: when to start, when to begin teaching, and when you have understood a part or want to skip it. It switches on as soon as its key is accepted. Until then the previous checker decides, with the same fix."]},
   {tag:"v2.1.78",date:"Sep 23",changes:["The Ask Anything card has one button: Voice while the box is empty, Send once you type something.","Reopening a voice lesson in text now shows the whole conversation, including everything said by voice, even on another phone."]},
   {tag:"v2.1.77",date:"Sep 23",changes:["Rename a lesson: tap ••• on its card and choose Rename."]},
