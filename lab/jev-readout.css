@@ -1,0 +1,32 @@
+/* LES-257: owner-only live Jev readout under the lesson progress. */
+.jev-readout { --jev: rgb(126 98 211); padding:0 20px 6px; font:500 12px/1.35 system-ui,sans-serif; color:var(--wv-text); }
+.jev-readout[hidden] { display:none; }
+.jev-readout-pill { display:inline-flex; align-items:center; gap:6px; max-width:100%; min-height:28px; padding:4px 11px 4px 9px; border:1px solid color-mix(in srgb, var(--jev) 35%, transparent); border-radius:999px; background:color-mix(in srgb, var(--jev) 13%, transparent); color:var(--wv-text); font:inherit; cursor:pointer; touch-action:manipulation; }
+.jev-readout-pill:focus-visible { outline:2px solid var(--jev); outline-offset:2px; }
+.jev-readout-dot { width:7px; height:7px; flex:none; border-radius:50%; background:var(--jev); }
+.jev-readout-pill.is-forward .jev-readout-dot { background:#3f9a68; }
+.jev-readout-pill.is-unavailable { border-color:color-mix(in srgb, var(--wv-text) 18%, transparent); background:color-mix(in srgb, var(--wv-text) 6%, transparent); }
+.jev-readout-pill.is-unavailable .jev-readout-dot { background:color-mix(in srgb, var(--wv-text) 40%, transparent); }
+.jev-readout-who { opacity:.7; }
+.jev-readout-pill b { overflow:hidden; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
+.jev-readout-p { font-variant-numeric:tabular-nums; font-weight:600; }
+.jev-readout.is-fresh .jev-readout-pill { animation:jev-readout-fresh 1.4s ease-out; }
+@keyframes jev-readout-fresh { 0% { background:color-mix(in srgb, var(--jev) 45%, transparent); } 100% { background:color-mix(in srgb, var(--jev) 13%, transparent); } }
+@media (prefers-reduced-motion:reduce) { .jev-readout.is-fresh .jev-readout-pill { animation:none; } }
+.jev-readout-panel { display:grid; gap:10px; max-width:560px; max-height:42dvh; margin-top:6px; padding:10px 12px; overflow-y:auto; border:1px solid color-mix(in srgb, var(--jev) 22%, transparent); border-radius:12px; background:var(--wv-card, var(--wv-surface)); overscroll-behavior:contain; }
+.jev-readout-panel[hidden] { display:none; }
+.jev-readout-meta { display:flex; flex-wrap:wrap; gap:4px 10px; margin:0; color:var(--wv-muted, color-mix(in srgb, var(--wv-text) 60%, transparent)); font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
+.jev-readout-desc { margin:0; font-weight:400; font-size:12.5px; line-height:1.45; }
+.jev-readout-desc[hidden] { display:none; }
+.jev-readout-options .jev-readout-desc { margin:2px 0 6px 2px; padding-left:8px; border-left:2px solid color-mix(in srgb, var(--jev) 40%, transparent); }
+.jev-readout-section { display:grid; gap:5px; }
+.jev-readout-section h4 { margin:0; color:var(--wv-muted, color-mix(in srgb, var(--wv-text) 60%, transparent)); font:600 10.5px/1.2 system-ui,sans-serif; text-transform:uppercase; letter-spacing:.06em; }
+.jev-readout-section p { margin:0; font-weight:400; }
+.jev-readout-steer { font-style:italic; }
+.jev-readout-options { display:grid; gap:3px; }
+.jev-readout-option { display:grid; grid-template-columns:minmax(84px,34%) 1fr 38px; gap:8px; align-items:center; width:100%; min-height:26px; padding:2px 4px; border:0; border-radius:6px; background:transparent; color:var(--wv-text); font:inherit; text-align:left; cursor:pointer; }
+.jev-readout-option.is-chosen { background:color-mix(in srgb, var(--jev) 12%, transparent); font-weight:700; }
+.jev-readout-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.jev-readout-bar { position:relative; height:8px; border-radius:0 4px 4px 0; background:color-mix(in srgb, var(--jev) 14%, transparent); }
+.jev-readout-bar i { position:absolute; inset:0 auto 0 0; border-radius:0 4px 4px 0; background:var(--jev); }
+.jev-readout-pct { text-align:right; font-variant-numeric:tabular-nums; }

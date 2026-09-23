@@ -758,6 +758,8 @@ ${MAP_LEARNING_JOURNEY_POLICY}
 
 Follow the learner's own organizing principle. The clarificationConversation is the authority on how this lesson is shaped, not just on what it covers. If the learner settled on a chronological or historical route, order chapters through time and open at the earliest relevant moment. If they settled on a comparative, problem-first, narrative, or applied route, follow that instead. When no shape is expressed, choose the route that best serves their question and motivation; do not impose a first-principles ladder. Never open on a definitions chapter when they asked for a story, a timeline, or a problem. Reserve brief orientation at the start of teaching: put research questions in the first real outcome’s supportNeeds for the setting and prerequisites a newcomer needs. For history, ask where and when, relevant scale and spatial relationships, and what differed from today; for other topics, ask the equivalent concrete situation and necessary background. Ask about causes only when relevant and researchable. Do not turn orientation into a separate assessed outcome unless demonstrating that context is itself part of the learning goal. Introduce further foundations just before they are needed. Preparation may already have elicited a general picture; researched teaching verifies and deepens it. Exposure there never proves mastery. Include relevant everyday conditions in the first real outcome's supportNeeds, even when the learner mainly asks why something happened. Keep these as concise research questions, not a mandatory separate history chapter. Do not build the route around an unverified motive: ask research to establish the uses and competing explanations before teaching why a feature existed.
 
+Use the lessonBrief when the packet has one (LES-253). It is the agreed summary of the clarification: focus is the question the route must answer; why shapes the examples and the bridges between chapters; startingPoint says where the first outcome begins; finishLine is what the final chapter and the teach-back must let the learner do. kind sets the route shape: do = worked example, guided try, correction, harder variation, ending with a fresh problem solved unaided; explain = everyday foundation, cause chain, prediction of a new case; story = setting, turning points, consequences, link to today; weigh = stakes, competing perspectives, evidence, and the learner's own position against the strongest counter-view; tour = a few surprising, memorable stops chosen for breadth. secondKind may shape the final chapter. Fields listed in defaults were not stated by the learner; never present them as the learner's wishes. Where the clarificationConversation is more specific than the brief, the conversation wins.
+
 Carry the learner's actual words. Before returning, cross-check the complete frozenScope, every interests entry, and the full clarificationConversation against the route. Every requested subject or boundary must remain represented; a short time target may make coverage concise but never silently removes requested scope.
 
 Plan the missing foundation explicitly. For each outcome, supportNeeds must include the everyday context and causal prerequisites a beginner needs before reasoning about it: what people could observe, what explanations or tools were available, or the ordinary physical starting situation. Historical beliefs need the contemporary explanatory context, not only dates and descriptions. Teach and check the relationship, not a list of names or dates. Keep successEvidence focused on the actual learning outcome so a correct explanation does not fail on incidental detail.
@@ -9494,11 +9496,12 @@ function pipelineMapInput(artifact = selectedPipelineArtifact()) {
 function pipelineMapPacket(artifact) {
   return JSON.stringify({
     artifactType: "clarification_scope",
-    packetVersion: "clarification-map-planning-v1",
+    packetVersion: artifact.lessonBrief ? "clarification-map-planning-v2" : "clarification-map-planning-v1",
     runId: artifact.runId,
     topic: artifact.topic,
     frozenScope: artifact.scopeSummary,
     interests: artifact.scopeItems,
+    lessonBrief: artifact.lessonBrief && typeof artifact.lessonBrief === "object" ? artifact.lessonBrief : null,
     scopePreferences: normalizeClarificationPreferences(artifact.scopePreferences),
     outcomeTarget: lessonMapOutcomeTarget(artifact.scopePreferences),
     scopePreferenceAuthority: "Advisory learner-stated planning preferences only. Do not promise exact duration, remove necessary foundations, or treat them as mastery.",
@@ -15576,7 +15579,7 @@ async function applyLiveJourney(study){
 }
 function syncLiveLesson(){
  const live=window.WorldviewLiveConversation;if(!live||!q('mock-learner-composer'))return;
- if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),speakerButton:q('mock-learner-mode'),onTextMode:()=>void chooseLiveConversationMode('text'),onStudy:applyLiveJourney,onLearnerTopic:applyLiveLearnerTopic,onCheckerUsage:recordLiveCheckerCost,onConnectionState:handleLearnerLiveEntryState,
+ if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),speakerButton:q('mock-learner-mode'),onTextMode:()=>void chooseLiveConversationMode('text'),onStudy:applyLiveJourney,onJev:readout=>window.WorldviewJevReadout?.update(readout,{enabled:labState.verifiedAdmin===true}),onLearnerTopic:applyLiveLearnerTopic,onCheckerUsage:recordLiveCheckerCost,onConnectionState:handleLearnerLiveEntryState,
   requestForCurrentAccount:liveTrialRequest,
   onTranscript:()=>renderMockLearnerShell(),
   releaseMedia:()=>{stopClarificationCaptureForModeChange();stopClarificationSpeech();stopPipelineExtractionVoice();if(typeof releaseClarificationTopicCapture==='function')releaseClarificationTopicCapture();}

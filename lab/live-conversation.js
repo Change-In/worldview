@@ -364,7 +364,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
    if(token!==loadToken||context.lineage!==expected)return;
    prepareTiming={start:Math.round(began),end:Math.round(performance.now())};
    if(!ready.journeyMode)throw Error('Natural Live lessons are awaiting the server update. Standard voice remains available.');
-   study=result.study;fragments=study.fragments.slice();ack=fragments.length;request=captured;scope=expected;draftKey='worldview-live-draft-v2:'+expected;
+   study=result.study;host.onJev?.(study.jev||null);fragments=study.fragments.slice();ack=fragments.length;request=captured;scope=expected;draftKey='worldview-live-draft-v2:'+expected;
    const imported=fragments.filter(f=>f.id.startsWith('import:')),earlier=context.priorHistory||[];
    let at=-1;for(let i=earlier.length-imported.length;imported.length&&i>=0;i--){if(imported.every((f,j)=>earlier[i+j]?.role===f.role&&earlier[i+j]?.content===f.delta)){at=i;break;}}
    prefix=at>0?earlier.slice(0,at).map(t=>({role:t.role,content:t.content})):[];
@@ -565,6 +565,9 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
    const result=needsCheck?await captured({action:'journey_check',studyId:id}):prepared;
    host.onCheckerUsage?.(s.costOwner,s.costRunId,result.checkerUsage);if(scope!==expected||session!==s||s.closing)return;
    study={...result.study,fragments};
+   // LES-257: the owner's live Jev readout follows every check, including a
+   // check that saved nothing because the learner kept talking.
+   host.onJev?.(study.jev||null);
    const advanced=studyStep(study)!==startedStep;
    // The saved phase is what the lesson has actually reached, so the roadmap and
    // the visible move to the next outcome follow it straight away. Only the
