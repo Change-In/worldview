@@ -1687,7 +1687,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .theme-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px}.theme-choices button{min-height:48px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--paper);color:var(--ink);font:600 14px system-ui;cursor:pointer}
   .theme-choices button[aria-pressed="true"]{border:2px solid var(--accent);background:var(--accent-100);color:var(--accent-700)}.theme-choices button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
   #set-theme[hidden]{display:none!important}.lesson-card .card-cat{display:none}
-  .lesson-options-button{left:8px;top:8px;width:44px;height:44px;padding:0}
+  .lesson-options-button{left:8px;top:8px;width:44px;height:44px;padding:0;border:0!important;background:transparent!important;box-shadow:none!important;color:var(--ink-soft)!important;font-size:18px}
   #home-archive-entry{margin-bottom:calc(env(safe-area-inset-bottom) + 60px)}
 </style>
 <link rel="stylesheet" href="models.css?v=2.1.37">
@@ -2257,7 +2257,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.75 · Sep 23";
+const BUILD = "v2.1.76 · Sep 23";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2265,6 +2265,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.76",date:"Sep 23",changes:["The ••• on lesson cards is now just three dots, with no circle around it."]},
   {tag:"v2.1.75",date:"Sep 23",changes:["Lesson cards are cleaner: the Voice, Text and Archive buttons are gone. Tap a card to choose Voice or Text as before.","A ••• button at the top left of every lesson card lets you organize it into folders, archive it, or delete it.","Organizing opens a new folder view: your lessons sit at the bottom (swipe between them) and your folders arc above. Tap a folder to file the lesson in the middle; tap again to take it out. With many folders, drag sideways to turn the arc.","Opening a folder now shows the saved lessons you filed there."]},
   {tag:"v2.1.74",date:"Sep 22",changes:["A Start my lesson button in voice lessons. One tap and the lesson is prepared, then begins by itself as soon as its first part is researched, so you are no longer stuck in the opening questions.","While your lesson is being prepared, tap the line under the progress bar to watch your lesson map being built.","A lesson no longer circles one part. A short yes to \"shall we move on?\" now counts, and after several tries the lesson moves on by itself and comes back to it in the final teach-back.","The quiet-minute pause keeps the line open on Gemini voice: just start talking and it carries on, with your first words kept. GPT voice asks you to tap Resume voice instead of promising something it cannot do.","After a pause, voice says welcome back and repeats its own question once, instead of starting over.","Copied transcripts show the time of each message.","Your thinking: an AI reading of the ideas you put forward, your strengths, questions to explore next, and any recognition you earned, with the reason. Find it in the Copy menu and on the lesson card. Earned tags appear on your profile.","Approved testers can use live voice lessons.","Voice transcription is set to English, so short replies are less often shown as words from other languages."]},
   {tag:"v2.1.73",date:"Sep 22",changes:["A finished lesson ends with a lesson card: what you explained for each part, in your own words, anything still open, and the sources. Copy it, or open it again from Copy."]},
