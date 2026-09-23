@@ -16,6 +16,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="lesson-entry-popup.css?v=2.1.38">
 <script src="lesson-entry-popup.js?v=2.1.71"></script>
+<link rel="stylesheet" href="lesson-folders.css?v=2.1.75">
+<script src="lesson-folders.js?v=2.1.75"></script>
 <link rel="apple-touch-icon" href="icon.png">
 <style>
   :root {
@@ -1169,13 +1171,6 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .quiz-button[hidden] { display:none; }
   .quiz-button:active { transform:scale(.95); background:rgba(189,90,48,.12); }
   .card-path-button { position:absolute;right:8px;top:8px;width:44px;height:44px;z-index:3;background:color-mix(in srgb,var(--card) 88%,transparent);touch-action:manipulation; }
-  /* Saved lesson cards start Voice or Text directly and move to Archive in one tap. */
-  .card-mode-actions { position:absolute;left:12px;right:12px;bottom:12px;z-index:3;display:flex;gap:8px;align-items:center; }
-  .card-mode-button { flex:1;min-height:40px;padding:0 10px;border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);border-radius:999px;background:color-mix(in srgb,var(--card) 88%,transparent);color:var(--ink);font:600 max(12px,calc(var(--cardW,262px) * .05))/1 system-ui,sans-serif;cursor:pointer;touch-action:manipulation; }
-  .card-mode-button:active { transform:scale(.97);background:color-mix(in srgb,var(--accent) 14%,var(--card)); }
-  .card-archive-button { flex:none;display:grid;place-items:center;width:40px;height:40px;padding:0;border:1px solid color-mix(in srgb,var(--ink) 18%,transparent);border-radius:50%;background:transparent;color:var(--ink-soft);cursor:pointer;touch-action:manipulation; }
-  .card-archive-button svg { width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round; }
-  .card-mode-button:focus-visible,.card-archive-button:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
   .card .card-cost[hidden] { display:none; }
   .card-path-button svg { width:20px;height:20px; }
   .card.lesson-card .lesson-mastery-dot { right:59px; top:22px; }
@@ -2262,7 +2257,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.74 · Sep 22";
+const BUILD = "v2.1.75 · Sep 23";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2270,6 +2265,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.75",date:"Sep 23",changes:["Lesson cards are cleaner: the Voice, Text and Archive buttons are gone. Tap a card to choose Voice or Text as before.","A ••• button at the top left of every lesson card lets you organize it into folders, archive it, or delete it.","Organizing opens a new folder view: your lessons sit at the bottom (swipe between them) and your folders arc above. Tap a folder to file the lesson in the middle; tap again to take it out. With many folders, drag sideways to turn the arc.","Opening a folder now shows the saved lessons you filed there."]},
   {tag:"v2.1.74",date:"Sep 22",changes:["A Start my lesson button in voice lessons. One tap and the lesson is prepared, then begins by itself as soon as its first part is researched, so you are no longer stuck in the opening questions.","While your lesson is being prepared, tap the line under the progress bar to watch your lesson map being built.","A lesson no longer circles one part. A short yes to \"shall we move on?\" now counts, and after several tries the lesson moves on by itself and comes back to it in the final teach-back.","The quiet-minute pause keeps the line open on Gemini voice: just start talking and it carries on, with your first words kept. GPT voice asks you to tap Resume voice instead of promising something it cannot do.","After a pause, voice says welcome back and repeats its own question once, instead of starting over.","Copied transcripts show the time of each message.","Your thinking: an AI reading of the ideas you put forward, your strengths, questions to explore next, and any recognition you earned, with the reason. Find it in the Copy menu and on the lesson card. Earned tags appear on your profile.","Approved testers can use live voice lessons.","Voice transcription is set to English, so short replies are less often shown as words from other languages."]},
   {tag:"v2.1.73",date:"Sep 22",changes:["A finished lesson ends with a lesson card: what you explained for each part, in your own words, anything still open, and the sources. Copy it, or open it again from Copy."]},
   {tag:"v2.1.72",date:"Sep 22",changes:["New visitors see what Worldview is before the sign-in box: three steps, a free early-access note, and one button to start.","Privacy and Terms pages, in plain language, linked from the sign-in screen. They are early-access versions."]},
@@ -6515,7 +6511,7 @@ function renderHome() {
     const optionsButton = card.querySelector(".lesson-options-button");
     optionsButton.addEventListener("pointerdown",event => event.stopPropagation());
     optionsButton.addEventListener("pointerup",event => event.stopPropagation());
-    optionsButton.onclick = event => { event.stopPropagation();openCategoryOrganizer(l.id,"explore"); };
+    optionsButton.onclick = event => { event.stopPropagation();window.WorldviewLessonMenu.open({kind:"lesson",id:l.id,title:l.title || l.topic || "Lesson"}); };
     const pathButton = card.querySelector(".card-path-button");
     pathButton.addEventListener("pointerdown", event => { wheel.methodInteracting = true; event.stopPropagation(); });
     pathButton.addEventListener("pointerup", event => { event.stopPropagation(); setTimeout(() => { wheel.methodInteracting = false; }, 0); });
@@ -6526,10 +6522,10 @@ function renderHome() {
     wheel.cards.push(card); wheel.ids.push(l.id);
   });
 
-  if (insidePersonalCategory && !visibleLessons.length) {
+  if (insidePersonalCategory && !visibleLessons.length && !wheel.cards.some(card => card.dataset.kind === "learner-run")) {
     const empty = document.createElement("div");
     empty.className = "card custom-category-card";
-    empty.innerHTML = `<div class="card-cat">collection</div><div class="card-title serif">Nothing filed here yet</div><div class="custom-category-count">Return to All lessons and open a lesson’s options to add it.</div>`;
+    empty.innerHTML = `<div class="card-cat">collection</div><div class="card-title serif">Nothing filed here yet</div><div class="custom-category-count">Return to All lessons and tap a lesson’s ••• to add it.</div>`;
     c.appendChild(empty);
     wheel.cards.push(empty); wheel.ids.push(null);
   }
@@ -6702,9 +6698,9 @@ function pathControlAtPoint(x, y) {
     const card = wheel.cards[index];
     if (!card) return;
     if (!wheel.ids[index] || card.style.pointerEvents === "none") return;
-    // Saved lesson cards also carry Voice, Text and Archive; the carousel owns
+    // Saved lesson cards also carry the ••• options button; the carousel owns
     // the pointer, so those taps are resolved here by position like the map.
-    for (const button of card.querySelectorAll(".card-path-button,.card-mode-button,.card-archive-button")) {
+    for (const button of card.querySelectorAll(".card-path-button,.lesson-options-button")) {
       const rect = button.getBoundingClientRect();
       if (!rect.width || x < rect.left - hitSlop || x > rect.right + hitSlop || y < rect.top - hitSlop || y > rect.bottom + hitSlop) continue;
       const z = parseInt(card.style.zIndex || "0", 10);
@@ -8490,8 +8486,10 @@ function homeLearnerRuns({ all = false } = {}) {
   catch (_) { return []; }
 }
 function renderHomeLearnerRuns(carousel) {
-  if (wheel.layerCategory) return;
+  const layer = wheel.layerCategory;
+  if (layer && !layer.startsWith("custom:")) return;
   for (const run of homeLearnerRuns()) {
+    if (layer && !window.WorldviewLessonMenu?.runFolderIds(run.runId).includes(layer.slice(7))) continue;
     const card = document.createElement("div");
     card.className = "card lesson-card";
     card.dataset.id = "learner:"+run.runId;
@@ -8500,22 +8498,12 @@ function renderHomeLearnerRuns(carousel) {
     card.setAttribute("aria-label",`${run.title}. ${stage}. Tap to continue.`);
     card.innerHTML = `<div class="card-cat">${esc(stage)}</div><div class="card-cost" data-run-cost="${esc(run.runId)}"></div><div class="card-title serif ${cardTitleSizeClass(run.title)}">${cardTitleHtml(run.title)}</div>`;
     paintHomeLessonUsage(card.querySelector(".card-cost"),run.runId);
-    /* Voice and Text start the lesson directly; tapping the card still offers the choice. */
-    const actions = document.createElement("div");actions.className = "card-mode-actions";
-    for (const [mode,label] of [["voice","Voice"],["text","Text"]]) {
-      const button = document.createElement("button");button.type = "button";button.className = "card-mode-button";button.textContent = label;
-      button.setAttribute("aria-label",label + " lesson: " + run.title);
-      guardCardControl(button);
-      button.onclick = event => { event.stopPropagation();openHomeLearnerRun({runId:run.runId,entryMode:mode}); };
-      actions.appendChild(button);
-    }
-    const archive = document.createElement("button");archive.type = "button";archive.className = "card-archive-button";
-    archive.setAttribute("aria-label","Move " + run.title + " to Archive");archive.title = "Archive";
-    archive.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M6 7v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7M9 11h6M5 4h14v3H5z"/></svg>';
-    guardCardControl(archive);
-    archive.onclick = event => { event.stopPropagation();archiveHomeLearnerRun(run); };
-    actions.appendChild(archive);
-    card.appendChild(actions);
+    /* Tapping the card offers Voice or Text; ••• holds folders, Archive and Delete. */
+    const options = document.createElement("button");options.type = "button";options.className = "lesson-options-button";
+    options.setAttribute("aria-label","Options for " + run.title);options.title = "Lesson options";options.textContent = "•••";
+    guardCardControl(options);
+    options.onclick = event => { event.stopPropagation();window.WorldviewLessonMenu.open({kind:"run",id:run.runId,title:run.title,run}); };
+    card.appendChild(options);
     const mapButton = document.createElement("button");
     mapButton.type = "button";
     mapButton.className = "lesson-path-button card-path-button";
@@ -11797,7 +11785,8 @@ function renderLibraryBrowser(lesson) {
   host.querySelectorAll('[data-archive-run-restore]').forEach(button => {button.onclick=()=>{if(setHomeLearnerRunRemoval(button.dataset.archiveRunRestore,"kept")){renderCategoryOrganizer();renderHome();$("library-back").focus();}};});
 }
 function customCategoryCount(categoryId,section) {
-  return state.lessons.filter(lesson => {
+  const runs = section === "upload" ? 0 : (window.WorldviewLessonMenu?.runCountInFolder(categoryId) || 0);
+  return runs + state.lessons.filter(lesson => {
     if (section === "upload" ? !isSourceLesson(lesson) : isSourceLesson(lesson)) return false;
     return !lessonIsArchived(lesson) && (lesson.customCategoryIds || []).includes(categoryId);
   }).length;
