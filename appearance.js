@@ -21,7 +21,10 @@
         : '<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>';
     }
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = dark ? '#241f1a' : '#f8f4ec';
+    // The lesson page's header is the card colour; the strip behind the phone's
+    // clock must match it, or a band of a different colour shows at the top.
+    const card = document.documentElement.dataset.statusTone === 'card';
+    if (meta) meta.content = dark ? (card ? '#332c25' : '#241f1a') : (card ? '#fffdf8' : '#f8f4ec');
   }
   function set(value) {
     if (!valid(value)) return;

@@ -46,3 +46,17 @@
 .mock-learner-map-cost:empty { display:none; }
 .mock-learner-map-cost .live-conversation-cost { display:flex; gap:6px 14px; justify-content:flex-end; margin:12px 0 0; color:var(--wv-muted); font:500 12px/1.4 system-ui,sans-serif; }
 .mock-learner-map-cost .live-conversation-cost[hidden] { display:none; }
+
+/* v3.1.1: once the chapter line shows, the progress bar sits beneath it as a
+   divider between the chapter text and the conversation. */
+.mock-learner-shell:has(> #mock-learner-progress:not([hidden])) > .mock-learner-header { order:-2; }
+.mock-learner-shell:has(> #mock-learner-progress:not([hidden])) > #mock-learner-progress { order:-1; }
+.mock-learner-shell:has(> #mock-learner-progress:not([hidden])) > .mock-learner-journey { padding:0 20px 8px; border-bottom:1px solid color-mix(in srgb, var(--wv-text) 8%, transparent); }
+.mock-learner-shell:has(> #mock-learner-progress:not([hidden])) .mock-chapter-menu > summary { padding-top:8px; padding-bottom:6px; }
+
+/* Play takes the pause button's place when voice is paused; the three
+   controls stay centred. */
+.live-conversation .live-conversation-actions { justify-content:center; }
+.live-conversation .live-icon-button.is-resume { color:var(--wv-accent); border-color:color-mix(in srgb, var(--wv-accent) 55%, transparent); }
+.live-conversation .live-icon-button.is-resume svg { fill:currentColor; }
+.live-conversation .live-icon-button:disabled { opacity:.45; }

@@ -29,6 +29,7 @@ window.WorldviewLiveConversation=(()=>{
   const ICONS={
    mic:'<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/><path class="live-icon-slash" d="m4 4 16 16"/>',
    pause:'<rect x="7" y="5" width="3.5" height="14" rx="1.2"/><rect x="13.5" y="5" width="3.5" height="14" rx="1.2"/>',
+   play:'<path d="M8 5.5v13l10.5-6.5z"/>',
    transcript:'<path d="M5 6h14M5 10h14M5 14h10M5 18h7"/>'
   };
   const iconButton=(name,label)=>{const b=element('button');b.className='live-icon-button';b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+ICONS[name]+'</svg>';b.setAttribute('aria-label',label);b.title=label;return b;};
@@ -50,7 +51,7 @@ window.WorldviewLiveConversation=(()=>{
   output=window.WorldviewLiveAudioOutput?.create({audio,button:adapter.speakerButton,container:root});
   enableAudio.onclick=()=>{const s=session;if(!s||s.closing)return;const version=s.outputVersion;void output?.apply({user:true});void resumeAudio(s).then(()=>{if(session===s&&!s.closing&&s.outputVersion===version){enableAudio.hidden=true;message('Listening');}}).catch(()=>{if(session===s&&!s.closing&&s.outputVersion===version)message('Audio is blocked. Check the browser’s audio permission.');});};
   captions.onclick=()=>{showCaptions=!showCaptions;paint();};
-  start.onclick=()=>{if(session?.softPaused){softResume(session);return;}openingPending=true;paused=false;startError=false;autoAttempts=0;void(study?begin():prepare());};end.onclick=()=>{paused=true;void stop('Voice paused.',{pause:true});};retry.onclick=()=>void flush();
+  start.onclick=()=>{if(session?.softPaused){softResume(session);return;}openingPending=true;paused=false;startError=false;autoAttempts=0;void(study?begin():prepare());};end.onclick=()=>{if(session?.softPaused){softResume(session);return;}if(!session){start.onclick();return;}paused=true;void stop('Voice paused.',{pause:true});};retry.onclick=()=>void flush();
   mute.onclick=()=>{const s=session;if(!s?.ready||s.closing)return;if(s.softPaused){s.softPaused=false;s.lastActivityAt=performance.now();}s.muted=!s.muted;s.mic?.getAudioTracks().forEach(t=>t.enabled=!s.muted);s.gemini?.mute(s.muted);message(s.muted?'Mic muted':'Listening');paint();};
   document.addEventListener('visibilitychange',()=>{
    if(document.hidden){
@@ -158,14 +159,20 @@ window.WorldviewLiveConversation=(()=>{
  /* "Paused" is only true when the Resume button is showing: with no
     session, or a Gemini session holding the microphone. A new connection
     that is live again says Listening, whatever an earlier pause left behind. */
- function restingStatus(){if(session?.softPaused)return 'Paused. Just start talking to carry on.';if(session&&!session.closing)return session.muted?'Mic muted':'Listening';return paused?'Paused. Tap Resume voice to carry on.':'Listening';}
+ function restingStatus(){if(session?.softPaused)return 'Paused. Just start talking, or tap play.';if(session&&!session.closing)return session.muted?'Mic muted':'Listening';return paused?'Paused. Tap play to carry on.':'Listening';}
+ const PAUSE_ICON='<rect x="7" y="5" width="3.5" height="14" rx="1.2"/><rect x="13.5" y="5" width="3.5" height="14" rx="1.2"/>',PLAY_ICON='<path d="M8 5.5v13l10.5-6.5z"/>';
  function paint(){
-  if(!ui)return;ui.root.hidden=!enabled;ui.start.hidden=session?!session.softPaused:(!paused&&!startError);ui.start.disabled=!session?.softPaused&&(loading||!!session||!context?.ready||document.hidden);
+  if(!ui)return;ui.root.hidden=!enabled;
+  /* Mute, pause and the transcript stay as three centred buttons. When voice
+     is paused or stopped, pause becomes play, and play resumes or retries. */
+  const resumable=!!session?.softPaused||(!session&&(paused||startError));
+  ui.end.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+(resumable?PLAY_ICON:PAUSE_ICON)+'</svg>';const endLabel=resumable?(startError&&!paused?'Try microphone again':'Resume voice'):'Pause voice';ui.end.setAttribute('aria-label',endLabel);ui.end.title=endLabel;ui.end.classList.toggle('is-resume',resumable);
+  ui.start.hidden=true;ui.start.disabled=!session?.softPaused&&(loading||!!session||!context?.ready||document.hidden);
   if(enabled)output?.paint();
   ui.start.textContent=paused||session?.softPaused?'Resume voice':'Try microphone again';
   ui.rate.hidden=true;ui.note.hidden=!context?.showCost;
-  ui.captions.hidden=!session?.ready;const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.setAttribute('aria-label',capsLabel);ui.captions.title=capsLabel;ui.captions.setAttribute('aria-pressed',String(showCaptions));
-  ui.end.hidden=!session;ui.mute.hidden=!session?.ready;const muteLabel=session?.muted?'Unmute mic':'Mute mic';ui.mute.setAttribute('aria-label',muteLabel);ui.mute.title=muteLabel;ui.mute.classList.toggle('is-muted',!!session?.muted);ui.mute.setAttribute('aria-pressed',String(!!session?.muted));
+const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.setAttribute('aria-label',capsLabel);ui.captions.title=capsLabel;ui.captions.setAttribute('aria-pressed',String(showCaptions));
+  ui.end.hidden=false;ui.end.disabled=!session&&!resumable;ui.mute.hidden=false;ui.mute.disabled=!session?.ready||!!session?.softPaused;ui.captions.hidden=false;const muteLabel=session?.muted?'Unmute mic':'Mute mic';ui.mute.setAttribute('aria-label',muteLabel);ui.mute.title=muteLabel;ui.mute.classList.toggle('is-muted',!!session?.muted);ui.mute.setAttribute('aria-pressed',String(!!session?.muted));
   ui.retry.hidden=true;ui.retry.disabled=!!saving;
   if(saveError)message(saveError);
   const count=Object.keys(study?.assessment||{}).length,total=study?.packet?.roadmap?.length||0;const phaseName={clarification:'Your direction',extraction:'Your starting point',lesson:'Lesson',quiz:'Final teach-back',complete:'Complete'}[study?.phase]||'Lesson';
@@ -573,7 +580,8 @@ window.WorldviewLiveConversation=(()=>{
     // Tutor questions generated before receiving this accepted state belong to
     // the old outcome, including tails arriving while a newer comment is saved.
     // New learner speech below still cancels the automatic spoken opening.
-    if(['lesson','quiz'].includes(startedPhase)){s.retiredQuestionSeq=fragments.at(-1)?.seq||0;s.retiringQuestionStep=studyStep(study);}
+    // An accepted outcome no longer retires the tutor's open question (v3.1.1):
+    // opening the next part on top of it asked two questions in a row.
    }
    // A new phase gets a fresh connection whose startup carries that phase,
    // instead of a quiet note appended to a conversation that began in an
@@ -605,13 +613,16 @@ window.WorldviewLiveConversation=(()=>{
   const step=studyStep(study);if(s.refreshStep===step)return;
   s.refreshStep=step;s.refreshSince=performance.now();s.deferredStudy=false;s.pendingOpeningStep=null;clearTimeout(s.openingTimer);
   announceTransition(s);
+  if(study?.phase==='lesson'&&!study.complete)inject(s,'PREPARATION COMPLETE. Do not speak because of this note. When the learner finishes their current answer, respond to it in one short sentence and ask nothing more; the lesson starts right after.');
   if(s.model==='gemini-3.8-live')void prepareNext(s);
   clearInterval(s.refreshTimer);
   s.refreshTimer=setInterval(()=>{
    if(session!==s||s.closing){clearInterval(s.refreshTimer);return;}
    const now=performance.now(),quiet=now-Math.max(s.lastUserTranscriptAt||0,s.lastAssistantAt||0);
    const prepared=s.model!=='gemini-3.8-live'||!!s.nextTransport||s.nextFailed||now-s.refreshSince>REFRESH_WAIT_MS;
-   if(s.speaking||s.checking||quiet<1200||!prepared)return;
+   // The learner answers the tutor's open question before the next part starts.
+   const waitingForAnswer=protectedQuestion(s)&&now-s.refreshSince<90000;
+   if(s.speaking||s.checking||quiet<1500||!prepared||waitingForAnswer)return;
    clearInterval(s.refreshTimer);void refresh(s);
   },300);
  }
@@ -663,7 +674,7 @@ window.WorldviewLiveConversation=(()=>{
  function idleCheck(s){
   recordTalk(s);
   if(session!==s||s.closing||!s.ready||document.hidden)return;
-  if(s.softPaused){if(performance.now()-s.softPausedAt>IDLE_LISTEN_MS)void stop('Voice paused. Tap Resume voice when you are ready.',{pause:true});return;}
+  if(s.softPaused){if(performance.now()-s.softPausedAt>IDLE_LISTEN_MS)void stop('Voice paused. Tap play when you are ready.',{pause:true});return;}
   if(s.speaking||s.checking||s.refreshStep===studyStep(study))return;
   if(performance.now()-(s.lastActivityAt||0)<IDLE_PAUSE_MS)return;
   void idlePause(s);
@@ -674,9 +685,9 @@ window.WorldviewLiveConversation=(()=>{
   if(s.gemini&&!s.muted){
    s.softPaused=true;s.softPausedAt=performance.now();s.levelFloor=[];s.loudSince=0;
    s.gemini.mute(true,{hold:true});
-   message('Paused after a quiet minute. Just start talking to carry on.');paint();return;
+   message('Paused after a quiet minute. Just start talking, or tap play.');paint();return;
   }
-  await stop('Paused after a quiet minute. Tap Resume voice to carry on.',{pause:true});
+  await stop('Paused after a quiet minute. Tap play to carry on.',{pause:true});
  }
  function softResume(s){
   if(session!==s||!s.softPaused)return;
@@ -805,7 +816,7 @@ window.WorldviewLiveConversation=(()=>{
      result=await created;if(!result||session!==s||s.closing)return;
      // A connection has to open within a minute of being authorized, and a
      // long microphone prompt can outlast that.
-     if(Date.now()-s.serverAt>45000)throw Error('The microphone took a while to open. Tap Try microphone again.');
+     if(Date.now()-s.serverAt>45000)throw Error('The microphone took a while to open. Tap play to try again.');
     }
     if(session!==s||s.closing){void s.request({action:'close',requestId:s.id}).catch(()=>{});return;}
     await window.WorldviewGeminiLive.connect({transport:result.transport,mic,outputAudio:ui.audio,initiate:s.initiate,openingText:s.openingText,onInputLevel:level=>inputLevel(s,level),isCurrent:()=>session===s&&!s.closing,onTransport:value=>{s.gemini=value;output?.attach({applyRoute:loud=>value.applyRoute?value.applyRoute(loud):'unavailable'});},onEvent:e=>event(s,e),onUsage:metadata=>recordVoiceCost(s,{metadata,usageId:s.usageTurn||0}),onStatus:text=>{if(session===s){message(text);if(text.includes('Tap Enable audio.'))ui.enableAudio.hidden=false;}}});
@@ -823,7 +834,7 @@ window.WorldviewLiveConversation=(()=>{
    s.costConfirmed=true;recordVoiceCost(s);
    if(session!==s||s.closing){void s.request({action:'close',requestId:s.id}).catch(()=>{});return;}
    await peer.setRemoteDescription({type:'answer',sdp:result.transport.sdp});
-  }catch(error){if(session===s){startError=true;void stop(error.name==='NotAllowedError'?'Voice stopped. Tap Try microphone again to carry on.':s.model==='gemini-3.8-live'?(error.message||'Gemini Live could not connect. Choose GPT Live or try again.'):'The microphone could not connect. Try again.');}}
+  }catch(error){if(session===s){startError=true;void stop(error.name==='NotAllowedError'?'Voice stopped. Tap play to carry on.':s.model==='gemini-3.8-live'?(error.message||'Gemini Live could not connect. Choose GPT Live or try again.'):'The microphone could not connect. Try again.');}}
  }
  async function stop(reason='Voice paused.',options={}){
   if(options.pause)paused=true;
