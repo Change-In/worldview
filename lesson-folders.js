@@ -1,6 +1,6 @@
 /* Lesson card "•••" menu and the folder arc (NAV-132).
-   The ••• button on every lesson card offers Organize into folders, Archive and
-   Delete. Organizing opens a full-screen arc: the lessons sit in a swipeable
+   The ••• button on every lesson card offers Rename, Organize into folders,
+   Archive and Delete. Organizing opens a full-screen arc: the lessons sit in a swipeable
    strip at the bottom, the folders hang in an arc above, and tapping a folder
    files (or unfiles) the centred lesson. With more than seven folders the arc
    turns like a dial so every name stays readable.
@@ -24,6 +24,25 @@
     if (include) ids.add(categoryId); else ids.delete(categoryId);
     if (ids.size) map[runId] = [...ids]; else delete map[runId];
     try { localStorage.setItem(RUN_FOLDERS_PREFIX + cloudAccount.id, JSON.stringify(map)); return true; }
+    catch (_) { return false; }
+  }
+  /* Renames of saved lessons, kept on this device beside the run list. */
+  const RUN_TITLES_PREFIX = "worldview-learner-run-titles-v1:";
+  function runTitles() {
+    if (!cloudAccount?.id) return {};
+    try { const value = JSON.parse(localStorage.getItem(RUN_TITLES_PREFIX + cloudAccount.id) || "{}"); return value && typeof value === "object" && !Array.isArray(value) ? value : {}; }
+    catch (_) { return {}; }
+  }
+  function renameItem(item, title) {
+    if (item.kind === "lesson") {
+      if (!guardAccountMutation("rename this lesson")) return false;
+      const lesson = getLesson(item.id); if (!lesson) return false;
+      lesson.title = title; lesson.updatedAt = Date.now();
+      return save() !== false;
+    }
+    if (!cloudAccount?.id) return false;
+    const map = runTitles(); map[item.id] = title;
+    try { localStorage.setItem(RUN_TITLES_PREFIX + cloudAccount.id, JSON.stringify(map)); return true; }
     catch (_) { return false; }
   }
   function runCountInFolder(categoryId) {
@@ -60,6 +79,22 @@
     sheet.setAttribute("role", "dialog"); sheet.setAttribute("aria-modal", "true"); sheet.setAttribute("aria-label", "Lesson options");
     sheet.append(el("div", "lf-menu-title", item.title));
     const action = (label, fn, cls) => { const b = el("button", "lf-menu-row" + (cls ? " " + cls : ""), label); b.type = "button"; b.onclick = fn; sheet.append(b); return b; };
+    action("Rename", () => {
+      sheet.innerHTML = "";
+      const form = el("form", "lf-rename");
+      const input = el("input"); input.value = item.title; input.maxLength = 120; input.setAttribute("aria-label", "Lesson title");
+      const saveBtn = el("button", "lf-menu-row", "Save"); saveBtn.type = "submit";
+      const cancel = el("button", "lf-menu-row quiet", "Cancel"); cancel.type = "button"; cancel.onclick = closeMenu;
+      form.append(el("div", "lf-menu-title", "Rename lesson"), input, saveBtn, cancel);
+      form.onsubmit = event => {
+        event.preventDefault();
+        const title = input.value.replace(/\s+/g, " ").trim();
+        if (!title || title === item.title) { closeMenu(); return; }
+        if (!renameItem(item, title)) { toast("This device could not save that change. Try again.", 4000); return; }
+        closeMenu(); renderHome(); toast("Renamed.");
+      };
+      sheet.append(form); input.focus(); input.select();
+    });
     action("Organize into folders", () => { closeMenu(); openArc(item); });
     action("Archive", () => {
       closeMenu();
@@ -248,5 +283,5 @@
     requestAnimationFrame(settle); // again once fonts and sizes have settled
   }
 
-  window.WorldviewLessonMenu = { open: openMenu, openArc, runFolderIds, runCountInFolder };
+  window.WorldviewLessonMenu = { open: openMenu, openArc, runFolderIds, runCountInFolder, runTitles };
 })();

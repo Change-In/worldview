@@ -30,3 +30,6 @@
 .lf-arc-card{flex:none;width:var(--w);aspect-ratio:1/.95;scroll-snap-align:center;display:grid;place-items:center;padding:14px;border:1px solid var(--line);border-radius:var(--radius,18px);background:var(--card);color:var(--ink);box-shadow:var(--shadow-sm);font:600 17px/1.25 Georgia,serif;text-align:center;overflow-wrap:anywhere;cursor:pointer;transform-origin:center bottom;transition:transform .08s linear}
 .lf-arc-caption{min-height:2.6em;margin:0;padding:0 24px;text-align:center;color:var(--ink-soft);font:14px/1.3 system-ui,sans-serif}
 @media(prefers-reduced-motion:reduce){.lf-arc-chip.pop{animation:none}.lf-arc-card{transition:none}}
+.lf-rename{display:flex;flex-direction:column;gap:4px}
+.lf-rename input{min-height:48px;margin:0 4px 6px;padding:0 14px;border:1px solid var(--line);border-radius:12px;background:var(--paper);color:var(--ink);font:17px system-ui,sans-serif}
+.lf-rename .lf-menu-row:not(.quiet){color:var(--accent);font-weight:600}

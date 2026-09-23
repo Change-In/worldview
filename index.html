@@ -16,8 +16,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="lesson-entry-popup.css?v=2.1.38">
 <script src="lesson-entry-popup.js?v=2.1.71"></script>
-<link rel="stylesheet" href="lesson-folders.css?v=2.1.75">
-<script src="lesson-folders.js?v=2.1.75"></script>
+<link rel="stylesheet" href="lesson-folders.css?v=2.1.77">
+<script src="lesson-folders.js?v=2.1.77"></script>
 <link rel="apple-touch-icon" href="icon.png">
 <style>
   :root {
@@ -2257,7 +2257,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v2.1.76 · Sep 23";
+const BUILD = "v2.1.77 · Sep 23";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2265,6 +2265,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v2.1.77",date:"Sep 23",changes:["Rename a lesson: tap ••• on its card and choose Rename."]},
   {tag:"v2.1.76",date:"Sep 23",changes:["The ••• on lesson cards is now just three dots, with no circle around it."]},
   {tag:"v2.1.75",date:"Sep 23",changes:["Lesson cards are cleaner: the Voice, Text and Archive buttons are gone. Tap a card to choose Voice or Text as before.","A ••• button at the top left of every lesson card lets you organize it into folders, archive it, or delete it.","Organizing opens a new folder view: your lessons sit at the bottom (swipe between them) and your folders arc above. Tap a folder to file the lesson in the middle; tap again to take it out. With many folders, drag sideways to turn the arc.","Opening a folder now shows the saved lessons you filed there."]},
   {tag:"v2.1.74",date:"Sep 22",changes:["A Start my lesson button in voice lessons. One tap and the lesson is prepared, then begins by itself as soon as its first part is researched, so you are no longer stuck in the opening questions.","While your lesson is being prepared, tap the line under the progress bar to watch your lesson map being built.","A lesson no longer circles one part. A short yes to \"shall we move on?\" now counts, and after several tries the lesson moves on by itself and comes back to it in the final teach-back.","The quiet-minute pause keeps the line open on Gemini voice: just start talking and it carries on, with your first words kept. GPT voice asks you to tap Resume voice instead of promising something it cannot do.","After a pause, voice says welcome back and repeats its own question once, instead of starting over.","Copied transcripts show the time of each message.","Your thinking: an AI reading of the ideas you put forward, your strengths, questions to explore next, and any recognition you earned, with the reason. Find it in the Copy menu and on the lesson card. Earned tags appear on your profile.","Approved testers can use live voice lessons.","Voice transcription is set to English, so short replies are less often shown as words from other languages."]},
@@ -8477,6 +8478,9 @@ function homeLearnerRuns({ all = false } = {}) {
   if (!homeLearnerAccountAllowed() || stateAccountId !== cloudAccount.id) return [];
   try {
     const runs = normalizedHomeLearnerRuns(JSON.parse(localStorage.getItem(HOME_LEARNER_RUNS_PREFIX+cloudAccount.id) || "[]"));
+    // A learner rename lives beside the list (the list is rebuilt from the server).
+    const names = window.WorldviewLessonMenu?.runTitles() || {};
+    runs.forEach(run => { if (names[run.runId]) run.title = names[run.runId]; });
     if (all) return runs;
     const removals = homeLearnerRunRemovals();
     return runs.filter(run => {
