@@ -29,7 +29,8 @@
    frame, so the button is not placed there at all, and Home hides it as soon
    as the learner leaves Home. */
 :root.appearance-away #theme-toggle { display:none; }
-#models-button { position:fixed; left:10px; right:auto; bottom:calc(env(safe-area-inset-bottom) + 68px); min-height:44px; }
+/* NAV-140: Settings is gone, so Models takes its bottom-left place. */
+#models-button { position:fixed; left:10px; right:auto; bottom:calc(env(safe-area-inset-bottom) + 12px); min-height:44px; }
 .rail-settings { position:fixed; left:10px; bottom:calc(env(safe-area-inset-bottom) + 12px); min-height:44px; }
 .mock-learner-send { color:#241f1a; }
 .mock-learner-header h2 { color:var(--wv-text); }

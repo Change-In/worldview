@@ -462,7 +462,9 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
  function studyStep(value){
   if(!value)return '';
   // Research readiness updates context; it does not start another conversation.
-  return JSON.stringify([value.id,value.phaseVersion,value.phase,value.currentIndex,value.packet?.currentOutcome?.id||'',value.complete===true]);
+  // LES-259: a chapter review starting or ending is its own step, so the tutor
+  // is prompted to open it (or the next chapter) like any new part.
+  return JSON.stringify([value.id,value.phaseVersion,value.phase,value.currentIndex,value.packet?.currentOutcome?.id||'',value.complete===true,value.packet?.chapterReview?.chapterId||'']);
  }
  function studyPublication(value){
   // Captions/revision changes alone must not inject another packet into a model
@@ -715,12 +717,16 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
     say not to speak merely because an update arrived, so it announced the move
     and then waited; the learner waited too and the lesson sat in silence. One cue
     is sent per phase, and only when nobody has spoken since the change. */
+ let reviewedChapter='';
  function phaseOpeningInstruction(fresh=false){
   const shared='PHASE OPENING. Use the saved phase in the selected language. Continue from the learner\'s thinking; no greeting, repeated question, or readiness offer. ';
   if(study.complete||study.phase==='complete')return shared+'The final teach-back is saved as complete. Briefly connect their takeaway to the original purpose, acknowledge the finish once, then stop. Ask no question and do not begin another quiz.';
   if(study.phase==='quiz')return shared+(study.currentIndex>0?'Continue the final teach-back with one plain-language application question for the saved current outcome.':(fresh?'Say in one short sentence that the lesson is covered and the final teach-back starts now. Then begin':'Begin')+' the final teach-back now with one plain-language application question for its current outcome.')+' Do not announce completion or offer to restart. Then listen.';
   if(study.phase==='extraction')return shared+'While the lesson is being prepared, invite one broad own-words perspective on the learner\'s concern. Do not test researched facts. Then listen.';
+  const review=study.packet?.chapterReview;
+  if(review){reviewedChapter=review.chapterTitle||' ';return shared+'CHAPTER REVIEW. In one short sentence say that the chapter'+(review.chapterTitle?' "'+review.chapterTitle+'"':'')+' is done and there is a quick recap before the next one. Then ask them, in one short question, to recap in their own words what they learned in it. Do not open the next part. Then listen.';}
   const chapter=study.packet?.journeyContext?.chapter?.title;
+  if(reviewedChapter&&study.phase==='lesson'){reviewedChapter='';return shared+'The chapter review is done. In one short sentence say the next chapter'+(chapter?', "'+chapter+'",':'')+' begins now. Then open only the saved current outcome: share its key verified idea in a few plain, vivid sentences, then ask one question that asks them to use it. Then listen.';}
   const start=fresh&&study.currentIndex===0?'The researched lesson begins now. In one short sentence tell the learner their lesson is starting'+(chapter?' and name the first chapter, "'+chapter+'"':'')+'. Then ':'';
   return shared+(start?start+'open':'Open')+' only the saved current outcome: connect briefly to the lesson purpose, share its key verified idea in a few plain, vivid sentences, then ask one question that asks them to use it. Do not offer the quiz before its saved phase. Then listen.';
  }
@@ -941,5 +947,14 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   for(const t of turns)t.content=cleanCaption(t.content);
   return turns.filter(t=>t.content);
  }
- const api={mount,sync,stop,place,transcriptTurns,startLesson,timingSummary,connectionState,freeStorage:sweepOtherDrafts,toggleSpeaker:()=>output?.toggle(),paintSpeaker:()=>output?.paint(),ownsAudio:()=>!!session,active:()=>!!session,enabled:()=>enabled};return api;
+ /* LES-260: the owner's running time and cost for this lesson. Talk time is
+    what the lesson card counts; the current connection is saved first so the
+    number includes the minute in progress. */
+ function stats(){
+  const costs=window.WorldviewLessonCost;if(!costs||!context?.runId)return null;
+  if(session)recordTalk(session);
+  const summary=costs.summary(context.owner,context.runId);
+  return {seconds:costs.talk?.(context.owner,context.runId)||0,cost:String(costs.format(summary)||'').replace(/^Est\.?\s*total\s*/i,''),costDetail:costs.describe?.(summary)||'',planned:Number(study?.clarification?.lessonBrief?.timeMinutes)||null,live:!!session&&!session.softPaused};
+ }
+ const api={mount,sync,stop,place,stats,transcriptTurns,startLesson,timingSummary,connectionState,freeStorage:sweepOtherDrafts,toggleSpeaker:()=>output?.toggle(),paintSpeaker:()=>output?.paint(),ownsAudio:()=>!!session,active:()=>!!session,enabled:()=>enabled};return api;
 })();

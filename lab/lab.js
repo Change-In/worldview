@@ -9003,23 +9003,27 @@ function bindPipelineVerifiedSupport(support, meta) {
   }
   const providerUrls = new Set((Array.isArray(meta?.citations) ? meta.citations : [])
     .map(canonicalPipelineSupportUrl).filter(Boolean));
-  const sources = Array.isArray(support.sources) ? support.sources : [];
-  const claims = Array.isArray(support.claims) ? support.claims : [];
-  const examples = Array.isArray(support.examples) ? support.examples : [];
-  if (!providerUrls.size || !sources.length || !claims.length) return unavailablePipelineVerifiedSupport();
+  if (!providerUrls.size) return unavailablePipelineVerifiedSupport();
+  /* BUG-468: only sources whose URL the provider actually returned count, and a
+     claim or example keeps the source ids that resolve (dropped if none do).
+     A single dangling id, such as a claim citing "source_10" after the model
+     trimmed its source list, used to discard the whole part's research: 5 of 72
+     verified results in the week to Sept 23. The server applies the same rule. */
   const sourceById = new Map();
-  for (const source of sources) {
+  for (const source of Array.isArray(support.sources) ? support.sources : []) {
     const id = cleanMapText(source?.id, 80);
     const url = canonicalPipelineSupportUrl(source);
-    if (!id || sourceById.has(id) || !url || !providerUrls.has(url)) return unavailablePipelineVerifiedSupport();
-    sourceById.set(id, source);
+    if (id && url && providerUrls.has(url) && !sourceById.has(id)) sourceById.set(id, source);
   }
-  const linked = (item) => {
-    const ids = Array.isArray(item?.sourceIds) ? item.sourceIds.map((id) => cleanMapText(id, 80)).filter(Boolean) : [];
-    return Boolean(ids.length && ids.every((id) => sourceById.has(id)));
+  const grounded = (item) => {
+    const ids = (Array.isArray(item?.sourceIds) ? item.sourceIds : []).map((id) => cleanMapText(id, 80)).filter((id) => sourceById.has(id));
+    return ids.length ? { ...item, sourceIds:ids } : null;
   };
-  if (!claims.every(linked) || !examples.every(linked)) return unavailablePipelineVerifiedSupport();
-  return support;
+  const claims = (Array.isArray(support.claims) ? support.claims : []).map(grounded).filter(Boolean);
+  const examples = (Array.isArray(support.examples) ? support.examples : []).map(grounded).filter(Boolean);
+  if (!claims.length) return unavailablePipelineVerifiedSupport();
+  const used = new Set([...claims, ...examples].flatMap((item) => item.sourceIds));
+  return { ...support, claims, examples, sources:[...sourceById.values()].filter((source) => used.has(cleanMapText(source?.id, 80))) };
 }
 
 function bindPipelineMapVerifiedSupport(map, meta) {
@@ -15592,6 +15596,7 @@ function syncLiveLesson(){
  recordLessonJobCosts(runId);
  live.sync({enabled:selected,lineage,owner:labState.verifiedUserId,runId,model:liveModelChoice(),showCost:labState.verifiedAdmin,history:[],priorHistory:transcript,ready:selected,autoStart:true,studyInput:selected?liveStudyInput(artifact,selection,transcript):null});
  if(selected){q('mock-learner-voice-controls').hidden=true;q('mock-learner-waiting').hidden=true;renderLiveResearchRecovery(selection,stage);}
+ window.WorldviewJevReadout?.refresh({enabled:selected&&labState.verifiedAdmin===true});
  const mode=stage==='clarification'?labState.clarification.mode:labState.extraction.mode;
  const button=q('mock-learner-mode');
  if(selected){closeLiveModeMenu();button.removeAttribute('aria-expanded');live.paintSpeaker();}

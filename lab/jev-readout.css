@@ -30,3 +30,8 @@
 .jev-readout-bar { position:relative; height:8px; border-radius:0 4px 4px 0; background:color-mix(in srgb, var(--jev) 14%, transparent); }
 .jev-readout-bar i { position:absolute; inset:0 auto 0 0; border-radius:0 4px 4px 0; background:var(--jev); }
 .jev-readout-pct { text-align:right; font-variant-numeric:tabular-nums; }
+/* LES-260: talk time and cost beside the pill. */
+.jev-readout-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; }
+.jev-readout-stats { color:var(--wv-muted, color-mix(in srgb, var(--wv-text) 60%, transparent)); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.jev-readout-stats[hidden], .jev-readout-pill[hidden] { display:none; }
+.jev-readout-stats.is-over { color:#c98a2b; font-weight:600; }

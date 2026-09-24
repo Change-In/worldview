@@ -9,7 +9,21 @@
  const label=name=>String(name||'').replace(/_/g,' ');
  const pct=p=>Number.isFinite(p)?Math.round(p*100)+'%':'—';
  const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=text;return n;};
- let host=null,pill=null,panel=null,current=null,enabled=false,open=false,openOption='',ticker=0;
+ let host=null,pill=null,panel=null,stats=null,current=null,enabled=false,open=false,openOption='',ticker=0;
+ /* LES-260: talk time against the minutes the learner asked for, and the
+    running cost estimate, beside the pill. */
+ const clock=s=>{s=Math.max(0,Math.round(s||0));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
+ function paintStats(){
+  if(!stats)return false;
+  const value=root.WorldviewLiveConversation?.stats?.();
+  if(!value){stats.hidden=true;return false;}
+  stats.hidden=false;
+  const over=value.planned&&value.seconds>value.planned*60;
+  stats.classList.toggle('is-over',!!over);
+  stats.textContent=clock(value.seconds)+(value.planned?' of ~'+value.planned+' min':'')+(value.cost&&value.cost!=='—'?' · '+value.cost:'');
+  stats.title=(value.planned?'Talk time against the '+value.planned+' minutes asked for. ':'Talk time. ')+(value.costDetail||'');
+  return true;
+ }
 
  function mount(){
   if(host&&host.isConnected)return host;
@@ -18,7 +32,9 @@
   pill=el('button','jev-readout-pill');pill.type='button';pill.setAttribute('aria-expanded','false');pill.setAttribute('aria-controls','jev-readout-panel');
   panel=el('div','jev-readout-panel');panel.id='jev-readout-panel';panel.hidden=true;
   pill.addEventListener('click',()=>{open=!open;render();});
-  host.append(pill,panel);
+  stats=el('span','jev-readout-stats');stats.setAttribute('aria-label','Lesson time and cost');
+  const row=el('div','jev-readout-row');row.append(pill,stats);
+  host.append(row,panel);
   const anchor=document.getElementById('mock-learner-journey')||document.getElementById('mock-learner-progress');
   if(anchor&&anchor.parentNode===shell)anchor.after(host);else shell.prepend(host);
   return host;
@@ -52,8 +68,12 @@
 
  function render(){
   if(!mount())return;
-  host.hidden=!enabled||!current;
+  const hasStats=enabled&&paintStats();
+  host.hidden=!enabled||(!current&&!hasStats);
   if(host.hidden){clearInterval(ticker);ticker=0;return;}
+  if(!ticker)ticker=setInterval(()=>{paintStats();const a=host&&host.querySelector('.jev-readout-ago');if(a&&current)a.textContent=ago(current.at);},5000);
+  pill.hidden=!current;panel.hidden=!current||!open;
+  if(!current)return;
   const r=current;
   pill.replaceChildren();
   pill.classList.toggle('is-unavailable',!!r.unavailable);
@@ -80,12 +100,14 @@
     if(Number.isInteger(r.learnerTurns))facts.push('Learner turns: '+r.learnerTurns+(r.capApplied?' · question limit reached, offering to start':''));
     if(Number.isFinite(r.mastery)&&Array.isArray(r.masteryLevels)){const i=Math.max(0,Math.min(r.masteryLevels.length-1,Math.round(r.mastery)));facts.push('Understanding: '+r.masteryLevels[i]+' ('+r.mastery+')');}
     if(Number.isFinite(r.recitation))facts.push('Repeating the tutor: '+pct(r.recitation));
+    if(Number.isFinite(r.recall)&&Array.isArray(r.recallLevels)){const i=Math.max(0,Math.min(r.recallLevels.length-1,Math.round(r.recall)));facts.push('Chapter review'+(r.chapter?' (“'+r.chapter+'”)':'')+': '+r.recallLevels[i]);}
     if(facts.length){const f=section('Also judged');for(const t of facts)f.append(el('p',null,t));panel.append(f);}
    }
   }
-  if(!ticker)ticker=setInterval(()=>{const a=host&&host.querySelector('.jev-readout-ago');if(a&&current)a.textContent=ago(current.at);},5000);
  }
 
+ // Called when a lesson opens, so time and cost show before Jev's first decision.
+ function refresh(options={}){if('enabled' in options)enabled=options.enabled===true;render();}
  function update(readout,options={}){
   enabled=options.enabled===true;
   const next=readout&&typeof readout==='object'?readout:null;
@@ -94,5 +116,5 @@
   if(fresh&&host&&!host.hidden){host.classList.remove('is-fresh');void host.offsetWidth;host.classList.add('is-fresh');}
  }
 
- root.WorldviewJevReadout={update};
+ root.WorldviewJevReadout={update,refresh};
 })(window);
