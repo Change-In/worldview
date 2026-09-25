@@ -757,7 +757,29 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     background: color-mix(in srgb, var(--card) 82%, transparent); color: var(--accent-700);
     font-size: max(10px, calc(var(--cardW, 262px) * 0.04)); font-weight: 650; letter-spacing: 0.01em; cursor: pointer;
   }
-  #new-card-folders span, #new-card-leave-folder span { font-size: 1.15em; line-height: 1; }
+  #new-card-folders span, #new-card-leave-folder span, #new-card-search span { font-size: 1.15em; line-height: 1; }
+  /* NAV-141: Search sits opposite Folders. */
+  #new-card-search {
+    position: absolute; left: 14px; bottom: 14px; width: auto;
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 7px 12px; border: 1px solid rgba(189,90,48,.5); border-radius: 999px;
+    background: color-mix(in srgb, var(--card) 82%, transparent); color: var(--accent-700);
+    font-size: max(10px, calc(var(--cardW, 262px) * 0.04)); font-weight: 650; letter-spacing: 0.01em; cursor: pointer;
+  }
+  .lesson-search-dialog { width:min(560px,calc(100vw - 24px)); max-height:min(80dvh,720px); margin:auto; padding:0; border:1px solid var(--line); border-radius:var(--radius-md); background:var(--card); color:var(--ink); box-shadow:var(--shadow-lg); }
+  .lesson-search-dialog::backdrop { background:var(--overlay); }
+  .lesson-search-dialog[open] { display:flex; flex-direction:column; }
+  .lesson-search-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 16px 8px; }
+  .lesson-search-head h2 { margin:0; font-size:15px; letter-spacing:.08em; text-transform:uppercase; }
+  .lesson-search-close { min-width:44px; min-height:44px; border:0; background:none; color:var(--ink); font-size:24px; cursor:pointer; }
+  #lesson-search-input { margin:0 16px 10px; padding:12px 14px; font-size:16px; border:1.5px solid var(--line); border-radius:var(--radius-sm); background:var(--paper); color:var(--ink); }
+  #lesson-search-input:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  .lesson-search-results { list-style:none; margin:0; padding:0 8px 12px; overflow-y:auto; display:grid; gap:2px; }
+  .lesson-search-results button { width:100%; min-height:52px; display:grid; gap:2px; padding:10px 10px; border:0; border-radius:var(--radius-sm); background:none; color:var(--ink); text-align:left; font:inherit; cursor:pointer; }
+  .lesson-search-results button:hover, .lesson-search-results button:focus-visible { background:var(--surface-soft); outline:none; }
+  .lesson-search-results b { font-weight:650; font-size:15px; }
+  .lesson-search-results span { color:var(--ink-soft); font-size:12.5px; }
+  .lesson-search-empty { padding:10px 16px 18px; color:var(--ink-soft); font-size:14px; }
   /* Leaving a folder is the one control that must never be missable, so it
      reads as filled rather than outlined. */
   #new-card-leave-folder { border-color: var(--accent); background: var(--accent); color: #fff; }
@@ -1693,7 +1715,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #home-archive-entry{margin-bottom:calc(env(safe-area-inset-bottom) + 60px)}
 </style>
 <link rel="stylesheet" href="models.css?v=2.1.37">
-<link rel="stylesheet" href="appearance.css?v=3.1.4">
+<link rel="stylesheet" href="appearance.css?v=3.1.5">
 <script src="appearance.js?v=3.1.1"></script>
 </head>
 <body>
@@ -2258,7 +2280,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.4 · Sep 24";
+const BUILD = "v3.1.5 · Sep 25";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2266,6 +2288,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.5",date:"Sep 25",changes:["Background noise no longer counts as you talking. Breathing, rustling, air conditioning or road noise that the captions turn into words (like \"breath\" or \"a young woman\") no longer moves the lesson on or makes a part look stuck.","The microphone now asks your phone for its noise filter.","After a pause the tutor goes straight back to the lesson, with no \"welcome back\".","The chapter recap just asks what you learned, in your own words. No \"explain it to a friend\".","The tutor no longer talks about updates, gaps or missing pieces.","Lesson cards show the date and time you had the lesson.","Search: tap Search on the Ask Anything card to find a lesson by title or topic.","Jev can run through OpenRouter when that key is set up."]},
   {tag:"v3.1.4",date:"Sep 24",changes:["The tutor waits for you to finish: no more \"mhm\" or \"uh\" while you are still talking.","No more long silences after the tutor says it is thinking: it carries on by itself.","Shaping your lesson has no question limit. The tutor follows what you say, answers \"what else could I learn?\" with the main options, and offers to start only when you sound happy with the plan.","If one research service cannot run (for example it is out of credit), the research goes to the other one.","Owner: the Jev panel lists earlier decisions, and your copied transcript ends with every Jev decision in order."]},
   {tag:"v3.1.3",date:"Sep 23",changes:["Between chapters there is now a short chapter review: you recap the chapter in your own words, the tutor follows up on something you mentioned with one more detail from the research, then the next chapter starts.","Fixed: the tutor could keep saying the next part's research was still loading after it had finished. Research whose claims pointed at one missing source was being thrown away (about 1 in 14 parts); it is now kept with its real sources. The server also checks finished research itself, so a stale copy on your phone cannot undo it.","For you: talk time (against the minutes you asked for) and the running cost now sit beside the Jev pill. The pill also shows how much of a chapter you recalled in a review.","Home: Settings is gone. Models moved to the bottom left, and the Model Lab is now a row in your account page."]},
   {tag:"v3.1.2",date:"Sep 23",changes:["Before a lesson starts, the tutor now helps you pin down what you actually want: it offers a few concrete angles on a broad topic, asks roughly how many minutes you have, and for a skill, what you can already do. Two short questions can come together to save time.","The tutor reads the lesson back in one sentence before asking to start, so you can correct it. Say \"just start\" at any point to skip the questions.","Jev now decides what is still missing (angle, purpose, level or time) and what kind of lesson this is: learning to do something, understanding how it works, a story, or an open question. The lesson map is planned from that brief.","For you only: a small Jev pill under the progress bar shows its latest decision and how sure it is. Tap it for every choice, the lesson kind and the note sent to the tutor."]},
@@ -6395,6 +6418,67 @@ function recentLessonOrder(lessons) {
   const stamp = lesson => { const value = lesson.updatedAt || lesson.createdAt;return Number(value) || Date.parse(value) || 0; };
   return [...lessons].reverse().sort((a,b) => stamp(b)-stamp(a));
 }
+/* NAV-142: when a lesson was had, on its card and in search. */
+function lessonTimestamp(lesson) { const value = lesson?.createdAt || lesson?.updatedAt;return Number(value) || Date.parse(value) || 0; }
+function lessonDateLabel(ms) {
+  if (!Number.isFinite(ms) || ms < Date.UTC(2020,0,1)) return "";
+  const date = new Date(ms), sameYear = date.getFullYear() === new Date().getFullYear();
+  try { return date.toLocaleString([], {month:"short",day:"numeric",...(sameYear ? {} : {year:"numeric"}),hour:"numeric",minute:"2-digit"}); }
+  catch (_) { return date.toDateString(); }
+}
+/* NAV-141: find a lesson by typing instead of scrolling the shelf. Voice and
+   text lessons, newest first; archived ones are marked. Tapping opens it. */
+function lessonSearchItems() {
+  const items = [];
+  const removals = homeLearnerRunRemovals();
+  const stages = {clarification:"Your direction",map:"Lesson Map",extraction:"Your starting point",lesson:"Lesson",quiz:"Quiz",complete:"Completed"};
+  for (const run of homeLearnerRuns({ all:true })) {
+    const removal = removals[run.runId]?.state;
+    if (removal === "deleted") continue;
+    items.push({id:"learner:"+run.runId,title:run.title || run.topic || "Voice lesson",text:[run.title,run.topic,run.lessonTitle].join(" "),
+      when:Number(run.startedAt || run.updatedAt) || 0,kind:stages[run.phase] || "Voice lesson",archived:removal === "archived"});
+  }
+  for (const lesson of state.lessons || []) {
+    if (!lesson || isSourceLesson(lesson)) continue;
+    items.push({id:lesson.id,title:lesson.title || lesson.topic || "Lesson",text:[lesson.title,lesson.topic,lesson.category].join(" "),
+      when:lessonTimestamp(lesson),kind:"Text lesson",archived:lessonIsArchived(lesson)});
+  }
+  return items.sort((a,b) => b.when - a.when);
+}
+function openLessonSearch() {
+  let dialog = $("lesson-search");
+  if (!dialog) {
+    dialog = document.createElement("dialog");
+    dialog.id = "lesson-search"; dialog.className = "lesson-search-dialog"; dialog.setAttribute("aria-labelledby","lesson-search-title");
+    dialog.innerHTML = '<div class="lesson-search-head"><h2 id="lesson-search-title">Search lessons</h2><button type="button" class="lesson-search-close" aria-label="Close search">×</button></div>'
+      + '<input id="lesson-search-input" type="search" placeholder="Type a title or topic" autocomplete="off" enterkeyhint="search" aria-label="Search your lessons">'
+      + '<ul class="lesson-search-results" id="lesson-search-results"></ul>';
+    document.body.appendChild(dialog);
+    dialog.querySelector(".lesson-search-close").onclick = () => dialog.close();
+    dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); });
+    $("lesson-search-input").addEventListener("input", renderLessonSearch);
+  }
+  $("lesson-search-input").value = "";
+  renderLessonSearch();
+  if (!dialog.open) dialog.showModal();
+  $("lesson-search-input").focus({ preventScroll:true });
+}
+function renderLessonSearch() {
+  const list = $("lesson-search-results"); if (!list) return;
+  const words = String($("lesson-search-input")?.value || "").toLowerCase().split(/\s+/).filter(Boolean);
+  const found = lessonSearchItems().filter(item => words.every(word => String(item.text || "").toLowerCase().includes(word)));
+  list.replaceChildren();
+  if (!found.length) { const empty = document.createElement("li"); empty.className = "lesson-search-empty"; empty.textContent = words.length ? "No lesson matches that." : "No lessons yet."; list.appendChild(empty); return; }
+  for (const item of found.slice(0,200)) {
+    const row = document.createElement("li"), button = document.createElement("button");
+    button.type = "button";
+    const title = document.createElement("b"); title.textContent = item.title;
+    const meta = document.createElement("span"); meta.textContent = [lessonDateLabel(item.when),item.kind,item.archived ? "Archived" : ""].filter(Boolean).join(" · ");
+    button.append(title,meta);
+    button.onclick = () => { $("lesson-search")?.close(); openChat(item.id); };
+    row.appendChild(button); list.appendChild(row);
+  }
+}
 const homeFolderScrollPositions = new Map();
 function renderHomeFolderCarousel(carousel) {
   const categories = categoriesForSection("explore");
@@ -6493,6 +6577,7 @@ function renderHome() {
       ${insidePersonalCategory
         ? `<button id="new-card-leave-folder" type="button" aria-label="Leave ${esc(layerName)} and show all lessons"><span>&#8592;</span> All lessons</button>`
         : `<button id="new-card-folders" type="button" aria-label="Browse folders and archive"><span aria-hidden="true">▱</span> Folders</button>`}
+      <button id="new-card-search" type="button" aria-label="Search your lessons"><span aria-hidden="true">⌕</span> Search</button>
     `;
     c.appendChild(nc);
     wheel.cards.push(nc); wheel.ids.push(null);
@@ -6526,6 +6611,7 @@ function renderHome() {
       </button>
       <button type="button" class="lesson-options-button" aria-label="Lesson options" title="Lesson options">•••</button>
       <div class="card-cat">${esc(l.category || "")}</div>
+      ${lessonDateLabel(lessonTimestamp(l)) ? `<div class="card-cost">${esc(lessonDateLabel(lessonTimestamp(l)))}</div>` : ""}
       <div class="card-title serif ${cardTitleSizeClass(l.title)}">${cardTitleHtml(l.title)}</div>
       ${state.continueHintDismissed ? "" : '<div class="card-hint">tap to continue</div>'}
     `;
@@ -6873,13 +6959,14 @@ function pathControlAtPoint(x, y) {
           const hit = (id) => { const b = $(id); const r = b && b.getBoundingClientRect(); return r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; };
           // Resolve before centering the transformed card. Pointer capture
           // retargets the native click to the carousel, so dispatch once here.
-          const control = ["start-btn", "start-voice-btn", "new-card-folders", "new-card-leave-folder"]
+          const control = ["start-btn", "start-voice-btn", "new-card-folders", "new-card-leave-folder", "new-card-search"]
             .find(id => !$(id)?.hidden && !$(id)?.disabled && hit(id));
           wheel.pos = idx; layoutWheel();
           if (control === "start-btn") startLesson();
           else if (control === "start-voice-btn") startFromAskCard();
           else if (control === "new-card-folders") openCategoryOrganizer(null, "explore");
           else if (control === "new-card-leave-folder") applyCategoryKey(null);
+          else if (control === "new-card-search") openLessonSearch();
           return;
         }
         if (el.dataset.kind === "notes") { wheel.pos = idx; layoutWheel(); showNotes(); return; }
@@ -8520,7 +8607,7 @@ function renderHomeLearnerRuns(carousel) {
     card.dataset.kind = "learner-run";
     const stage = {clarification:"Your direction",map:"Lesson Map",extraction:"Your starting point",lesson:"Lesson",quiz:"Quiz",complete:"Completed"}[run.phase];
     card.setAttribute("aria-label",`${run.title}. ${stage}. Tap to continue.`);
-    card.innerHTML = `<div class="card-cat">${esc(stage)}</div><div class="card-cost" data-run-cost="${esc(run.runId)}"></div><div class="card-title serif ${cardTitleSizeClass(run.title)}">${cardTitleHtml(run.title)}</div>`;
+    card.innerHTML = `<div class="card-cat">${esc(stage)}</div><div class="card-cost" data-run-cost="${esc(run.runId)}" data-run-date="${Number(run.startedAt || run.updatedAt) || ""}"></div><div class="card-title serif ${cardTitleSizeClass(run.title)}">${cardTitleHtml(run.title)}</div>`;
     paintHomeLessonUsage(card.querySelector(".card-cost"),run.runId);
     /* Tapping the card offers Voice or Text; ••• holds folders, Archive and Delete. */
     const options = document.createElement("button");options.type = "button";options.className = "lesson-options-button";
@@ -8547,7 +8634,8 @@ function renderHomeLearnerRuns(carousel) {
 function paintHomeLessonUsage(node,runId){
   if(!node||!cloudAccount?.id)return;
   const costs=window.WorldviewLessonCost,seconds=costs?.talk?.(cloudAccount.id,runId)||0;
-  const parts=[];if(seconds>=60)parts.push(Math.round(seconds/60)+" min talked");
+  const parts=[];const when=lessonDateLabel(Number(node.dataset.runDate));if(when)parts.push(when);
+  if(seconds>=60)parts.push(Math.round(seconds/60)+" min talked");
   if(backendEntitlementRecord?.access_tier==="admin"&&costs){const value=costs.summary(cloudAccount.id,runId);if(value.known)parts.push("$"+value.usd.toFixed(2));node.title=costs.describe(value);}
   node.textContent=parts.join(" · ");node.hidden=!parts.length;
 }

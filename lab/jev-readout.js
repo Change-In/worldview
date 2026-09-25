@@ -91,6 +91,7 @@
    panel.replaceChildren();
    const meta=el('p','jev-readout-meta');meta.append(el('span',null,label(r.phase)),el('span','jev-readout-ago',ago(r.at)));
    if(r.version)meta.append(el('span',null,r.version));
+   if(r.route)meta.append(el('span',null,r.route==='openrouter'?'via OpenRouter':'via OpenJEV'));
    panel.append(meta);
    if(r.unavailable){
     panel.append(el('p','jev-readout-desc is-open','Jev was not used for this check ('+(r.decider||'older checker')+'). Its decision was: '+label(r.choice)+'.'));

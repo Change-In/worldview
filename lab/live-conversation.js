@@ -334,7 +334,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
  }
  async function acquireMic(s){
   captureAudioType();
-  try{return await navigator.mediaDevices.getUserMedia({audio:true});}
+  try{return await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});}
   catch(error){if(!/AudioSession category/i.test(error.message||'')||session!==s||s.closing||document.hidden)throw error;
    captureAudioType('auto');captureAudioType();return await navigator.mediaDevices.getUserMedia({audio:true});}
  }
@@ -411,11 +411,28 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   return parts.join(' ').replace(CHANNEL_STRAY,' ').replace(/[ 	]{2,}/g,' ').trim();
  }
  function isControlEcho(text){const t=String(text||'').trimStart();return CONTROL_MARKERS.some(marker=>t.startsWith(marker));}
+ /* BUG-477: breathing, rustling, air conditioning and road noise come back from
+    the caption model as words ("breath", "a young woman", "è"). They are kept in
+    the transcript but are not the learner speaking: they start no check, keep
+    no session awake and never count as an answer. Same rule as the server's
+    isNoiseCaption in functions/live-trial/jev.mjs; keep the two the same. */
+ const NOISE_TAGS=/^(?:[[(]?(?:breath(?:ing)?|bre|inhale|exhale|sigh|cough(?:ing)?|laugh(?:ter|ing)?|music|noise|static|silence|applause|numerusform)[\])]?[\s.,!?…-]*)+$/i;
+ const IMAGE_CAPTION=/^(?:a|an)\s+(?:young|old|older|elderly|middle-aged|cheerful|smiling|happy|vibrant|abstract|silhouette|person|man|woman|men|women|boy|girl|child|baby|couple|laptop|orange|close-up)\b/i;
+ const SHORT_REAL=new Set(['i','no','ok','hi','so','oh','ah','uh','um','go','mm','hm']);
+ function isNoiseCaption(text,fresh=true){
+  const t=String(text||'').trim();if(!/\p{L}/u.test(t))return true;
+  const words=t.split(/\s+/).filter(Boolean);
+  if(/�/.test(t)&&words.length<3)return true;
+  if(NOISE_TAGS.test(t))return true;
+  if(words.length<=5&&IMAGE_CAPTION.test(t))return true;
+  return fresh&&words.length===1&&t.replace(/[^\p{L}]/gu,'').length<=2&&!SHORT_REAL.has(t.toLowerCase().replace(/[^\p{L}]/gu,''));
+ }
  function append(state,event,role){
   if(session!==state||state.scope!==scope)return;
   if(typeof event.delta!=='string'||!event.delta)return;
   if(isControlEcho(event.delta))return;
   const f={seq:fragments.length+1,id:String(event.event_id||state.id+':'+fragments.length),role,delta:event.delta,start_ms:Number.isFinite(event.start_ms)?event.start_ms:Date.now(),end_ms:Number.isFinite(event.end_ms)?event.end_ms:null};
+  if(role==='user'&&isNoiseCaption(event.delta,!/^\s/.test(event.delta))){fragments.push(f);fragmentTimes.set(f.id,Date.now());stash();paint();clearTimeout(saveTimer);saveTimer=setTimeout(()=>void flush(),1500);return;}
   fragments.push(f);if(role==='assistant')mark(state,'words');state.lastTranscriptAt=performance.now();state.lastActivityAt=state.lastTranscriptAt;
   if(role==='user')state.lastUserTranscriptAt=state.lastTranscriptAt;
   else{
@@ -552,7 +569,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
     update is in (or after a short wait if it never arrives), the tutor is told
     to carry on speaking, unless the learner or the tutor has already moved on. */
  const DELEGATION_RESUME_MS=9000;
- const DELEGATION_RESUME='CONTINUE NOW. The application update for this moment is complete; nothing more is coming. Speak now: reply in this same turn to what the learner last said, following the latest saved phase and nextFocus. Do not mention checking, thinking or waiting, and do not repeat an earlier question.';
+ const DELEGATION_RESUME='CONTINUE NOW. Speak now: reply in this same turn to what the learner last said, following the latest saved phase and nextFocus. Never say anything about updates, checks, notes, thinking or waiting, and do not repeat an earlier question.';
  function watchDelegation(state,id){
   if(state.gemini)return;
   const watch=state.delegationWatch||(state.delegationWatch=new Map());if(watch.has(id))return;
@@ -707,7 +724,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
     run on iPhone Safari without a tap, which is why "start talking" failed.
     GPT Live bills by the minute, so it closes and asks for a tap instead. After
     ten held minutes the connection closes too. */
- const RESUME_INSTRUCTION='RESUMING THE SAVED LESSON after a pause. In the selected language, begin with a two-word welcome back. If the learner spoke last, respond briefly to what they said. If you spoke last and asked a question they have not answered, repeat that one question in one short sentence; do not turn it into a new question. Otherwise remind them in one sentence where you left off and invite them to carry on. Never start a new topic. Then listen.';
+ const RESUME_INSTRUCTION='RESUMING THE SAVED LESSON after a pause. In the selected language, with no greeting and no welcome back: go straight to the lesson. If the learner is speaking, let them finish and answer what they said. If the learner spoke last, respond briefly to what they said. If you spoke last and asked a question they have not answered, repeat that one question in one short sentence; do not turn it into a new question. Otherwise remind them in one sentence where you left off and invite them to carry on. Never start a new topic. Then listen.';
  function recordTalk(s){if(s?.talkStartedAt)window.WorldviewLessonCost?.recordTalk?.(s.costOwner||context?.owner,s.costRunId||context?.runId,s.id,(Date.now()-s.talkStartedAt)/1000);}
  function idleCheck(s){
   recordTalk(s);
@@ -757,7 +774,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   if(study.phase==='quiz')return shared+(study.currentIndex>0?'Continue the final teach-back with one plain-language application question for the saved current outcome.':(fresh?'Say in one short sentence that the lesson is covered and the final teach-back starts now. Then begin':'Begin')+' the final teach-back now with one plain-language application question for its current outcome.')+' Do not announce completion or offer to restart. Then listen.';
   if(study.phase==='extraction')return shared+'While the lesson is being prepared, invite one broad own-words perspective on the learner\'s concern. Do not test researched facts. Then listen.';
   const review=study.packet?.chapterReview;
-  if(review){reviewedChapter=review.chapterTitle||' ';return shared+'CHAPTER REVIEW. In one short sentence say that the chapter'+(review.chapterTitle?' "'+review.chapterTitle+'"':'')+' is done and there is a quick recap before the next one. Then ask them, in one short question, to recap in their own words what they learned in it. Do not open the next part. Then listen.';}
+  if(review){reviewedChapter=review.chapterTitle||' ';return shared+'CHAPTER REVIEW. In one short sentence say that the chapter'+(review.chapterTitle?' "'+review.chapterTitle+'"':'')+' is done and there is a quick recap before the next one. Then ask them, in one short question, to recap in their own words what they learned in it (never "to a friend" or to anyone else). Do not open the next part. Then listen.';}
   const chapter=study.packet?.journeyContext?.chapter?.title;
   if(reviewedChapter&&study.phase==='lesson'){reviewedChapter='';return shared+'The chapter review is done. In one short sentence say the next chapter'+(chapter?', "'+chapter+'",':'')+' begins now. Then open only the saved current outcome: share its key verified idea in a few plain, vivid sentences, then ask one question that asks them to use it. Then listen.';}
   const start=fresh&&study.currentIndex===0?'The researched lesson begins now. In one short sentence tell the learner their lesson is starting'+(chapter?' and name the first chapter, "'+chapter+'"':'')+'. Then ':'';
@@ -825,7 +842,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   if(!enabled||loading||!study||session||(releasing&&!start)||!context?.ready||document.hidden){release();return;}
   if(autoAttempts>=3){release();startError=true;message('Voice could not reconnect. Try again.');paint();return;}autoAttempts++;
   // Voice that returns after a pause, or on a lesson reopened later, says a
-  // short welcome back and repeats its own unanswered question once; it does
+  // brief continuation (no greeting, VOI-153) and repeats its own unanswered question once; it does
   // not open the phase again.
   const resuming=!start&&fragments.some(f=>!f.id.startsWith('import:'));
   const s={id:start?.id||crypto.randomUUID(),initiate:openingPending,openingText:start?.opening||(resuming?RESUME_INSTRUCTION:''),refreshed:!!start?.phase,resumed:resuming,request,scope,model:context.model||'gpt-live-1',connectedAt:Date.now(),studyId:study.id,seen:new Set(),delegations:new Set(),pendingDelegations:new Set(),lastUserSeq:fragments.findLast(f=>f.role==='user')?.seq||0,seconds:0,ready:false,closing:false,dispatched:false,muted:false,t0:performance.now(),marks:{}};session=s;paint();
