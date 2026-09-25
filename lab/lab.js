@@ -15583,7 +15583,7 @@ async function applyLiveJourney(study){
 }
 function syncLiveLesson(){
  const live=window.WorldviewLiveConversation;if(!live||!q('mock-learner-composer'))return;
- if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),speakerButton:q('mock-learner-mode'),onTextMode:()=>void chooseLiveConversationMode('text'),onStudy:applyLiveJourney,onJev:readout=>window.WorldviewJevReadout?.update(readout,{enabled:labState.verifiedAdmin===true}),onLearnerTopic:applyLiveLearnerTopic,onCheckerUsage:recordLiveCheckerCost,onConnectionState:handleLearnerLiveEntryState,
+ if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),speakerButton:q('mock-learner-mode'),onTextMode:()=>void chooseLiveConversationMode('text'),onStudy:applyLiveJourney,onJev:(readout,history)=>window.WorldviewJevReadout?.update(readout,{enabled:labState.verifiedAdmin===true,history}),onLearnerTopic:applyLiveLearnerTopic,onCheckerUsage:recordLiveCheckerCost,onConnectionState:handleLearnerLiveEntryState,
   requestForCurrentAccount:liveTrialRequest,
   onTranscript:()=>renderMockLearnerShell(),
   releaseMedia:()=>{stopClarificationCaptureForModeChange();stopClarificationSpeech();stopPipelineExtractionVoice();if(typeof releaseClarificationTopicCapture==='function')releaseClarificationTopicCapture();}
@@ -19578,7 +19578,10 @@ function bindEvents() {
     const turns = native ?? ordinary;
     // VOI-142: the owner and testers also see where the voice start time went.
     const timing = liveVoiceAccess() ? window.WorldviewLiveConversation?.timingSummary?.() : '';
-    return (timing ? timing + '\n\n' : '') + window.WorldviewConversationTools.serializeTurns(turns);
+    // LES-262: the owner's copy ends with Jev's decisions, in order, so a lesson
+    // can be reviewed turn by turn afterwards. Admin only; no learner words.
+    const jev = labState.verifiedAdmin === true ? window.WorldviewJevReadout?.historyText?.() || '' : '';
+    return (timing ? timing + '\n\n' : '') + window.WorldviewConversationTools.serializeTurns(turns) + (jev ? '\n\n' + jev : '');
   },getCard:()=>window.WorldviewLessonCard?.data?.(),onCard:()=>window.WorldviewLessonCard?.show?.(),onThinking:openThinking});
   q("mock-learner-mode")?.addEventListener("click", () => { if(liveLessonSelected())window.WorldviewLiveConversation?.toggleSpeaker();else toggleLiveModeMenu(); });
   q("mock-learner-sources")?.addEventListener("click", toggleMockLearnerSources);

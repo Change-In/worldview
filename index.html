@@ -1693,7 +1693,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #home-archive-entry{margin-bottom:calc(env(safe-area-inset-bottom) + 60px)}
 </style>
 <link rel="stylesheet" href="models.css?v=2.1.37">
-<link rel="stylesheet" href="appearance.css?v=3.1.3">
+<link rel="stylesheet" href="appearance.css?v=3.1.4">
 <script src="appearance.js?v=3.1.1"></script>
 </head>
 <body>
@@ -2258,7 +2258,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.3 · Sep 23";
+const BUILD = "v3.1.4 · Sep 24";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2266,6 +2266,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.4",date:"Sep 24",changes:["The tutor waits for you to finish: no more \"mhm\" or \"uh\" while you are still talking.","No more long silences after the tutor says it is thinking: it carries on by itself.","Shaping your lesson has no question limit. The tutor follows what you say, answers \"what else could I learn?\" with the main options, and offers to start only when you sound happy with the plan.","If one research service cannot run (for example it is out of credit), the research goes to the other one.","Owner: the Jev panel lists earlier decisions, and your copied transcript ends with every Jev decision in order."]},
   {tag:"v3.1.3",date:"Sep 23",changes:["Between chapters there is now a short chapter review: you recap the chapter in your own words, the tutor follows up on something you mentioned with one more detail from the research, then the next chapter starts.","Fixed: the tutor could keep saying the next part's research was still loading after it had finished. Research whose claims pointed at one missing source was being thrown away (about 1 in 14 parts); it is now kept with its real sources. The server also checks finished research itself, so a stale copy on your phone cannot undo it.","For you: talk time (against the minutes you asked for) and the running cost now sit beside the Jev pill. The pill also shows how much of a chapter you recalled in a review.","Home: Settings is gone. Models moved to the bottom left, and the Model Lab is now a row in your account page."]},
   {tag:"v3.1.2",date:"Sep 23",changes:["Before a lesson starts, the tutor now helps you pin down what you actually want: it offers a few concrete angles on a broad topic, asks roughly how many minutes you have, and for a skill, what you can already do. Two short questions can come together to save time.","The tutor reads the lesson back in one sentence before asking to start, so you can correct it. Say \"just start\" at any point to skip the questions.","Jev now decides what is still missing (angle, purpose, level or time) and what kind of lesson this is: learning to do something, understanding how it works, a story, or an open question. The lesson map is planned from that brief.","For you only: a small Jev pill under the progress bar shows its latest decision and how sure it is. Tap it for every choice, the lesson kind and the note sent to the tutor."]},
   {tag:"v3.1.1",date:"Sep 23",changes:["No more two questions in a row when the lesson moves to its next part: the tutor waits for your answer first.","The tutor follows up on what you actually said instead of summarising or praising it.","The starting-picture chat gets at least one follow-up, and the lesson waits for your answer before it begins.","Instead of asking whether you want to move on, the tutor asks if you have any questions first.","Pause turns into a play button when voice is paused, and the three buttons stay centred.","The strip behind your phone's clock now matches the lesson header.","Once a lesson is under way, the progress bar sits under the chapter line."]},

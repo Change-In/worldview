@@ -35,3 +35,5 @@
 .jev-readout-stats { color:var(--wv-muted, color-mix(in srgb, var(--wv-text) 60%, transparent)); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .jev-readout-stats[hidden], .jev-readout-pill[hidden] { display:none; }
 .jev-readout-stats.is-over { color:#c98a2b; font-weight:600; }
+/* LES-262: earlier decisions in this lesson, newest first. */
+.jev-readout-history { display:grid; gap:3px; margin:0; padding-left:18px; font-weight:400; font-size:12px; font-variant-numeric:tabular-nums; }

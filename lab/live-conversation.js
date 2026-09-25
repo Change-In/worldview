@@ -364,7 +364,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
    if(token!==loadToken||context.lineage!==expected)return;
    prepareTiming={start:Math.round(began),end:Math.round(performance.now())};
    if(!ready.journeyMode)throw Error('Natural Live lessons are awaiting the server update. Standard voice remains available.');
-   study=result.study;host.onJev?.(study.jev||null);fragments=study.fragments.slice();ack=fragments.length;request=captured;scope=expected;draftKey='worldview-live-draft-v2:'+expected;
+   study=result.study;host.onJev?.(study.jev||null,study.jevHistory);fragments=study.fragments.slice();ack=fragments.length;request=captured;scope=expected;draftKey='worldview-live-draft-v2:'+expected;
    const imported=fragments.filter(f=>f.id.startsWith('import:')),earlier=context.priorHistory||[];
    let at=-1;for(let i=earlier.length-imported.length;imported.length&&i>=0;i--){if(imported.every((f,j)=>earlier[i+j]?.role===f.role&&earlier[i+j]?.content===f.delta)){at=i;break;}}
    prefix=at>0?earlier.slice(0,at).map(t=>({role:t.role,content:t.content})):[];
@@ -390,7 +390,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
  // channel, where it would otherwise be recorded as a turn and shown to the
  // learner as something they said. These markers are the app's own vocabulary
  // and are always uppercase, so real speech never transcribes as one.
- const CONTROL_MARKERS=['APP_HANDOFF'];
+ const CONTROL_MARKERS=['APP_HANDOFF','CONTINUE NOW.'];
  /* GPT Live emits harmony channel markup, and on device it reaches the caption
     stream as literal text: |channel|commentary|> and its variants. The commentary
     channel is the model's internal side, is not spoken, and restates what the
@@ -542,7 +542,40 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   state.pendingDelegations.clear();
   if(!published&&first)inject(state,'Application state received. Continue from the saved state; this is not a new learner turn.',first);
   for(const id of pending)inject(state,'Application state received. Use the latest saved phase; this is not a new learner turn.',id);
+  for(const id of [first,...pending])if(id)scheduleDelegationResume(state,id,900);
   return published;
+ }
+ /* BUG-472: GPT-Live says "let me think for a second" and hands the moment to
+    the app (a delegation). The app answered with quiet context only, which the
+    model is not asked to speak, so it waited until the learner said something:
+    55 seconds on Sept 24, although the check had finished within two. Once the
+    update is in (or after a short wait if it never arrives), the tutor is told
+    to carry on speaking, unless the learner or the tutor has already moved on. */
+ const DELEGATION_RESUME_MS=9000;
+ const DELEGATION_RESUME='CONTINUE NOW. The application update for this moment is complete; nothing more is coming. Speak now: reply in this same turn to what the learner last said, following the latest saved phase and nextFocus. Do not mention checking, thinking or waiting, and do not repeat an earlier question.';
+ function watchDelegation(state,id){
+  if(state.gemini)return;
+  const watch=state.delegationWatch||(state.delegationWatch=new Map());if(watch.has(id))return;
+  const d={at:performance.now(),userSeq:state.lastUserSeq||0,from:fragments.length,timer:null};watch.set(id,d);
+  d.timer=setTimeout(()=>resumeDelegation(state,id),DELEGATION_RESUME_MS);
+ }
+ function scheduleDelegationResume(state,id,delay){
+  const d=state.delegationWatch?.get(id);if(!d)return;
+  clearTimeout(d.timer);d.timer=setTimeout(()=>resumeDelegation(state,id),delay);
+ }
+ function resumeDelegation(state,id){
+  const d=state.delegationWatch?.get(id);if(!d)return;
+  const done=()=>{clearTimeout(d.timer);state.delegationWatch.delete(id);};
+  if(session!==state||state.closing||!state.ready){done();return;}
+  // The learner spoke since: the tutor answers them in the ordinary way.
+  if((state.lastUserSeq||0)!==d.userSeq){done();return;}
+  // The tutor already gave a real reply after its "let me think".
+  const spoken=fragments.slice(d.from).filter(f=>f.role==='assistant').map(f=>f.delta).join('');
+  if(spoken.trim().length>120){done();return;}
+  // A phase opening is about to speak, or the tutor is mid-sentence: look again shortly.
+  if(state.pendingOpeningStep||state.speaking||performance.now()-(state.lastAssistantAt||0)<1200){clearTimeout(d.timer);d.timer=setTimeout(()=>resumeDelegation(state,id),700);if(performance.now()-d.at>30000)done();return;}
+  done();
+  send(state,{type:'session.instructions.append',event_id:state.id+':resume:'+id,delegation_id:id,content:DELEGATION_RESUME});
  }
  async function check(delegationId=null){
   const s=session;if(!s?.ready||s.closing)return;
@@ -569,7 +602,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
    study={...result.study,fragments};
    // LES-257: the owner's live Jev readout follows every check, including a
    // check that saved nothing because the learner kept talking.
-   host.onJev?.(study.jev||null);
+   host.onJev?.(study.jev||null,study.jevHistory);
    const advanced=studyStep(study)!==startedStep;
    // The saved phase is what the lesson has actually reached, so the roadmap and
    // the visible move to the next outcome follow it straight away. Only the
@@ -773,7 +806,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   else if(e.type==='session.input_transcript.delta')append(state,e,'user');
   else if(e.type==='session.output_transcript.delta')append(state,e,'assistant');
   else if(e.type==='gemini.turn.complete'){state.usageTurn=(state.usageTurn||0)+1;if(Date.now()-(state.connectedAt||Date.now())>=60000)autoAttempts=0;}
-  else if(e.type==='session.delegation.created'){const id=e.delegation?.id;if(typeof id==='string'&&!state.delegations.has(id)){state.delegations.add(id);void check(id);}}
+  else if(e.type==='session.delegation.created'){const id=e.delegation?.id;if(typeof id==='string'&&!state.delegations.has(id)){state.delegations.add(id);watchDelegation(state,id);void check(id);}}
   else if(e.type==='session.usage.updated'||e.type==='session.closed'){
    if(Number.isFinite(e.usage?.seconds)&&e.usage.seconds>=0)state.seconds=Math.max(state.seconds,e.usage.seconds);if(state.seconds>=60)autoAttempts=0;
    recordVoiceCost(state,{seconds:e.usage?.seconds,final:e.type==='session.closed'});
