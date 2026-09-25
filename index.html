@@ -701,6 +701,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     position: absolute; bottom: 14px; left: 0; right: 0;
     font-size: max(7px, calc(var(--cardW, 262px) * 0.042)); color: var(--ink-soft);
   }
+  /* LES-268: the chapter a lesson continues with. */
+  .card .card-chapter { position:absolute; left:16px; right:16px; bottom:44px; text-align:center; font-size:max(10px,calc(var(--cardW,262px) * .046)); font-weight:650; letter-spacing:.02em; color:var(--accent-700); }
   .card .card-cost {
     position:absolute;top:52px;left:16px;right:16px;text-align:left;
     font-size:max(10px,calc(var(--cardW,262px) * .044));line-height:1.4;color:var(--ink-soft);
@@ -1715,7 +1717,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #home-archive-entry{margin-bottom:calc(env(safe-area-inset-bottom) + 60px)}
 </style>
 <link rel="stylesheet" href="models.css?v=2.1.37">
-<link rel="stylesheet" href="appearance.css?v=3.1.6">
+<link rel="stylesheet" href="appearance.css?v=3.1.7">
 <script src="appearance.js?v=3.1.1"></script>
 </head>
 <body>
@@ -2280,7 +2282,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.6 · Sep 25";
+const BUILD = "v3.1.7 · Sep 25";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2288,6 +2290,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.7",date:"Sep 25",changes:["Lessons by chapter: when you say how long you have, the tutor asks whether that is for the whole lesson or one chapter. Chapters then fit that time, with only as many parts as the topic needs.","When a chapter is done, choose Next chapter or Stop for now.","A lesson card shows the chapter you will start with next. When you come back, the tutor asks how much time you have today."]},
   {tag:"v3.1.6",date:"Sep 25",changes:["The tutor teaches more like a classroom teacher: it asks what you know or have heard first, explains any word or date you might not know before using it, and builds on things you said earlier.","The step from your starting picture into the lesson is smoother: no repeating, and the tutor starts from what you just said.","A part only moves on after you have had a go in your own words.","A paused lesson now hangs up after 2 minutes, so a pause stops costing."]},
   {tag:"v3.1.5",date:"Sep 25",changes:["Background noise no longer counts as you talking. Breathing, rustling, air conditioning or road noise that the captions turn into words (like \"breath\" or \"a young woman\") no longer moves the lesson on or makes a part look stuck.","The microphone now asks your phone for its noise filter.","After a pause the tutor goes straight back to the lesson, with no \"welcome back\".","The chapter recap just asks what you learned, in your own words. No \"explain it to a friend\".","The tutor no longer talks about updates, gaps or missing pieces.","Lesson cards show the date and time you had the lesson.","Search: tap Search on the Ask Anything card to find a lesson by title or topic.","Jev can run through OpenRouter when that key is set up."]},
   {tag:"v3.1.4",date:"Sep 24",changes:["The tutor waits for you to finish: no more \"mhm\" or \"uh\" while you are still talking.","No more long silences after the tutor says it is thinking: it carries on by itself.","Shaping your lesson has no question limit. The tutor follows what you say, answers \"what else could I learn?\" with the main options, and offers to start only when you sound happy with the plan.","If one research service cannot run (for example it is out of credit), the research goes to the other one.","Owner: the Jev panel lists earlier decisions, and your copied transcript ends with every Jev decision in order."]},
@@ -8525,7 +8528,7 @@ function normalizedHomeLearnerRuns(value) {
       lessonTitleUpdatedAt:Number(item.lessonTitleUpdatedAt) || Date.parse(item.lessonTitleUpdatedAt) || 0} : {}),
       phase:["clarification","map","extraction","lesson","quiz","complete"].includes(item.phase) ? item.phase : "clarification",
       updatedAt:Number(item.updatedAt) || Date.parse(item.updatedAt) || 0,
-      startedAt:learnerRunStart(item.startedAt)};
+      startedAt:learnerRunStart(item.startedAt),...(Number.isInteger(item.chapter?.number)&&item.chapter.number>0?{chapterNumber:item.chapter.number}:Number.isInteger(item.chapterNumber)&&item.chapterNumber>0?{chapterNumber:item.chapterNumber}:{})};
     const previous = runs.get(runId);
     // Display metadata can arrive separately from phase updates (including
     // older clients). Missing metadata must not erase the map's saved name.
@@ -8608,7 +8611,7 @@ function renderHomeLearnerRuns(carousel) {
     card.dataset.kind = "learner-run";
     const stage = {clarification:"Your direction",map:"Lesson Map",extraction:"Your starting point",lesson:"Lesson",quiz:"Quiz",complete:"Completed"}[run.phase];
     card.setAttribute("aria-label",`${run.title}. ${stage}. Tap to continue.`);
-    card.innerHTML = `<div class="card-cat">${esc(stage)}</div><div class="card-cost" data-run-cost="${esc(run.runId)}" data-run-date="${Number(run.startedAt || run.updatedAt) || ""}"></div><div class="card-title serif ${cardTitleSizeClass(run.title)}">${cardTitleHtml(run.title)}</div>`;
+    card.innerHTML = `<div class="card-cat">${esc(stage)}</div><div class="card-cost" data-run-cost="${esc(run.runId)}" data-run-date="${Number(run.startedAt || run.updatedAt) || ""}"></div><div class="card-title serif ${cardTitleSizeClass(run.title)}">${cardTitleHtml(run.title)}</div>${run.chapterNumber && run.phase === "lesson" ? `<div class="card-chapter">Chapter ${run.chapterNumber}</div>` : ""}`;
     paintHomeLessonUsage(card.querySelector(".card-cost"),run.runId);
     /* Tapping the card offers Voice or Text; ••• holds folders, Archive and Delete. */
     const options = document.createElement("button");options.type = "button";options.className = "lesson-options-button";

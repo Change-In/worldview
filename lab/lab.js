@@ -8106,6 +8106,11 @@ function lessonMapOutcomeTarget(value) {
     if (hours) minutes = Math.round(Number(hours[1]) * 60);
     else if (minuteText) minutes = Number(minuteText[1]);
   }
+  /* LES-268: minutes per chapter: 2–3 chapters that each fit that time, with only as many parts as the topic needs. */
+  if (Number.isFinite(minutes) && minutes >= 5 && /per chapter/i.test(preferences.timeText || "")) {
+    const per = minutes <= 15 ? [2,4] : minutes <= 30 ? [3,6] : [4,8];
+    return { min:per[0]*2, max:Math.min(18,per[1]*3), preferred:Math.min(18,per[1]*2+1), timeMinutes:minutes, perChapter:true, label:`2–3 chapters of about ${minutes} minutes each, ${per[0]}–${per[1]} outcomes per chapter, only as many as the topic needs` };
+  }
   /* An open-ended answer earns a full route rather than the floor. */
   if (!Number.isFinite(minutes) && preferences.timeText === OPEN_ENDED_TIME_TEXT) {
     return { min:12, max:18, preferred:16, timeMinutes:null, openEnded:true, label:"a full route of 12–18 outcomes, because the learner set no limit on time" };
@@ -15583,7 +15588,7 @@ async function applyLiveJourney(study){
 }
 function syncLiveLesson(){
  const live=window.WorldviewLiveConversation;if(!live||!q('mock-learner-composer'))return;
- if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),speakerButton:q('mock-learner-mode'),onTextMode:()=>void chooseLiveConversationMode('text'),onStudy:applyLiveJourney,onJev:(readout,history)=>window.WorldviewJevReadout?.update(readout,{enabled:labState.verifiedAdmin===true,history}),onLearnerTopic:applyLiveLearnerTopic,onCheckerUsage:recordLiveCheckerCost,onConnectionState:handleLearnerLiveEntryState,
+ if(!liveConversationMounted){liveConversationMounted=true;live.mount({container:q('mock-learner-composer'),transcript:q('mock-learner-transcript'),speakerButton:q('mock-learner-mode'),onTextMode:()=>void chooseLiveConversationMode('text'),onStudy:applyLiveJourney,onChapterBreak:(title,go,stop)=>showChapterBreak(title,go,stop),onJev:(readout,history)=>window.WorldviewJevReadout?.update(readout,{enabled:labState.verifiedAdmin===true,history}),onLearnerTopic:applyLiveLearnerTopic,onCheckerUsage:recordLiveCheckerCost,onConnectionState:handleLearnerLiveEntryState,
   requestForCurrentAccount:liveTrialRequest,
   onTranscript:()=>renderMockLearnerShell(),
   releaseMedia:()=>{stopClarificationCaptureForModeChange();stopClarificationSpeech();stopPipelineExtractionVoice();if(typeof releaseClarificationTopicCapture==='function')releaseClarificationTopicCapture();}
@@ -20007,3 +20012,18 @@ window.WorldviewTimingHost = {
 };
 void boot();
 setTimeout(() => scheduleConversationDeliveryRecovery(), 2000);
+
+/* LES-268: a finished chapter offers Next chapter or Stop for now. */
+function showChapterBreak(title, go, stop) {
+  const shell = document.getElementById("mock-learner-shell"); if (!shell) return;
+  document.getElementById("chapter-break")?.remove();
+  const bar = document.createElement("div"); bar.id = "chapter-break"; bar.setAttribute("role","group"); bar.setAttribute("aria-label","Chapter finished");
+  bar.style.cssText = "position:sticky;bottom:12px;z-index:30;margin:8px 16px;padding:12px;display:grid;gap:8px;border:1px solid var(--wv-line,rgba(128,128,128,.35));border-radius:14px;background:var(--wv-card,var(--wv-surface,#fff));color:var(--wv-text,inherit);box-shadow:0 8px 24px rgba(0,0,0,.18)";
+  const note = document.createElement("p"); note.style.cssText = "margin:0;font:600 14px/1.4 system-ui,sans-serif"; note.textContent = title ? "Chapter done. Next: " + title : "Chapter done.";
+  const row = document.createElement("div"); row.style.cssText = "display:flex;gap:8px";
+  const button = (label, primary, action) => { const b = document.createElement("button"); b.type = "button"; b.textContent = label;
+    b.style.cssText = "flex:1;min-height:44px;border-radius:999px;font:600 14px system-ui,sans-serif;cursor:pointer;" + (primary ? "border:0;background:var(--wv-accent,#bd5a30);color:#fff" : "border:1px solid var(--wv-line,rgba(128,128,128,.4));background:transparent;color:inherit");
+    b.onclick = () => { bar.remove(); action(); }; return b; };
+  row.append(button("Next chapter", true, go), button("Stop for now", false, stop));
+  bar.append(note, row); shell.appendChild(bar);
+}

@@ -724,7 +724,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
     run on iPhone Safari without a tap, which is why "start talking" failed.
     GPT Live bills by the minute, so it closes and asks for a tap instead. After
     ten held minutes the connection closes too. */
- const RESUME_INSTRUCTION='RESUMING THE SAVED LESSON after a pause. In the selected language, with no greeting and no welcome back: go straight to the lesson. If the learner is speaking, let them finish and answer what they said. If the learner spoke last, respond briefly to what they said. If you spoke last and asked a question they have not answered, repeat that one question in one short sentence; do not turn it into a new question. Otherwise remind them in one sentence where you left off and invite them to carry on. Never start a new topic. Then listen.';
+ const RESUME_INSTRUCTION='RESUMING THE SAVED LESSON after a pause. In the selected language, with no greeting and no welcome back: go straight to the lesson. If the learner is speaking, let them finish and answer what they said. If the learner spoke last, respond briefly to what they said. If you spoke last and asked a question they have not answered, repeat that one question in one short sentence; do not turn it into a new question. Otherwise remind them in one sentence where you left off and invite them to carry on. Never start a new topic. If a new chapter is about to begin, first ask briefly how much time they have today. Then listen.';
  function recordTalk(s){if(s?.talkStartedAt)window.WorldviewLessonCost?.recordTalk?.(s.costOwner||context?.owner,s.costRunId||context?.runId,s.id,(Date.now()-s.talkStartedAt)/1000);}
  function idleCheck(s){
   recordTalk(s);
@@ -793,6 +793,10 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
    if(protectedQuestion(state)){state.openedPhase=version;state.pendingOpeningStep=null;return;}
    // Somebody is already talking, so the handoff is not a dead end after all.
    if(state.speaking||(state.lastAssistantAt||0)>changedAt||state.deferredStudy)return;
+   // LES-268: after a chapter review the learner chooses (a button) whether to
+   // start the next chapter now, so it is not opened automatically.
+   if(reviewedChapter&&study.phase==='lesson'&&!study.packet?.chapterReview&&!state.chapterGo){if(!state.chapterAsked){state.chapterAsked=true;host.onChapterBreak?.(String(study.packet?.journeyContext?.chapter?.title||''),()=>{state.chapterGo=true;state.openedPhase=null;schedulePhaseOpening(state);},()=>{void stop('Saved. Next time you start with the next chapter.',{pause:true});});}return;}
+   state.chapterGo=false;state.chapterAsked=false;
    const instruction=phaseOpeningInstruction();
    if(state.gemini){if(state.gemini.prompt?.(instruction)){state.openedPhase=version;state.pendingOpeningStep=null;}return;}
    state.openingCount=(state.openingCount||0)+1;
