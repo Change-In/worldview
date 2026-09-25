@@ -8,7 +8,7 @@ window.WorldviewLiveConversation=(()=>{
     hides the page for a moment. Ending the voice session on every hide made
     each of those a full reconnect, so a short absence is now ridden out and
     only a real departure stops the session. */
- const BACKGROUND_GRACE_MS=30000,IDLE_PAUSE_MS=60000,IDLE_LISTEN_MS=10*60*1000,REFRESH_WAIT_MS=45000;
+ const BACKGROUND_GRACE_MS=30000,IDLE_PAUSE_MS=60000,IDLE_LISTEN_MS=2*60*1000,REFRESH_WAIT_MS=45000;
  let hiddenAt=0,hiddenTimer=null,nextStart=null,starting=null,prepareTiming=null;const timingLog=[];
  const fragmentTimes=new Map();
  // VOI-144: a spoken fragment keeps the clock time it arrived (start_ms, epoch
@@ -776,9 +776,9 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   const review=study.packet?.chapterReview;
   if(review){reviewedChapter=review.chapterTitle||' ';return shared+'CHAPTER REVIEW. In one short sentence say that the chapter'+(review.chapterTitle?' "'+review.chapterTitle+'"':'')+' is done and there is a quick recap before the next one. Then ask them, in one short question, to recap in their own words what they learned in it (never "to a friend" or to anyone else). Do not open the next part. Then listen.';}
   const chapter=study.packet?.journeyContext?.chapter?.title;
-  if(reviewedChapter&&study.phase==='lesson'){reviewedChapter='';return shared+'The chapter review is done. In one short sentence say the next chapter'+(chapter?', "'+chapter+'",':'')+' begins now. Then open only the saved current outcome: share its key verified idea in a few plain, vivid sentences, then ask one question that asks them to use it. Then listen.';}
+  if(reviewedChapter&&study.phase==='lesson'){reviewedChapter='';return shared+'The chapter review is done. In one short sentence say the next chapter'+(chapter?', "'+chapter+'",':'')+' begins now. Then open only the saved current outcome: ask in one short question what they already know or have heard about it, and teach its key idea after they answer. Then listen.';}
   const start=fresh&&study.currentIndex===0?'The researched lesson begins now. In one short sentence tell the learner their lesson is starting'+(chapter?' and name the first chapter, "'+chapter+'"':'')+'. Then ':'';
-  return shared+(start?start+'open':'Open')+' only the saved current outcome: connect briefly to the lesson purpose, share its key verified idea in a few plain, vivid sentences, then ask one question that asks them to use it. Do not offer the quiz before its saved phase. Then listen.';
+  return shared+(start?start+'open':'Open')+' only the saved current outcome: bridge briefly from what the learner said last (name their idea), then ask in one short question what they already know or have heard about it. Teach its key idea after they answer. Do not repeat anything already said. Do not offer the quiz before its saved phase. Then listen.';
  }
  function schedulePhaseOpening(state){
   if(!study||state.openedPhase===studyStep(study))return;

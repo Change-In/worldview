@@ -1715,7 +1715,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #home-archive-entry{margin-bottom:calc(env(safe-area-inset-bottom) + 60px)}
 </style>
 <link rel="stylesheet" href="models.css?v=2.1.37">
-<link rel="stylesheet" href="appearance.css?v=3.1.5">
+<link rel="stylesheet" href="appearance.css?v=3.1.6">
 <script src="appearance.js?v=3.1.1"></script>
 </head>
 <body>
@@ -2280,7 +2280,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.5 · Sep 25";
+const BUILD = "v3.1.6 · Sep 25";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2288,6 +2288,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.6",date:"Sep 25",changes:["The tutor teaches more like a classroom teacher: it asks what you know or have heard first, explains any word or date you might not know before using it, and builds on things you said earlier.","The step from your starting picture into the lesson is smoother: no repeating, and the tutor starts from what you just said.","A part only moves on after you have had a go in your own words.","A paused lesson now hangs up after 2 minutes, so a pause stops costing."]},
   {tag:"v3.1.5",date:"Sep 25",changes:["Background noise no longer counts as you talking. Breathing, rustling, air conditioning or road noise that the captions turn into words (like \"breath\" or \"a young woman\") no longer moves the lesson on or makes a part look stuck.","The microphone now asks your phone for its noise filter.","After a pause the tutor goes straight back to the lesson, with no \"welcome back\".","The chapter recap just asks what you learned, in your own words. No \"explain it to a friend\".","The tutor no longer talks about updates, gaps or missing pieces.","Lesson cards show the date and time you had the lesson.","Search: tap Search on the Ask Anything card to find a lesson by title or topic.","Jev can run through OpenRouter when that key is set up."]},
   {tag:"v3.1.4",date:"Sep 24",changes:["The tutor waits for you to finish: no more \"mhm\" or \"uh\" while you are still talking.","No more long silences after the tutor says it is thinking: it carries on by itself.","Shaping your lesson has no question limit. The tutor follows what you say, answers \"what else could I learn?\" with the main options, and offers to start only when you sound happy with the plan.","If one research service cannot run (for example it is out of credit), the research goes to the other one.","Owner: the Jev panel lists earlier decisions, and your copied transcript ends with every Jev decision in order."]},
   {tag:"v3.1.3",date:"Sep 23",changes:["Between chapters there is now a short chapter review: you recap the chapter in your own words, the tutor follows up on something you mentioned with one more detail from the research, then the next chapter starts.","Fixed: the tutor could keep saying the next part's research was still loading after it had finished. Research whose claims pointed at one missing source was being thrown away (about 1 in 14 parts); it is now kept with its real sources. The server also checks finished research itself, so a stale copy on your phone cannot undo it.","For you: talk time (against the minutes you asked for) and the running cost now sit beside the Jev pill. The pill also shows how much of a chapter you recalled in a review.","Home: Settings is gone. Models moved to the bottom left, and the Model Lab is now a row in your account page."]},
