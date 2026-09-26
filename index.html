@@ -216,6 +216,17 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .account-menu button+button { border-top:1px solid var(--line); }.account-menu button>span:first-child { width:28px;text-align:center;font-size:23px;color:var(--accent); }.account-menu button>span:last-child { margin-left:auto;font-size:24px;color:var(--ink-soft); }
   .account-menu strong,.account-menu small { display:block; }.account-menu strong { font-size:14px; }.account-menu small { font-size:12px;color:var(--ink-soft);margin-top:5px; }
   .account-device-note { font-size:12px;line-height:1.5;color:var(--ink-soft);margin:20px 0 8px; }
+  .account-access { display:grid;gap:8px;margin:0 0 22px; }
+  .account-access label { font-size:13px;font-weight:600; }
+  .account-access-row { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px; }
+  #account-access-code { min-width:0;height:46px;border:1.5px solid var(--line);border-radius:12px;background:var(--paper);color:var(--ink);padding:0 13px;font:inherit;font-size:16px;outline:none; }
+  #account-access-code:focus { border-color:var(--accent);box-shadow:0 0 0 3px rgba(23,77,91,.1); }
+  #account-access-unlock { min-width:84px;min-height:46px;border:0;border-radius:12px;background:var(--accent);color:#fff;font:inherit;font-size:14px;font-weight:700;cursor:pointer; }
+  #account-access-unlock:disabled { opacity:.5;cursor:default; }
+  #account-access-unlock:focus-visible { outline:2px solid var(--accent);outline-offset:3px; }
+  #account-access-note { font-size:12.5px;line-height:1.5;color:var(--ink-soft);margin:0; }
+  #account-access-note[data-state=error] { color:var(--danger,#b3473e); }
+  #account-access-note[data-state=ok] { color:var(--accent);font-weight:600; }
   #account-dialog[data-mode=manage] .account-dialog-actions { justify-content:flex-start;margin-top:14px; }
   #account-dialog[data-mode=manage] #password-account-signout { color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 17px; }
   #account-dialog button:focus-visible { outline:2px solid var(--accent);outline-offset:3px; }
@@ -1746,6 +1757,11 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     </section>
     <section id="account-summary" hidden aria-label="Account details">
       <div class="account-identity"><span id="account-avatar" aria-hidden="true"></span><div><strong id="account-email"></strong><span class="account-verified">Verified email</span></div></div>
+      <div id="account-access" class="account-access" hidden>
+        <label for="account-access-code">Access code</label>
+        <div class="account-access-row"><input id="account-access-code" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="Enter your code" data-1p-ignore data-lpignore><button id="account-access-unlock" type="button">Unlock</button></div>
+        <p id="account-access-note" role="status">Have an access code? Enter it to start lessons.</p>
+      </div>
       <div class="account-menu">
         <button id="account-lab" type="button" hidden><span aria-hidden="true"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3M7.5 14h9"/></svg></span><span><strong>Model Lab</strong><small>Owner tools: mock runs, prompts and models</small></span><span aria-hidden="true">›</span></button>
         <button id="account-password" type="button"><span aria-hidden="true"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg></span><span><strong>Change password</strong><small>Keep your account secure</small></span><span aria-hidden="true">›</span></button>
@@ -2282,7 +2298,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.7 · Sep 25";
+const BUILD = "v3.1.8 · Sep 26";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2290,6 +2306,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.8",date:"Sep 26",changes:["Access code on your account page: tap your profile at the top left, type the code, and tap Unlock. You can start lessons right away.","If you try to start a lesson without access, the app now takes you to that code box."]},
   {tag:"v3.1.7",date:"Sep 25",changes:["Lessons by chapter: when you say how long you have, the tutor asks whether that is for the whole lesson or one chapter. Chapters then fit that time, with only as many parts as the topic needs.","When a chapter is done, choose Next chapter or Stop for now.","A lesson card shows the chapter you will start with next. When you come back, the tutor asks how much time you have today."]},
   {tag:"v3.1.6",date:"Sep 25",changes:["The tutor teaches more like a classroom teacher: it asks what you know or have heard first, explains any word or date you might not know before using it, and builds on things you said earlier.","The step from your starting picture into the lesson is smoother: no repeating, and the tutor starts from what you just said.","A part only moves on after you have had a go in your own words.","A paused lesson now hangs up after 2 minutes, so a pause stops costing."]},
   {tag:"v3.1.5",date:"Sep 25",changes:["Background noise no longer counts as you talking. Breathing, rustling, air conditioning or road noise that the captions turn into words (like \"breath\" or \"a young woman\") no longer moves the lesson on or makes a part look stuck.","The microphone now asks your phone for its noise filter.","After a pause the tutor goes straight back to the lesson, with no \"welcome back\".","The chapter recap just asks what you learned, in your own words. No \"explain it to a friend\".","The tutor no longer talks about updates, gaps or missing pieces.","Lesson cards show the date and time you had the lesson.","Search: tap Search on the Ask Anything card to find a lesson by title or topic.","Jev can run through OpenRouter when that key is set up."]},
@@ -3537,6 +3554,9 @@ if (!state.speechLanguage) { state.speechLanguage = "en"; save(); }
 // Save setup values to this browser surface. On iPhone, Safari and a newly
 // installed Home Screen app may use separate storage, so account setup is
 // deliberately completed inside the installed app rather than promised here.
+// BUS-061: the account library replaces device state after sign-in, so an
+// invite code from the link is also kept here until it has been claimed.
+var pendingInviteCode = "";
 (function keyFromLink() {
   const params = new URLSearchParams(location.search);
   const k = params.get("key"), ek = params.get("elkey"), ck = params.get("cartkey"), invite = params.get("invite"), developer = params.get("developer") === "1";
@@ -3545,7 +3565,7 @@ if (!state.speechLanguage) { state.speechLanguage = "en"; save(); }
   if (k) state.apiKey = k;
   if (ek) state.elKey = ek;
   if (ck) state.cartKey = ck;
-  if (invite) state.testerInvite = invite;
+  if (invite) { state.testerInvite = invite;pendingInviteCode = invite; }
   save();
   history.replaceState(null, "", location.pathname); // don't leave setup values sitting in the address bar
   setTimeout(() => toast(invite ? "Tester access is ready on this device." : "Set up on this device — you won't need to enter a key again.", 4500), 400);
@@ -4301,6 +4321,7 @@ function updateCloudAccountUI(status = "") {
       : "Tester access is active.";
   }
   renderAccountSetupUI(status);
+  renderAccountAccess();
   renderAccountWorkspace();
   syncDeveloperLauncherVisibility();
   syncDeveloperSettingsVisibility();
@@ -7686,7 +7707,7 @@ function createLessonPlanningProgress(lesson, planningBubble, wantsVoice) {
 async function beginLesson(topic, methodKey, starterText, parentId, sourceUrl, sourceMedia, intakeContext, startToken = "") {
   if (SOURCES_PLACEHOLDER && (sourceUrl || sourceMedia)) { showSourcesPlaceholder(); return null; }
   if (!await ensureStableIdentityForMutation("start a lesson")) return null;
-  if (!aiAvailable()) { openSettings(); toast("Enter the access code, then Save."); return; }
+  if (!aiAvailable()) { openAccessCode("Enter your access code to start lessons."); return; }
   if (!intakeContext || intakeContext.version !== LESSON_INTAKE_PROMPT_VERSION) {
     const startKey = JSON.stringify([
       cleanLessonIntakeText(topic,500),String(methodKey || ""),String(parentId || ""),String(sourceUrl || ""),
@@ -8711,6 +8732,7 @@ async function openHomeLearnerRun({topic = "",runId = "",view = "",entryMode = "
     if (!homeLearnerAccountAllowed()) {
       // Commerce migration remains separate; preserve the existing paid path.
       if (!runId && topic && backendEntitled && backendEntitlementRecord?.access_tier === "paid") { openDirection(topic,entryMode === "text" ? "text" : "voice");return true; }
+      if (accessCodeWanted()) { openAccessCode("Enter your access code to start lessons.");return false; }
       toast("Sign in with your approved tester account to begin. If you have just joined, your tester access needs to be enabled.",6500);return false;
     }
     if (entryMode === "voice") {
@@ -12275,7 +12297,7 @@ async function startSourceLesson() {
   if (SOURCES_PLACEHOLDER) { showSourcesPlaceholder(); return; }
   const raw = $("source-url").value.trim();
   if (!raw && !pendingSourceFile) { $("source-status").textContent = "Add a webpage, photo, or PDF first."; return; }
-  if (!aiAvailable()) { openSettings(); toast("Enter the access code, then Save."); return; }
+  if (!aiAvailable()) { openAccessCode("Enter your access code to start lessons."); return; }
   let url = "";
   if (raw) {
     try {
@@ -12932,7 +12954,7 @@ function enterVoice(autoListen = true, excludeLastFromHistory = false, pinNextMe
   if (!voiceSupported()) { toast("Voice needs microphone access and a supported transcription service."); return; }
   const lesson = getLesson(currentLessonId);
   if (!lesson) return;
-  if (!aiAvailable()) { openSettings(); return; }
+  if (!aiAvailable()) { openAccessCode("Enter your access code to start lessons."); return; }
   stopListening();
   voice.active = true;
   voice.followResponse = true;
@@ -14619,7 +14641,7 @@ async function voiceSend(text, reuseExistingTurn = false) {
     renderVoiceWords(copy.title + " " + copy.detail);
     toast(copy.title + " Your message is saved.", 5200);
     if (voice.active) {
-      if (accessFailure) setTimeout(() => { exitVoice();openSettings();toast("Enter the current access code, then Save.",5200); },180);
+      if (accessFailure) setTimeout(() => { exitVoice();openAccessCode("Enter your access code to carry on."); },180);
       else setVoiceStatus("response-retry");
     }
   }
@@ -14700,7 +14722,7 @@ async function voiceReenter(lesson) {
     abortSpokenReplyPlayback(error.message);
     toast(copy.title, 5200);
     if (voice.active) {
-      if (accessFailure) setTimeout(() => { exitVoice();openSettings();toast("Enter the current access code, then Save.",5200); },180);
+      if (accessFailure) setTimeout(() => { exitVoice();openAccessCode("Enter your access code to carry on."); },180);
       else setVoiceStatus("reentry-retry");
     }
   }
@@ -16878,6 +16900,97 @@ function openAccountSettings() {
 }
 $("gear").onclick = openSettings;
 $("home-account").onclick = openAccountSettings;
+/* BUS-061: a signed-in learner without access types the tester code on their
+   account page. Settings is no longer reachable from Home (NAV-140), and saved
+   voice lessons need an access row on the server, so the code is checked and
+   claimed right away rather than waiting for a first tutor request.
+   lesson-metrics runs requireTesterAccess before it reads its request: an empty
+   POST claims the row when the code is right (the server then answers
+   invalid_metric and records nothing) and answers access_denied when it is not.
+   var, not let: updateCloudAccountUI can render this before the line runs. */
+var accessClaimBusy = false, accessClaimTriedFor = "", accessClaimSucceededFor = "";
+function setAccessNote(text, kind = "") {
+  const note = $("account-access-note");
+  if (!note) return;
+  note.textContent = text;
+  if (kind) note.dataset.state = kind; else delete note.dataset.state;
+}
+function accessCodeWanted() {
+  return !!(backendClient && permanentAccountVerified() && !accountRecoveryRequired()
+    && cloudAccount && entitlementAccountId === cloudAccount.id && !backendAccessRowPresent);
+}
+function renderAccountAccess() {
+  const box = $("account-access");
+  if (!box) return;
+  const wanted = accessCodeWanted();
+  // Right after a successful unlock the box stays to say so, without the field.
+  const unlocked = !wanted && !!cloudAccount && accessClaimSucceededFor === cloudAccount.id;
+  box.hidden = !wanted && !unlocked;
+  box.querySelector("label").hidden = unlocked;
+  box.querySelector(".account-access-row").hidden = unlocked;
+  $("account-access-unlock").disabled = accessClaimBusy;
+  $("account-access-code").disabled = accessClaimBusy;
+  // A code from an invite link is claimed once per account, without a tap.
+  const linkCode = state.testerInvite || pendingInviteCode;
+  if (wanted && linkCode && !accessClaimBusy && accessClaimTriedFor !== cloudAccount.id) {
+    accessClaimTriedFor = cloudAccount.id;
+    void claimAccessCode(linkCode,{quiet:true});
+  }
+}
+async function claimAccessCode(raw, {quiet = false} = {}) {
+  const code = String(raw || "").trim();
+  if (!code) { setAccessNote("Type the code first.","error");$("account-access-code").focus();return false; }
+  if (accessClaimBusy || !accessCodeWanted()) return false;
+  const userId = cloudAccount.id;
+  accessClaimBusy = true;renderAccountAccess();
+  if (!quiet) setAccessNote("Checking the code…");
+  try {
+    const token = await backendAccessToken(false);
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/lesson-metrics`,{
+      method:"POST",
+      headers:{apikey:SUPABASE_PUBLISHABLE_KEY,authorization:`Bearer ${token}`,"content-type":"application/json","x-worldview-access":code},
+      body:"{}",signal:AbortSignal.timeout(15000),
+    });
+    const type = String((await response.json().catch(() => null))?.error?.type || "");
+    if (cloudAccount?.id !== userId) return false;
+    if (response.status === 400 && type === "invalid_metric") {
+      state.testerInvite = code;save();
+      accessClaimSucceededFor = userId;
+      await loadBackendEntitlement(userId);
+      if (cloudAccount?.id !== userId) return false;
+      $("account-access-code").value = "";
+      setAccessNote("You're in. Close this and start a lesson.","ok");
+      toast("Access unlocked. You can start lessons now.",4500);
+      return true;
+    }
+    // A wrong code from an old link is forgotten, so the field shows instead.
+    if (type === "access_denied") { if (state.testerInvite === code) { state.testerInvite = "";save(); } if (pendingInviteCode === code) pendingInviteCode = ""; }
+    if (quiet) return false;
+    setAccessNote(type === "access_denied" ? "That code didn't work. Check it and try again."
+      : ["access_revoked","access_expired","access_invalid"].includes(type) ? "Access for this account is switched off."
+      : type === "not_configured" ? "Access codes aren't set up yet."
+      : "Couldn't check the code right now. Try again in a moment.","error");
+    return false;
+  } catch (_) {
+    if (!quiet) setAccessNote("Couldn't reach Worldview. Check your connection and try again.","error");
+    return false;
+  } finally {
+    accessClaimBusy = false;
+    updateCloudAccountUI();
+  }
+}
+function openAccessCode(message = "") {
+  if (!permanentAccountVerified()) { openAccountSettings();return; }
+  openPasswordAccount("manage");
+  renderAccountAccess();
+  if (message && accessCodeWanted()) setAccessNote(message);
+  if (innerWidth > 700 && accessCodeWanted()) $("account-access-code").focus();
+}
+$("account-access-unlock").onclick = () => { void claimAccessCode($("account-access-code").value); };
+$("account-access-code").addEventListener("keydown",event => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();void claimAccessCode($("account-access-code").value);
+});
 renderHomeAccount();
 // dirty = fields changed since the panel was OPENED (comparing against saved
 // state broke on the phone: a laptop-chosen voice doesn't exist in the phone's
