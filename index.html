@@ -1764,6 +1764,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       </div>
       <div class="account-menu">
         <button id="account-lab" type="button" hidden><span aria-hidden="true"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3M7.5 14h9"/></svg></span><span><strong>Model Lab</strong><small>Owner tools: mock runs, prompts and models</small></span><span aria-hidden="true">›</span></button>
+        <button id="account-models" type="button" hidden><span aria-hidden="true"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></span><span><strong>Models</strong><small>Testing only. Gemini is in use.</small></span><span aria-hidden="true">›</span></button>
         <button id="account-password" type="button"><span aria-hidden="true"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg></span><span><strong>Change password</strong><small>Keep your account secure</small></span><span aria-hidden="true">›</span></button>
         <button id="account-delete" class="account-delete-entry" type="button"><span aria-hidden="true"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></span><span><strong>Delete account</strong><small>Permanently remove your lessons and data</small></span><span aria-hidden="true">›</span></button>
       </div>
@@ -2290,7 +2291,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <script src="config.js"></script>
 <!-- optional: data.js is a shared lessons file — auto-loaded so browsers/devices stay in sync -->
 <script src="data.js"></script>
-<script src="models.js?v=2.1.37"></script>
+<script src="models.js?v=3.1.9"></script>
 <script src="lab/lesson-cost.js?v=2.1.71"></script>
 <script src="saved-map.js?v=2.1.57"></script>
 <script src="profile-chart.js?v=2.1.74"></script>
@@ -2298,7 +2299,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.8 · Sep 26";
+const BUILD = "v3.1.9 · Sep 26";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2306,6 +2307,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.9",date:"Sep 26",changes:["Gemini Live is now the voice for every lesson. Choosing a model is kept for testing only (owner: account page, then Models).","Voice lessons should cost much less. Gemini now re-reads only the last few minutes word for word, plus your key answers and the lesson notes, instead of the whole conversation on every reply.","Between parts, the app sends Gemini short notes instead of the full lesson packet every time.","Each voice connection now saves Gemini's own usage, so a lesson's real cost can be checked."]},
   {tag:"v3.1.8",date:"Sep 26",changes:["Access code on your account page: tap your profile at the top left, type the code, and tap Unlock. You can start lessons right away.","If you try to start a lesson without access, the app now takes you to that code box."]},
   {tag:"v3.1.7",date:"Sep 25",changes:["Lessons by chapter: when you say how long you have, the tutor asks whether that is for the whole lesson or one chapter. Chapters then fit that time, with only as many parts as the topic needs.","When a chapter is done, choose Next chapter or Stop for now.","A lesson card shows the chapter you will start with next. When you come back, the tutor asks how much time you have today."]},
   {tag:"v3.1.6",date:"Sep 25",changes:["The tutor teaches more like a classroom teacher: it asks what you know or have heard first, explains any word or date you might not know before using it, and builds on things you said earlier.","The step from your starting picture into the lesson is smoother: no repeating, and the tutor starts from what you just said.","A part only moves on after you have had a go in your own words.","A paused lesson now hangs up after 2 minutes, so a pause stops costing."]},
@@ -6426,7 +6428,9 @@ function syncDeveloperLauncherVisibility() {
   if (launcher) launcher.hidden = true;
   if ($("account-lab")) $("account-lab").hidden = !admin;
   const modelsButton = $("models-button");
-  if (modelsButton) modelsButton.hidden = !aiAvailable();
+  // BUS-064: models are chosen only for testing, from the owner's account page.
+  if (modelsButton) modelsButton.hidden = true;
+  if ($("account-models")) $("account-models").hidden = !admin;
   // A return-to-window check temporarily disables actions; it is not a
   // navigation request or proof that access was revoked. Wait for a resolved
   // result before dismissing the panel. Identity changes clear it separately.
@@ -16775,6 +16779,12 @@ $("password-account-back").onclick = () => {
 };
 // NAV-140: the Lab lives in the owner's account page, not on Home.
 $("account-lab").onclick = () => { if (closePasswordAccount()) location.href = "lab/"; };
+$("account-models").onclick = () => {
+  if (!ownerToolsAvailable() || !aiAvailable() || !closePasswordAccount()) return;
+  renderModelsSheet();
+  $("models-sheet").classList.add("open");
+  $("models-sheet").setAttribute("aria-hidden","false");
+};
 $("device-account-add").onclick = addDeviceAccount;
 $("account-password").onclick = () => { if (permanentAccountVerified()) openPasswordAccount("update"); };
 /* BUS-050: permanent account deletion. The server deletes the account and

@@ -156,13 +156,15 @@ const defaults = {
 };
 catalog.openai.models.push({id:'gpt-6-astra',label:'GPT-6 Astra'},{id:'gpt-5.6-sol',label:'GPT-5.6 Sol'});
 catalog.xai.models.push({id:'grok-4.6',label:'Grok 4.6'});
-const key = 'worldview-home-models-v1';
+// BUS-064 (v3.1.9): Gemini is the only model in use. Choices saved before this
+// on a device are left behind; a new choice here is for testing only.
+const key = 'worldview-home-models-v2';
 const legacyKey = 'worldview-lab-mock-run-config-gemini38-v2';
 const voiceKey = 'wv-lab-voice-routes';
 const liveKey = 'worldview-live-lesson-stages-v1';
 const voiceRouteKey='worldview-voice-route-v2';
-const liveModelKey='worldview-live-model-v1';
-function liveModel(storage=localStorage){return read(storage,liveModelKey).model==='gemini-3.8-live'?'gemini-3.8-live':'gpt-live-1';}
+const liveModelKey='worldview-live-model-v2';
+function liveModel(storage=localStorage){return read(storage,liveModelKey).model==='gpt-live-1'?'gpt-live-1':'gemini-3.8-live';}
 function liveLabel(storage=localStorage){return liveModel(storage)==='gemini-3.8-live'?'Gemini 3.8 Live':'GPT Live';}
 const liveStages = ['clarification','extraction','lesson','quiz'];
 function liveEnabled(stage,storage=localStorage) { return liveStages.includes(stage) && read(storage,voiceRouteKey).mode !== 'standard'; }
@@ -184,7 +186,7 @@ function apply(config,storage=localStorage) {
  return result;
 }
 function initial(storage,admin) {
- const legacy=admin?read(storage,legacyKey):{}, config={};
+ const legacy={}, config={}; // BUS-064: older Lab choices no longer carry into lessons
  for(const stage of Object.keys(defaults)) {
   const choice=legacy[stage];
   config[stage]={...defaults[stage]};
@@ -244,17 +246,17 @@ function render(host,{admin=false,onVoice=()=>{},storage=localStorage,mode='voic
   }
   company.onchange=()=>commit({provider:company.value,model:choices[company.value].models[0].id});
   model.onchange=()=>{if(model.value==='__custom__'){customLine.hidden=false;input.value='';input.focus();}else commit({provider:company.value,model:model.value});};
-  customLine.onsubmit=event=>{event.preventDefault();const value=input.value.trim();if(!valid(company.value,value)||/^gpt-(live|realtime)/i.test(value)){input.setCustomValidity('Enter a supported text model ID. GPT Live is the default in Voice.');input.reportValidity();return;}commit({provider:company.value,model:value});};input.oninput=()=>input.setCustomValidity('');
+  customLine.onsubmit=event=>{event.preventDefault();const value=input.value.trim();if(!valid(company.value,value)||/^gpt-(live|realtime)/i.test(value)){input.setCustomValidity('Enter a supported text model ID. Gemini 3.8 Live is the voice model.');input.reportValidity();return;}commit({provider:company.value,model:value});};input.oninput=()=>input.setCustomValidity('');
   section.append(top,presets,controls,customLine,price,liveNote,advanced);parent.append(section);fill();
  }
  if(mode==='voice'){
   const selectedLive=liveModel(storage),gemini=selectedLive==='gemini-3.8-live';
-  const card=el('section','models-live-default');card.append(el('div','model-badge',admin?(gemini?'Test option':'Recommended'):'Owner access required'),el('h3','',liveLabel(storage)));
+  const card=el('section','models-live-default');card.append(el('div','model-badge',admin?(gemini?'In use':'Testing only'):'Owner access required'),el('h3','',liveLabel(storage)));
   const choose=el('select');choose.id='model-choice-live';choose.setAttribute('aria-label','Live voice model');choose.disabled=!admin;
-  choose.add(new Option('GPT Live 1 · recommended','gpt-live-1'));choose.add(new Option('Gemini 3.8 Live · try it','gemini-3.8-live'));choose.value=selectedLive;
+  choose.add(new Option('Gemini 3.8 Live · in use','gemini-3.8-live'));choose.add(new Option('GPT Live 1 · testing only','gpt-live-1'));choose.value=selectedLive;
   choose.onchange=()=>{if(persist(liveModelKey,{model:choose.value})){persist(voiceRouteKey,{mode:'live'});rerender('model-choice-live');}};
   const pricing=el('a','','Official voice pricing');pricing.href=links[gemini?'google':'openai'];pricing.target='_blank';pricing.rel='noopener noreferrer';
-  card.append(choose,el('p','model-rate',gemini?'$0.005/min audio in + $0.018/min audio out':'$0.05/min'),el('p','models-note',gemini?'Text and context tokens are additional. The lesson total uses reported usage; this is not a fixed session-minute rate.':'Your current default. Keep this selected to retain the voice you have been testing.'),pricing);host.append(card);
+  card.append(choose,el('p','model-rate',gemini?'$0.005/min audio in + $0.018/min audio out':'$0.05/min'),el('p','models-note',gemini?'Text and context tokens are additional. The lesson total uses reported usage; this is not a fixed session-minute rate.':'For testing only. Switch back to Gemini 3.8 Live when you are done.'),pricing);host.append(card);
   row(details,'map','Lesson map',catalog,config.map,choice=>{const saved=read(storage,key);saved.map=choice;return persist(key,saved);},defaults.map,true);
   row(details,'brain','Understanding checks',catalog,config.brain,choice=>{const saved=read(storage,key);saved.brain=choice;return persist(key,saved);},defaults.brain,true);
  }else{

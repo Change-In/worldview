@@ -94,6 +94,7 @@ window.WorldviewLiveConversation=(()=>{
   s.costOwner??=context?.owner;s.costRunId??=context?.runId;
   if(value.metadata){
    const estimate=costs.geminiUsage(value.metadata);
+   trackGeminiUsage(s,value.usageId??s.usageTurn??0,value.metadata);
    costs.report(s.costOwner,s.costRunId,'voice:'+s.id+':turn:'+(value.usageId??s.usageTurn??0),{...estimate,model:s.model,atLeast:true});
   }else if((s.model||'gpt-live-1')==='gpt-live-1'&&s.dispatched){
    const final=value.final===true&&typeof value.seconds==='number'&&Number.isFinite(value.seconds)&&value.seconds>=0;
@@ -106,6 +107,33 @@ window.WorldviewLiveConversation=(()=>{
    costs.report(s.costOwner,s.costRunId,'voice:'+s.id,{usd:seconds/60*.05,model:'gpt-live-1',final,partial:!final});
   }
   paintCosts();
+ }
+ /* BUS-063: Gemini's own usage for this connection goes to the server beside
+    its receipt, so a lesson's real cost can be read later. Counts only, never
+    speech or text. A turn can report more than once; the largest count of each
+    kind is kept. Sent at most every 30 seconds, and once more on stop. */
+ const USAGE_KINDS=['promptText','promptAudio','promptOther','cached','responseText','responseAudio','responseOther','thoughts'];
+ const tokens=value=>Math.max(0,Math.round(Number(value)||0));
+ function usageCounts(metadata){
+  const c={promptText:0,promptAudio:0,promptOther:0,cached:tokens(metadata?.cachedContentTokenCount),responseText:0,responseAudio:0,responseOther:0,thoughts:tokens(metadata?.thoughtsTokenCount),prompt:tokens(metadata?.promptTokenCount)};
+  for(const [field,prefix] of [['promptTokensDetails','prompt'],['responseTokensDetails','response']])
+   for(const d of Array.isArray(metadata?.[field])?metadata[field]:[])c[prefix+(d?.modality==='TEXT'?'Text':d?.modality==='AUDIO'?'Audio':'Other')]+=tokens(d?.tokenCount);
+  return c;
+ }
+ function trackGeminiUsage(s,turn,metadata){
+  if(!metadata||typeof metadata!=='object')return;
+  const turns=s.usageTurns||(s.usageTurns=new Map()),next=usageCounts(metadata),old=turns.get(turn);
+  turns.set(turn,old?Object.fromEntries(Object.keys(next).map(k=>[k,Math.max(old[k],next[k])])):next);
+  if(Date.now()-(s.usageSentAt||0)>=30000)sendGeminiUsage(s);
+ }
+ function sendGeminiUsage(s,final=false){
+  if(!s?.usageTurns?.size||!s.dispatched||typeof s.request!=='function')return;
+  const t={turns:s.usageTurns.size,maxPrompt:0};for(const k of USAGE_KINDS)t[k]=0;
+  for(const c of s.usageTurns.values()){for(const k of USAGE_KINDS)t[k]+=c[k];t.maxPrompt=Math.max(t.maxPrompt,c.prompt);}
+  // List prices; any discount Google gives for cached tokens is not applied here.
+  const usd=((t.promptText+t.promptOther)*.75+t.promptAudio*3+(t.responseText+t.responseOther+t.thoughts)*4.5+t.responseAudio*12)/1e6;
+  s.usageSentAt=Date.now();
+  void s.request({action:'usage',requestId:s.id,usage:{...t,usd:Math.round(usd*1e6)/1e6,final}}).catch(()=>{});
  }
  function startVoiceCost(s){
   s.costOwner??=context?.owner;s.costRunId??=context?.runId;
@@ -525,6 +553,11 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   const tail=at<0?-1:value.indexOf(POLICY_TAIL,at+POLICY_MARK.length);
   return at<0||tail<0?value:(value.slice(0,at)+value.slice(tail)).trim();
  }
+ const FULL_PACKET_EVERY=6;
+ function lightPacket(p){
+  const c=p.conversationState||{};
+  return {phase:p.phase,phaseVersion:p.phaseVersion,conversationState:{revision:c.revision,learnerSaid:c.learnerSaid,nextFocus:c.nextFocus,waitingForResearch:c.waitingForResearch,approvalSaved:c.approvalSaved},lastCheck:p.lastCheck,gaps:p.gaps,probe:p.probe,progress:p.progress};
+ }
  function publishStudy(state,delegationId=null){
   if(session!==state||state.closing)return false;
   if(protectedQuestion(state)||state.speaking){state.deferredStudy=true;return false;}
@@ -533,7 +566,28 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   if(state.publishedStudy===signature)return false;
   const phaseChanged=state.publishedPhase!==study.phaseVersion;
   if(state.gemini){
-   state.gemini.context('APP_HANDOFF. Adopt this saved phase and next focus at the next natural boundary. This is application context, not learner speech. Do not repeat answered questions or speak merely because this update arrived.\n'+(phaseChanged?'Phase policy: '+changedPolicy(study.instructions)+'\n':'')+'Saved reference packet: '+JSON.stringify(study.packet));
+   /* BUS-063: every note stays in Gemini's conversation and is paid for again
+      on each later turn; the full packet (the part's research, the roadmap and
+      the learner's earlier answers) was being re-sent after almost every answer.
+      It now goes at a new part, when research or approval changes, when the
+      queued note it would replace was a full one, and after a few small notes so
+      the capped window always holds a recent copy. In between, only what changed:
+      the next focus, the last check, recorded gaps and the learner's own words
+      (LES-267). */
+   const packet=study.packet||{};
+   const heavy=JSON.stringify([studyStep(study),packet.research,packet.currentOutcome?.verifiedSupport?.status||'',(packet.preparationResearch||[]).length,!!packet.scopeApproved]);
+   const queuedFull=!!state.lastQueuedFull&&!!state.gemini.hasPending?.();
+   const full=phaseChanged||queuedFull||state.heavyPublished!==heavy||(state.lightNotes||0)>=FULL_PACKET_EVERY;
+   const policy=phaseChanged||(queuedFull&&state.lastQueuedPolicy);
+   const head='APP_HANDOFF. Adopt this saved phase and next focus at the next natural boundary. This is application context, not learner speech. Do not repeat answered questions or speak merely because this update arrived.\n';
+   if(full){
+    state.gemini.context(head+(policy?'Phase policy: '+changedPolicy(study.instructions)+'\n':'')+'Saved reference packet: '+JSON.stringify(packet));
+    state.heavyPublished=heavy;state.lightNotes=0;
+   }else{
+    state.gemini.context(head+'Same part: the last full reference packet still applies. What changed: '+JSON.stringify(lightPacket(packet)));
+    state.lightNotes=(state.lightNotes||0)+1;
+   }
+   state.lastQueuedFull=full;state.lastQueuedPolicy=!!policy;
    state.publishedStudy=signature;state.publishedPhase=study.phaseVersion;state.publishedStep=studyStep(study);return true;
   }
   // Silent context is advisory, not a provider-enforced speech boundary.
@@ -908,6 +962,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   // Otherwise a paused/replaced session can keep talking for the 8-second grace.
   output?.stop();detachOutput(s);ui.audio.pause?.();ui.audio.srcObject=null;ui.enableAudio.hidden=true;stash();void flush();message(reason);
   if(s.model==='gemini-3.8-live'){
+   sendGeminiUsage(s,true);
    closeGeminiReceipt(s);s.gemini?.close();cleanup(s);message(reason);return;
   }
   if(s.ready)send(s,{type:'session.close'});

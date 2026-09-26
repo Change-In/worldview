@@ -2814,7 +2814,9 @@ function normalizeMockStageOutputTokens(stage, value, fallback) {
 function loadMockRunConfig() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(MOCK_RUN_CONFIG_KEY) || "null"); } catch (_) { saved = null; }
-  if (typeof LAB_LEARNER !== "undefined" && LAB_LEARNER && !labState.verifiedAdmin) saved = null;
+  // BUS-064: lessons never use the Lab's saved experiments, the owner's included.
+  // Gemini is the default; only a testing choice on the Models page overrides it.
+  if (typeof LAB_LEARNER !== "undefined" && LAB_LEARNER) saved = null;
   for (const stage of MOCK_RUN_STAGES) {
     const fallback = MOCK_STAGE_DEFAULTS[stage];
     const value = saved?.[stage] && typeof saved[stage] === "object" ? saved[stage] : {};

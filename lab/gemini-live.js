@@ -140,7 +140,9 @@ window.WorldviewGeminiLive=(()=>{
    const kept=held;held=[];
    if(flush&&ready)for(const chunk of kept)send({realtimeInput:{audio:{mimeType:'audio/pcm;rate=16000',data:encodePcm(chunk)}}});
   }
-  const controls={context,mute,resumeAudio,applyRoute,prompt,alive,close:()=>finish('client_closed'),dispose:()=>finish('client_closed')};
+  // BUS-063: whether a note is still waiting to be sent (a newer one replaces it).
+  const hasPending=()=>!!pendingContext;
+  const controls={context,hasPending,mute,resumeAudio,applyRoute,prompt,alive,close:()=>finish('client_closed'),dispose:()=>finish('client_closed')};
   onTransport(controls);
   try{
    await audio.audioWorklet.addModule('./gemini-pcm-worklet.js?v=2.1.37');
