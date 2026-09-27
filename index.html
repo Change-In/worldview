@@ -1252,14 +1252,18 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #carousel-wrap { position:relative; }
   /* NAV-149 (revised 2026-09-27): back and Edit sit just above the lesson
      cards, left and right; Done takes Edit's place. */
-  #home-shelf-bar { position:absolute; z-index:30; top:calc(50% - var(--cardH,320px) / 2 - 50px); left:calc(50% - var(--cardW,262px) / 2); width:var(--cardW,262px); display:flex; align-items:center; justify-content:space-between; pointer-events:none; }
+  #home-shelf-bar { position:absolute; z-index:30; top:calc(50% - var(--cardH,320px) / 2 - 50px); left:max(16px,env(safe-area-inset-left)); right:max(16px,env(safe-area-inset-right)); display:flex; align-items:center; justify-content:space-between; pointer-events:none; }
   #home-shelf-bar[hidden] { display:none; }
   #home-shelf-bar > button { pointer-events:auto; }
   #home-back-start { width:38px; height:38px; display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; background:var(--card); color:var(--ink); cursor:pointer; padding:0; }
   #home-back-start[hidden] { visibility:hidden; display:grid; }
   #home-back-start svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
-  #home-edit-toggle { padding:8px 16px; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--ink); font:650 13px system-ui,sans-serif; cursor:pointer; }
+  #home-edit-toggle { width:38px; height:38px; display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; background:var(--card); color:var(--ink); cursor:pointer; padding:0; }
+  #home-edit-toggle svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   body.home-editing #home-edit-toggle { background:var(--accent); border-color:var(--accent); color:#fff; }
+  /* Time spent in the lesson, small at the bottom of its card. */
+  .card .card-time { position:absolute; left:16px; right:16px; bottom:14px; text-align:center; font-size:max(10px,calc(var(--cardW,262px) * .042)); color:var(--ink-soft); font-variant-numeric:tabular-nums; }
+  body.home-editing .card .card-time { display:none; }
   #home-edit-bar { position:absolute; z-index:30; top:calc(50% - var(--cardH,320px) / 2 - 98px); left:16px; right:16px; display:flex; justify-content:center; }
   #home-edit-bar[hidden] { display:none; }
   #home-edit-folders { display:flex; flex-wrap:nowrap; gap:6px; overflow-x:auto; max-width:100%; padding:2px; scrollbar-width:none; }
@@ -2031,7 +2035,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
       <section id="carousel-page" class="home-deck-page" aria-label="Questions and saved lessons">
         <div id="carousel-wrap">
           <div id="home-edit-bar" hidden><div id="home-edit-folders" role="group" aria-label="Folders for this lesson"></div></div>
-          <div id="home-shelf-bar" hidden><button id="home-back-start" type="button" aria-label="Back to Ask anything"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6 5 12l6 6M5 12h14"/></svg></button><button id="home-edit-toggle" type="button">Edit</button></div>
+          <div id="home-shelf-bar" hidden><button id="home-back-start" type="button" aria-label="Back to Ask anything"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6 5 12l6 6M5 12h14"/></svg></button><button id="home-edit-toggle" type="button" aria-label="Edit lessons"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button></div>
           <div id="carousel"></div>
           <div id="lesson-layer-guide" aria-label="Lesson folder selector" hidden>
             <div id="lesson-layer-up" class="layer-destination"></div>
@@ -2377,7 +2381,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.14 · Sep 27";
+const BUILD = "v3.1.15 · Sep 27";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2385,6 +2389,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.15",date:"Sep 27",changes:["Back and edit now sit at the far left and far right of the screen, just above your lesson cards.","Edit is a pencil; while editing it turns into a check to finish.","Each lesson card shows how long you have spent in it, small at the bottom."]},
   {tag:"v3.1.14",date:"Sep 27",changes:["The Folders and Search card starts closed: just two icons.","Tap the folder icon and your lessons are swapped for folders, two stacked in each spot. Tap one to see its lessons; the × on the card shows everything again.","Tap search and type: the lesson cards themselves filter as you go.","Back and Edit now sit just above your lesson cards. Done appears in Edit's place.","Edit a title right on the card: tap it, type, and press return.","Lesson cards are lighter: no ••• button, no date and cost line, and no outline around the map button."]},
   {tag:"v3.1.13",date:"Sep 27",changes:["One card for Folders and Search, right after Ask anything. Flip between them with the two icons.","The AI sorts your lessons into a few categories on its own (marked ✦), next to your own folders. A lesson can be in several.","Edit mode: tap the pencil on that card, or hold a lesson. Every card gets archive and trash, tap a title to rename it, and add the centered lesson to folders at the top. Tap Done when finished.","A back button at the top brings you straight to Ask anything when you are deep in your lessons.","Lesson titles are always capitalized.","Profile is tidier: one small line of numbers, a cleaner chart you can tap to see any day, and your completed lessons.","Fixed: tapping near the edge of a card could open the options of the card behind it."]},
   {tag:"v3.1.12",date:"Sep 26",changes:["Shaping now asks whether you want a quick overview or a deep dive, instead of how many minutes. An overview is one chapter; a deep dive gets every chapter the topic needs, one chapter at a time.","The chapter recap now always comes before the next chapter starts.","Coming back to a lesson after a while starts with a quick warm-up: the tutor asks what you remember from last time.","Lesson cards show where you left off: Continue, the chapter number and its name.","Research is prepared one chapter ahead of you, so a deep dive starts just as fast.","The tutor sounds more relaxed and warm, with a new friendly voice and no over-the-top praise."]},
@@ -6884,7 +6889,8 @@ function setHomeEditMode(on) {
   wheel.editMode = !!on;
   document.body.classList.toggle("home-editing", wheel.editMode);
   $("home-edit-bar").hidden = !wheel.editMode;
-  $("home-edit-toggle").textContent = wheel.editMode ? "Done" : "Edit";
+  $("home-edit-toggle").innerHTML = wheel.editMode ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>' : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>';
+  $("home-edit-toggle").setAttribute("aria-label", wheel.editMode ? "Done editing" : "Edit lessons");
   if (wheel.editMode && wheel.libraryMode === "folders") wheel.libraryMode = "";
   renderHome();
   syncHomeEditBar(true);
@@ -9035,8 +9041,11 @@ function renderHomeLearnerRuns(carousel) {
     const stage = {clarification:"Your direction",map:"Lesson Map",extraction:"Your starting point",lesson:"Lesson",quiz:"Quiz",complete:"Completed"}[run.phase];
     card.setAttribute("aria-label",`${run.title}. ${stage}. Tap to continue.`);
     card.innerHTML = `<div class="card-cat">${esc(stage)}</div><div class="card-title serif ${cardTitleSizeClass(run.title)}">${cardTitleHtml(run.title)}</div>${run.chapterNumber && run.phase === "lesson" ? homeChapterHtml(run) : ""}`;
-    /* A card holds the title, where it continues and the map. Rename, folders,
-       archive and delete live in edit mode (owner 2026-09-27: no •••). */
+    /* A card holds the title, where it continues, the map, and the time spent
+       in it, small at the bottom. Rename, folders, archive and delete live in
+       edit mode (owner 2026-09-27: no •••). */
+    const talked = homeLessonTalkLabel(run.runId);
+    if (talked) card.insertAdjacentHTML("beforeend", `<div class="card-time" aria-label="${esc(talked)} in this lesson">${esc(talked)}</div>`);
     const mapButton = document.createElement("button");
     mapButton.type = "button";
     mapButton.className = "lesson-path-button card-path-button";
@@ -9055,6 +9064,12 @@ function renderHomeLearnerRuns(carousel) {
 }
 /* A learner sees how long they have talked. The dollar estimate stays visible
    to the owner only, until pricing is decided (BUS-049). */
+function homeLessonTalkLabel(runId){
+  if(!cloudAccount?.id)return "";
+  const minutes=Math.round((window.WorldviewLessonCost?.talk?.(cloudAccount.id,runId)||0)/60);
+  if(minutes<1)return "";
+  return minutes<60?minutes+" min":Math.floor(minutes/60)+" h"+(minutes%60?" "+(minutes%60)+" min":"");
+}
 function paintHomeLessonUsage(node,runId){
   if(!node||!cloudAccount?.id)return;
   const costs=window.WorldviewLessonCost,seconds=costs?.talk?.(cloudAccount.id,runId)||0;
