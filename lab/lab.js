@@ -726,7 +726,7 @@ Return only valid JSON with this shape:
   "assumptions": ["important map assumption not established by the learner"],
   "sharedResearchNeeds": ["fresh or contested claim shared by several outcomes"]
 }
-Audit the necessary prerequisites within the chosen route. Establish a concrete situation and any basic category distinction before depending on a specialist word or measurement, without turning every route into a definitions ladder. First decide the individual learning outcomes, then group adjacent outcomes into chapters only where they form one comprehensible part of the learner's question. Every non-final chapter must contain two to four related outcomes; do not make a one-outcome chapter just to create another title—merge that outcome into its closest prerequisite or integration chapter. Only a genuinely indivisible final integration may have one outcome. Chapters and outcomes are already in learner order, with necessary prerequisites introduced before their use and a final connection to the clarified goal. Fixed application code supplies an outcomeTarget derived from the learner's stated time; keep the total outcome count inside that target while preserving the smallest necessary prerequisite floor. Every learningOutcome and successEvidence must be observable, not a topic label.
+Audit the necessary prerequisites within the chosen route. Establish a concrete situation and any basic category distinction before depending on a specialist word or measurement, without turning every route into a definitions ladder. First decide the individual learning outcomes, then group adjacent outcomes into chapters only where they form one comprehensible part of the learner's question. Every non-final chapter must contain two to four related outcomes; do not make a one-outcome chapter just to create another title—merge that outcome into its closest prerequisite or integration chapter. Only a genuinely indivisible final integration may have one outcome. Chapters and outcomes are already in learner order, with necessary prerequisites introduced before their use and a final connection to the clarified goal. Fixed application code supplies an outcomeTarget derived from the learner's chosen depth (an overview is exactly one chapter; a deep dive has every chapter the topic needs), or from their stated time on older lessons; keep the chapter and outcome counts inside that target while preserving the smallest necessary prerequisite floor. Every learningOutcome and successEvidence must be observable, not a topic label.
 
 Web research is mandatory for this Lesson Map. Investigate the factual claims, mechanisms, dates, examples, and boundaries needed by every outcome before returning the map. supportNeeds must list the concise research questions actually investigated, not future work. For every outcome that names a country, organisation, product, period, policy or method, one support need must be the comparison an interested learner would ask next: the obvious counterpart, rival, alternative or the same measure elsewhere, with the figures that make the comparison meaningful. A learner who hears what one actor does asks immediately how that compares with the others, and an outcome researched without that comparison leaves the tutor unable to answer it. Every outcome must contain verifiedSupport with status verified or conflicting, a compact summary of at most 600 characters, no more than three atomic claims, no more than three HTTPS sources, no more than two boundaries, and no more than two examples. Link every claim and example to source IDs. Use only source URLs that the provider's research tool actually returned; never invent, repair, or guess a citation, URL, date, fact, or example. If an outcome cannot be supported by the completed research, omit or merge it rather than returning unsupported teaching material. Keep every string concise and use empty arrays only where optional so the complete JSON fits within the output budget. Do not wrap the JSON in markdown.`;
 
@@ -8118,6 +8118,19 @@ function cleanMapDisplayTitle(value, fallback = "", length = 180) {
 function lessonMapOutcomeTarget(value) {
   const preferences = normalizeClarificationPreferences(value);
   let minutes = preferences.timeMinutes;
+  /* LES-273: depth is how many chapters there are (owner, 2026-09-26). An
+     overview is one chapter; a deep dive gets every chapter the topic needs,
+     taken one chapter at a time, each as long as its parts need. Minutes, when
+     a lesson was shaped before depth existed, still size the older routes. */
+  if (!minutes && !preferences.timeText && preferences.depth === "introductory") {
+    return { min:3, max:5, preferred:4, chapters:1, depth:"overview", timeMinutes:null, label:"an overview: exactly one chapter of 3–5 outcomes" };
+  }
+  if (!minutes && !preferences.timeText && preferences.depth === "deep") {
+    return { min:9, max:18, preferred:15, depth:"deep_dive", timeMinutes:null, label:"a deep dive: every chapter the topic needs (usually 4–6 chapters of 2–4 outcomes), 9–18 outcomes in all" };
+  }
+  if (!minutes && !preferences.timeText && preferences.depth === "moderate") {
+    return { min:6, max:10, preferred:8, depth:"moderate", timeMinutes:null, label:"a moderate lesson: 2–3 chapters, 6–10 outcomes in all" };
+  }
   if (!minutes && preferences.timeText) {
     const hours = preferences.timeText.match(/\b(\d+(?:\.\d+)?)\s*hours?\b/i);
     const minuteText = preferences.timeText.match(/\b(\d{1,3})\s*minutes?\b/i);
@@ -8431,7 +8444,7 @@ function pipelineMapPlanValidation(map, artifact = selectedPipelineArtifact()) {
           : invalidPrerequisite ? "A chapter prerequisite does not refer to an earlier chapter."
             : missingResearchPlan ? "At least one outcome has no bounded research plan."
               : "";
-  const advisory = sizingMatches ? "" : `The planner returned ${outcomes.length} outcomes; the learner's time estimate suggested ${outcomeTarget.label}.`;
+  const advisory = sizingMatches ? "" : `The planner returned ${outcomes.length} outcomes; the learner's choice suggested ${outcomeTarget.label}.`;
   return { valid, reason, advisory, sizingMatches, chapters, outcomes, outcomeTarget };
 }
 
@@ -8804,6 +8817,23 @@ async function retryPipelineMapChapterResearch(plannerJob, artifact = selectedPi
   return ensurePipelineMapChapterResearch(plannerJob, artifact, { retryMissing:true });
 }
 
+/* LES-272: a voice lesson researches its current chapter and the next one,
+   and starts each following chapter's research as the lesson reaches it. A
+   deep dive therefore costs nothing extra up front, and research a learner
+   never reaches is never bought. Typed lessons (owner only) research it all. */
+function learnerResearchChapterLimit(plannerMap) {
+  const journey = labState.liveJourney;
+  if (!LAB_LEARNER || !journey) return Infinity;
+  const index = Number(journey.currentIndex);
+  let current = 0, seen = 0;
+  for (const [chapterIndex, chapter] of (plannerMap?.chapters || []).entries()) {
+    current = chapterIndex;
+    seen += (chapter.outcomes || []).length;
+    if (!Number.isInteger(index) || index < seen) break;
+  }
+  return current + 1;
+}
+
 function ensureSelectedPipelineMapResearch(selection = selectedPipelineMapRecord()) {
   // Cached detail can hydrate before Continue. Reconcile again in active views.
   if (labState.learnerEntryPending || labState.mockSetupActive || labState.preview
@@ -8841,7 +8871,9 @@ async function ensurePipelineMapChapterResearch(plannerJob, artifact = selectedP
   const { provider, model } = mockResearchRoute(plannerRoute.provider, plannerRoute.model);
   const requests = [];
   const pendingIds = new Set();
+  const researchLimit = learnerResearchChapterLimit(plannerMap);
   for (const [chapterIndex, chapter] of plannerMap.chapters.entries()) {
+    if (chapterIndex > researchLimit) continue;
     const state = pipelineMapChapterResearchState(artifact, plannerJob.id, planFingerprint, chapter);
     for (const outcome of chapter.outcomes || []) {
       if (pipelineMapSupportCoverage({ chapters:[{ outcomes:[state.chapter.outcomes.find((item) => item.id === outcome.id)] }] }).complete) continue;
@@ -15617,6 +15649,8 @@ async function applyLiveJourney(study){
  if(study.clarification){labState.clarification.finalized=study.clarification;labState.clarification.finalizedStorage='server';labState.pipelineSelectedRunId=study.runId;rememberClarificationArtifact(study.clarification,'server');}
  if(study.extraction)rememberExtractionArtifact(study.extraction,'server');
  maybeAutoStartLessonMap(study);
+ // LES-272: research follows the lesson, one chapter ahead.
+ if(LAB_LEARNER)ensureSelectedPipelineMapResearch(selectedPipelineMapRecord());
  if(changed){
   const target=study.phase==='complete'?'quiz':study.phase;
   if(target!==labState.pipelineStage)setPipelineStage(target);

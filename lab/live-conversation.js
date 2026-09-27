@@ -778,7 +778,12 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
     run on iPhone Safari without a tap, which is why "start talking" failed.
     GPT Live bills by the minute, so it closes and asks for a tap instead. After
     ten held minutes the connection closes too. */
- const RESUME_INSTRUCTION='RESUMING THE SAVED LESSON after a pause. In the selected language, with no greeting and no welcome back: go straight to the lesson. If the learner is speaking, let them finish and answer what they said. If the learner spoke last, respond briefly to what they said. If you spoke last and asked a question they have not answered, repeat that one question in one short sentence; do not turn it into a new question. Otherwise remind them in one sentence where you left off and invite them to carry on. Never start a new topic. If a new chapter is about to begin, first ask briefly how much time they have today. Then listen.';
+ const RESUME_INSTRUCTION='RESUMING THE SAVED LESSON after a pause. In the selected language, with no greeting and no welcome back: go straight to the lesson. If the learner is speaking, let them finish and answer what they said. If the learner spoke last, respond briefly to what they said. If you spoke last and asked a question they have not answered, repeat that one question in one short sentence; do not turn it into a new question. Otherwise remind them in one sentence where you left off and invite them to carry on. Never start a new topic. If a new chapter is about to begin, name it in a few words and begin it. Then listen.';
+ /* LES-275: a lesson reopened after a couple of hours starts with a short
+    recall of where it left off, which is what makes it stick. */
+ const WARMUP_AFTER_MS=2*60*60*1000;
+ const WARMUP_INSTRUCTION='WARM-UP: a new sitting of a saved lesson. In the selected language, with no greeting and no welcome back, ask ONE short question inviting them to recall, in their own words, the key idea from the last part you covered together (use the saved conversation). React in a sentence and fill any gap plainly, then carry on from where you left off. If a new chapter is about to begin, name it in a few words and begin it after the warm-up. Then listen.';
+ function warmupDue(){return study?.phase==='lesson'&&!study.complete&&Date.now()-(Date.parse(study.updatedAt||'')||Date.now())>WARMUP_AFTER_MS;}
  function recordTalk(s){if(s?.talkStartedAt)window.WorldviewLessonCost?.recordTalk?.(s.costOwner||context?.owner,s.costRunId||context?.runId,s.id,(Date.now()-s.talkStartedAt)/1000);}
  function idleCheck(s){
   recordTalk(s);
@@ -903,7 +908,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   // brief continuation (no greeting, VOI-153) and repeats its own unanswered question once; it does
   // not open the phase again.
   const resuming=!start&&fragments.some(f=>!f.id.startsWith('import:'));
-  const s={id:start?.id||crypto.randomUUID(),initiate:openingPending,openingText:start?.opening||(resuming?RESUME_INSTRUCTION:''),refreshed:!!start?.phase,resumed:resuming,request,scope,model:context.model||'gpt-live-1',connectedAt:Date.now(),studyId:study.id,seen:new Set(),delegations:new Set(),pendingDelegations:new Set(),lastUserSeq:fragments.findLast(f=>f.role==='user')?.seq||0,seconds:0,ready:false,closing:false,dispatched:false,muted:false,t0:performance.now(),marks:{}};session=s;paint();
+  const s={id:start?.id||crypto.randomUUID(),initiate:openingPending,openingText:start?.opening||(resuming?(warmupDue()?WARMUP_INSTRUCTION:RESUME_INSTRUCTION):''),refreshed:!!start?.phase,resumed:resuming,request,scope,model:context.model||'gpt-live-1',connectedAt:Date.now(),studyId:study.id,seen:new Set(),delegations:new Set(),pendingDelegations:new Set(),lastUserSeq:fragments.findLast(f=>f.role==='user')?.seq||0,seconds:0,ready:false,closing:false,dispatched:false,muted:false,t0:performance.now(),marks:{}};session=s;paint();
   try{
    host.releaseMedia();captureAudioType();output?.start();
    let mic=start?.mic?.getAudioTracks().some(t=>t.readyState==='live')?start.mic:null;

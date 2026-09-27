@@ -713,7 +713,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     font-size: max(7px, calc(var(--cardW, 262px) * 0.042)); color: var(--ink-soft);
   }
   /* LES-268: the chapter a lesson continues with. */
-  .card .card-chapter { position:absolute; left:16px; right:16px; bottom:44px; text-align:center; font-size:max(10px,calc(var(--cardW,262px) * .046)); font-weight:650; letter-spacing:.02em; color:var(--accent-700); }
+  .card .card-chapter { position:absolute; left:16px; right:16px; bottom:44px; display:grid; justify-items:center; gap:4px; text-align:center; font-size:max(10px,calc(var(--cardW,262px) * .046)); font-weight:650; letter-spacing:.02em; color:var(--accent-700); }
+  .card-chapter-dots { display:flex; gap:4px; }
+  .card-chapter-dots i { width:14px; height:3px; border-radius:2px; background:color-mix(in srgb,var(--ink) 18%,transparent); }
+  .card-chapter-dots i.done, .card-chapter-dots i.now { background:var(--accent-700); }
+  .card-chapter-dots i.now { opacity:.55; }
+  .card-chapter-name { font-weight:500; color:var(--ink-soft); line-height:1.25; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   .card .card-cost {
     position:absolute;top:52px;left:16px;right:16px;text-align:left;
     font-size:max(10px,calc(var(--cardW,262px) * .044));line-height:1.4;color:var(--ink-soft);
@@ -2299,7 +2304,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.11 · Sep 26";
+const BUILD = "v3.1.12 · Sep 26";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2307,6 +2312,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.12",date:"Sep 26",changes:["Shaping now asks whether you want a quick overview or a deep dive, instead of how many minutes. An overview is one chapter; a deep dive gets every chapter the topic needs, one chapter at a time.","The chapter recap now always comes before the next chapter starts.","Coming back to a lesson after a while starts with a quick warm-up: the tutor asks what you remember from last time.","Lesson cards show where you left off: Continue, the chapter number and its name.","Research is prepared one chapter ahead of you, so a deep dive starts just as fast.","The tutor sounds more relaxed and warm, with a new friendly voice and no over-the-top praise."]},
   {tag:"v3.1.11",date:"Sep 26",changes:["Lesson research never gives up. If a source is slow or a provider is busy, it keeps trying quietly in the background while the tutor keeps talking with you. No more research errors or retry buttons.","The tutor waits for a quiet moment before taking in app notes, so your words don't get cut off mid-answer.","If the microphone hears you but no words come through, the tutor asks you to say it again instead of going silent.","Testers start every lesson in voice. The Voice or Text question is gone for now."]},
   {tag:"v3.1.10",date:"Sep 26",changes:["A finished lesson stays finished. Your completed lessons now count on Profile and are listed there.","Lessons that stopped before shaping was done no longer show up on Home, in Search, Archive or your counts.","Saying yeah to start the lesson works even when the captions mishear it.","Typed lessons no longer get stuck after you choose how deep to go.","Voice error messages now tell you a step you can actually take."]},
   {tag:"v3.1.9",date:"Sep 26",changes:["Gemini Live is now the voice for every lesson. Choosing a model is kept for testing only (owner: account page, then Models).","Voice lessons should cost much less. Gemini now re-reads only the last few minutes word for word, plus your key answers and the lesson notes, instead of the whole conversation on every reply.","Between parts, the app sends Gemini short notes instead of the full lesson packet every time.","Each voice connection now saves Gemini's own usage, so a lesson's real cost can be checked."]},
@@ -8558,7 +8564,9 @@ function normalizedHomeLearnerRuns(value) {
       lessonTitleUpdatedAt:Number(item.lessonTitleUpdatedAt) || Date.parse(item.lessonTitleUpdatedAt) || 0} : {}),
       phase:["clarification","map","extraction","lesson","quiz","complete"].includes(item.phase) ? item.phase : "clarification",
       updatedAt:Number(item.updatedAt) || Date.parse(item.updatedAt) || 0,
-      startedAt:learnerRunStart(item.startedAt),...(Number.isInteger(item.chapter?.number)&&item.chapter.number>0?{chapterNumber:item.chapter.number}:Number.isInteger(item.chapterNumber)&&item.chapterNumber>0?{chapterNumber:item.chapterNumber}:{})};
+      startedAt:learnerRunStart(item.startedAt),...(Number.isInteger(item.chapter?.number)&&item.chapter.number>0?{chapterNumber:item.chapter.number}:Number.isInteger(item.chapterNumber)&&item.chapterNumber>0?{chapterNumber:item.chapterNumber}:{}),
+      ...(Number.isInteger(item.chapter?.total)&&item.chapter.total>0?{chapterTotal:item.chapter.total}:Number.isInteger(item.chapterTotal)&&item.chapterTotal>0?{chapterTotal:item.chapterTotal}:{}),
+      ...(item.chapter?.title||item.chapterTitle?{chapterTitle:titleCaseLesson(String(item.chapter?.title||item.chapterTitle).trim().slice(0,160))}:{})};
     const previous = runs.get(runId);
     // Display metadata can arrive separately from phase updates (including
     // older clients). Missing metadata must not erase the map's saved name.
@@ -8570,6 +8578,8 @@ function normalizedHomeLearnerRuns(value) {
     if (named) Object.assign(merged,{lessonTitle:named.lessonTitle,lessonTitleMapJobId:named.lessonTitleMapJobId,
       lessonTitleUpdatedAt:named.lessonTitleUpdatedAt});
     if (!merged.topic && other?.topic) merged.topic = other.topic;
+    // Only the saved voice lesson knows its chapter; a newer job record must not drop it.
+    for (const key of ["chapterNumber","chapterTotal","chapterTitle"]) if (merged[key] == null && other?.[key] != null) merged[key] = other[key];
     // BUG-497: the stage comes from two lists (lab jobs and the saved voice
     // lesson). A later background job must never turn "complete" (or any later
     // stage) back into an earlier one, so the furthest stage wins.
@@ -8635,6 +8645,25 @@ function homeLearnerRuns({ all = false } = {}) {
   }
   catch (_) { return []; }
 }
+/* LES-274: a lesson in progress shows where it continues: dots for its
+   chapters and the name of the chapter it opens on. */
+function homeChapterHtml(run) {
+  const total = Math.min(12, Number(run.chapterTotal) || 0), number = Number(run.chapterNumber) || 1;
+  const dots = total > 1 ? `<span class="card-chapter-dots" aria-hidden="true">${Array.from({length:total},(_,i) => `<i class="${i < number - 1 ? "done" : i === number - 1 ? "now" : ""}"></i>`).join("")}</span>` : "";
+  return `<div class="card-chapter" aria-label="Continue with chapter ${number}${total ? " of " + total : ""}">${dots}<span class="card-chapter-go">Continue · Chapter ${number}</span>${run.chapterTitle ? `<span class="card-chapter-name">${esc(run.chapterTitle)}</span>` : ""}</div>`;
+}
+/* NAV-147: titles always show capitalized, whoever wrote them. Short joining
+   words stay lower case unless they start the title; words already written
+   with capitals (AI, NASA, iPhone) are kept as they are. */
+const TITLE_CASE_SMALL = new Set(["a","an","and","as","at","but","by","for","from","in","into","nor","of","on","or","over","the","to","up","via","vs","with"]);
+function titleCaseLesson(value) {
+  return String(value || "").replace(/[A-Za-z\u00C0-\u024F][\w\u00C0-\u024F'’]*/g, (word, offset, whole) => {
+    if (/[A-Z]/.test(word.slice(1)) || /^[A-Z]/.test(word) && word === word.toUpperCase() && word.length > 1) return word;
+    const lower = word.toLowerCase();
+    const first = offset === 0 || /[:—–-]\s*$/.test(whole.slice(0, offset));
+    return !first && TITLE_CASE_SMALL.has(lower) ? lower : word.charAt(0).toUpperCase() + word.slice(1);
+  });
+}
 function renderHomeLearnerRuns(carousel) {
   const layer = wheel.layerCategory;
   if (layer && !layer.startsWith("custom:")) return;
@@ -8646,7 +8675,7 @@ function renderHomeLearnerRuns(carousel) {
     card.dataset.kind = "learner-run";
     const stage = {clarification:"Your direction",map:"Lesson Map",extraction:"Your starting point",lesson:"Lesson",quiz:"Quiz",complete:"Completed"}[run.phase];
     card.setAttribute("aria-label",`${run.title}. ${stage}. Tap to continue.`);
-    card.innerHTML = `<div class="card-cat">${esc(stage)}</div><div class="card-cost" data-run-cost="${esc(run.runId)}" data-run-date="${Number(run.startedAt || run.updatedAt) || ""}"></div><div class="card-title serif ${cardTitleSizeClass(run.title)}">${cardTitleHtml(run.title)}</div>${run.chapterNumber && run.phase === "lesson" ? `<div class="card-chapter">Chapter ${run.chapterNumber}</div>` : ""}`;
+    card.innerHTML = `<div class="card-cat">${esc(stage)}</div><div class="card-cost" data-run-cost="${esc(run.runId)}" data-run-date="${Number(run.startedAt || run.updatedAt) || ""}"></div><div class="card-title serif ${cardTitleSizeClass(run.title)}">${cardTitleHtml(run.title)}</div>${run.chapterNumber && run.phase === "lesson" ? homeChapterHtml(run) : ""}`;
     paintHomeLessonUsage(card.querySelector(".card-cost"),run.runId);
     /* Tapping the card offers Voice or Text; ••• holds folders, Archive and Delete. */
     const options = document.createElement("button");options.type = "button";options.className = "lesson-options-button";
