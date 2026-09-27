@@ -77,7 +77,7 @@
     menu = el("div", "lf-menu-backdrop");
     const sheet = el("div", "lf-menu");
     sheet.setAttribute("role", "dialog"); sheet.setAttribute("aria-modal", "true"); sheet.setAttribute("aria-label", "Lesson options");
-    sheet.append(el("div", "lf-menu-title", item.title));
+    sheet.append(el("div", "lf-menu-title", typeof titleCaseLesson === "function" ? titleCaseLesson(item.title) : item.title));
     const action = (label, fn, cls) => { const b = el("button", "lf-menu-row" + (cls ? " " + cls : ""), label); b.type = "button"; b.onclick = fn; sheet.append(b); return b; };
     action("Rename", () => {
       sheet.innerHTML = "";
@@ -283,5 +283,33 @@
     requestAnimationFrame(settle); // again once fonts and sizes have settled
   }
 
-  window.WorldviewLessonMenu = { open: openMenu, openArc, runFolderIds, runCountInFolder, runTitles };
+  /* NAV-144: a new folder from Home's edit mode or the Folders card. */
+  function newFolder(onCreate) {
+    closeMenu();
+    menu = el("div", "lf-menu-backdrop");
+    const sheet = el("form", "lf-menu lf-rename");
+    sheet.setAttribute("role", "dialog"); sheet.setAttribute("aria-modal", "true"); sheet.setAttribute("aria-label", "New folder");
+    const input = el("input"); input.maxLength = 40; input.setAttribute("aria-label", "Folder name"); input.enterKeyHint = "done";
+    const saveBtn = el("button", "lf-menu-row", "Create"); saveBtn.type = "submit";
+    const cancel = el("button", "lf-menu-row quiet", "Cancel"); cancel.type = "button"; cancel.onclick = closeMenu;
+    sheet.append(el("div", "lf-menu-title", "New folder"), input, saveBtn, cancel);
+    sheet.onsubmit = async event => {
+      event.preventDefault();
+      const name = input.value.replace(/\s+/g, " ").trim();
+      if (!name) return;
+      if (!await ensureStableIdentityForMutation("create a folder")) return;
+      if (categoriesForSection("explore").some(c => c.name.toLocaleLowerCase() === name.toLocaleLowerCase())) { toast("That folder already exists."); return; }
+      const category = { id:uid(), name, section:"explore", createdAt:Date.now() };
+      state.customCategories.push(category); save(); closeMenu();
+      onCreate?.(category);
+    };
+    menu.append(sheet);
+    menu.addEventListener("click", event => { if (event.target === menu) closeMenu(); });
+    document.body.append(menu);
+    setActiveViewInert(true);
+    input.focus();
+  }
+
+  window.WorldviewLessonMenu = { open: openMenu, openArc, runFolderIds, runCountInFolder, runTitles,
+    rename: renameItem, toggleFolder, folderIds, newFolder };
 })();

@@ -18,35 +18,45 @@ window.WorldviewProfileChart=(()=>{
   return days;
  }
  function render(container,runs){
+  /* PRO-010: thin axes, no headings or legend text; tapping (or hovering) a
+     day shows that day's numbers above the chart, the day stays bright and
+     the others fade back. No vertical marker line (owner: "tacky"). */
   const days=series(runs);
-  const total=days.reduce((n,d)=>n+d.started,0),finished=days.reduce((n,d)=>n+d.completed,0);
   const section=document.createElement('section');section.className='worldview-section profile-chart';
-  const head=document.createElement('div');head.className='profile-chart-head';
-  const title=document.createElement('h3');title.textContent='Your last two weeks';
-  const summary=document.createElement('p');summary.className='profile-chart-summary';
-  summary.textContent=total?`${total} lesson${total===1?'':'s'} started · ${finished} completed`:'Lessons you start will show up here, day by day.';
-  head.append(title,summary);section.append(head);
+  const readout=document.createElement('div');readout.className='profile-chart-readout';readout.setAttribute('aria-live','polite');
+  const day=document.createElement('strong'),counts=document.createElement('span');
+  readout.append(day,counts);section.append(readout);
   const max=Math.max(3,...days.map(d=>Math.max(d.started,d.completed)));
-  const W=320,H=128,left=22,bottom=18,top=8,plotW=W-left-4,plotH=H-top-bottom,slot=plotW/DAYS,bar=Math.max(6,slot*.56);
+  const W=320,H=122,left=20,bottom=18,top=6,plotW=W-left-4,plotH=H-top-bottom,slot=plotW/DAYS,bar=Math.max(6,slot*.56);
   const y=v=>top+plotH-(v/max)*plotH;
   const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');
-  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('class','profile-chart-svg');svg.setAttribute('role','img');
-  svg.setAttribute('aria-label',`Lessons per day for the last ${DAYS} days: ${total} started, ${finished} completed.`);
-  const add=(tag,attrs,text)=>{const n=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))n.setAttribute(k,v);if(text!==undefined)n.textContent=text;svg.append(n);return n;};
-  const ticks=max<=4?[1,2,3,4].filter(v=>v<=max):[Math.round(max/3),Math.round(2*max/3),max];
-  for(const v of ticks){add('line',{x1:left,x2:W-4,y1:y(v),y2:y(v),class:'profile-chart-grid'});add('text',{x:left-6,y:y(v)+3.5,class:'profile-chart-tick','text-anchor':'end'},String(v));}
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.setAttribute('class','profile-chart-svg');svg.setAttribute('role','group');
+  svg.setAttribute('aria-label','Lessons per day for the last '+DAYS+' days');
+  const add=(tag,attrs,text,parent=svg)=>{const n=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))n.setAttribute(k,v);if(text!==undefined)n.textContent=text;parent.append(n);return n;};
   add('line',{x1:left,x2:W-4,y1:y(0),y2:y(0),class:'profile-chart-axis'});
+  add('line',{x1:left,x2:left,y1:top,y2:y(0),class:'profile-chart-axis'});
+  for(const v of [0,Math.round(max/2),max].filter((v,i,a)=>a.indexOf(v)===i))add('text',{x:left-5,y:y(v)+3,class:'profile-chart-tick','text-anchor':'end'},String(v));
+  const label=d=>d.date.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+  const groups=[];
+  const key=(cls,n,word)=>{const i=document.createElement('i');i.className='profile-chart-key '+cls;return [i,document.createTextNode(n+' '+word+' ')];};
+  const pick=i=>{
+   groups.forEach((g,j)=>g.classList.toggle('is-selected',j===i));svg.classList.add('has-selection');
+   const d=days[i];day.textContent=i===DAYS-1?'Today':label(d);
+   counts.replaceChildren(...key('is-started',d.started,'started'),...key('is-completed',d.completed,'finished'));
+  };
   days.forEach((d,i)=>{
    const x=left+i*slot+(slot-bar)/2;
-   if(d.started)add('rect',{x,y:y(d.started),width:bar,height:y(0)-y(d.started),rx:2,class:'profile-chart-started'});
-   if(d.completed)add('rect',{x,y:y(d.completed),width:bar,height:y(0)-y(d.completed),rx:2,class:'profile-chart-completed'});
-   if(i===0||i===DAYS-1||i===Math.floor(DAYS/2))add('text',{x:x+bar/2,y:H-4,class:'profile-chart-tick','text-anchor':'middle'},i===DAYS-1?'Today':d.date.toLocaleDateString(undefined,{month:'short',day:'numeric'}));
-   const tip=add('title',{});tip.textContent=`${d.date.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}: ${d.started} started, ${d.completed} completed`;
+   const g=add('g',{class:'profile-chart-day',tabindex:'0',role:'button','aria-label':label(d)+': '+d.started+' started, '+d.completed+' finished'});
+   if(d.started)add('rect',{x,y:y(d.started),width:bar,height:y(0)-y(d.started),rx:2,class:'profile-chart-started'},undefined,g);
+   if(d.completed)add('rect',{x,y:y(d.completed),width:bar,height:y(0)-y(d.completed),rx:2,class:'profile-chart-completed'},undefined,g);
+   add('rect',{x:left+i*slot,y:top,width:slot,height:plotH+bottom,class:'profile-chart-hit'},undefined,g);
+   g.addEventListener('click',()=>pick(i));g.addEventListener('pointerenter',e=>{if(e.pointerType==='mouse')pick(i);});
+   g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick(i);}});
+   groups.push(g);
+   if(i===0||i===DAYS-1)add('text',{x:i===0?x:x+bar,y:H-4,class:'profile-chart-tick','text-anchor':i===0?'start':'end'},i===DAYS-1?'Today':d.date.toLocaleDateString(undefined,{month:'short',day:'numeric'}));
   });
   section.append(svg);
-  const legend=document.createElement('p');legend.className='profile-chart-legend';
-  legend.innerHTML='<span class="profile-chart-key is-started"></span>Started <span class="profile-chart-key is-completed"></span>Completed';
-  section.append(legend);
+  pick(DAYS-1);
   container.append(section);
  }
  /* LES-242: "How you think". Recognition tags the learner earned in "Your

@@ -17,7 +17,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <link rel="stylesheet" href="lesson-entry-popup.css?v=2.1.38">
 <script src="lesson-entry-popup.js?v=2.1.71"></script>
 <link rel="stylesheet" href="lesson-folders.css?v=2.1.77">
-<script src="lesson-folders.js?v=2.1.77"></script>
+<script src="lesson-folders.js?v=3.1.13"></script>
 <link rel="apple-touch-icon" href="icon.png">
 <style>
   :root {
@@ -1213,6 +1213,52 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .quiz-button[hidden] { display:none; }
   .quiz-button:active { transform:scale(.95); background:rgba(189,90,48,.12); }
   .card-path-button { position:absolute;right:8px;top:8px;width:44px;height:44px;z-index:3;background:color-mix(in srgb,var(--card) 88%,transparent);touch-action:manipulation; }
+  /* NAV-143: one card that flips between folders and search. No numbers and
+     no helper text (P-027); familiar icons carry the meaning. */
+  .card.library-card { justify-content:flex-start; gap:12px; padding:16px 14px; }
+  .library-head { width:100%; display:flex; align-items:center; justify-content:center; position:relative; min-height:34px; }
+  .library-toggle { display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; background:var(--paper); }
+  .library-mode { width:46px; height:32px; display:grid; place-items:center; border:0; background:transparent; color:var(--ink-soft); cursor:pointer; padding:0; }
+  .library-mode svg, .library-edit svg, .library-search-box svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
+  .library-mode[aria-pressed="true"] { background:var(--accent); color:#fff; }
+  .library-edit { position:absolute; right:0; top:0; width:34px; height:34px; display:grid; place-items:center; border:1px solid var(--line); border-radius:10px; background:transparent; color:var(--ink-soft); cursor:pointer; padding:0; }
+  .library-chips { width:100%; display:flex; flex-wrap:wrap; gap:6px; justify-content:center; align-content:flex-start; overflow-y:auto; max-height:calc(var(--cardH,320px) - 90px); touch-action:pan-y; }
+  .library-chip { display:inline-flex; align-items:center; gap:4px; padding:6px 11px; border:1px solid var(--line); border-radius:999px; background:transparent; color:var(--ink); font:600 max(11px,calc(var(--cardW,262px) * .047)) system-ui,sans-serif; cursor:pointer; }
+  .library-chip .ai { font-size:.8em; color:var(--accent); }
+  .library-chip[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .library-chip[aria-pressed="true"] .ai { color:#fff; }
+  .library-chip.add { width:32px; justify-content:center; padding:6px 0; color:var(--ink-soft); }
+  .library-search-box { width:100%; display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--line); border-radius:10px; color:var(--ink-soft); background:var(--paper); }
+  .library-search-box input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:var(--ink); font:500 15px system-ui,sans-serif; }
+  .library-results { width:100%; list-style:none; margin:0; padding:0; overflow-y:auto; max-height:calc(var(--cardH,320px) - 110px); touch-action:pan-y; text-align:left; }
+  .library-result { width:100%; display:grid; gap:1px; padding:8px 4px; border:0; border-bottom:1px solid var(--line); background:transparent; color:var(--ink); text-align:left; cursor:pointer; }
+  .library-result b { font:600 14px/1.25 Georgia,serif; }
+  .library-result span { font-size:11.5px; color:var(--ink-soft); }
+  /* NAV-144: edit mode keeps the carousel. Archive and trash sit where ••• and
+     the map button were; the title looks like a text box (look D, centered). */
+  body.home-editing .card.lesson-card .lesson-options-button, body.home-editing .card.lesson-card .card-path-button, body.home-editing .card.lesson-card .card-chapter { display:none; }
+  .edit-corner { position:absolute; top:8px; width:40px; height:40px; z-index:4; display:grid; place-items:center; border:1px solid var(--line); border-radius:12px; background:color-mix(in srgb,var(--card) 90%,transparent); color:var(--ink-soft); cursor:pointer; padding:0; }
+  .edit-corner svg { width:19px; height:19px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .edit-corner.edit-archive { left:8px; }
+  .edit-corner.edit-delete { right:8px; color:#d0503c; }
+  .card .card-title.title-editable { position:relative; padding:6px 10px; border:1.5px solid color-mix(in srgb,var(--ink) 38%,transparent); border-radius:10px; text-align:center; cursor:text; }
+  .title-pen { position:absolute; top:-8px; right:-8px; width:18px; height:18px; border-radius:50%; background:var(--accent); display:grid; place-items:center; }
+  .title-pen svg { width:10px; height:10px; fill:none; stroke:#fff; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; }
+  .title-rename-input { position:absolute; z-index:6; left:14px; right:14px; padding:8px 10px; border:1.5px solid var(--accent); border-radius:10px; background:var(--card); color:var(--ink); font:600 17px/1.3 Georgia,serif; text-align:center; }
+  #home-edit-bar { position:absolute; z-index:30; top:6px; left:max(12px,env(safe-area-inset-left)); right:max(12px,env(safe-area-inset-right)); display:flex; align-items:flex-start; gap:10px; }
+  #home-edit-bar[hidden] { display:none; }
+  #home-edit-folders { flex:1; display:flex; flex-wrap:wrap; gap:6px; justify-content:center; }
+  #home-edit-done { flex:none; padding:7px 14px; border:0; border-radius:999px; background:var(--accent); color:#fff; font:700 13px system-ui,sans-serif; cursor:pointer; }
+  /* NAV-149: back to Ask anything, at the top, once the shelf is two or more cards away. */
+  #home-back-start { position:absolute; z-index:30; top:8px; left:50%; transform:translateX(-50%); width:38px; height:38px; display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; background:var(--card); color:var(--ink); box-shadow:var(--shadow-md); cursor:pointer; padding:0; transition:opacity .18s ease; }
+  #home-back-start[hidden] { display:none; }
+  #home-back-start svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  #carousel-page { position:relative; }
+  /* PRO-010: one title (the app's), one small line of numbers, a centered chart. */
+  #profile-header { display:none; }
+  .worldview-stats.compact { display:flex; justify-content:center; gap:14px; margin:4px 0 18px; color:var(--ink-soft); font-size:13px; }
+  .worldview-stats.compact b { color:var(--ink); font-weight:650; }
+
   .card .card-cost[hidden] { display:none; }
   .card-path-button svg { width:20px;height:20px; }
   .card.lesson-card .lesson-mastery-dot { right:59px; top:22px; }
@@ -1305,7 +1351,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
        explainer, not Profile content. Removing it also eliminates its special
        left offset so every retained section shares one 20px gutter. */
     #profile-header { display:none; }
-    #profile-scroll { padding:26px 20px calc(28px + env(safe-area-inset-bottom)); }
+    /* PRO-010: start below the Profile/Explore/Archive menu so nothing overlaps it. */
+    #profile-scroll { padding:122px 20px calc(28px + env(safe-area-inset-bottom)); }
     .worldview-stats,.worldview-section,#profile-category-detail,#profile-empty { width:100%;margin-left:0;margin-right:0; }
   }
   .worldview-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-bottom: 26px; }
@@ -1356,6 +1403,16 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .profile-chart-started { fill:color-mix(in srgb,var(--accent) 32%,transparent); }
   .profile-chart-completed { fill:var(--accent); }
   .profile-chart-legend { display:flex; align-items:center; gap:6px; margin:8px 0 0; color:var(--ink-soft); font-size:12px; }
+  .profile-chart-readout { display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap; max-width:520px; margin:0 auto; font-size:12.5px; color:var(--ink-soft); }
+  .profile-chart-readout strong { color:var(--ink); font-weight:650; }
+  .profile-chart-readout .profile-chart-key { margin-left:8px; margin-right:4px; }
+  .profile-chart .profile-chart-svg { margin:8px auto 0; }
+  .profile-chart-hit { fill:transparent; cursor:pointer; }
+  .profile-chart-day { transition:opacity .15s ease; outline:none; }
+  .profile-chart-svg.has-selection .profile-chart-day { opacity:.4; }
+  .profile-chart-svg.has-selection .profile-chart-day.is-selected { opacity:1; }
+  .profile-chart-day:focus-visible .profile-chart-hit { stroke:var(--ink-soft); stroke-width:1; }
+  .profile-chart .profile-chart-axis { stroke-width:.8; }
   .profile-chart-key { display:inline-block; width:10px; height:10px; border-radius:2px; margin-left:8px; }
   .profile-chart-key:first-child { margin-left:0; }
   .profile-chart-key.is-started { background:color-mix(in srgb,var(--accent) 32%,transparent); }
@@ -1958,6 +2015,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
         <div id="profile-scroll"></div>
       </section>
       <section id="carousel-page" class="home-deck-page" aria-label="Questions and saved lessons">
+        <button id="home-back-start" type="button" aria-label="Back to Ask anything" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6 5 12l6 6M5 12h14"/></svg></button>
+        <div id="home-edit-bar" hidden><div id="home-edit-folders" role="group" aria-label="Folders for this lesson"></div><button id="home-edit-done" type="button">Done</button></div>
         <div id="carousel-wrap">
           <div id="carousel"></div>
           <div id="lesson-layer-guide" aria-label="Lesson folder selector" hidden>
@@ -2299,12 +2358,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <script src="models.js?v=3.1.9"></script>
 <script src="lab/lesson-cost.js?v=2.1.71"></script>
 <script src="saved-map.js?v=2.1.57"></script>
-<script src="profile-chart.js?v=2.1.74"></script>
+<script src="profile-chart.js?v=3.1.13"></script>
 <script>
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.12 · Sep 26";
+const BUILD = "v3.1.13 · Sep 27";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2312,6 +2371,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.13",date:"Sep 27",changes:["One card for Folders and Search, right after Ask anything. Flip between them with the two icons.","The AI sorts your lessons into a few categories on its own (marked ✦), next to your own folders. A lesson can be in several.","Edit mode: tap the pencil on that card, or hold a lesson. Every card gets archive and trash, tap a title to rename it, and add the centered lesson to folders at the top. Tap Done when finished.","A back button at the top brings you straight to Ask anything when you are deep in your lessons.","Lesson titles are always capitalized.","Profile is tidier: one small line of numbers, a cleaner chart you can tap to see any day, and your completed lessons.","Fixed: tapping near the edge of a card could open the options of the card behind it."]},
   {tag:"v3.1.12",date:"Sep 26",changes:["Shaping now asks whether you want a quick overview or a deep dive, instead of how many minutes. An overview is one chapter; a deep dive gets every chapter the topic needs, one chapter at a time.","The chapter recap now always comes before the next chapter starts.","Coming back to a lesson after a while starts with a quick warm-up: the tutor asks what you remember from last time.","Lesson cards show where you left off: Continue, the chapter number and its name.","Research is prepared one chapter ahead of you, so a deep dive starts just as fast.","The tutor sounds more relaxed and warm, with a new friendly voice and no over-the-top praise."]},
   {tag:"v3.1.11",date:"Sep 26",changes:["Lesson research never gives up. If a source is slow or a provider is busy, it keeps trying quietly in the background while the tutor keeps talking with you. No more research errors or retry buttons.","The tutor waits for a quiet moment before taking in app notes, so your words don't get cut off mid-answer.","If the microphone hears you but no words come through, the tutor asks you to say it again instead of going silent.","Testers start every lesson in voice. The Voice or Text question is gone for now."]},
   {tag:"v3.1.10",date:"Sep 26",changes:["A finished lesson stays finished. Your completed lessons now count on Profile and are listed there.","Lessons that stopped before shaping was done no longer show up on Home, in Search, Archive or your counts.","Saying yeah to start the lesson works even when the captions mishear it.","Typed lessons no longer get stuck after you choose how deep to go.","Voice error messages now tell you a step you can actually take."]},
@@ -5496,7 +5556,7 @@ function splitCardTitle(title) {
   return { lead, sub };
 }
 function cardTitleHtml(title) {
-  const { lead, sub } = splitCardTitle(title);
+  const { lead, sub } = splitCardTitle(titleCaseLesson(title));
   return sub ? `${esc(lead)}<span class="title-sub">${esc(sub)}</span>` : esc(lead);
 }
 // a long title with no colon to break on still has to fit, so it steps down
@@ -6287,11 +6347,58 @@ function categoriesForSection(section) {
 }
 
 function categoryLayerEntries() {
-  return [{key:null,label:"All lessons",kind:"recent"}, ...categoriesForSection("explore").map(category => ({key:"custom:"+category.id,label:category.name,kind:"custom",id:category.id}))];
+  return [{key:null,label:"All lessons",kind:"recent"},
+    ...aiCategoryNames().map(name => ({key:"ai:"+name,label:name,kind:"ai"})),
+    ...categoriesForSection("explore").map(category => ({key:"custom:"+category.id,label:category.name,kind:"custom",id:category.id}))];
+}
+/* NAV-146: categories the AI gives each lesson (marked ✦), next to the
+   learner's own folders. Titles only are sent, once for each new lesson; the
+   result is kept on this device with the lesson list. */
+const AI_CATEGORIES_PREFIX = "worldview-ai-categories-v1:";
+let aiCategoryInflight = false, aiCategoryTriedAt = 0, aiCategoryTimer = 0;
+function aiCategoryStore() {
+  if (!cloudAccount?.id) return { byId:{} };
+  try { const value = JSON.parse(localStorage.getItem(AI_CATEGORIES_PREFIX + cloudAccount.id) || "{}"); return value && typeof value.byId === "object" && value.byId ? value : { byId:{} }; }
+  catch (_) { return { byId:{} }; }
+}
+function lessonAiCategories(id) { const names = aiCategoryStore().byId[id]; return Array.isArray(names) ? names : []; }
+function aiCategoryItems() {
+  const items = homeLearnerRuns().filter(run => run.title && run.title !== VOICE_TOPIC_PLACEHOLDER).map(run => ({ id:"learner:" + run.runId, title:run.title }));
+  for (const lesson of state.lessons || []) if (lesson && !isSourceLesson(lesson) && !lessonIsArchived(lesson)) items.push({ id:lesson.id, title:lesson.title || lesson.topic || "" });
+  return items.filter(item => /^[A-Za-z0-9:_-]{1,140}$/.test(item.id) && item.title).slice(0, 80);
+}
+function aiCategoryNames() {
+  const counts = new Map(), live = new Set(aiCategoryItems().map(item => item.id)), byId = aiCategoryStore().byId;
+  for (const [id, names] of Object.entries(byId)) if (live.has(id) && Array.isArray(names)) for (const name of names) counts.set(name, (counts.get(name) || 0) + 1);
+  return [...counts].sort((a,b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name]) => name).slice(0, 8);
+}
+function scheduleAiCategories() {
+  clearTimeout(aiCategoryTimer);
+  aiCategoryTimer = setTimeout(() => { void refreshAiCategories(); }, 2500);
+}
+async function refreshAiCategories() {
+  if (aiCategoryInflight || !cloudAccount?.id || !homeLearnerAccountAllowed() || Date.now() - aiCategoryTriedAt < 60000) return;
+  const items = aiCategoryItems(), store = aiCategoryStore();
+  if (!items.some(item => !Array.isArray(store.byId[item.id]))) return;
+  aiCategoryInflight = true; aiCategoryTriedAt = Date.now();
+  const owner = cloudAccount.id;
+  try {
+    const response = await backendFetch("live-trial",{headers:{"content-type":"application/json"},body:JSON.stringify({action:"categorize",lessons:items,existing:aiCategoryNames()}),signal:AbortSignal.timeout(20000)});
+    if (!response.ok) { await response.body?.cancel(); return; }
+    const payload = await response.json();
+    if (cloudAccount?.id !== owner || !payload?.categories || typeof payload.categories !== "object") return;
+    const next = aiCategoryStore();
+    for (const item of items) next.byId[item.id] = Array.isArray(payload.categories[item.id]) ? payload.categories[item.id].slice(0,2) : (next.byId[item.id] || []);
+    next.at = Date.now();
+    localStorage.setItem(AI_CATEGORIES_PREFIX + owner, JSON.stringify(next));
+    if (!wheel.editMode && document.activeElement?.id !== "library-search") renderHome();
+  } catch (_) { /* Categories are a convenience; the shelf works without them. */ }
+  finally { aiCategoryInflight = false; }
 }
 function categoryLayers() { return categoryLayerEntries().map(entry => entry.label); }
 function lessonMatchesLayer(lesson,layerKey = wheel.layerCategory) {
   if (!layerKey) return true;
+  if (layerKey.startsWith("ai:")) return lessonAiCategories(lesson.id).includes(layerKey.slice(3));
   if (layerKey.startsWith("custom:")) return (lesson.customCategoryIds || []).includes(layerKey.slice(7));
   if (layerKey.startsWith("topic:")) return lessonCategory(lesson).toLocaleLowerCase() === layerKey.slice(6);
   return lessonCategory(lesson).toLocaleLowerCase() === String(layerKey).toLocaleLowerCase();
@@ -6613,17 +6720,13 @@ function renderHome() {
         <button id="start-btn" type="button" hidden${startStatus.busy ? " disabled" : ""}>${pilotAtLimit ? "10/10 created" : startStatus.label || "Text"}</button>
         <button id="start-voice-btn" type="button" aria-label="Start a voice conversation and say what you want to learn"${pilotAtLimit || startStatus.busy ? " disabled" : ""}>Voice</button>
       </div>
-      ${insidePersonalCategory
-        ? `<button id="new-card-leave-folder" type="button" aria-label="Leave ${esc(layerName)} and show all lessons"><span>&#8592;</span> All lessons</button>`
-        : `<button id="new-card-folders" type="button" aria-label="Browse folders and archive"><span aria-hidden="true">▱</span> Folders</button>`}
-      <button id="new-card-search" type="button" aria-label="Search your lessons"><span aria-hidden="true">⌕</span> Search</button>
     `;
     c.appendChild(nc);
     wheel.cards.push(nc); wheel.ids.push(null);
   }
 
-  // Folders occupy one place after Ask Anything; the remaining shelf is recent lessons.
-  renderHomeFolderCarousel(c);
+  // NAV-143: one Folders/Search card after Ask anything; then the lessons.
+  renderHomeLibraryCard(c);
   renderHomeLearnerRuns(c);
 
   // lesson cards, newest first
@@ -6664,6 +6767,7 @@ function renderHome() {
     pathButton.addEventListener("pointercancel", () => { wheel.methodInteracting = false; });
     pathButton.onclick = event => { event.stopPropagation(); openLessonPath(l.id); };
     attachOrganizerLongPress(card,l.id,"explore");
+    decorateEditableCard(card,{kind:"lesson",id:l.id,title:l.title || l.topic || "Lesson"});
     c.appendChild(card);
     wheel.cards.push(card); wheel.ids.push(l.id);
   });
@@ -6695,7 +6799,164 @@ function renderHome() {
   };
   $("topic-input").oninput = syncStartButton;
   syncStartButton();
+  scheduleAiCategories();
 }
+
+/* ---- NAV-143 / NAV-146: the Folders ⇄ Search card ---- */
+function renderHomeLibraryCard(carousel) {
+  const mode = wheel.libraryMode === "search" ? "search" : "folders";
+  const card = document.createElement("div");
+  card.className = "card library-card";
+  card.dataset.kind = "library";
+  card.setAttribute("aria-label", mode === "search" ? "Search your lessons" : "Folders");
+  const head = `<div class="library-head"><div class="library-toggle" role="group" aria-label="Folders or search">`
+    + `<button type="button" class="library-mode" data-mode="folders" aria-label="Folders" aria-pressed="${mode === "folders"}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z"/></svg></button>`
+    + `<button type="button" class="library-mode" data-mode="search" aria-label="Search" aria-pressed="${mode === "search"}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg></button></div>`
+    + `<button type="button" class="library-edit" aria-label="Edit lessons"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button></div>`;
+  if (mode === "folders") {
+    const chip = (key, label, ai = false) => `<button type="button" class="library-chip" data-layer="${attr(key || "")}" aria-pressed="${(wheel.layerCategory || "") === (key || "")}">${ai ? '<span class="ai" aria-hidden="true">✦</span>' : ""}${esc(label)}</button>`;
+    card.innerHTML = head + `<div class="library-chips" role="group" aria-label="Show lessons from">`
+      + chip("", "All")
+      + aiCategoryNames().map(name => chip("ai:" + name, name, true)).join("")
+      + categoriesForSection("explore").map(category => chip("custom:" + category.id, category.name)).join("")
+      + `<button type="button" class="library-chip add" data-action="new-folder" aria-label="New folder">+</button></div>`;
+  } else {
+    card.innerHTML = head + `<label class="library-search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg><input id="library-search" type="search" autocomplete="off" enterkeyhint="search" aria-label="Search your lessons"></label><ul class="library-results" id="library-results"></ul>`;
+  }
+  for (const button of card.querySelectorAll(".library-mode")) button.onclick = () => {
+    if (wheel.libraryMode === button.dataset.mode) return;
+    wheel.libraryMode = button.dataset.mode; renderHome();
+    if (wheel.libraryMode === "search") requestAnimationFrame(() => $("library-search")?.focus({ preventScroll:true }));
+  };
+  card.querySelector(".library-edit").onclick = () => setHomeEditMode(true);
+  for (const button of card.querySelectorAll(".library-chip[data-layer]")) button.onclick = () => applyCategoryKey(button.dataset.layer || null);
+  const add = card.querySelector('[data-action="new-folder"]');
+  if (add) add.onclick = () => window.WorldviewLessonMenu?.newFolder(() => renderHome());
+  const input = card.querySelector("#library-search");
+  if (input) {
+    input.value = wheel.libraryQuery || "";
+    input.oninput = () => { wheel.libraryQuery = input.value; renderLibraryResults(); };
+    input.onkeydown = event => { if (event.key === "Enter") { event.preventDefault(); card.querySelector(".library-result")?.click(); } };
+  }
+  carousel.appendChild(card);
+  wheel.cards.push(card); wheel.ids.push(null);
+  if (mode === "search") renderLibraryResults(card);
+}
+function renderLibraryResults(card = document.querySelector(".library-card")) {
+  const list = card?.querySelector(".library-results"); if (!list) return;
+  const words = String(wheel.libraryQuery || "").toLowerCase().split(/\s+/).filter(Boolean);
+  const found = lessonSearchItems().filter(item => !item.archived && words.every(word => String(item.text || "").toLowerCase().includes(word))).slice(0, 30);
+  list.replaceChildren();
+  for (const item of found) {
+    const row = document.createElement("li"), button = document.createElement("button");
+    button.type = "button"; button.className = "library-result"; button.dataset.id = item.id;
+    const title = document.createElement("b"); title.textContent = titleCaseLesson(item.title);
+    const when = document.createElement("span"); when.textContent = lessonDateLabel(item.when);
+    button.append(title, when);
+    button.onclick = () => openChat(item.id);
+    row.append(button); list.append(row);
+  }
+}
+function libraryControlAtPoint(card, x, y) {
+  for (const control of card.querySelectorAll(".library-mode,.library-edit,.library-chip,.library-result")) {
+    const rect = control.getBoundingClientRect();
+    if (rect.width && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) return control;
+  }
+  return null;
+}
+
+/* ---- NAV-144: edit mode on the same page ---- */
+function setHomeEditMode(on) {
+  wheel.editMode = !!on;
+  document.body.classList.toggle("home-editing", wheel.editMode);
+  $("home-edit-bar").hidden = !wheel.editMode;
+  renderHome();
+  syncHomeEditBar(true);
+}
+function editItemForCard(card) {
+  const id = String(card?.dataset.id || "");
+  if (id.startsWith("learner:")) { const run = homeLearnerRuns().find(row => row.runId === id.slice(8)); return run ? {kind:"run",id:run.runId,title:run.title,run} : null; }
+  const lesson = id && getLesson(id);
+  return lesson ? {kind:"lesson",id,title:lesson.title || lesson.topic || "Lesson"} : null;
+}
+function decorateEditableCard(card, item) {
+  if (!wheel.editMode) return;
+  const archive = document.createElement("button");
+  archive.type = "button"; archive.className = "edit-corner edit-archive"; archive.setAttribute("aria-label","Archive " + item.title);
+  archive.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v4H3zM5 9v10h14V9M10 13h4"/></svg>';
+  archive.onclick = () => { if (item.kind === "run") archiveHomeLearnerRun(item.run); else setLessonArchived(item.id,true); };
+  card.appendChild(archive);
+  /* Older lessons have no deletion record that survives sync, so they archive only. */
+  if (item.kind === "run") {
+    const remove = document.createElement("button");
+    remove.type = "button"; remove.className = "edit-corner edit-delete"; remove.setAttribute("aria-label","Delete " + item.title);
+    remove.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>';
+    remove.onclick = () => {
+      if (!confirm(`Delete “${titleCaseLesson(item.title)}”?`)) return;
+      if (!setHomeLearnerRunRemoval(item.id,"deleted")) { toast("This device could not save that change. Try again.",4000); return; }
+      renderHome();
+    };
+    card.appendChild(remove);
+  }
+  const title = card.querySelector(".card-title");
+  if (title) {
+    title.classList.add("title-editable");
+    title.insertAdjacentHTML("beforeend",'<span class="title-pen" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></span>');
+    title.onclick = () => startInlineRename(card,title,item);
+  }
+}
+function startInlineRename(card, title, item) {
+  if (card.querySelector(".title-rename-input")) return;
+  const input = document.createElement("input");
+  input.className = "title-rename-input"; input.maxLength = 120; input.value = titleCaseLesson(item.title); input.enterKeyHint = "done";
+  input.setAttribute("aria-label","Lesson title");
+  input.style.top = Math.max(8, title.offsetTop) + "px";
+  card.appendChild(input);
+  let done = false;
+  const finish = saveIt => {
+    if (done) return; done = true;
+    const value = input.value.replace(/\s+/g," ").trim();
+    input.remove();
+    if (saveIt && value && value !== item.title) {
+      if (!window.WorldviewLessonMenu?.rename(item,value)) { toast("This device could not save that change. Try again.",4000); return; }
+      renderHome();
+    }
+  };
+  input.onkeydown = event => { if (event.key === "Enter") { event.preventDefault(); finish(true); } else if (event.key === "Escape") finish(false); };
+  input.onblur = () => finish(true);
+  input.focus(); input.select();
+}
+let homeEditBarIndex = -1;
+function syncHomeEditBar(force = false) {
+  const bar = $("home-edit-folders"); if (!bar || !wheel.editMode) return;
+  const index = Math.round(wheel.pos);
+  if (!force && index === homeEditBarIndex) return;
+  homeEditBarIndex = index;
+  const item = editItemForCard(wheel.cards[index]);
+  bar.replaceChildren();
+  if (!item) return;
+  const menu = window.WorldviewLessonMenu, inFolders = new Set(menu?.folderIds(item) || []);
+  for (const category of categoriesForSection("explore")) {
+    const chip = document.createElement("button");
+    chip.type = "button"; chip.className = "library-chip"; chip.textContent = category.name;
+    chip.setAttribute("aria-pressed", String(inFolders.has(category.id)));
+    chip.onclick = () => { if (menu?.toggleFolder(item,category.id) !== undefined) syncHomeEditBar(true); };
+    bar.append(chip);
+  }
+  const add = document.createElement("button");
+  add.type = "button"; add.className = "library-chip add"; add.textContent = "+"; add.setAttribute("aria-label","New folder");
+  add.onclick = () => menu?.newFolder(category => { menu.toggleFolder(item,category.id); renderHome(); syncHomeEditBar(true); });
+  bar.append(add);
+}
+$("home-edit-done").onclick = () => setHomeEditMode(false);
+/* NAV-149: from deep in the shelf, one tap glides back to Ask anything. */
+function homeAskIndex() { return wheel.cards.findIndex(card => card.classList.contains("new-card")); }
+function syncHomeBackButton() {
+  const button = $("home-back-start"); if (!button) return;
+  const ask = homeAskIndex();
+  button.hidden = wheel.editMode || ask < 0 || Math.abs(wheel.pos - ask) < 2;
+}
+$("home-back-start").onclick = () => { const ask = homeAskIndex(); if (ask < 0) return; wheel.pos = ask; layoutWheel(true); };
 
 /* ---- notes view: parked topics; tapping a note starts that lesson ---- */
 function showNotes() {
@@ -6751,6 +7012,8 @@ $("note-input").addEventListener("keydown", e => { if (e.key === "Enter") addNot
    this keeps a library of 50 lessons about as cheap to drag as five. */
 function layoutWheel(animate = true, refreshGuide = true) {
   updateDeckLabelVisibility();
+  syncHomeBackButton();
+  if (wheel.editMode) syncHomeEditBar();
   const spacing = wheel.cardW * 0.78;
   const transition = animate ? "transform .32s cubic-bezier(.22,.8,.25,1), opacity .28s ease" : "none";
   const nextRendered = new Set();
@@ -6840,13 +7103,16 @@ function cardAtPoint(x, y) {
 function pathControlAtPoint(x, y) {
   const hitSlop = innerWidth <= 700 ? 10 : 6;
   let best = null, bestZ = -Infinity;
+  /* Cards overlap. A button on a card that another card covers at this point
+     (the Folders card over its neighbour's •••) must not take the tap. */
+  const front = cardAtPoint(x, y);
   wheel.renderedIndices.forEach(index => {
     const card = wheel.cards[index];
-    if (!card) return;
+    if (!card || front >= 0 && index !== front) return;
     if (!wheel.ids[index] || card.style.pointerEvents === "none") return;
     // Saved lesson cards also carry the ••• options button; the carousel owns
     // the pointer, so those taps are resolved here by position like the map.
-    for (const button of card.querySelectorAll(".card-path-button,.lesson-options-button")) {
+    for (const button of card.querySelectorAll(wheel.editMode ? ".edit-corner,.card-title.title-editable" : ".card-path-button,.lesson-options-button")) {
       const rect = button.getBoundingClientRect();
       if (!rect.width || x < rect.left - hitSlop || x > rect.right + hitSlop || y < rect.top - hitSlop || y > rect.bottom + hitSlop) continue;
       const z = parseInt(card.style.zIndex || "0", 10);
@@ -6906,6 +7172,11 @@ function pathControlAtPoint(x, y) {
     // against the input's real rect, not by asking the browser what element
     // it thinks was hit (the same native lookup that was misrouting taps
     // elsewhere in this carousel)
+    // The search box on the Folders/Search card takes its own taps too.
+    if (target >= 0 && wheel.cards[target].dataset.kind === "library") {
+      const box = $("library-search")?.getBoundingClientRect();
+      if (box && e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom) return;
+    }
     if (target >= 0 && wheel.cards[target].classList.contains("new-card")) {
       const input = $("topic-input");
       const r = input && input.getBoundingClientRect();
@@ -6998,14 +7269,17 @@ function pathControlAtPoint(x, y) {
           const hit = (id) => { const b = $(id); const r = b && b.getBoundingClientRect(); return r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; };
           // Resolve before centering the transformed card. Pointer capture
           // retargets the native click to the carousel, so dispatch once here.
-          const control = ["start-btn", "start-voice-btn", "new-card-folders", "new-card-leave-folder", "new-card-search"]
+          const control = ["start-btn", "start-voice-btn"]
             .find(id => !$(id)?.hidden && !$(id)?.disabled && hit(id));
           wheel.pos = idx; layoutWheel();
           if (control === "start-btn") startLesson();
           else if (control === "start-voice-btn") startFromAskCard();
-          else if (control === "new-card-folders") openCategoryOrganizer(null, "explore");
-          else if (control === "new-card-leave-folder") applyCategoryKey(null);
-          else if (control === "new-card-search") openLessonSearch();
+          return;
+        }
+        if (el.dataset.kind === "library") {
+          const control = libraryControlAtPoint(el,e.clientX,e.clientY);
+          if (!control) { wheel.pos = idx; layoutWheel(); return; }
+          control.click();
           return;
         }
         if (el.dataset.kind === "notes") { wheel.pos = idx; layoutWheel(); showNotes(); return; }
@@ -7018,6 +7292,8 @@ function pathControlAtPoint(x, y) {
         }
         if (wheel.ids[idx]) {
           wheel.pos = idx; layoutWheel();
+          // In edit mode a tap only brings the card to the middle.
+          if (wheel.editMode) return;
           if (!state.continueHintDismissed) { state.continueHintDismissed = true; save(); }
           openChat(wheel.ids[idx]); return;
         }
@@ -8666,9 +8942,10 @@ function titleCaseLesson(value) {
 }
 function renderHomeLearnerRuns(carousel) {
   const layer = wheel.layerCategory;
-  if (layer && !layer.startsWith("custom:")) return;
+  if (layer && !layer.startsWith("custom:") && !layer.startsWith("ai:")) return;
   for (const run of homeLearnerRuns()) {
-    if (layer && !window.WorldviewLessonMenu?.runFolderIds(run.runId).includes(layer.slice(7))) continue;
+    if (layer?.startsWith("custom:") && !window.WorldviewLessonMenu?.runFolderIds(run.runId).includes(layer.slice(7))) continue;
+    if (layer?.startsWith("ai:") && !lessonAiCategories("learner:" + run.runId).includes(layer.slice(3))) continue;
     const card = document.createElement("div");
     card.className = "card lesson-card";
     card.dataset.id = "learner:"+run.runId;
@@ -8694,6 +8971,8 @@ function renderHomeLearnerRuns(carousel) {
     mapButton.addEventListener("pointercancel", () => { wheel.methodInteracting = false; });
     mapButton.onclick = event => { event.stopPropagation(); openLessonPath(card.dataset.id); };
     card.appendChild(mapButton);
+    decorateEditableCard(card,{kind:"run",id:run.runId,title:run.title,run});
+    attachOrganizerLongPress(card,"learner:" + run.runId,"explore");
     carousel.appendChild(card);wheel.cards.push(card);wheel.ids.push(card.dataset.id);
   }
 }
@@ -11751,22 +12030,22 @@ function renderProfile(resetSelection = false) {
       button.className = "recent-lesson";
       button.type = "button";
       const when = Number(run.updatedAt || run.startedAt) || 0;
-      button.innerHTML = `<span class="recent-lesson-copy"><span class="recent-lesson-title">${esc(run.title || run.topic || "Lesson")}</span><span class="recent-lesson-meta">${when ? esc(new Date(when).toLocaleDateString(undefined,{month:"short",day:"numeric"})) : ""}</span></span>`;
+      button.innerHTML = `<span class="recent-lesson-copy"><span class="recent-lesson-title">${esc(titleCaseLesson(run.title || run.topic || "Lesson"))}</span><span class="recent-lesson-meta">${when ? esc(new Date(when).toLocaleDateString(undefined,{month:"short",day:"numeric"})) : ""}</span></span>`;
       button.onclick = () => { void openHomeLearnerRun({runId:run.runId}); };
       host.appendChild(button);
     });
   };
   if (!state.lessons.length && !learnerRuns.length) {
-    scroll.innerHTML = `<div id="profile-empty">Nothing here yet.<br><br>Start a lesson and your worldview will begin to take shape &mdash; every conversation gets categorized automatically.</div>`;
+    scroll.innerHTML = `<div id="profile-empty">Nothing here yet.</div>`;
     return;
   }
+  /* PRO-010: one small centered line of numbers instead of three tiles. */
+  const statLine = (notes, lessons, done) => `<span><b>${notes}</b> note${notes === 1 ? "" : "s"}</span><span><b>${lessons}</b> lesson${lessons === 1 ? "" : "s"}</span><span><b>${done}</b> completed</span>`;
   if (!state.lessons.length) {
     const done = learnerRuns.filter(run => run.phase === "complete").length;
     const stats = document.createElement("div");
-    stats.className = "worldview-stats";
-    stats.innerHTML = `<div class="worldview-stat"><strong>${state.notes.length}</strong><span>note${state.notes.length === 1 ? "" : "s"}</span></div>`
-      + `<div class="worldview-stat"><strong>${learnerRuns.length}</strong><span>lesson${learnerRuns.length === 1 ? "" : "s"}</span></div>`
-      + `<div class="worldview-stat${done < learnerRuns.length ? " worldview-stat-open" : ""}"><strong>${done}</strong><span>completed</span></div>`;
+    stats.className = "worldview-stats compact";
+    stats.innerHTML = statLine(state.notes.length, learnerRuns.length, done);
     scroll.appendChild(stats);
     window.WorldviewProfileChart?.render(scroll, learnerRuns);
     window.WorldviewProfileChart?.renderThinking?.(scroll, cloudAccount?.id);
@@ -11786,16 +12065,14 @@ function renderProfile(resetSelection = false) {
   if (profileCategory && !cats[profileCategory]) profileCategory = null;
 
   const stats = document.createElement("div");
-  stats.className = "worldview-stats";
+  stats.className = "worldview-stats compact";
   /* notes · conversations · completed (LES-037). "Areas explored" is gone: it
      only ever went up, so it never asked anything of the learner. Completed
      sitting lower than conversations is the point — what is unfinished should
      be visible without being scolded about. */
   const finished = state.lessons.filter(lessonRouteComplete);
   const allLessons = state.lessons.length + learnerRuns.length, allDone = finished.length + learnerDone.length;
-  stats.innerHTML = `<div class="worldview-stat"><strong>${state.notes.length}</strong><span>note${state.notes.length === 1 ? "" : "s"}</span></div>`
-    + `<div class="worldview-stat"><strong>${allLessons}</strong><span>lesson${allLessons === 1 ? "" : "s"}</span></div>`
-    + `<div class="worldview-stat${allDone < allLessons ? " worldview-stat-open" : ""}"><strong>${allDone}</strong><span>completed</span></div>`;
+  stats.innerHTML = statLine(state.notes.length, allLessons, allDone);
   scroll.appendChild(stats);
   if (learnerRuns.length) window.WorldviewProfileChart?.render(scroll, learnerRuns);
   window.WorldviewProfileChart?.renderThinking?.(scroll, cloudAccount?.id);
@@ -12101,7 +12378,8 @@ function cancelOrganizerLongPress() {
 function attachOrganizerLongPress(element,lessonId,section) {
   element.addEventListener("pointerdown",event => {
     if(cardPinchActive || Date.now()<cardPinchSuppressUntil)return;
-    if (event.target.closest(".source-card-path,.lesson-path-button,.lesson-options-button")) return;
+    if (event.target.closest(".source-card-path,.lesson-path-button,.lesson-options-button,.edit-corner")) return;
+    if (wheel.editMode) return;
     cancelOrganizerLongPress();
     organizerLongPress = { pointerId:event.pointerId,x:event.clientX,y:event.clientY,opened:false,lessonId,section };
     organizerLongPress.timer = setTimeout(() => {
@@ -12110,8 +12388,8 @@ function attachOrganizerLongPress(element,lessonId,section) {
       press.opened = true;
       element._organizerSuppressClickUntil = Date.now() + 900;
       organizerConsumedPointers.add(press.pointerId);
-      openCategoryOrganizer(lessonId,section);
-      categoryOrganizerState.press = press;
+      if (section === "explore") { cancelOrganizerLongPress(); setHomeEditMode(true); const index = wheel.ids.indexOf(lessonId); if (index >= 0) { wheel.pos = index; layoutWheel(); } }
+      else { openCategoryOrganizer(lessonId,section); categoryOrganizerState.press = press; }
       if (navigator.vibrate) try { navigator.vibrate(18); } catch (error) {}
     },560);
   });
