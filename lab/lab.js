@@ -8738,23 +8738,49 @@ async function submitPendingMapResearchCreate(pending, { deadlineMs = LAB_CONVER
    now nothing retried it: the learner had to press Retry missing research to
    make the lesson whole. Retry automatically instead, bounded by the same limit
    the planner uses so a genuinely broken run cannot spend without end. The
-   manual control stays as the last resort once the attempts are used. */
-const RESEARCH_AUTO_RETRY_LIMIT = PIPELINE_MAP_AUTO_RETRY_LIMIT;
+   manual control stays as the last resort once the attempts are used.
+   BUG-493 (owner: research "cannot fail"): a learner's lesson keeps retrying in
+   the background with growing waits (8 s, 16 s, 32 s, then every 90 s) for
+   about an hour, and reports "working" meanwhile, so neither the tutor nor the
+   screen ever says research failed. Each retry redoes only the missing parts. */
+const RESEARCH_AUTO_RETRY_LIMIT = LAB_LEARNER ? 40 : PIPELINE_MAP_AUTO_RETRY_LIMIT;
+function researchRetryDelayMs(attempt) {
+  return attempt <= 0 ? 0 : Math.min(90000, 8000 * 2 ** (attempt - 1));
+}
+function researchRetryRecord(plannerJob) {
+  const value = labState.researchAutoRetries?.get?.(plannerJob?.id);
+  return typeof value === "number" ? { count:value, nextAt:0 } : value || { count:0, nextAt:0 };
+}
 function researchAutoRetriesLeft(plannerJob) {
   if (!plannerJob) return 0;
-  const used = labState.researchAutoRetries?.get?.(plannerJob.id) || 0;
-  return Math.max(0, RESEARCH_AUTO_RETRY_LIMIT - used);
+  return Math.max(0, RESEARCH_AUTO_RETRY_LIMIT - researchRetryRecord(plannerJob).count);
+}
+function wakeResearchRetry(plannerJob, delay) {
+  const timers = labState.researchRetryTimers ||= new Map();
+  if (timers.has(plannerJob.id)) return;
+  timers.set(plannerJob.id, setTimeout(() => {
+    timers.delete(plannerJob.id);
+    renderPipelineExtraction();
+    syncLiveLesson();
+  }, Math.max(250, delay)));
 }
 function maybeAutoRetryChapterResearch(plannerJob, artifact = selectedPipelineArtifact(), selection = null) {
   if (!plannerJob || !artifact || labState.preview || labState.learnerEntryPending) return false;
-  if (labState.extraction?.mapRetryBusy || labState.busy || labState.createStarting) return false;
-  if (labState.mapResearchStarting?.has?.(plannerJob.id)) return false;
   // Only retry where a retry is actually offered. This keeps an exhausted
   // server-owned allowance, which another attempt cannot repair, off the path.
   if (selection?.meta?.researchRetryAvailable !== true) return false;
   if (!researchAutoRetriesLeft(plannerJob)) return false;
+  const record = researchRetryRecord(plannerJob), wait = record.nextAt - Date.now();
+  const busy = labState.extraction?.mapRetryBusy || labState.busy || labState.createStarting || labState.mapResearchStarting?.has?.(plannerJob.id);
+  if (busy || wait > 0) {
+    // A learner's lesson counts a retry that is waiting its turn as still working.
+    if (!LAB_LEARNER) return false;
+    wakeResearchRetry(plannerJob, busy ? 3000 : wait);
+    return true;
+  }
   const tracker = labState.researchAutoRetries ||= new Map();
-  tracker.set(plannerJob.id, (tracker.get(plannerJob.id) || 0) + 1);
+  tracker.set(plannerJob.id, { count:record.count + 1, nextAt:Date.now() + researchRetryDelayMs(record.count + 1) });
+  if (LAB_LEARNER) wakeResearchRetry(plannerJob, researchRetryDelayMs(record.count + 1));
   void retryPipelineMapChapterResearch(plannerJob, artifact).catch((error) => {
     logFlow(`Automatic research retry failed: ${clip(error.message, 120)}`, "map workflow");
   });
@@ -15474,12 +15500,16 @@ function liveResearchState(selection, stage=labState.pipelineStage) {
     only told the overall state, and workflowState tests researchFailures before
     teachingReady - so one failed outcome anywhere read as "wait". */
  const teachable=!ready&&meta?.teachingReady===true&&first?.verifiedSupport?.status==='verified';
- return {state:ready?'ready':teachable?'partial':retryAvailable?'needs-attention':'working',firstOutcomeReady:first?.verifiedSupport?.status==='verified',retryAvailable,teachable,
-  autoLeft:researchAutoRetriesLeft(planner),
+ // BUG-493: while background retries remain, a learner's lesson is still working,
+ // and this read (made on every lesson sync) keeps the next retry scheduled.
+ if(LAB_LEARNER&&retryAvailable&&planner&&artifact)maybeAutoRetryChapterResearch(planner,artifact,selection);
+ const autoLeft=researchAutoRetriesLeft(planner),quietRetry=LAB_LEARNER&&retryAvailable&&autoLeft>0;
+ return {state:ready?'ready':teachable?'partial':retryAvailable&&!quietRetry?'needs-attention':'working',firstOutcomeReady:first?.verifiedSupport?.status==='verified',retryAvailable:retryAvailable&&!quietRetry,teachable,
+  autoLeft,
   verified,total:outcomes.length,
   message:ready?'Verified lesson research is ready.'
    :teachable?'The lesson route is ready and its first chapter is verified, so begin teaching now rather than waiting. '+verified+' of '+outcomes.length+' parts are researched. Teach only parts whose support is verified; when the lesson reaches a part that is not, say plainly that its research is not ready and do not teach it from memory.'
-   :retryAvailable?'Some chapter research could not be verified. Retry missing research; keep completed support and the saved conversation.':'Lesson research is still running. Preserve any agreement to begin.'};
+   :retryAvailable&&!quietRetry?'Some chapter research could not be verified. Retry missing research; keep completed support and the saved conversation.':'Lesson research is still running. Preserve any agreement to begin.'};
 }
 function renderLiveResearchRecovery(selection, stage=labState.pipelineStage) {
  const research=liveResearchState(selection,stage),retry=q('mock-learner-retry'),status=q('mock-learner-status');

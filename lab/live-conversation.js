@@ -133,7 +133,7 @@ window.WorldviewLiveConversation=(()=>{
   // List prices; any discount Google gives for cached tokens is not applied here.
   const usd=((t.promptText+t.promptOther)*.75+t.promptAudio*3+(t.responseText+t.responseOther+t.thoughts)*4.5+t.responseAudio*12)/1e6;
   s.usageSentAt=Date.now();
-  void s.request({action:'usage',requestId:s.id,usage:{...t,usd:Math.round(usd*1e6)/1e6,final}}).catch(()=>{});
+  void s.request({action:'usage',requestId:s.id,usage:{...t,usd:Math.round(usd*1e6)/1e6,final,...(s.startFailure?{startFailure:s.startFailure}:{})}}).catch(()=>{});
  }
  function startVoiceCost(s){
   s.costOwner??=context?.owner;s.costRunId??=context?.runId;
@@ -924,7 +924,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
    mark(s,'mic');
    if(session!==s||s.closing){mic.getTracks().forEach(t=>t.stop());if(start?.id)void s.request({action:'close',requestId:s.id}).catch(()=>{});return;}s.mic=mic;void output?.refresh();
    message(start?.phase?{lesson:'Starting your lesson…',quiz:'Starting the final teach-back…',complete:'Wrapping up…'}[start.phase]||'Moving on…':'Connecting voice…');
-   s.startup=setTimeout(()=>{if(session!==s||s.closing)return;startError=true;void stop('Voice could not connect. Try again.');},45000);
+   s.startup=setTimeout(()=>{if(session!==s||s.closing)return;startError=true;reportStartFailure(s,'timeout');void stop('Voice could not connect. Try again.');},45000);
    if(s.model==='gemini-3.8-live'){
     mic.getAudioTracks().forEach(t=>t.addEventListener('ended',()=>{if(session===s&&!s.closing)void stop('Microphone disconnected.');}));
     let result=start?.transport?{transport:start.transport}:null;
@@ -951,7 +951,13 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
    s.costConfirmed=true;recordVoiceCost(s);
    if(session!==s||s.closing){void s.request({action:'close',requestId:s.id}).catch(()=>{});return;}
    await peer.setRemoteDescription({type:'answer',sdp:result.transport.sdp});
-  }catch(error){if(session===s){startError=true;void stop(error.name==='NotAllowedError'?'Voice stopped. Tap play to carry on.':s.model==='gemini-3.8-live'?(error.message||'Voice could not connect. Tap play to try again.'):'The microphone could not connect. Try again.');}}
+  }catch(error){if(session===s){startError=true;reportStartFailure(s,error.name==='NotAllowedError'?'microphone_denied':/microphone took a while/i.test(error.message||'')?'microphone_slow':s.model==='gemini-3.8-live'&&!s.gemini?(s.serverAt?'connect_failed':'server_refused'):'other');void stop(error.name==='NotAllowedError'?'Voice stopped. Tap play to carry on.':s.model==='gemini-3.8-live'?(error.message||'Voice could not connect. Tap play to try again.'):'The microphone could not connect. Try again.');}}
+ }
+ /* BUG-496: a failed start records one fixed reason word on its own session
+    record, so failures can be counted instead of guessed. Nothing said is sent. */
+ function reportStartFailure(s,kind){
+  if(!s?.dispatched||s.startFailure)return;s.startFailure=kind;
+  void s.request({action:'usage',requestId:s.id,usage:{final:true,startFailure:kind}}).catch(()=>{});
  }
  async function stop(reason='Voice paused.',options={}){
   if(options.pause)paused=true;

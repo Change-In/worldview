@@ -22,6 +22,16 @@ window.WorldviewGeminiLive=(()=>{
   });
   let socket,ready=false,closed=false,started=false,muted=false,holding=false,held=[],modelActive=false,processor,input,silent,playAt=0,resumeHandle='',resumeAttempts=0,closingReason='connection_lost',expiryTimer,openTimer;
   let received=Promise.resolve(),pendingContext='',connectResolve,connectReject,output,mix,hardGain,elementGain;
+  /* BUG-488: a note sent while the learner is talking, or just as they begin an
+     answer, can swallow their words. Notes wait for a quiet moment: nothing
+     heard for 1.5 s (captions) and no voice on the microphone for 0.8 s; right
+     after the tutor finishes, the learner gets 2.5 s to start answering; and an
+     answer the tutor has not replied to yet waits up to 4 s for that reply.
+     VOI-156: when the microphone clearly hears speech but no words arrive
+     within 3 s and the tutor stays silent, the tutor is asked to have the
+     learner repeat it (at most once a minute). */
+  let pendingSince=0,heardAt=0,voiceAt=0,tutorDoneAt=0,flushTimer=null,burstStart=0,burstVoiced=0,repeatAskedAt=0;
+  const VOICE_LEVEL=.02,STRONG_VOICE_LEVEL=.04;
   const connected=new Promise((resolve,reject)=>{connectResolve=resolve;connectReject=reject;});
   // Cancellation can precede the asynchronous worklet load and its later await.
   // Observe this promise immediately; awaiting the original still propagates errors.
@@ -41,7 +51,7 @@ window.WorldviewGeminiLive=(()=>{
   }
   function clearAudio(){for(const source of sources){try{source.stop();}catch{}}sources.clear();playAt=audio.currentTime;}
   function finish(reason){
-   if(closed)return;closed=true;clearInterval(revive);ready=false;clearTimeout(expiryTimer);clearTimeout(openTimer);clearAudio();
+   if(closed)return;closed=true;clearInterval(revive);ready=false;clearTimeout(expiryTimer);clearTimeout(openTimer);clearTimeout(flushTimer);clearAudio();
    processor?.disconnect();input?.disconnect();silent?.disconnect();if(processor)processor.port.onmessage=null;
    if(outputAudio){outputAudio.removeEventListener?.('error',outputError);if(ownsOutput()){outputAudio.pause();outputAudio.srcObject=null;}}
    output?.stream.getTracks().forEach(track=>track.stop());output?.disconnect();
@@ -60,14 +70,35 @@ window.WorldviewGeminiLive=(()=>{
    if(audio.state==='suspended'||outputAudio?.paused)onStatus('Tap Enable audio.');
   }
   function context(text){
+   if(!pendingContext)pendingSince=Date.now();
    pendingContext=text;flushContext();
+  }
+  function quietWait(now=Date.now()){
+   // A note held for 20 s goes at the next gap in captions even if the room is noisy.
+   const local=now-pendingSince>20000?0:Math.max(0,voiceAt+800-now);
+   const answering=heardAt>tutorDoneAt&&!modelActive?Math.max(0,heardAt+4000-now):0;
+   const opening=heardAt<=tutorDoneAt?Math.max(0,tutorDoneAt+2500-now):0;
+   return Math.max(heardAt+1500-now,local,answering,opening,0);
   }
   function flushContext(){
    // Generic API references warn clientContent can interrupt generation even
    // with turnComplete false. Wait for completion AND local playback drainage.
    if(!pendingContext||!ready||modelActive||sources.size)return;
+   const wait=quietWait();
+   if(wait>0){clearTimeout(flushTimer);flushTimer=setTimeout(()=>{flushTimer=null;flushContext();},Math.min(wait+50,4000));return;}
    const text=pendingContext;pendingContext='';
    send({clientContent:{turns:[{role:'user',parts:[{text}]}],turnComplete:false}});
+  }
+  function watchUnheard(level,now){
+   if(muted||!ready)return;
+   // The tutor's own voice can leak into the microphone; only count the learner's turn.
+   if(sources.size||modelActive){burstStart=0;burstVoiced=0;return;}
+   if(level>=VOICE_LEVEL){if(!burstStart)burstStart=now;voiceAt=now;if(level>=STRONG_VOICE_LEVEL)burstVoiced+=1;return;}
+   if(!burstStart||now-voiceAt<3000)return;
+   // About half a second of strong voice that produced no caption and no reply.
+   const unheard=burstVoiced>=5&&heardAt<burstStart&&!modelActive&&!sources.size&&now-repeatAskedAt>60000;
+   burstStart=0;burstVoiced=0;
+   if(unheard&&prompt('APP NOTE: the learner just spoke but no words came through. Briefly ask them to say that again. Do not guess what they said.'))repeatAskedAt=now;
   }
   async function receive(event,source){
    const raw=typeof event.data==='string'?event.data:await event.data.text();
@@ -92,10 +123,10 @@ window.WorldviewGeminiLive=(()=>{
    if(content){
     if(content.interrupted){modelActive=false;clearAudio();}
     if(content.modelTurn||content.outputTranscription)modelActive=true;
-    if(content.inputTranscription?.text)onEvent({type:'session.input_transcript.delta',delta:content.inputTranscription.text});
+    if(content.inputTranscription?.text){heardAt=Date.now();onEvent({type:'session.input_transcript.delta',delta:content.inputTranscription.text});}
     if(content.outputTranscription?.text)onEvent({type:'session.output_transcript.delta',delta:content.outputTranscription.text});
     for(const part of content.modelTurn?.parts||[])if(part.inlineData?.data&&part.inlineData.mimeType?.startsWith('audio/pcm'))play(part.inlineData.data,part.inlineData.mimeType);
-    if(content.turnComplete){modelActive=false;onEvent({type:'gemini.turn.complete'});flushContext();}
+    if(content.turnComplete){modelActive=false;tutorDoneAt=Date.now();onEvent({type:'gemini.turn.complete'});flushContext();}
    }
    // Let the current turn finish; reconnect on the provider's socket close using
    // its opaque resumption handle. No repeated startup prompt or history replay.
@@ -167,7 +198,7 @@ window.WorldviewGeminiLive=(()=>{
    silent=audio.createGain();silent.gain.value=0;input.connect(processor);processor.connect(silent);silent.connect(audio.destination);
    processor.port.onmessage=e=>{
     if(!ready||!active())return;
-    if(onInputLevel){const pcm=new Int16Array(e.data);let sum=0;for(let i=0;i<pcm.length;i++){const v=pcm[i]/32768;sum+=v*v;}onInputLevel(Math.sqrt(sum/Math.max(1,pcm.length)));}
+    {const pcm=new Int16Array(e.data);let sum=0;for(let i=0;i<pcm.length;i++){const v=pcm[i]/32768;sum+=v*v;}const level=Math.sqrt(sum/Math.max(1,pcm.length));onInputLevel?.(level);watchUnheard(level,Date.now());}
     if(muted){if(holding){held.push(e.data);if(held.length>15)held.shift();}return;}
     if(socket.bufferedAmount>1024*1024){failure('The voice connection is too slow. Your conversation is saved.');return;}
     send({realtimeInput:{audio:{mimeType:'audio/pcm;rate=16000',data:encodePcm(e.data)}}});

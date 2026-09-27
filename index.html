@@ -2299,7 +2299,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.10 · Sep 26";
+const BUILD = "v3.1.11 · Sep 26";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2307,6 +2307,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.11",date:"Sep 26",changes:["Lesson research never gives up. If a source is slow or a provider is busy, it keeps trying quietly in the background while the tutor keeps talking with you. No more research errors or retry buttons.","The tutor waits for a quiet moment before taking in app notes, so your words don't get cut off mid-answer.","If the microphone hears you but no words come through, the tutor asks you to say it again instead of going silent.","Testers start every lesson in voice. The Voice or Text question is gone for now."]},
   {tag:"v3.1.10",date:"Sep 26",changes:["A finished lesson stays finished. Your completed lessons now count on Profile and are listed there.","Lessons that stopped before shaping was done no longer show up on Home, in Search, Archive or your counts.","Saying yeah to start the lesson works even when the captions mishear it.","Typed lessons no longer get stuck after you choose how deep to go.","Voice error messages now tell you a step you can actually take."]},
   {tag:"v3.1.9",date:"Sep 26",changes:["Gemini Live is now the voice for every lesson. Choosing a model is kept for testing only (owner: account page, then Models).","Voice lessons should cost much less. Gemini now re-reads only the last few minutes word for word, plus your key answers and the lesson notes, instead of the whole conversation on every reply.","Between parts, the app sends Gemini short notes instead of the full lesson packet every time.","Each voice connection now saves Gemini's own usage, so a lesson's real cost can be checked."]},
   {tag:"v3.1.8",date:"Sep 26",changes:["Access code on your account page: tap your profile at the top left, type the code, and tap Unlock. You can start lessons right away.","If you try to start a lesson without access, the app now takes you to that code box."]},
@@ -3305,6 +3306,8 @@ function accountRecoveryRequired(user = cloudAccount) {
   try { return JSON.parse(localStorage.getItem(PASSWORD_RECOVERY_KEY) || "null")?.userId === user.id; }
   catch (error) { return false; }
 }
+/* MVP 1 is voice only for testers; typed lessons stay available to the owner. */
+function voiceOnlyLearner() { return !ownerToolsAvailable(); }
 function ownerToolsAvailable() {
   const row = backendEntitlementRecord;
   const expires = row?.expires_at ? Date.parse(row.expires_at) : null;
@@ -8730,6 +8733,8 @@ async function openHomeLearnerRun({topic = "",runId = "",view = "",entryMode = "
   homeLearnerLaunchBusy = true;
   try {
     entryMode = ["text","voice"].includes(entryMode) ? entryMode : "";
+    // MVP 1 is voice only for testers (BUS-065); the owner keeps text for testing.
+    if (view !== "map" && !entryMode && voiceOnlyLearner()) entryMode = "voice";
     if (view !== "map" && !entryMode) {
       entryMode = await window.WorldviewLessonEntry.choose({
         title:runId ? homeLearnerRuns().find(row => row.runId === runId)?.title || "Your saved lesson" : topic,
@@ -8782,7 +8787,7 @@ async function startLesson() {
   if (!topic) return;
   if (Date.now() - (startLesson._t || 0) < 500) return;
   startLesson._t = Date.now();
-  await openHomeLearnerRun({topic,entryMode:"text"});
+  await openHomeLearnerRun({topic,entryMode:voiceOnlyLearner() ? "voice" : "text"});
 }
 
 function startFromAskCard() { return $("topic-input")?.value.trim() ? startLesson() : startVoiceLesson(); }
