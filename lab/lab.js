@@ -2040,6 +2040,20 @@ JSON only; no markdown fences or commentary.`;
 const CLARIFICATION_PREVIOUS_BUILTIN_FINGERPRINTS = new Set(["fnv1a-58de53ae", "fnv1a-bcb0dd9c", "fnv1a-45b15680", "fnv1a-19120e07", "fnv1a-d5d8b508", "fnv1a-192c3133", "fnv1a-acc1c5ef", "fnv1a-d420c1c2", "fnv1a-7cdb0b4d", "fnv1a-54d4cbbc", "fnv1a-7ccd5bd2", "fnv1a-ffbb342e", "fnv1a-b818cbac", "fnv1a-8f1ce516", "fnv1a-373d5999", "fnv1a-42f86bb3", "fnv1a-4855bd32", "fnv1a-8d655409"]);
 const CLARIFICATION_LOCAL_KEY = "worldview-lab-clarification-v1";
 
+/* BUG-491: the model writes the depth the way the learner said it ("deeper
+   dive", "quick overview"). Only three exact words used to count, so a clear
+   answer read as no answer, every reply was rejected and the lesson dead-ended.
+   Read the meaning instead. */
+function clarificationDepthWord(candidate, allowed) {
+  const exact = allowed(candidate, ["introductory", "moderate", "deep"]);
+  if (exact) return exact;
+  const text = asText(candidate).toLowerCase();
+  if (!text.trim()) return "";
+  if (/\b(deep|deeper|in[\s-]?depth|thorough|detailed|advanced|full)\b/.test(text)) return "deep";
+  if (/\b(quick|overview|intro\w*|basic|basics|high[\s-]?level|simple|brief|light|short)\b/.test(text)) return "introductory";
+  if (/\b(moderate|medium|middle|balanced|standard|some detail)\b/.test(text)) return "moderate";
+  return "";
+}
 function normalizeClarificationPreferences(value) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const rawMinutes = Number(source.timeMinutes ?? source.time_minutes);
@@ -2052,7 +2066,7 @@ function normalizeClarificationPreferences(value) {
     timeMinutes,
     timeText: clip(source.timeText ?? source.time_text, 180),
     breadth: allowed(source.breadth, ["broad", "overview", "balanced", "focused", "core_plus_deepening"]),
-    depth: allowed(source.depth, ["introductory", "moderate", "deep"]),
+    depth: clarificationDepthWord(source.depth, allowed),
     focus: allowed(source.focus, ["conceptual", "engineering", "both"]),
     summary: clip(source.summary, 320),
   };
@@ -2126,7 +2140,9 @@ function clarificationApplyTurnPolicy(output, state = labState.clarification, re
   const currentRunId = String(state?.runId || "");
   const responseBelongsToRun = Boolean(currentRunId && String(responseRunId || "") === currentRunId);
   const learnerJustReplied = state?.turns?.at?.(-1)?.role === "user";
-  const priorOfferBelongsToRun = priorAction === "offer_transition" && state?.latest?.phase_action_run_id === currentRunId;
+  // BUG-491: an offer the learner saw still counts if the application had downgraded it.
+  const priorOfferBelongsToRun = (priorAction === "offer_transition" || String(state?.latest?.requested_phase_action || "") === "offer_transition")
+    && state?.latest?.phase_action_run_id === currentRunId;
   const sizingReady = Boolean(scopePreferences.timeMinutes || scopePreferences.timeText || scopePreferences.depth);
   const canOffer = sizingReady && usableScope && responseBelongsToRun && learnerJustReplied && Number(state?.learnerReplyCount || 0) > 0;
   const canCommit = sizingReady && usableScope && responseBelongsToRun && learnerJustReplied && priorOfferBelongsToRun && Number(state?.learnerReplyCount || 0) > 0;
@@ -5613,13 +5629,13 @@ function clarificationAssertProtocol(output, raw = "", sample = null) {
   const repeated = output?.delivery_review?.repeated_prior_question === true
     && output?.phase_action !== "commit_transition";
   if (!mismatch && !repeated) return output;
-  const error = new Error(mismatch === "repeated_transition_offer" || repeated
-    ? "The model repeated an earlier Clarification question instead of responding to the learner."
-    : "The model returned a Clarification action that did not match this conversation turn.");
-  error.type = "clarification_protocol_mismatch";
-  error.clarificationRaw = raw;
-  error.clarificationSample = sample;
-  throw error;
+  /* BUG-491 / P-025: a sensible reply is never thrown away. The action has
+     already been downgraded to continue by clarificationApplyTurnPolicy, so the
+     learner sees the reply and the conversation goes on. The disagreement is
+     only noted. Before, each mismatch was an error: automatic retries hit the
+     same rule and Try again did nothing. */
+  console.warn("Clarification rule disagreement kept as a normal reply", mismatch || "repeated_prior_question");
+  return output;
 }
 
 function completeConversationQuestion(value) {

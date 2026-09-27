@@ -951,7 +951,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
    s.costConfirmed=true;recordVoiceCost(s);
    if(session!==s||s.closing){void s.request({action:'close',requestId:s.id}).catch(()=>{});return;}
    await peer.setRemoteDescription({type:'answer',sdp:result.transport.sdp});
-  }catch(error){if(session===s){startError=true;void stop(error.name==='NotAllowedError'?'Voice stopped. Tap play to carry on.':s.model==='gemini-3.8-live'?(error.message||'Gemini Live could not connect. Choose GPT Live or try again.'):'The microphone could not connect. Try again.');}}
+  }catch(error){if(session===s){startError=true;void stop(error.name==='NotAllowedError'?'Voice stopped. Tap play to carry on.':s.model==='gemini-3.8-live'?(error.message||'Voice could not connect. Tap play to try again.'):'The microphone could not connect. Try again.');}}
  }
  async function stop(reason='Voice paused.',options={}){
   if(options.pause)paused=true;

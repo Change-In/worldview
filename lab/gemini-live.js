@@ -73,7 +73,7 @@ window.WorldviewGeminiLive=(()=>{
    const raw=typeof event.data==='string'?event.data:await event.data.text();
    if(!active()||source!==socket)return;
    const message=JSON.parse(raw);
-   if(message.error){failure('Gemini Live rejected the connection. Choose GPT Live or try again.');return;}
+   if(message.error){failure('The voice connection was refused. Tap play to try again.');return;}
    if(message.usageMetadata)onUsage(message.usageMetadata);
    if(message.setupComplete){
     clearTimeout(openTimer);ready=true;

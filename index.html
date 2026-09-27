@@ -2299,7 +2299,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.9 · Sep 26";
+const BUILD = "v3.1.10 · Sep 26";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2307,6 +2307,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.10",date:"Sep 26",changes:["A finished lesson stays finished. Your completed lessons now count on Profile and are listed there.","Lessons that stopped before shaping was done no longer show up on Home, in Search, Archive or your counts.","Saying yeah to start the lesson works even when the captions mishear it.","Typed lessons no longer get stuck after you choose how deep to go.","Voice error messages now tell you a step you can actually take."]},
   {tag:"v3.1.9",date:"Sep 26",changes:["Gemini Live is now the voice for every lesson. Choosing a model is kept for testing only (owner: account page, then Models).","Voice lessons should cost much less. Gemini now re-reads only the last few minutes word for word, plus your key answers and the lesson notes, instead of the whole conversation on every reply.","Between parts, the app sends Gemini short notes instead of the full lesson packet every time.","Each voice connection now saves Gemini's own usage, so a lesson's real cost can be checked."]},
   {tag:"v3.1.8",date:"Sep 26",changes:["Access code on your account page: tap your profile at the top left, type the code, and tap Unlock. You can start lessons right away.","If you try to start a lesson without access, the app now takes you to that code box."]},
   {tag:"v3.1.7",date:"Sep 25",changes:["Lessons by chapter: when you say how long you have, the tutor asks whether that is for the whole lesson or one chapter. Chapters then fit that time, with only as many parts as the topic needs.","When a chapter is done, choose Next chapter or Stop for now.","A lesson card shows the chapter you will start with next. When you come back, the tutor asks how much time you have today."]},
@@ -6463,7 +6464,7 @@ function lessonSearchItems() {
   const stages = {clarification:"Your direction",map:"Lesson Map",extraction:"Your starting point",lesson:"Lesson",quiz:"Quiz",complete:"Completed"};
   for (const run of homeLearnerRuns({ all:true })) {
     const removal = removals[run.runId]?.state;
-    if (removal === "deleted") continue;
+    if (removal === "deleted" || unfinishedLearnerRun(run)) continue;
     items.push({id:"learner:"+run.runId,title:run.title || run.topic || "Voice lesson",text:[run.title,run.topic,run.lessonTitle].join(" "),
       when:Number(run.startedAt || run.updatedAt) || 0,kind:stages[run.phase] || "Voice lesson",archived:removal === "archived"});
   }
@@ -8540,6 +8541,7 @@ function learnerRunStart(value) {
   const time = typeof value === "number" ? value : typeof value === "string" && value ? Date.parse(value) : 0;
   return Number.isFinite(time) && time > Date.UTC(2026,0,1) ? time : 0;
 }
+const LEARNER_RUN_STAGES = ["clarification","map","extraction","lesson","quiz","complete"];
 function normalizedHomeLearnerRuns(value) {
   if (!Array.isArray(value)) return [];
   const runs = new Map();
@@ -8565,6 +8567,10 @@ function normalizedHomeLearnerRuns(value) {
     if (named) Object.assign(merged,{lessonTitle:named.lessonTitle,lessonTitleMapJobId:named.lessonTitleMapJobId,
       lessonTitleUpdatedAt:named.lessonTitleUpdatedAt});
     if (!merged.topic && other?.topic) merged.topic = other.topic;
+    // BUG-497: the stage comes from two lists (lab jobs and the saved voice
+    // lesson). A later background job must never turn "complete" (or any later
+    // stage) back into an earlier one, so the furthest stage wins.
+    if (other && LEARNER_RUN_STAGES.indexOf(other.phase) > LEARNER_RUN_STAGES.indexOf(merged.phase)) merged.phase = other.phase;
     // The earliest known start is the day the lesson began (profile chart).
     const starts = [latest.startedAt, other?.startedAt].map(learnerRunStart).filter(value => value > 0);
     merged.startedAt = starts.length ? Math.min(...starts) : 0;
@@ -8603,11 +8609,12 @@ function setHomeLearnerRunRemoval(runId, state) {
 }
 /* A lesson that never got past its opening questions is clutter after half a
    day. It moves to Archive rather than disappearing. */
-const UNFINISHED_LESSON_MS = 12 * 60 * 60 * 1000;
-function unfinishedLearnerRun(run) { return run?.phase === "clarification" && run.updatedAt > 0 && Date.now() - run.updatedAt > UNFINISHED_LESSON_MS; }
+/* NAV-145: a lesson is recorded only once shaping is done and it starts. One that
+   stopped while still shaping is not shown on Home, in Archive, Search or Profile. */
+function unfinishedLearnerRun(run) { return run?.phase === "clarification"; }
 function archivedLearnerRuns() {
   const removals = homeLearnerRunRemovals();
-  return homeLearnerRuns({ all:true }).filter(run => removals[run.runId]?.state === "archived" || !removals[run.runId] && unfinishedLearnerRun(run));
+  return homeLearnerRuns({ all:true }).filter(run => removals[run.runId]?.state === "archived" && !unfinishedLearnerRun(run));
 }
 function homeLearnerRuns({ all = false } = {}) {
   if (!homeLearnerAccountAllowed() || stateAccountId !== cloudAccount.id) return [];
@@ -8620,7 +8627,7 @@ function homeLearnerRuns({ all = false } = {}) {
     const removals = homeLearnerRunRemovals();
     return runs.filter(run => {
       const removal = removals[run.runId]?.state;
-      return removal !== "archived" && removal !== "deleted" && (removal === "kept" || !unfinishedLearnerRun(run));
+      return removal !== "archived" && removal !== "deleted" && !unfinishedLearnerRun(run);
     });
   }
   catch (_) { return []; }
@@ -11700,7 +11707,21 @@ function renderProfile(resetSelection = false) {
   /* Current lessons live in the saved lesson list, not in state.lessons, so the
      profile counts both and charts the list day by day. */
   const removals = typeof homeLearnerRunRemovals === "function" ? homeLearnerRunRemovals() : {};
-  const learnerRuns = typeof homeLearnerRuns === "function" ? homeLearnerRuns({ all:true }).filter(run => removals[run.runId]?.state !== "deleted") : [];
+  const learnerRuns = typeof homeLearnerRuns === "function" ? homeLearnerRuns({ all:true }).filter(run => removals[run.runId]?.state !== "deleted" && !unfinishedLearnerRun(run)) : [];
+  /* BUG-498: finished voice lessons count and are listed, not only old text
+     conversations. */
+  const learnerDone = learnerRuns.filter(run => run.phase === "complete");
+  const appendCompletedRuns = host => {
+    [...learnerDone].sort((a,b) => (b.updatedAt || 0) - (a.updatedAt || 0)).forEach(run => {
+      const button = document.createElement("button");
+      button.className = "recent-lesson";
+      button.type = "button";
+      const when = Number(run.updatedAt || run.startedAt) || 0;
+      button.innerHTML = `<span class="recent-lesson-copy"><span class="recent-lesson-title">${esc(run.title || run.topic || "Lesson")}</span><span class="recent-lesson-meta">${when ? esc(new Date(when).toLocaleDateString(undefined,{month:"short",day:"numeric"})) : ""}</span></span>`;
+      button.onclick = () => { void openHomeLearnerRun({runId:run.runId}); };
+      host.appendChild(button);
+    });
+  };
   if (!state.lessons.length && !learnerRuns.length) {
     scroll.innerHTML = `<div id="profile-empty">Nothing here yet.<br><br>Start a lesson and your worldview will begin to take shape &mdash; every conversation gets categorized automatically.</div>`;
     return;
@@ -11715,6 +11736,12 @@ function renderProfile(resetSelection = false) {
     scroll.appendChild(stats);
     window.WorldviewProfileChart?.render(scroll, learnerRuns);
     window.WorldviewProfileChart?.renderThinking?.(scroll, cloudAccount?.id);
+    const runsSection = document.createElement("section");
+    runsSection.className = "worldview-section";
+    runsSection.innerHTML = `<h3>Completed</h3>`;
+    if (learnerDone.length) appendCompletedRuns(runsSection);
+    else { const empty = document.createElement("p");empty.className = "worldview-completed-empty";empty.textContent = "Nothing yet.";runsSection.appendChild(empty); }
+    scroll.appendChild(runsSection);
     return;
   }
   const cats = {};
@@ -11731,9 +11758,10 @@ function renderProfile(resetSelection = false) {
      sitting lower than conversations is the point — what is unfinished should
      be visible without being scolded about. */
   const finished = state.lessons.filter(lessonRouteComplete);
+  const allLessons = state.lessons.length + learnerRuns.length, allDone = finished.length + learnerDone.length;
   stats.innerHTML = `<div class="worldview-stat"><strong>${state.notes.length}</strong><span>note${state.notes.length === 1 ? "" : "s"}</span></div>`
-    + `<div class="worldview-stat"><strong>${state.lessons.length}</strong><span>conversation${state.lessons.length === 1 ? "" : "s"}</span></div>`
-    + `<div class="worldview-stat${finished.length < state.lessons.length ? " worldview-stat-open" : ""}"><strong>${finished.length}</strong><span>completed</span></div>`;
+    + `<div class="worldview-stat"><strong>${allLessons}</strong><span>lesson${allLessons === 1 ? "" : "s"}</span></div>`
+    + `<div class="worldview-stat${allDone < allLessons ? " worldview-stat-open" : ""}"><strong>${allDone}</strong><span>completed</span></div>`;
   scroll.appendChild(stats);
   if (learnerRuns.length) window.WorldviewProfileChart?.render(scroll, learnerRuns);
   window.WorldviewProfileChart?.renderThinking?.(scroll, cloudAccount?.id);
@@ -11746,7 +11774,9 @@ function renderProfile(resetSelection = false) {
   completedSection.className = "worldview-section";
   completedSection.innerHTML = `<h3>Completed</h3>`;
   scroll.appendChild(completedSection);
+  appendCompletedRuns(completedSection);
 
+  if (!finished.length && learnerDone.length) return;
   if (!finished.length) {
     const empty = document.createElement("p");
     empty.className = "worldview-completed-empty";
