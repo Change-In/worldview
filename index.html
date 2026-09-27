@@ -1213,46 +1213,60 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   .quiz-button[hidden] { display:none; }
   .quiz-button:active { transform:scale(.95); background:rgba(189,90,48,.12); }
   .card-path-button { position:absolute;right:8px;top:8px;width:44px;height:44px;z-index:3;background:color-mix(in srgb,var(--card) 88%,transparent);touch-action:manipulation; }
-  /* NAV-143: one card that flips between folders and search. No numbers and
-     no helper text (P-027); familiar icons carry the meaning. */
-  .card.library-card { justify-content:flex-start; gap:12px; padding:16px 14px; }
-  .library-head { width:100%; display:flex; align-items:center; justify-content:center; position:relative; min-height:34px; }
-  .library-toggle { display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; background:var(--paper); }
-  .library-mode { width:46px; height:32px; display:grid; place-items:center; border:0; background:transparent; color:var(--ink-soft); cursor:pointer; padding:0; }
-  .library-mode svg, .library-edit svg, .library-search-box svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
-  .library-mode[aria-pressed="true"] { background:var(--accent); color:#fff; }
-  .library-edit { position:absolute; right:0; top:0; width:34px; height:34px; display:grid; place-items:center; border:1px solid var(--line); border-radius:10px; background:transparent; color:var(--ink-soft); cursor:pointer; padding:0; }
-  .library-chips { width:100%; display:flex; flex-wrap:wrap; gap:6px; justify-content:center; align-content:flex-start; overflow-y:auto; max-height:calc(var(--cardH,320px) - 90px); touch-action:pan-y; }
-  .library-chip { display:inline-flex; align-items:center; gap:4px; padding:6px 11px; border:1px solid var(--line); border-radius:999px; background:transparent; color:var(--ink); font:600 max(11px,calc(var(--cardW,262px) * .047)) system-ui,sans-serif; cursor:pointer; }
-  .library-chip .ai { font-size:.8em; color:var(--accent); }
-  .library-chip[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
-  .library-chip[aria-pressed="true"] .ai { color:#fff; }
-  .library-chip.add { width:32px; justify-content:center; padding:6px 0; color:var(--ink-soft); }
-  .library-search-box { width:100%; display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--line); border-radius:10px; color:var(--ink-soft); background:var(--paper); }
-  .library-search-box input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:var(--ink); font:500 15px system-ui,sans-serif; }
-  .library-results { width:100%; list-style:none; margin:0; padding:0; overflow-y:auto; max-height:calc(var(--cardH,320px) - 110px); touch-action:pan-y; text-align:left; }
-  .library-result { width:100%; display:grid; gap:1px; padding:8px 4px; border:0; border-bottom:1px solid var(--line); background:transparent; color:var(--ink); text-align:left; cursor:pointer; }
-  .library-result b { font:600 14px/1.25 Georgia,serif; }
-  .library-result span { font-size:11.5px; color:var(--ink-soft); }
-  /* NAV-144: edit mode keeps the carousel. Archive and trash sit where ••• and
-     the map button were; the title looks like a text box (look D, centered). */
-  body.home-editing .card.lesson-card .lesson-options-button, body.home-editing .card.lesson-card .card-path-button, body.home-editing .card.lesson-card .card-chapter { display:none; }
-  .edit-corner { position:absolute; top:8px; width:40px; height:40px; z-index:4; display:grid; place-items:center; border:1px solid var(--line); border-radius:12px; background:color-mix(in srgb,var(--card) 90%,transparent); color:var(--ink-soft); cursor:pointer; padding:0; }
-  .edit-corner svg { width:19px; height:19px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
-  .edit-corner.edit-archive { left:8px; }
-  .edit-corner.edit-delete { right:8px; color:#d0503c; }
+  /* NAV-143 (revised 2026-09-27): the Folders/Search card starts closed, two
+     icons only. Folders swaps the lesson cards for smaller folder tiles, two
+     to a column; search filters the lesson cards themselves. No helper text. */
+  .card.library-card { gap:14px; padding:16px 14px; }
+  .library-toggle { display:flex; gap:14px; }
+  .library-mode { width:62px; height:62px; display:grid; place-items:center; border:1px solid var(--line); border-radius:18px; background:transparent; color:var(--ink-soft); cursor:pointer; padding:0; }
+  .library-mode svg, .library-search-box svg, .library-clear svg { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .library-mode[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .library-filter { display:inline-flex; align-items:center; gap:6px; padding:6px 6px 6px 12px; border:1px solid var(--accent); border-radius:999px; color:var(--ink); font:600 13px system-ui,sans-serif; }
+  .library-filter .ai { color:var(--accent); font-size:.85em; }
+  .library-clear { width:24px; height:24px; display:grid; place-items:center; border:0; border-radius:50%; background:transparent; color:var(--ink-soft); padding:0; cursor:pointer; }
+  .library-clear svg { width:14px; height:14px; }
+  .library-search-box { width:100%; display:flex; align-items:center; gap:8px; padding:9px 10px; border:1px solid var(--line); border-radius:12px; color:var(--ink-soft); background:var(--paper); }
+  .library-search-box svg { width:18px; height:18px; }
+  .library-search-box input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:var(--ink); font:500 16px system-ui,sans-serif; }
+  /* Folder tiles: a slot of the carousel holds two, stacked. */
+  .card.folder-tiles-card { background:transparent; box-shadow:none; padding:0; gap:12px; justify-content:center; }
+  .folder-tile { width:100%; flex:1; max-height:calc((var(--cardH,320px) - 12px) / 2); display:grid; place-items:center; align-content:center; gap:4px; padding:12px; border:0; border-radius:var(--radius); background:var(--card); box-shadow:var(--shadow-md); color:var(--ink); cursor:pointer; text-align:center; }
+  .folder-tile b { font:600 max(15px,calc(var(--cardW,262px) * .072))/1.2 Georgia,serif; }
+  .folder-tile .ai { color:var(--accent); font-size:14px; }
+  .folder-tile[aria-pressed="true"] { box-shadow:0 0 0 2px var(--accent), var(--shadow-md); }
+  .folder-tile.add { color:var(--ink-soft); font-size:28px; }
+  .folder-tile.empty { visibility:hidden; }
+  /* Lesson cards: the title, where it continues, and the map (no outline). */
+  .card.lesson-card .card-path-button { border:0; background:transparent; }
+  /* NAV-144 (revised 2026-09-27): edit mode keeps the carousel; archive and
+     trash are plain icons where the map was; titles are edited in place. */
+  body.home-editing .card.lesson-card .card-path-button, body.home-editing .card.lesson-card .card-chapter { display:none; }
+  .edit-corner { position:absolute; top:10px; width:40px; height:40px; z-index:4; display:grid; place-items:center; border:0; background:transparent; color:var(--ink-soft); cursor:pointer; padding:0; }
+  .edit-corner svg { width:21px; height:21px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+  .edit-corner.edit-archive { left:10px; }
+  .edit-corner.edit-delete { right:10px; color:#d0503c; }
   .card .card-title.title-editable { position:relative; padding:6px 10px; border:1.5px solid color-mix(in srgb,var(--ink) 38%,transparent); border-radius:10px; text-align:center; cursor:text; }
+  .card .card-title.editing { border-color:var(--accent); outline:0; user-select:text; -webkit-user-select:text; caret-color:var(--accent); }
   .title-pen { position:absolute; top:-8px; right:-8px; width:18px; height:18px; border-radius:50%; background:var(--accent); display:grid; place-items:center; }
   .title-pen svg { width:10px; height:10px; fill:none; stroke:#fff; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; }
-  .title-rename-input { position:absolute; z-index:6; left:14px; right:14px; padding:8px 10px; border:1.5px solid var(--accent); border-radius:10px; background:var(--card); color:var(--ink); font:600 17px/1.3 Georgia,serif; text-align:center; }
-  #home-edit-bar { position:absolute; z-index:30; top:6px; left:max(12px,env(safe-area-inset-left)); right:max(12px,env(safe-area-inset-right)); display:flex; align-items:flex-start; gap:10px; }
-  #home-edit-bar[hidden] { display:none; }
-  #home-edit-folders { flex:1; display:flex; flex-wrap:wrap; gap:6px; justify-content:center; }
-  #home-edit-done { flex:none; padding:7px 14px; border:0; border-radius:999px; background:var(--accent); color:#fff; font:700 13px system-ui,sans-serif; cursor:pointer; }
-  /* NAV-149: back to Ask anything, at the top, once the shelf is two or more cards away. */
-  #home-back-start { position:absolute; z-index:30; top:8px; left:50%; transform:translateX(-50%); width:38px; height:38px; display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; background:var(--card); color:var(--ink); box-shadow:var(--shadow-md); cursor:pointer; padding:0; transition:opacity .18s ease; }
-  #home-back-start[hidden] { display:none; }
+  #carousel-wrap { position:relative; }
+  /* NAV-149 (revised 2026-09-27): back and Edit sit just above the lesson
+     cards, left and right; Done takes Edit's place. */
+  #home-shelf-bar { position:absolute; z-index:30; top:calc(50% - var(--cardH,320px) / 2 - 50px); left:calc(50% - var(--cardW,262px) / 2); width:var(--cardW,262px); display:flex; align-items:center; justify-content:space-between; pointer-events:none; }
+  #home-shelf-bar[hidden] { display:none; }
+  #home-shelf-bar > button { pointer-events:auto; }
+  #home-back-start { width:38px; height:38px; display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; background:var(--card); color:var(--ink); cursor:pointer; padding:0; }
+  #home-back-start[hidden] { visibility:hidden; display:grid; }
   #home-back-start svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  #home-edit-toggle { padding:8px 16px; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--ink); font:650 13px system-ui,sans-serif; cursor:pointer; }
+  body.home-editing #home-edit-toggle { background:var(--accent); border-color:var(--accent); color:#fff; }
+  #home-edit-bar { position:absolute; z-index:30; top:calc(50% - var(--cardH,320px) / 2 - 98px); left:16px; right:16px; display:flex; justify-content:center; }
+  #home-edit-bar[hidden] { display:none; }
+  #home-edit-folders { display:flex; flex-wrap:nowrap; gap:6px; overflow-x:auto; max-width:100%; padding:2px; scrollbar-width:none; }
+  #home-edit-folders::-webkit-scrollbar { display:none; }
+  .edit-chip { flex:none; display:inline-flex; align-items:center; padding:6px 12px; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--ink); font:600 13px system-ui,sans-serif; cursor:pointer; }
+  .edit-chip[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .edit-chip.add { width:34px; justify-content:center; padding:6px 0; color:var(--ink-soft); }
   #carousel-page { position:relative; }
   /* PRO-010: one title (the app's), one small line of numbers, a centered chart. */
   #profile-header { display:none; }
@@ -2015,9 +2029,9 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
         <div id="profile-scroll"></div>
       </section>
       <section id="carousel-page" class="home-deck-page" aria-label="Questions and saved lessons">
-        <button id="home-back-start" type="button" aria-label="Back to Ask anything" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6 5 12l6 6M5 12h14"/></svg></button>
-        <div id="home-edit-bar" hidden><div id="home-edit-folders" role="group" aria-label="Folders for this lesson"></div><button id="home-edit-done" type="button">Done</button></div>
         <div id="carousel-wrap">
+          <div id="home-edit-bar" hidden><div id="home-edit-folders" role="group" aria-label="Folders for this lesson"></div></div>
+          <div id="home-shelf-bar" hidden><button id="home-back-start" type="button" aria-label="Back to Ask anything"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 6 5 12l6 6M5 12h14"/></svg></button><button id="home-edit-toggle" type="button">Edit</button></div>
           <div id="carousel"></div>
           <div id="lesson-layer-guide" aria-label="Lesson folder selector" hidden>
             <div id="lesson-layer-up" class="layer-destination"></div>
@@ -2363,7 +2377,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.13 · Sep 27";
+const BUILD = "v3.1.14 · Sep 27";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2371,6 +2385,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.14",date:"Sep 27",changes:["The Folders and Search card starts closed: just two icons.","Tap the folder icon and your lessons are swapped for folders, two stacked in each spot. Tap one to see its lessons; the × on the card shows everything again.","Tap search and type: the lesson cards themselves filter as you go.","Back and Edit now sit just above your lesson cards. Done appears in Edit's place.","Edit a title right on the card: tap it, type, and press return.","Lesson cards are lighter: no ••• button, no date and cost line, and no outline around the map button."]},
   {tag:"v3.1.13",date:"Sep 27",changes:["One card for Folders and Search, right after Ask anything. Flip between them with the two icons.","The AI sorts your lessons into a few categories on its own (marked ✦), next to your own folders. A lesson can be in several.","Edit mode: tap the pencil on that card, or hold a lesson. Every card gets archive and trash, tap a title to rename it, and add the centered lesson to folders at the top. Tap Done when finished.","A back button at the top brings you straight to Ask anything when you are deep in your lessons.","Lesson titles are always capitalized.","Profile is tidier: one small line of numbers, a cleaner chart you can tap to see any day, and your completed lessons.","Fixed: tapping near the edge of a card could open the options of the card behind it."]},
   {tag:"v3.1.12",date:"Sep 26",changes:["Shaping now asks whether you want a quick overview or a deep dive, instead of how many minutes. An overview is one chapter; a deep dive gets every chapter the topic needs, one chapter at a time.","The chapter recap now always comes before the next chapter starts.","Coming back to a lesson after a while starts with a quick warm-up: the tutor asks what you remember from last time.","Lesson cards show where you left off: Continue, the chapter number and its name.","Research is prepared one chapter ahead of you, so a deep dive starts just as fast.","The tutor sounds more relaxed and warm, with a new friendly voice and no over-the-top praise."]},
   {tag:"v3.1.11",date:"Sep 26",changes:["Lesson research never gives up. If a source is slow or a provider is busy, it keeps trying quietly in the background while the tutor keeps talking with you. No more research errors or retry buttons.","The tutor waits for a quiet moment before taking in app notes, so your words don't get cut off mid-answer.","If the microphone hears you but no words come through, the tutor asks you to say it again instead of going silent.","Testers start every lesson in voice. The Voice or Text question is gone for now."]},
@@ -6727,58 +6742,7 @@ function renderHome() {
 
   // NAV-143: one Folders/Search card after Ask anything; then the lessons.
   renderHomeLibraryCard(c);
-  renderHomeLearnerRuns(c);
-
-  // lesson cards, newest first
-  const visibleLessons = recentLessonOrder(state.lessons).filter(lesson => {
-    if (isSourceLesson(lesson) || lessonIsArchived(lesson) || !lessonMatchesLayer(lesson)) return false;
-    // Filing changes organization, not recency. Recent lessons include filed lessons.
-    // Finishing never archives a lesson; the learner chooses when to put it away.
-    return true;
-  });
-  visibleLessons.forEach(l => {
-    const progress = authoritativeLessonProgress(l);
-    const card = document.createElement("div");
-    card.className = "card lesson-card";
-    card.dataset.id = l.id;
-    card.dataset.progressState = progress.state;
-    card.style.setProperty("--lesson-progress",`${progress.percent == null ? 0 : progress.percent}%`);
-    const progressLabel = progress.percent == null
-      ? "Lesson progress unavailable"
-      : `${progress.percent}% complete, ${progress.completedCount} of ${progress.totalCount} checkpoints demonstrated`;
-    card.setAttribute("aria-label",`${l.title || l.topic || "Lesson"}. ${progressLabel}. Tap to continue.`);
-    card.innerHTML = `
-      <button type="button" class="lesson-path-button card-path-button" aria-label="Open lesson path" title="Lesson path">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6v4m10-4v4M7 10h10M12 10v5"/><circle cx="7" cy="4" r="2"/><circle cx="17" cy="4" r="2"/><circle cx="12" cy="18" r="2"/></svg>
-      </button>
-      <button type="button" class="lesson-options-button" aria-label="Lesson options" title="Lesson options">•••</button>
-      <div class="card-cat">${esc(l.category || "")}</div>
-      ${lessonDateLabel(lessonTimestamp(l)) ? `<div class="card-cost">${esc(lessonDateLabel(lessonTimestamp(l)))}</div>` : ""}
-      <div class="card-title serif ${cardTitleSizeClass(l.title)}">${cardTitleHtml(l.title)}</div>
-      ${state.continueHintDismissed ? "" : '<div class="card-hint">tap to continue</div>'}
-    `;
-    const optionsButton = card.querySelector(".lesson-options-button");
-    optionsButton.addEventListener("pointerdown",event => event.stopPropagation());
-    optionsButton.addEventListener("pointerup",event => event.stopPropagation());
-    optionsButton.onclick = event => { event.stopPropagation();window.WorldviewLessonMenu.open({kind:"lesson",id:l.id,title:l.title || l.topic || "Lesson"}); };
-    const pathButton = card.querySelector(".card-path-button");
-    pathButton.addEventListener("pointerdown", event => { wheel.methodInteracting = true; event.stopPropagation(); });
-    pathButton.addEventListener("pointerup", event => { event.stopPropagation(); setTimeout(() => { wheel.methodInteracting = false; }, 0); });
-    pathButton.addEventListener("pointercancel", () => { wheel.methodInteracting = false; });
-    pathButton.onclick = event => { event.stopPropagation(); openLessonPath(l.id); };
-    attachOrganizerLongPress(card,l.id,"explore");
-    decorateEditableCard(card,{kind:"lesson",id:l.id,title:l.title || l.topic || "Lesson"});
-    c.appendChild(card);
-    wheel.cards.push(card); wheel.ids.push(l.id);
-  });
-
-  if (insidePersonalCategory && !visibleLessons.length && !wheel.cards.some(card => card.dataset.kind === "learner-run")) {
-    const empty = document.createElement("div");
-    empty.className = "card custom-category-card";
-    empty.innerHTML = `<div class="card-cat">collection</div><div class="card-title serif">Nothing filed here yet</div><div class="custom-category-count">Return to All lessons and tap a lesson’s ••• to add it.</div>`;
-    c.appendChild(empty);
-    wheel.cards.push(empty); wheel.ids.push(null);
-  }
+  renderHomeShelf(c);
 
   if (!wheel.cards.length) {
     wheel.layerCategory = null; wheel.layerIndex = 0;
@@ -6802,65 +6766,115 @@ function renderHome() {
   scheduleAiCategories();
 }
 
-/* ---- NAV-143 / NAV-146: the Folders ⇄ Search card ---- */
+/* ---- NAV-143 / NAV-146: the Folders ⇄ Search card (revised 2026-09-27) ----
+   Closed by default: two icons. Folders swaps the lessons for folder tiles;
+   search filters the lesson cards to its right as you type. */
+const LIBRARY_ICONS = {
+  folder:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z"/></svg>',
+  search:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg>',
+  close:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+  pencil:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+  archive:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v4H3zM5 9v10h14V9M10 13h4"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>'
+};
+function homeSearchMatches(values) {
+  if (wheel.libraryMode !== "search") return true;
+  const words = String(wheel.libraryQuery || "").toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const text = values.map(value => String(value || "")).join(" ").toLowerCase();
+  return words.every(word => text.includes(word));
+}
+function activeLibraryFilter() {
+  const key = wheel.layerCategory;
+  if (!key) return null;
+  const entry = categoryLayerEntries().find(item => item.key === key);
+  return entry ? { key, label:entry.label, ai:key.startsWith("ai:") } : null;
+}
 function renderHomeLibraryCard(carousel) {
-  const mode = wheel.libraryMode === "search" ? "search" : "folders";
+  const mode = ["folders","search"].includes(wheel.libraryMode) ? wheel.libraryMode : "";
   const card = document.createElement("div");
   card.className = "card library-card";
   card.dataset.kind = "library";
-  card.setAttribute("aria-label", mode === "search" ? "Search your lessons" : "Folders");
-  const head = `<div class="library-head"><div class="library-toggle" role="group" aria-label="Folders or search">`
-    + `<button type="button" class="library-mode" data-mode="folders" aria-label="Folders" aria-pressed="${mode === "folders"}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z"/></svg></button>`
-    + `<button type="button" class="library-mode" data-mode="search" aria-label="Search" aria-pressed="${mode === "search"}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg></button></div>`
-    + `<button type="button" class="library-edit" aria-label="Edit lessons"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button></div>`;
-  if (mode === "folders") {
-    const chip = (key, label, ai = false) => `<button type="button" class="library-chip" data-layer="${attr(key || "")}" aria-pressed="${(wheel.layerCategory || "") === (key || "")}">${ai ? '<span class="ai" aria-hidden="true">✦</span>' : ""}${esc(label)}</button>`;
-    card.innerHTML = head + `<div class="library-chips" role="group" aria-label="Show lessons from">`
-      + chip("", "All")
-      + aiCategoryNames().map(name => chip("ai:" + name, name, true)).join("")
-      + categoriesForSection("explore").map(category => chip("custom:" + category.id, category.name)).join("")
-      + `<button type="button" class="library-chip add" data-action="new-folder" aria-label="New folder">+</button></div>`;
-  } else {
-    card.innerHTML = head + `<label class="library-search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg><input id="library-search" type="search" autocomplete="off" enterkeyhint="search" aria-label="Search your lessons"></label><ul class="library-results" id="library-results"></ul>`;
-  }
+  card.setAttribute("aria-label","Folders and search");
+  const filter = activeLibraryFilter();
+  card.innerHTML = `<div class="library-toggle" role="group" aria-label="Folders or search">`
+    + `<button type="button" class="library-mode" data-mode="folders" aria-label="Folders" aria-pressed="${mode === "folders"}">${LIBRARY_ICONS.folder}</button>`
+    + `<button type="button" class="library-mode" data-mode="search" aria-label="Search" aria-pressed="${mode === "search"}">${LIBRARY_ICONS.search}</button></div>`
+    + (mode === "search" ? `<label class="library-search-box">${LIBRARY_ICONS.search}<input id="library-search" type="search" autocomplete="off" enterkeyhint="search" aria-label="Search your lessons"></label>` : "")
+    + (filter && mode !== "folders" ? `<span class="library-filter">${filter.ai ? '<span class="ai" aria-hidden="true">✦</span>' : ""}${esc(filter.label)}<button type="button" class="library-clear" aria-label="Show all lessons">${LIBRARY_ICONS.close}</button></span>` : "");
   for (const button of card.querySelectorAll(".library-mode")) button.onclick = () => {
-    if (wheel.libraryMode === button.dataset.mode) return;
-    wheel.libraryMode = button.dataset.mode; renderHome();
-    if (wheel.libraryMode === "search") requestAnimationFrame(() => $("library-search")?.focus({ preventScroll:true }));
+    const next = wheel.libraryMode === button.dataset.mode ? "" : button.dataset.mode;
+    wheel.libraryMode = next;
+    if (next !== "search") wheel.libraryQuery = "";
+    renderHome();
+    const library = wheel.cards.findIndex(item => item.dataset.kind === "library");
+    if (library >= 0) { wheel.pos = library; layoutWheel(); }
+    if (next === "search") $("library-search")?.focus({ preventScroll:true });
   };
-  card.querySelector(".library-edit").onclick = () => setHomeEditMode(true);
-  for (const button of card.querySelectorAll(".library-chip[data-layer]")) button.onclick = () => applyCategoryKey(button.dataset.layer || null);
-  const add = card.querySelector('[data-action="new-folder"]');
-  if (add) add.onclick = () => window.WorldviewLessonMenu?.newFolder(() => renderHome());
+  const clear = card.querySelector(".library-clear");
+  if (clear) clear.onclick = () => applyCategoryKey(null);
   const input = card.querySelector("#library-search");
   if (input) {
     input.value = wheel.libraryQuery || "";
-    input.oninput = () => { wheel.libraryQuery = input.value; renderLibraryResults(); };
-    input.onkeydown = event => { if (event.key === "Enter") { event.preventDefault(); card.querySelector(".library-result")?.click(); } };
+    input.oninput = () => { wheel.libraryQuery = input.value; refreshHomeShelf(); };
+    input.onkeydown = event => { if (event.key === "Enter") { event.preventDefault(); input.blur(); } };
   }
   carousel.appendChild(card);
   wheel.cards.push(card); wheel.ids.push(null);
-  if (mode === "search") renderLibraryResults(card);
 }
-function renderLibraryResults(card = document.querySelector(".library-card")) {
-  const list = card?.querySelector(".library-results"); if (!list) return;
-  const words = String(wheel.libraryQuery || "").toLowerCase().split(/\s+/).filter(Boolean);
-  const found = lessonSearchItems().filter(item => !item.archived && words.every(word => String(item.text || "").toLowerCase().includes(word))).slice(0, 30);
-  list.replaceChildren();
-  for (const item of found) {
-    const row = document.createElement("li"), button = document.createElement("button");
-    button.type = "button"; button.className = "library-result"; button.dataset.id = item.id;
-    const title = document.createElement("b"); title.textContent = titleCaseLesson(item.title);
-    const when = document.createElement("span"); when.textContent = lessonDateLabel(item.when);
-    button.append(title, when);
-    button.onclick = () => openChat(item.id);
-    row.append(button); list.append(row);
-  }
+/* Only the cards after the Folders/Search card change, so the search box keeps
+   its focus and the keyboard stays up while the lessons filter. */
+function refreshHomeShelf() {
+  const c = $("carousel"), library = wheel.cards.findIndex(card => card.dataset.kind === "library");
+  if (!c || library < 0) { renderHome(); return; }
+  for (const card of wheel.cards.slice(library + 1)) card.remove();
+  wheel.cards.length = library + 1; wheel.ids.length = library + 1;
+  wheel.renderedIndices = new Set([...wheel.renderedIndices].filter(index => index <= library));
+  renderHomeShelf(c);
+  wheel.pos = Math.max(0, Math.min(wheel.pos, wheel.cards.length - 1));
+  layoutWheel(false);
 }
 function libraryControlAtPoint(card, x, y) {
-  for (const control of card.querySelectorAll(".library-mode,.library-edit,.library-chip,.library-result")) {
+  for (const control of card.querySelectorAll(".library-mode,.library-clear")) {
     const rect = control.getBoundingClientRect();
     if (rect.width && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) return control;
+  }
+  return null;
+}
+/* Folder tiles: All, the AI's categories (✦), the learner's folders, then +.
+   Two tiles share each place in the carousel. */
+function renderHomeFolderTiles(carousel) {
+  const tiles = [{ key:"", label:"All" },
+    ...aiCategoryNames().map(name => ({ key:"ai:" + name, label:name, ai:true })),
+    ...categoriesForSection("explore").map(category => ({ key:"custom:" + category.id, label:category.name })),
+    { add:true, label:"+" }];
+  for (let i = 0; i < tiles.length; i += 2) {
+    const card = document.createElement("div");
+    card.className = "card folder-tiles-card";
+    card.dataset.kind = "folder-tiles";
+    for (const tile of [tiles[i], tiles[i + 1]]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      if (!tile) { button.className = "folder-tile empty"; button.tabIndex = -1; button.setAttribute("aria-hidden","true"); card.append(button); continue; }
+      if (tile.add) {
+        button.className = "folder-tile add"; button.textContent = "+"; button.setAttribute("aria-label","New folder");
+        button.onclick = () => window.WorldviewLessonMenu?.newFolder(() => renderHome());
+      } else {
+        button.className = "folder-tile";
+        button.setAttribute("aria-pressed", String((wheel.layerCategory || "") === tile.key));
+        button.innerHTML = `${tile.ai ? '<span class="ai" aria-hidden="true">✦</span>' : ""}<b>${esc(tile.label)}</b>`;
+        button.onclick = () => { wheel.libraryMode = ""; applyCategoryKey(tile.key || null); };
+      }
+      card.append(button);
+    }
+    carousel.appendChild(card);
+    wheel.cards.push(card); wheel.ids.push(null);
+  }
+}
+function folderTileAtPoint(card, x, y) {
+  for (const tile of card.querySelectorAll(".folder-tile:not(.empty)")) {
+    const rect = tile.getBoundingClientRect();
+    if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) return tile;
   }
   return null;
 }
@@ -6870,6 +6884,8 @@ function setHomeEditMode(on) {
   wheel.editMode = !!on;
   document.body.classList.toggle("home-editing", wheel.editMode);
   $("home-edit-bar").hidden = !wheel.editMode;
+  $("home-edit-toggle").textContent = wheel.editMode ? "Done" : "Edit";
+  if (wheel.editMode && wheel.libraryMode === "folders") wheel.libraryMode = "";
   renderHome();
   syncHomeEditBar(true);
 }
@@ -6883,14 +6899,14 @@ function decorateEditableCard(card, item) {
   if (!wheel.editMode) return;
   const archive = document.createElement("button");
   archive.type = "button"; archive.className = "edit-corner edit-archive"; archive.setAttribute("aria-label","Archive " + item.title);
-  archive.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v4H3zM5 9v10h14V9M10 13h4"/></svg>';
+  archive.innerHTML = LIBRARY_ICONS.archive;
   archive.onclick = () => { if (item.kind === "run") archiveHomeLearnerRun(item.run); else setLessonArchived(item.id,true); };
   card.appendChild(archive);
   /* Older lessons have no deletion record that survives sync, so they archive only. */
   if (item.kind === "run") {
     const remove = document.createElement("button");
     remove.type = "button"; remove.className = "edit-corner edit-delete"; remove.setAttribute("aria-label","Delete " + item.title);
-    remove.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>';
+    remove.innerHTML = LIBRARY_ICONS.trash;
     remove.onclick = () => {
       if (!confirm(`Delete “${titleCaseLesson(item.title)}”?`)) return;
       if (!setHomeLearnerRunRemoval(item.id,"deleted")) { toast("This device could not save that change. Try again.",4000); return; }
@@ -6901,30 +6917,33 @@ function decorateEditableCard(card, item) {
   const title = card.querySelector(".card-title");
   if (title) {
     title.classList.add("title-editable");
-    title.insertAdjacentHTML("beforeend",'<span class="title-pen" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></span>');
-    title.onclick = () => startInlineRename(card,title,item);
+    title.insertAdjacentHTML("beforeend",'<span class="title-pen" aria-hidden="true">' + LIBRARY_ICONS.pencil + '</span>');
+    title.onclick = () => startInlineRename(title,item);
   }
 }
-function startInlineRename(card, title, item) {
-  if (card.querySelector(".title-rename-input")) return;
-  const input = document.createElement("input");
-  input.className = "title-rename-input"; input.maxLength = 120; input.value = titleCaseLesson(item.title); input.enterKeyHint = "done";
-  input.setAttribute("aria-label","Lesson title");
-  input.style.top = Math.max(8, title.offsetTop) + "px";
-  card.appendChild(input);
+/* Owner 2026-09-27: edit right on the title. The title itself becomes
+   editable, with the caret at the end; Return or tapping away saves. */
+function startInlineRename(title, item) {
+  if (title.classList.contains("editing")) return;
+  const original = titleCaseLesson(item.title);
+  title.textContent = original;
+  title.classList.add("editing");
+  try { title.contentEditable = "plaintext-only"; } catch (_) { title.contentEditable = "true"; }
+  if (title.contentEditable !== "plaintext-only") title.contentEditable = "true";
+  title.setAttribute("role","textbox"); title.setAttribute("aria-label","Lesson title"); title.enterKeyHint = "done";
+  title.focus({ preventScroll:true });
+  const range = document.createRange(); range.selectNodeContents(title); range.collapse(false);
+  const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range);
   let done = false;
   const finish = saveIt => {
     if (done) return; done = true;
-    const value = input.value.replace(/\s+/g," ").trim();
-    input.remove();
-    if (saveIt && value && value !== item.title) {
-      if (!window.WorldviewLessonMenu?.rename(item,value)) { toast("This device could not save that change. Try again.",4000); return; }
-      renderHome();
-    }
+    const value = title.textContent.replace(/\s+/g," ").trim().slice(0,120);
+    title.contentEditable = "false"; title.classList.remove("editing");
+    if (saveIt && value && value !== original && !window.WorldviewLessonMenu?.rename(item,value)) toast("This device could not save that change. Try again.",4000);
+    renderHome();
   };
-  input.onkeydown = event => { if (event.key === "Enter") { event.preventDefault(); finish(true); } else if (event.key === "Escape") finish(false); };
-  input.onblur = () => finish(true);
-  input.focus(); input.select();
+  title.onkeydown = event => { if (event.key === "Enter") { event.preventDefault(); title.blur(); } else if (event.key === "Escape") { finish(false); } };
+  title.onblur = () => finish(true);
 }
 let homeEditBarIndex = -1;
 function syncHomeEditBar(force = false) {
@@ -6938,25 +6957,75 @@ function syncHomeEditBar(force = false) {
   const menu = window.WorldviewLessonMenu, inFolders = new Set(menu?.folderIds(item) || []);
   for (const category of categoriesForSection("explore")) {
     const chip = document.createElement("button");
-    chip.type = "button"; chip.className = "library-chip"; chip.textContent = category.name;
+    chip.type = "button"; chip.className = "edit-chip"; chip.textContent = category.name;
     chip.setAttribute("aria-pressed", String(inFolders.has(category.id)));
     chip.onclick = () => { if (menu?.toggleFolder(item,category.id) !== undefined) syncHomeEditBar(true); };
     bar.append(chip);
   }
   const add = document.createElement("button");
-  add.type = "button"; add.className = "library-chip add"; add.textContent = "+"; add.setAttribute("aria-label","New folder");
+  add.type = "button"; add.className = "edit-chip add"; add.textContent = "+"; add.setAttribute("aria-label","New folder");
   add.onclick = () => menu?.newFolder(category => { menu.toggleFolder(item,category.id); renderHome(); syncHomeEditBar(true); });
   bar.append(add);
 }
-$("home-edit-done").onclick = () => setHomeEditMode(false);
-/* NAV-149: from deep in the shelf, one tap glides back to Ask anything. */
+/* NAV-149: back (left) and Edit (right) appear just above the lesson cards
+   once the shelf reaches them; Done replaces Edit in the same place. */
 function homeAskIndex() { return wheel.cards.findIndex(card => card.classList.contains("new-card")); }
 function syncHomeBackButton() {
-  const button = $("home-back-start"); if (!button) return;
-  const ask = homeAskIndex();
-  button.hidden = wheel.editMode || ask < 0 || Math.abs(wheel.pos - ask) < 2;
+  const bar = $("home-shelf-bar"); if (!bar) return;
+  const ask = homeAskIndex(), library = wheel.cards.findIndex(card => card.dataset.kind === "library");
+  const onLessons = library >= 0 && Math.round(wheel.pos) > library && !!wheel.ids[Math.round(wheel.pos)];
+  bar.hidden = !(wheel.editMode || onLessons);
+  $("home-back-start").hidden = ask < 0 || Math.abs(wheel.pos - ask) < 2;
 }
 $("home-back-start").onclick = () => { const ask = homeAskIndex(); if (ask < 0) return; wheel.pos = ask; layoutWheel(true); };
+$("home-edit-toggle").onclick = () => setHomeEditMode(!wheel.editMode);
+
+/* The part of Home after the Folders/Search card: folder tiles while folders
+   are open, otherwise the lessons (filtered by folder and by search). */
+function renderHomeShelf(c) {
+  if (wheel.libraryMode === "folders") { renderHomeFolderTiles(c); return; }
+  const insidePersonalCategory = !!(wheel.layerCategory && wheel.layerCategory.startsWith("custom:"));
+  renderHomeLearnerRuns(c);
+
+  // lesson cards, newest first
+  const visibleLessons = recentLessonOrder(state.lessons).filter(lesson => {
+    if (isSourceLesson(lesson) || lessonIsArchived(lesson) || !lessonMatchesLayer(lesson)) return false;
+    if (!homeSearchMatches([lesson.title,lesson.topic,lesson.category])) return false;
+    // Filing changes organization, not recency. Recent lessons include filed lessons.
+    // Finishing never archives a lesson; the learner chooses when to put it away.
+    return true;
+  });
+  visibleLessons.forEach(l => {
+    const progress = authoritativeLessonProgress(l);
+    const card = document.createElement("div");
+    card.className = "card lesson-card";
+    card.dataset.id = l.id;
+    card.dataset.progressState = progress.state;
+    card.style.setProperty("--lesson-progress",`${progress.percent == null ? 0 : progress.percent}%`);
+    const progressLabel = progress.percent == null
+      ? "Lesson progress unavailable"
+      : `${progress.percent}% complete, ${progress.completedCount} of ${progress.totalCount} checkpoints demonstrated`;
+    card.setAttribute("aria-label",`${l.title || l.topic || "Lesson"}. ${progressLabel}. Tap to continue.`);
+    card.innerHTML = `
+      <button type="button" class="lesson-path-button card-path-button" aria-label="Open lesson path" title="Lesson path">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6v4m10-4v4M7 10h10M12 10v5"/><circle cx="7" cy="4" r="2"/><circle cx="17" cy="4" r="2"/><circle cx="12" cy="18" r="2"/></svg>
+      </button>
+      <div class="card-title serif ${cardTitleSizeClass(l.title)}">${cardTitleHtml(l.title)}</div>
+    `;
+    const pathButton = card.querySelector(".card-path-button");
+    pathButton.addEventListener("pointerdown", event => { wheel.methodInteracting = true; event.stopPropagation(); });
+    pathButton.addEventListener("pointerup", event => { event.stopPropagation(); setTimeout(() => { wheel.methodInteracting = false; }, 0); });
+    pathButton.addEventListener("pointercancel", () => { wheel.methodInteracting = false; });
+    pathButton.onclick = event => { event.stopPropagation(); openLessonPath(l.id); };
+    attachOrganizerLongPress(card,l.id,"explore");
+    decorateEditableCard(card,{kind:"lesson",id:l.id,title:l.title || l.topic || "Lesson"});
+    c.appendChild(card);
+    wheel.cards.push(card); wheel.ids.push(l.id);
+  });
+
+  /* An empty folder shows no card and no explanation (P-027). */
+
+}
 
 /* ---- notes view: parked topics; tapping a note starts that lesson ---- */
 function showNotes() {
@@ -7112,7 +7181,7 @@ function pathControlAtPoint(x, y) {
     if (!wheel.ids[index] || card.style.pointerEvents === "none") return;
     // Saved lesson cards also carry the ••• options button; the carousel owns
     // the pointer, so those taps are resolved here by position like the map.
-    for (const button of card.querySelectorAll(wheel.editMode ? ".edit-corner,.card-title.title-editable" : ".card-path-button,.lesson-options-button")) {
+    for (const button of card.querySelectorAll(wheel.editMode ? ".edit-corner,.card-title.title-editable:not(.editing)" : ".card-path-button")) {
       const rect = button.getBoundingClientRect();
       if (!rect.width || x < rect.left - hitSlop || x > rect.right + hitSlop || y < rect.top - hitSlop || y > rect.bottom + hitSlop) continue;
       const z = parseInt(card.style.zIndex || "0", 10);
@@ -7158,6 +7227,8 @@ function pathControlAtPoint(x, y) {
   area.addEventListener("pointerdown", e => {
     if(cardPinchActive || Date.now()<cardPinchSuppressUntil)return;
     if (e.target && e.target.closest && e.target.closest(".category-add-button")) return;
+    // Back, Edit/Done and the edit-mode folder chips sit over the carousel but are ordinary buttons.
+    if (e.target?.closest?.("#home-shelf-bar,#home-edit-bar")) return;
     const pathHit = pathControlAtPoint(e.clientX, e.clientY);
     if (pathHit) {
       pathPress = { pointerId:e.pointerId, x:e.clientX, y:e.clientY, lessonId:pathHit.lessonId, button:pathHit.button, canceled:false };
@@ -7172,6 +7243,11 @@ function pathControlAtPoint(x, y) {
     // against the input's real rect, not by asking the browser what element
     // it thinks was hit (the same native lookup that was misrouting taps
     // elsewhere in this carousel)
+    // A title being renamed takes its own taps (caret, selection).
+    if (wheel.editMode && target >= 0) {
+      const editing = wheel.cards[target].querySelector(".card-title.editing")?.getBoundingClientRect();
+      if (editing && e.clientX >= editing.left && e.clientX <= editing.right && e.clientY >= editing.top && e.clientY <= editing.bottom) return;
+    }
     // The search box on the Folders/Search card takes its own taps too.
     if (target >= 0 && wheel.cards[target].dataset.kind === "library") {
       const box = $("library-search")?.getBoundingClientRect();
@@ -7274,6 +7350,11 @@ function pathControlAtPoint(x, y) {
           wheel.pos = idx; layoutWheel();
           if (control === "start-btn") startLesson();
           else if (control === "start-voice-btn") startFromAskCard();
+          return;
+        }
+        if (el.dataset.kind === "folder-tiles") {
+          const tile = folderTileAtPoint(el,e.clientX,e.clientY);
+          if (tile) tile.click(); else { wheel.pos = idx; layoutWheel(); }
           return;
         }
         if (el.dataset.kind === "library") {
@@ -8946,20 +9027,16 @@ function renderHomeLearnerRuns(carousel) {
   for (const run of homeLearnerRuns()) {
     if (layer?.startsWith("custom:") && !window.WorldviewLessonMenu?.runFolderIds(run.runId).includes(layer.slice(7))) continue;
     if (layer?.startsWith("ai:") && !lessonAiCategories("learner:" + run.runId).includes(layer.slice(3))) continue;
+    if (!homeSearchMatches([run.title,run.topic,run.lessonTitle])) continue;
     const card = document.createElement("div");
     card.className = "card lesson-card";
     card.dataset.id = "learner:"+run.runId;
     card.dataset.kind = "learner-run";
     const stage = {clarification:"Your direction",map:"Lesson Map",extraction:"Your starting point",lesson:"Lesson",quiz:"Quiz",complete:"Completed"}[run.phase];
     card.setAttribute("aria-label",`${run.title}. ${stage}. Tap to continue.`);
-    card.innerHTML = `<div class="card-cat">${esc(stage)}</div><div class="card-cost" data-run-cost="${esc(run.runId)}" data-run-date="${Number(run.startedAt || run.updatedAt) || ""}"></div><div class="card-title serif ${cardTitleSizeClass(run.title)}">${cardTitleHtml(run.title)}</div>${run.chapterNumber && run.phase === "lesson" ? homeChapterHtml(run) : ""}`;
-    paintHomeLessonUsage(card.querySelector(".card-cost"),run.runId);
-    /* Tapping the card offers Voice or Text; ••• holds folders, Archive and Delete. */
-    const options = document.createElement("button");options.type = "button";options.className = "lesson-options-button";
-    options.setAttribute("aria-label","Options for " + run.title);options.title = "Lesson options";options.textContent = "•••";
-    guardCardControl(options);
-    options.onclick = event => { event.stopPropagation();window.WorldviewLessonMenu.open({kind:"run",id:run.runId,title:run.title,run}); };
-    card.appendChild(options);
+    card.innerHTML = `<div class="card-cat">${esc(stage)}</div><div class="card-title serif ${cardTitleSizeClass(run.title)}">${cardTitleHtml(run.title)}</div>${run.chapterNumber && run.phase === "lesson" ? homeChapterHtml(run) : ""}`;
+    /* A card holds the title, where it continues and the map. Rename, folders,
+       archive and delete live in edit mode (owner 2026-09-27: no •••). */
     const mapButton = document.createElement("button");
     mapButton.type = "button";
     mapButton.className = "lesson-path-button card-path-button";
