@@ -1,0 +1,97 @@
+/* Profile page styles (top page of the Home deck), the signed-out welcome, and the daily lesson chart.
+   Moved out of index.html unchanged on 2026-09-28 (v3.1.16). It is loaded in
+   index.html at the same point it used to sit, so it runs in the same order.
+   See architecture/CODE_MAP.md. */
+  /* ---------- Profile (top page of the home deck) ---------- */
+  #profile-header {
+    /* clear the Profile/Explore/Upload rail pinned at the left edge */
+    padding: 18px 24px 10px 104px; text-align: center;
+  }
+  #profile-header h2 { font-size: 19px; letter-spacing: 0.1em; text-transform: uppercase; }
+  #profile-header p { color: var(--ink-soft); font-size: 13px; margin-top: 4px; font-style: italic; }
+  #profile-scroll { flex: 1; overflow-y: auto; padding: 10px max(20px, calc((100% - 680px) / 2)) 24px; touch-action:pan-y; }
+  @media (max-width:720px) {
+    /* The old “Your Worldview / what you've been curious about” block was an
+       explainer, not Profile content. Removing it also eliminates its special
+       left offset so every retained section shares one 20px gutter. */
+    #profile-header { display:none; }
+    /* PRO-010: start below the Profile/Explore/Archive menu so nothing overlaps it. */
+    #profile-scroll { padding:122px 20px calc(28px + env(safe-area-inset-bottom)); }
+    .worldview-stats,.worldview-section,#profile-category-detail,#profile-empty { width:100%;margin-left:0;margin-right:0; }
+  }
+  .worldview-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-bottom: 26px; }
+  .worldview-stat { padding: 15px 8px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--card); text-align: center; }
+  .worldview-stat strong { display: block; font-family: Georgia, "Times New Roman", serif; font-size: 25px; font-weight: 500; }
+  .worldview-stat span { display: block; margin-top: 3px; color: var(--ink-soft); font-size: 11px; line-height: 1.25; }
+  .worldview-section { margin-bottom: 26px; }
+  /* BUS-050 welcome for signed-out visitors */
+  #account-welcome[hidden] { display:none; }
+  .welcome-steps { list-style:none; counter-reset:step; margin:6px 0 16px; padding:0; display:grid; gap:14px; }
+  .welcome-steps li { counter-increment:step; display:grid; grid-template-columns:30px 1fr; column-gap:12px; align-items:start; }
+  .welcome-steps li::before { content:counter(step); grid-row:span 2; display:grid; place-items:center; width:28px; height:28px; border-radius:50%; background:#e2895a; color:#241f1a; font:700 14px/1 system-ui,sans-serif; }
+  .welcome-steps strong { font:700 15.5px/1.3 system-ui,sans-serif; }
+  .welcome-steps span { color:var(--ink-soft); font-size:14px; line-height:1.45; }
+  .welcome-note { margin:0 0 16px; color:var(--ink-soft); font-size:13.5px; }
+  #account-welcome .account-primary { width:100%; }
+  .welcome-secondary { width:100%; min-height:46px; margin-top:10px; border:1px solid color-mix(in srgb,var(--ink) 22%,transparent); border-radius:14px; background:transparent; color:var(--ink); font:600 15px system-ui,sans-serif; }
+  .account-legal { margin:14px 0 0; text-align:center; font-size:12.5px; color:var(--ink-soft); }
+  .account-legal a { color:inherit; }
+  #source-page #source-carousel-wrap { display:none; }
+  #source-page { justify-content:center; }
+  #source-page #home-archive-entry { margin-top:auto; margin-bottom:auto; }
+  .account-menu .account-delete-entry strong { color:#d2644f; }
+  #account-delete-dialog { position:fixed; inset:0; margin:auto; height:fit-content; max-height:calc(100% - 32px); overflow:auto; width:min(420px,calc(100% - 32px)); padding:22px; border:1px solid color-mix(in srgb,var(--ink) 16%,transparent); border-radius:18px; background:var(--card); color:var(--ink); }
+  #account-delete-dialog::backdrop { background:#0009; }
+  #account-delete-dialog h2 { margin:0 0 10px; font:700 20px/1.2 Georgia,serif; }
+  #account-delete-dialog p { margin:0 0 14px; color:var(--ink-soft); font-size:14.5px; line-height:1.5; }
+  #account-delete-dialog label { display:block; margin-bottom:6px; font-size:13px; font-weight:600; }
+  #account-delete-dialog input { width:100%; min-height:44px; padding:10px 12px; border:1px solid color-mix(in srgb,var(--ink) 22%,transparent); border-radius:12px; background:transparent; color:var(--ink); font:600 16px system-ui,sans-serif; letter-spacing:.08em; }
+  #account-delete-status:empty { display:none; }
+  #account-delete-status { margin-top:12px!important; }
+  .account-delete-actions { display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; margin-top:16px; }
+  .account-delete-actions button { min-height:44px; padding:0 16px; border-radius:999px; border:1px solid color-mix(in srgb,var(--ink) 22%,transparent); background:transparent; color:var(--ink); font:600 14px system-ui,sans-serif; }
+  #account-delete-go { border-color:#c4533e; background:#c4533e; color:#fff; }
+  #account-delete-go:disabled { opacity:.45; }
+  /* PRO-008 daily lesson chart */
+  .profile-chart-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .profile-chart-head h3 { margin:0; }
+  .profile-chart-summary { margin:0; color:var(--ink-soft); font-size:12.5px; }
+  .profile-thinking-tags { display:grid; gap:10px; margin:12px 0 0; padding:0; list-style:none; }
+  .profile-thinking-tags li { display:grid; gap:2px; padding:10px 12px; border-radius:12px; background:color-mix(in srgb,var(--ink) 5%,transparent); }
+  .profile-thinking-tags strong { font-size:14px; }
+  .profile-thinking-tags span { color:var(--ink-soft); font-size:12.5px; line-height:1.4; }
+  .profile-chart-svg { display:block; width:100%; height:auto; max-width:520px; margin-top:12px; overflow:visible; }
+  .profile-chart-grid { stroke:color-mix(in srgb,var(--ink) 10%,transparent); stroke-width:1; }
+  .profile-chart-axis { stroke:color-mix(in srgb,var(--ink) 28%,transparent); stroke-width:1; }
+  .profile-chart-tick { fill:var(--ink-soft); font:500 9px system-ui,sans-serif; font-variant-numeric:tabular-nums; }
+  .profile-chart-started { fill:color-mix(in srgb,var(--accent) 32%,transparent); }
+  .profile-chart-completed { fill:var(--accent); }
+  .profile-chart-legend { display:flex; align-items:center; gap:6px; margin:8px 0 0; color:var(--ink-soft); font-size:12px; }
+  .profile-chart-readout { display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap; max-width:520px; margin:0 auto; font-size:12.5px; color:var(--ink-soft); }
+  .profile-chart-readout strong { color:var(--ink); font-weight:650; }
+  .profile-chart-readout .profile-chart-key { margin-left:8px; margin-right:4px; }
+  .profile-chart .profile-chart-svg { margin:8px auto 0; }
+  .profile-chart-hit { fill:transparent; cursor:pointer; }
+  .profile-chart-day { transition:opacity .15s ease; outline:none; }
+  .profile-chart-svg.has-selection .profile-chart-day { opacity:.4; }
+  .profile-chart-svg.has-selection .profile-chart-day.is-selected { opacity:1; }
+  .profile-chart-day:focus-visible .profile-chart-hit { stroke:var(--ink-soft); stroke-width:1; }
+  .profile-chart .profile-chart-axis { stroke-width:.8; }
+  .profile-chart-key { display:inline-block; width:10px; height:10px; border-radius:2px; margin-left:8px; }
+  .profile-chart-key:first-child { margin-left:0; }
+  .profile-chart-key.is-started { background:color-mix(in srgb,var(--accent) 32%,transparent); }
+  .profile-chart-key.is-completed { background:var(--accent); }
+  .worldview-section h3 { margin-bottom: 10px; color: var(--ink-soft); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+  .worldview-categories { display: flex; flex-wrap: wrap; gap: 8px; }
+  .worldview-category {
+    padding:9px 12px; border:1px solid var(--line); border-radius:999px;
+    background:rgba(44,36,28,.05); color:var(--ink); font:inherit; font-size:13px; cursor:pointer;
+  }
+  .worldview-category.active { border-color:var(--accent); background:rgba(189,90,48,.15); }
+  .worldview-category span { margin-left: 6px; color: var(--ink-soft); font-size: 11px; }
+  #profile-category-detail[hidden] { display:none; }
+  #profile-category-detail { animation:profileDetailIn .18s ease; }
+  @keyframes profileDetailIn { from { opacity:0; transform:translateY(7px); } }
+  .worldview-lessons { display: grid; gap: 8px; }
+  .worldview-note { color: var(--ink-soft); font-size: 13px; line-height: 1.55; }
+  #profile-empty { text-align: center; color: var(--ink-soft); font-style: italic; margin-top: 60px; padding: 0 30px; line-height: 1.6; }
