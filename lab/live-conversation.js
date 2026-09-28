@@ -835,9 +835,9 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   const review=study.packet?.chapterReview;
   if(review){reviewedChapter=review.chapterTitle||' ';return shared+'CHAPTER REVIEW. In one short sentence say that the chapter'+(review.chapterTitle?' "'+review.chapterTitle+'"':'')+' is done and there is a quick recap before the next one. Then ask them, in one short question, to recap in their own words what they learned in it (never "to a friend" or to anyone else). Do not open the next part. Then listen.';}
   const chapter=study.packet?.journeyContext?.chapter?.title;
-  if(reviewedChapter&&study.phase==='lesson'){reviewedChapter='';return shared+'The chapter review is done. In one short sentence say the next chapter'+(chapter?', "'+chapter+'",':'')+' begins now. Then open only the saved current outcome: ask in one short question what they already know or have heard about it, and teach its key idea after they answer. Then listen.';}
+  if(reviewedChapter&&study.phase==='lesson'){reviewedChapter='';return shared+'The chapter review is done. In one short sentence say the next chapter'+(chapter?', "'+chapter+'",':'')+' begins now. Then open only the saved current outcome with one short question that lets them try to work out its first step from what they already know. Do not explain the idea first. Then listen.';}
   const start=fresh&&study.currentIndex===0?'The researched lesson begins now. In one short sentence tell the learner their lesson is starting'+(chapter?' and name the first chapter, "'+chapter+'"':'')+'. Then ':'';
-  return shared+(start?start+'open':'Open')+' only the saved current outcome: bridge briefly from what the learner said last (name their idea), then ask in one short question what they already know or have heard about it. Teach its key idea after they answer. Do not repeat anything already said. Do not offer the quiz before its saved phase. Then listen.';
+  return shared+(start?start+'open':'Open')+' only the saved current outcome: bridge briefly from what the learner said last (name their idea), then point with one short question that lets them try to work out its first step themselves. Do not explain the idea first. Do not repeat anything already said. Do not offer the quiz before its saved phase. Then listen.';
  }
  function schedulePhaseOpening(state){
   if(!study||state.openedPhase===studyStep(study))return;
@@ -857,7 +857,8 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
    if(reviewedChapter&&study.phase==='lesson'&&!study.packet?.chapterReview&&!state.chapterGo){if(!state.chapterAsked){state.chapterAsked=true;host.onChapterBreak?.(String(study.packet?.journeyContext?.chapter?.title||''),()=>{state.chapterGo=true;state.openedPhase=null;schedulePhaseOpening(state);},()=>{void stop('Saved. Next time you start with the next chapter.',{pause:true});});}return;}
    state.chapterGo=false;state.chapterAsked=false;
    const instruction=phaseOpeningInstruction();
-   if(state.gemini){if(state.gemini.prompt?.(instruction)){state.openedPhase=version;state.pendingOpeningStep=null;}return;}
+   // BUG-502: a refused opener (the tutor was just interrupted or has only just stopped) is retried, not dropped.
+   if(state.gemini){if(state.gemini.prompt?.(instruction)){state.openedPhase=version;state.pendingOpeningStep=null;}else if(!state.closing){state.openedPhase=null;schedulePhaseOpening(state);}return;}
    state.openingCount=(state.openingCount||0)+1;
    send(state,{type:'session.instructions.append',event_id:state.id+':phase-opening:'+state.openingCount,delegation_id:null,content:instruction});
    state.openedPhase=version;state.pendingOpeningStep=null;

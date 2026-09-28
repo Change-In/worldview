@@ -19588,6 +19588,10 @@ function bindEvents() {
   q("lab-connection-retry")?.addEventListener("click", reconnectLabAccount);
   window.addEventListener("online", () => { void reconnectLabAccount(); void recoverUnconfirmedConversationDelivery(); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { void reconnectLabAccount(); void recoverUnconfirmedConversationDelivery(); } });
+  /* BUG-296: coming back to the lesson (after a screenshot, say) with a text box
+     still focused made iPhone Passwords offer a saved login over the lesson.
+     Nothing keeps typing focus across a return; a tap focuses it again. */
+  document.addEventListener("visibilitychange", () => { const el = document.activeElement; if (document.hidden && el && /^(INPUT|TEXTAREA)$/.test(el.tagName)) el.blur(); });
   scheduleConversationDeliveryRecovery();
   bindClarificationEvents();
   document.querySelectorAll("[data-load-prompt]").forEach((button) => button.addEventListener("click", () => resetPreset(button.dataset.loadPrompt)));

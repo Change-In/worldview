@@ -30,7 +30,7 @@ window.WorldviewGeminiLive=(()=>{
      VOI-156: when the microphone clearly hears speech but no words arrive
      within 3 s and the tutor stays silent, the tutor is asked to have the
      learner repeat it (at most once a minute). */
-  let pendingSince=0,heardAt=0,voiceAt=0,tutorDoneAt=0,flushTimer=null,burstStart=0,burstVoiced=0,repeatAskedAt=0;
+  let pendingSince=0,heardAt=0,voiceAt=0,tutorDoneAt=0,flushTimer=null,burstStart=0,burstVoiced=0,repeatAskedAt=0,interruptedAt=0,playedAt=0;
   const VOICE_LEVEL=.02,STRONG_VOICE_LEVEL=.04;
   const connected=new Promise((resolve,reject)=>{connectResolve=resolve;connectReject=reject;});
   // Cancellation can precede the asynchronous worklet load and its later await.
@@ -66,7 +66,7 @@ window.WorldviewGeminiLive=(()=>{
    if(!samples.length||rate<8000||rate>96000)return;
    const buffer=audio.createBuffer(1,samples.length,rate);buffer.copyToChannel(samples,0);
    const source=audio.createBufferSource();source.buffer=buffer;source.connect(mix||audio.destination);sources.add(source);
-   source.onended=()=>{sources.delete(source);flushContext();};playAt=Math.max(audio.currentTime+.02,playAt);source.start(playAt);playAt+=buffer.duration;
+   source.onended=()=>{sources.delete(source);if(!sources.size)playedAt=Date.now();flushContext();};playAt=Math.max(audio.currentTime+.02,playAt);source.start(playAt);playAt+=buffer.duration;
    if(audio.state==='suspended'||outputAudio?.paused)onStatus('Tap Enable audio.');
   }
   function context(text){
@@ -121,7 +121,7 @@ window.WorldviewGeminiLive=(()=>{
    if(message.sessionResumptionUpdate?.resumable&&message.sessionResumptionUpdate.newHandle)resumeHandle=message.sessionResumptionUpdate.newHandle;
    const content=message.serverContent;
    if(content){
-    if(content.interrupted){modelActive=false;clearAudio();}
+    if(content.interrupted){modelActive=false;interruptedAt=Date.now();clearAudio();}
     if(content.modelTurn||content.outputTranscription)modelActive=true;
     if(content.inputTranscription?.text){heardAt=Date.now();onEvent({type:'session.input_transcript.delta',delta:content.inputTranscription.text});}
     if(content.outputTranscription?.text)onEvent({type:'session.output_transcript.delta',delta:content.outputTranscription.text});
@@ -156,8 +156,18 @@ window.WorldviewGeminiLive=(()=>{
   }
   // Quiet context cannot make the model speak, so an application-owned opening
   // needs a completed turn. Never sent while the model already holds the floor.
+  /* BUG-502: on Sept 28 the tutor was cut off mid-sentence and the chapter's
+     first question started at once. Gemini stops itself when it thinks it hears
+     the learner (often its own voice from the speaker), which cleared the audio,
+     and the waiting opener then went straight away. An app prompt now waits for
+     1.2 s of quiet after the tutor's audio ends, and after an interruption for
+     either the learner's words or 3.5 s. */
+  function promptWait(now=Date.now()){
+   const afterInterrupt=interruptedAt&&heardAt<interruptedAt?Math.max(0,interruptedAt+3500-now):0;
+   return Math.max(afterInterrupt,playedAt?Math.max(0,playedAt+1200-now):0);
+  }
   function prompt(text){
-   if(!active()||!ready||modelActive||sources.size)return false;
+   if(!active()||!ready||modelActive||sources.size||promptWait()>0)return false;
    modelActive=true;send({clientContent:{turns:[{role:'user',parts:[{text:String(text)}]}],turnComplete:true}});return true;
   }
   const alive=()=>!closed&&socket?.readyState===WebSocket.OPEN;

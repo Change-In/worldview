@@ -713,7 +713,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
     font-size: max(7px, calc(var(--cardW, 262px) * 0.042)); color: var(--ink-soft);
   }
   /* LES-268: the chapter a lesson continues with. */
-  .card .card-chapter { position:absolute; left:16px; right:16px; bottom:44px; display:grid; justify-items:center; gap:4px; text-align:center; font-size:max(10px,calc(var(--cardW,262px) * .046)); font-weight:650; letter-spacing:.02em; color:var(--accent-700); }
+  .card .card-chapter { position:absolute; left:16px; right:16px; bottom:44px; display:flex; justify-content:center; align-items:center; gap:8px; white-space:nowrap; text-align:center; font-size:max(10px,calc(var(--cardW,262px) * .046)); font-weight:650; letter-spacing:.02em; color:var(--accent-700); }
   .card-chapter-dots { display:flex; gap:4px; }
   .card-chapter-dots i { width:14px; height:3px; border-radius:2px; background:color-mix(in srgb,var(--ink) 18%,transparent); }
   .card-chapter-dots i.done, .card-chapter-dots i.now { background:var(--accent-700); }
@@ -2212,7 +2212,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.16 · Sep 28";
+const BUILD = "v3.1.17 · Sep 28";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2220,6 +2220,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.17",date:"Sep 28",changes:["The tutor now points instead of explaining: it gives you one fact or one question, lets you work it out out loud, and stops you at the edge when you drift, with what's right, what's off and the one fact you're missing. Mistakes are welcome.","If you ask a question, the tutor answers it before asking its own.","The tutor should no longer be cut off mid-sentence when a chapter starts: the next question waits for a moment of quiet.","The lesson card shows one short line: the chapter dots and \"Chapter 1 of 5\".","Coming back to the app after a screenshot no longer leaves a text box ready to type, which is what made your iPhone offer a password."]},
   {tag:"v3.1.16",date:"Sep 28",changes:["Behind the scenes: Profile and Settings now live in their own files, so future fixes are safer and quicker.","Nothing should look or work differently. If anything in Profile, Settings or your account seems off, tell me."]},
   {tag:"v3.1.15",date:"Sep 27",changes:["Back and edit now sit at the far left and far right of the screen, just above your lesson cards.","Edit is a pencil; while editing it turns into a check to finish.","Each lesson card shows how long you have spent in it, small at the bottom."]},
   {tag:"v3.1.14",date:"Sep 27",changes:["The Folders and Search card starts closed: just two icons.","Tap the folder icon and your lessons are swapped for folders, two stacked in each spot. Tap one to see its lessons; the × on the card shows everything again.","Tap search and type: the lesson cards themselves filter as you go.","Back and Edit now sit just above your lesson cards. Done appears in Edit's place.","Edit a title right on the card: tap it, type, and press return.","Lesson cards are lighter: no ••• button, no date and cost line, and no outline around the map button."]},
@@ -8845,7 +8846,10 @@ function homeLearnerRuns({ all = false } = {}) {
 function homeChapterHtml(run) {
   const total = Math.min(12, Number(run.chapterTotal) || 0), number = Number(run.chapterNumber) || 1;
   const dots = total > 1 ? `<span class="card-chapter-dots" aria-hidden="true">${Array.from({length:total},(_,i) => `<i class="${i < number - 1 ? "done" : i === number - 1 ? "now" : ""}"></i>`).join("")}</span>` : "";
-  return `<div class="card-chapter" aria-label="Continue with chapter ${number}${total ? " of " + total : ""}">${dots}<span class="card-chapter-go">Continue · Chapter ${number}</span>${run.chapterTitle ? `<span class="card-chapter-name">${esc(run.chapterTitle)}</span>` : ""}</div>`;
+  /* NAV-151: one short line. The chapter's name and "Continue" crowded the
+     title on a phone; the tutor names the chapter when it starts. */
+  const label = `Chapter ${number}${total ? " of " + total : ""}`;
+  return `<div class="card-chapter" aria-label="${label}">${dots}<span class="card-chapter-go">${label}</span></div>`;
 }
 /* NAV-147: titles always show capitalized, whoever wrote them. Short joining
    words stay lower case unless they start the title; words already written
@@ -16473,6 +16477,19 @@ async function refreshAccountOnReturn() {
 }
 window.addEventListener("focus",refreshAccountOnReturn);
 document.addEventListener("visibilitychange",refreshAccountOnReturn);
+/* BUG-296: a text box still focused when the app is left (for a screenshot,
+   say) made iPhone Passwords offer a saved login on return. Let go of typing
+   focus on leaving; a tap focuses it again. PERF-031: an icon installed from an
+   old vercel.app address is told where the real app lives. It is not
+   redirected, because saved sign-in and storage do not follow an address. */
+document.addEventListener("visibilitychange",() => { if (document.hidden) { const el = document.activeElement; if (el && /^(INPUT|TEXTAREA)$/.test(el.tagName)) el.blur(); } });
+if (/\.vercel\.app$/i.test(location.hostname)) {
+  const note = document.createElement("div");
+  note.setAttribute("role","note");
+  note.style.cssText = "position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:9999;padding:12px 14px;border-radius:12px;background:var(--accent-700,#b5623a);color:#fff;font:600 14px/1.35 system-ui,sans-serif;text-align:center";
+  note.textContent = "This is an old copy of Worldview. Open worldview.cristianjperezb.workers.dev in Safari and add it to your Home Screen.";
+  document.body.appendChild(note);
+}
 window.addEventListener("pagehide",() => { clearTimeout(cloudSyncTimer);cloudSyncTimer = 0;cloudSyncNow(); });
 window.addEventListener("blur", () => {
   if (voice.active && voice.spaceHeld) pauseVoiceCapture("The Space-key recording paused when the window lost focus.");
