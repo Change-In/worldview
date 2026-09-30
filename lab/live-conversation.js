@@ -21,7 +21,7 @@ window.WorldviewLiveConversation=(()=>{
   host=adapter;const root=element('section');root.className='live-conversation';root.hidden=true;
   const note=element('p'),rate=element('span','$0.05/min'),total=element('strong','Est. total —');note.className='live-conversation-cost';note.append(rate,total);
   const actions=element('div');actions.className='live-conversation-actions';
-  const enableAudio=element('button','Enable audio');enableAudio.hidden=true;
+  const enableAudio=element('button','Tap to hear the tutor');enableAudio.className='live-hear-tutor';enableAudio.hidden=true;
   const start=element('button','Start GPT Live'),retry=element('button','Retry saving');retry.hidden=true;
   // Mute, Pause and the transcript toggle are icon-only. Each keeps a real
   // aria-label and title, kept in sync by paint(), so the control is still
@@ -273,7 +273,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   // insists on a tap, say so rather than leaving the tutor silent.
   if(session&&!session.closing&&session.ready){
    const s=session;s.lastActivityAt=performance.now();
-   void resumeAudio(s).then(()=>{if(session===s&&!s.closing)message(s.muted?'Mic muted':'Listening');}).catch(()=>{if(session===s&&!s.closing){ui.enableAudio.hidden=false;message('Tap Enable audio.');}});
+   void resumeAudio(s).then(()=>{if(session===s&&!s.closing)message(s.muted?'Mic muted':'Listening');}).catch(()=>{if(session===s&&!s.closing){ui.enableAudio.hidden=false;message('Tap to hear the tutor.');}});
   }
   backgrounded=false;paint();maybeStart();
  }
@@ -317,7 +317,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
    s.outputContext=null;s.outputSource=null;s.outputGain=null;s.outputAnalyser=null;}
   const version=s.outputVersion;
   output?.attach(outputTransport(s));
-  void resumeAudio(s).catch(()=>{if(session===s&&!s.closing&&s.outputVersion===version){ui.enableAudio.hidden=false;message('Tap Enable audio.');}});
+  void resumeAudio(s).catch(()=>{if(session===s&&!s.closing&&s.outputVersion===version){ui.enableAudio.hidden=false;message('Tap to hear the tutor.');}});
  }
  function setHardwareRoute(s,on){
   if(!s.outputGain)return;
@@ -699,8 +699,9 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
    // starting picture, so a new connection had nothing to say (the Sept 23
    // "groan") and the learner's answer during the swap was lost. It stays on
    // this connection and receives the new phase as an update.
+   // VOI-159: a Gemini lesson never swaps; see swapsConnection.
    const intoPreparation=startedPhase==='clarification'&&study.phase==='extraction'&&!study.complete;
-   if(advanced&&!intoPreparation&&(study.phase!==startedPhase||study.complete===true)){scheduleRefresh(s);paint();return;}
+   if(advanced&&swapsConnection(s)&&!intoPreparation&&(study.phase!==startedPhase||study.complete===true)){scheduleRefresh(s);paint();return;}
    if((s.lastUserSeq||0)!==startedUserSeq){s.deferredStudy=true;s.pendingOpeningStep=null;scheduleCheck(s);return;}
    deliverStudy(s);
    if(advanced||s.pendingOpeningStep===studyStep(study))schedulePhaseOpening(s);
@@ -710,6 +711,16 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   }catch{if(scope===expected&&session===s&&!s.closing)message('Live can keep teaching. The background understanding check is unavailable; no new progress was recorded.');}
   finally{clearTimeout(s.slowTimer);s.checking=false;}
  }
+ /* VOI-159 (BUG-506). A Gemini lesson keeps one connection and one audio
+    engine from start to finish. Swapping at a phase change hung up the tutor
+    mid-sentence (the swap waited for quiet captions, but the voice plays
+    seconds behind them), and it rebuilt the phone's audio with no tap: the
+    Sept 30 lesson's next question was never heard and the screen stopped
+    taking taps for about 30 seconds. Gemini's startup instructions are the
+    same in every phase, so a new connection gained nothing; the phase change
+    now arrives as an update on the same connection, as the move into the
+    starting talk always has. GPT Live, testing only, still swaps. */
+ function swapsConnection(s){return s?.model!=='gemini-3.8-live';}
  /* Phase refresh. The session that opened in one phase keeps that phase in its
     startup, and later phases only arrived as appended context that a long
     conversation can trim away; that is how the tutor drifted back into an
@@ -887,6 +898,9 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   else if(e.type==='session.input_transcript.delta')append(state,e,'user');
   else if(e.type==='session.output_transcript.delta')append(state,e,'assistant');
   else if(e.type==='gemini.turn.complete'){state.usageTurn=(state.usageTurn||0)+1;if(Date.now()-(state.connectedAt||Date.now())>=60000)autoAttempts=0;}
+  // VOI-159: words arrived but no sound is playing; one tap starts it.
+  else if(e.type==='gemini.audio.stalled'){ui.enableAudio.hidden=false;message('Tap to hear the tutor.');}
+  else if(e.type==='gemini.audio.playing'){if(!ui.enableAudio.hidden){ui.enableAudio.hidden=true;message(restingStatus());}}
   else if(e.type==='session.delegation.created'){const id=e.delegation?.id;if(typeof id==='string'&&!state.delegations.has(id)){state.delegations.add(id);watchDelegation(state,id);void check(id);}}
   else if(e.type==='session.usage.updated'||e.type==='session.closed'){
    if(Number.isFinite(e.usage?.seconds)&&e.usage.seconds>=0)state.seconds=Math.max(state.seconds,e.usage.seconds);if(state.seconds>=60)autoAttempts=0;
@@ -942,7 +956,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
      if(Date.now()-s.serverAt>45000)throw Error('The microphone took a while to open. Tap play to try again.');
     }
     if(session!==s||s.closing){void s.request({action:'close',requestId:s.id}).catch(()=>{});return;}
-    await window.WorldviewGeminiLive.connect({transport:result.transport,mic,outputAudio:ui.audio,initiate:s.initiate,openingText:s.openingText,onInputLevel:level=>inputLevel(s,level),isCurrent:()=>session===s&&!s.closing,onTransport:value=>{s.gemini=value;output?.attach({applyRoute:loud=>value.applyRoute?value.applyRoute(loud):'unavailable'});},onEvent:e=>event(s,e),onUsage:metadata=>recordVoiceCost(s,{metadata,usageId:s.usageTurn||0}),onStatus:text=>{if(session===s){message(text);if(text.includes('Tap Enable audio.'))ui.enableAudio.hidden=false;}}});
+    await window.WorldviewGeminiLive.connect({transport:result.transport,mic,outputAudio:ui.audio,initiate:s.initiate,openingText:s.openingText,onInputLevel:level=>inputLevel(s,level),isCurrent:()=>session===s&&!s.closing,onTransport:value=>{s.gemini=value;output?.attach({applyRoute:loud=>value.applyRoute?value.applyRoute(loud):'unavailable'});},onEvent:e=>event(s,e),onUsage:metadata=>recordVoiceCost(s,{metadata,usageId:s.usageTurn||0}),onStatus:text=>{if(session===s){message(text);if(text.includes('Tap to hear the tutor.'))ui.enableAudio.hidden=false;}}});
     return;
    }
    const peer=s.peer=new RTCPeerConnection();mic.getAudioTracks().forEach(t=>{peer.addTrack(t,mic);t.addEventListener('ended',()=>{if(session===s&&!s.closing)void stop('Microphone disconnected.');});});
@@ -1023,7 +1037,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
    if(scope!==expected||!result?.study)return false;
    study={...result.study,fragments};await applyPhase();
    const s=session,advanced=studyStep(study)!==before;
-   if(advanced&&s?.ready&&!s.closing){if(study.phase==='extraction'&&!study.complete){deliverStudy(s);s.pendingOpeningStep=studyStep(study);schedulePhaseOpening(s);}else scheduleRefresh(s);}
+   if(advanced&&s?.ready&&!s.closing){if(study.phase==='extraction'&&!study.complete||!swapsConnection(s)){deliverStudy(s);s.pendingOpeningStep=studyStep(study);schedulePhaseOpening(s);}else scheduleRefresh(s);}
    else if(s?.ready&&!s.closing)message('Listening');
    paint();return advanced||study.packet?.conversationState?.approvalSaved===true;
   }catch(error){if(scope===expected)message(error.message||'The lesson could not start. Try again.');return false;}

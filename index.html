@@ -2212,7 +2212,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.17 · Sep 28";
+const BUILD = "v3.1.18 · Sep 30";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2220,6 +2220,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.18",date:"Sep 30",changes:["Fixed: when your lesson started, the screen could stop responding and the tutor could go silent. The voice connection now stays the same for the whole lesson instead of reconnecting at each new part.","The tutor is no longer cut off mid-sentence when the lesson starts. The next question waits until it has finished speaking.","If the tutor's words ever arrive without any sound, a big \"Tap to hear the tutor\" button appears. One tap brings the sound back.","A long lesson keeps its voice connection for up to 3 hours."]},
   {tag:"v3.1.17",date:"Sep 28",changes:["The tutor now points instead of explaining: it gives you one fact or one question, lets you work it out out loud, and stops you at the edge when you drift, with what's right, what's off and the one fact you're missing. Mistakes are welcome.","If you ask a question, the tutor answers it before asking its own.","The tutor should no longer be cut off mid-sentence when a chapter starts: the next question waits for a moment of quiet.","The lesson card shows one short line: the chapter dots and \"Chapter 1 of 5\".","Coming back to the app after a screenshot no longer leaves a text box ready to type, which is what made your iPhone offer a password."]},
   {tag:"v3.1.16",date:"Sep 28",changes:["Behind the scenes: Profile and Settings now live in their own files, so future fixes are safer and quicker.","Nothing should look or work differently. If anything in Profile, Settings or your account seems off, tell me."]},
   {tag:"v3.1.15",date:"Sep 27",changes:["Back and edit now sit at the far left and far right of the screen, just above your lesson cards.","Edit is a pencil; while editing it turns into a check to finish.","Each lesson card shows how long you have spent in it, small at the bottom."]},

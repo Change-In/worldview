@@ -10,12 +10,14 @@ window.WorldviewGeminiLive=(()=>{
   const Audio=window.AudioContext||window.webkitAudioContext;
   if(!Audio||!window.AudioWorkletNode)throw Error('Gemini Live needs a browser with AudioWorklet support.');
   const audio=new Audio({latencyHint:'interactive'}),sources=new Set();
+  window.WorldviewLessonCues?.useContext?.(audio);
   /* A phone alert (low battery, a call, Siri) interrupts the page's audio and
      can leave the context suspended after the alert is gone, so the tutor is
      heard no more although the connection is fine. Ask for it back while the
      page is visible; a browser that insists on a tap gets the existing prompt. */
   let revive=null;
   audio.addEventListener?.('statechange',()=>{
+   if(audio.state==='running'&&stalled&&!closed){stalled=false;onEvent({type:'gemini.audio.playing'});}
    if(closed||audio.state==='running'||audio.state==='closed'){clearInterval(revive);revive=null;return;}
    if(revive)return;let tries=0;
    revive=setInterval(()=>{if(closed||audio.state==='running'||++tries>40){clearInterval(revive);revive=null;return;}if(!document.hidden)void audio.resume().catch(()=>{});},500);
@@ -30,7 +32,7 @@ window.WorldviewGeminiLive=(()=>{
      VOI-156: when the microphone clearly hears speech but no words arrive
      within 3 s and the tutor stays silent, the tutor is asked to have the
      learner repeat it (at most once a minute). */
-  let pendingSince=0,heardAt=0,voiceAt=0,tutorDoneAt=0,flushTimer=null,burstStart=0,burstVoiced=0,repeatAskedAt=0,interruptedAt=0,playedAt=0;
+  let pendingSince=0,heardAt=0,voiceAt=0,tutorDoneAt=0,flushTimer=null,burstStart=0,burstVoiced=0,repeatAskedAt=0,interruptedAt=0,playedAt=0,stalled=false,stallTimer=null,setupAt=0;
   const VOICE_LEVEL=.02,STRONG_VOICE_LEVEL=.04;
   const connected=new Promise((resolve,reject)=>{connectResolve=resolve;connectReject=reject;});
   // Cancellation can precede the asynchronous worklet load and its later await.
@@ -39,7 +41,7 @@ window.WorldviewGeminiLive=(()=>{
   const active=()=>!closed&&isCurrent();
   const send=payload=>{if(active()&&socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify(payload));};
   const ownsOutput=()=>!!output&&outputAudio?.srcObject===output.stream;
-  function playbackFailure(error){if(active()&&(!outputAudio||ownsOutput()))onStatus(error?.name==='NotAllowedError'?'Tap Enable audio.':'Audio playback failed. Tap Enable audio.');}
+  function playbackFailure(error){if(active()&&(!outputAudio||ownsOutput()))onStatus(error?.name==='NotAllowedError'?'Tap to hear the tutor.':'Audio playback failed. Tap to hear the tutor.');}
   const outputError=()=>playbackFailure(outputAudio?.error);
   function resumeAudio(){
    if(!active()||outputAudio&&!ownsOutput())return Promise.reject(Error('This voice output is no longer active.'));
@@ -47,16 +49,28 @@ window.WorldviewGeminiLive=(()=>{
    // lose the media element's user activation in browsers that require it.
    const start=operation=>{try{return Promise.resolve(operation());}catch(error){return Promise.reject(error);}};
    const tasks=[start(()=>audio.resume())];if(outputAudio)tasks.push(start(()=>outputAudio.play()));
-   return Promise.all(tasks).then(()=>{if(!active()||outputAudio&&!ownsOutput())throw Error('This voice output is no longer active.');});
+   return Promise.all(tasks).then(()=>{if(!active()||outputAudio&&!ownsOutput())throw Error('This voice output is no longer active.');if(stalled){stalled=false;onEvent({type:'gemini.audio.playing'});}});
+  }
+  /* VOI-159 safety net. The tutor's words can arrive while the phone plays
+     nothing, because it would not start audio without a tap. After 2.5 s of
+     queued speech that is not playing, the learner is asked for one tap. */
+  function watchSound(){
+   if(stallTimer||stalled||closed)return;
+   const from=audio.currentTime;
+   stallTimer=setTimeout(()=>{
+    stallTimer=null;if(closed||!sources.size)return;
+    const silent=audio.state!=='running'||audio.currentTime-from<.5||(!!hardGain&&hardGain.gain.value===0&&!!outputAudio?.paused);
+    if(silent){stalled=true;onEvent({type:'gemini.audio.stalled'});}
+   },2500);
   }
   function clearAudio(){for(const source of sources){try{source.stop();}catch{}}sources.clear();playAt=audio.currentTime;}
   function finish(reason){
-   if(closed)return;closed=true;clearInterval(revive);ready=false;clearTimeout(expiryTimer);clearTimeout(openTimer);clearTimeout(flushTimer);clearAudio();
+   if(closed)return;closed=true;clearInterval(revive);ready=false;clearTimeout(expiryTimer);clearTimeout(openTimer);clearTimeout(flushTimer);clearTimeout(stallTimer);clearAudio();
    processor?.disconnect();input?.disconnect();silent?.disconnect();if(processor)processor.port.onmessage=null;
    if(outputAudio){outputAudio.removeEventListener?.('error',outputError);if(ownsOutput()){outputAudio.pause();outputAudio.srcObject=null;}}
    output?.stream.getTracks().forEach(track=>track.stop());output?.disconnect();
    mix?.disconnect();hardGain?.disconnect();elementGain?.disconnect();
-   socket?.close();void audio.close().catch(()=>{});
+   window.WorldviewLessonCues?.releaseContext?.(audio);socket?.close();void audio.close().catch(()=>{});
    if(!started)connectReject(Error('Gemini Live did not complete its connection.'));
    onEvent({type:'session.closed',reason});
   }
@@ -67,7 +81,8 @@ window.WorldviewGeminiLive=(()=>{
    const buffer=audio.createBuffer(1,samples.length,rate);buffer.copyToChannel(samples,0);
    const source=audio.createBufferSource();source.buffer=buffer;source.connect(mix||audio.destination);sources.add(source);
    source.onended=()=>{sources.delete(source);if(!sources.size)playedAt=Date.now();flushContext();};playAt=Math.max(audio.currentTime+.02,playAt);source.start(playAt);playAt+=buffer.duration;
-   if(audio.state==='suspended'||outputAudio?.paused)onStatus('Tap Enable audio.');
+   if(audio.state==='suspended'||outputAudio?.paused)onStatus('Tap to hear the tutor.');
+   watchSound();
   }
   function context(text){
    if(!pendingContext)pendingSince=Date.now();
@@ -107,11 +122,11 @@ window.WorldviewGeminiLive=(()=>{
    if(message.error){failure('The voice connection was refused. Tap play to try again.');return;}
    if(message.usageMetadata)onUsage(message.usageMetadata);
    if(message.setupComplete){
-    clearTimeout(openTimer);ready=true;
+    clearTimeout(openTimer);ready=true;setupAt=Date.now();
     if(!started){
      send({clientContent:{turns:transport.history||[],turnComplete:false}});
      started=true;connectResolve();onEvent({type:'session.started'});
-     if(audio.state==='suspended'||outputAudio?.paused)onStatus('Tap Enable audio.');
+     if(audio.state==='suspended'||outputAudio?.paused)onStatus('Tap to hear the tutor.');
      // Give a fresh conversation its opening; resumed lessons continue from the
      // saved current phase/question rather than running Clarification again.
      if(initiate){modelActive=true;send({clientContent:{turns:[{role:'user',parts:[{text:openingText||'APP_START. Begin or resume the saved lesson now. Use the saved phase and conversation. Do not re-ask a question already answered. Speak first now in the selected language. If no subject is chosen, ask what they would like to explore today. Ask at most one relevant next question, then listen.'}]}],turnComplete:true}});}
@@ -141,6 +156,10 @@ window.WorldviewGeminiLive=(()=>{
    ws.addEventListener('error',()=>{/* close provides the single cleanup path */});
    ws.addEventListener('close',()=>{
     if(closed||socket!==ws)return;ready=false;clearTimeout(openTimer);
+    // VOI-159: one connection now lasts the whole lesson, and Google asks for a
+    // resume about every 10 minutes. Three failures in a row still end it; a
+    // resumed socket that stayed up a minute starts the count again.
+    if(setupAt&&Date.now()-setupAt>60000)resumeAttempts=0;
     if(active()&&resumeHandle&&Date.now()<Date.parse(transport.expiresAt)-10000&&resumeAttempts++<3){onStatus('Reconnecting Gemini Live…');open(true);return;}
     finish(closingReason);
    });
@@ -164,11 +183,16 @@ window.WorldviewGeminiLive=(()=>{
      either the learner's words or 3.5 s. */
   function promptWait(now=Date.now()){
    const afterInterrupt=interruptedAt&&heardAt<interruptedAt?Math.max(0,interruptedAt+3500-now):0;
-   return Math.max(afterInterrupt,playedAt?Math.max(0,playedAt+1200-now):0);
+   // VOI-159: nor while the learner's voice is on the microphone.
+   return Math.max(afterInterrupt,playedAt?Math.max(0,playedAt+1200-now):0,voiceAt?Math.max(0,voiceAt+800-now):0);
   }
   function prompt(text){
    if(!active()||!ready||modelActive||sources.size||promptWait()>0)return false;
-   modelActive=true;send({clientContent:{turns:[{role:'user',parts:[{text:String(text)}]}],turnComplete:true}});return true;
+   // VOI-159: a phase update still waiting its quiet moment goes first, in the
+   // same message, so the opening is spoken from the new phase.
+   const turns=[...(pendingContext?[{role:'user',parts:[{text:pendingContext}]}]:[]),{role:'user',parts:[{text:String(text)}]}];
+   pendingContext='';clearTimeout(flushTimer);
+   modelActive=true;send({clientContent:{turns,turnComplete:true}});return true;
   }
   const alive=()=>!closed&&socket?.readyState===WebSocket.OPEN;
   /* A quiet-minute pause holds the microphone instead of closing: nothing is

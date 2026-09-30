@@ -3,8 +3,12 @@
    here records speech or reaches the network. */
 window.WorldviewLessonCues=(()=>{
  'use strict';
- let context=null,toastTimer=null;
+ let context=null,shared=null,toastTimer=null;
  function audio(){
+  // VOI-159: in a voice lesson the chime plays through the lesson's own audio
+  // engine. A second engine started without a tap is what the phone may
+  // refuse or stall on.
+  if(shared&&shared.state!=='closed')return shared;
   const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return null;
   try{if(!context||context.state==='closed')context=new Audio({latencyHint:'interactive'});}catch{return null;}
   return context;
@@ -39,5 +43,6 @@ window.WorldviewLessonCues=(()=>{
   clearTimeout(toastTimer);
   toastTimer=setTimeout(()=>{node.classList.add('is-leaving');toastTimer=setTimeout(()=>{node.hidden=true;},400);},4200);
  }
- return {chime,toast};
+ const useContext=ctx=>{shared=ctx||null;},releaseContext=ctx=>{if(shared===ctx)shared=null;};
+ return {chime,toast,useContext,releaseContext};
 })();
