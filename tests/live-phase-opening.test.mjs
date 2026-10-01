@@ -62,13 +62,15 @@ test('chapter recap precedes a supported next-chapter opener exactly once',()=>{
  assert.doesNotMatch(h.open(false),/The chapter review is done/,'the recap bridge is consumed');
 });
 
+// LES-290: the teach-back is "teach me": the roles swap and the tutor plays a curious newcomer.
 test('quiz continues the saved teach-back without importing lesson teaching cues',()=>{
  const h=harness({phase:'quiz',currentIndex:0,complete:false,packet:{}});
- assert.match(h.open(true),/final teach-back starts now/);
+ assert.match(h.open(true),/the roles swap: they teach you/);
  h.set({phase:'quiz',currentIndex:1,complete:false,packet:{}});
  const text=h.open(false);
- assert.match(text,/Continue the final teach-back/);
- assert.match(text,/one plain-language application question for the saved current outcome/);
+ assert.match(text,/Stay the curious newcomer/);
+ assert.match(text,/ask them to teach you the saved current outcome next/);
+ assert.match(text,/Never teach, hint or correct/);
  assert.match(text,/Do not announce completion or offer to restart/);
  assert.doesNotMatch(text,/explain the relationship directly|Supply only needed setting/);
 });
