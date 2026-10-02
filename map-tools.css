@@ -1,0 +1,23 @@
+/* NAV-157: the lesson map panel (from a lesson card's map button) can show
+   everything at once, fill the screen, copy the whole map as text, and marks
+   the chapter you are on. */
+.map-tools { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.map-tools button {
+  appearance:none; border:1px solid var(--line); background:var(--paper); color:var(--ink);
+  font:600 12px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; padding:7px 11px; border-radius:999px; cursor:pointer;
+}
+.map-tools button[aria-pressed="true"] { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+.map-tools button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+#lesson-path-panel.map-full { width:100vw !important; left:0; border-left:0; }
+#lesson-path-panel.map-full .lesson-path-head,
+#lesson-path-panel.map-full #lesson-path-nodes,
+#lesson-path-panel.map-full .lesson-path-footnote { max-width:860px; margin-left:auto; margin-right:auto; width:100%; box-sizing:border-box; }
+@media (min-width:900px) {
+  #lesson-path-panel.map-full .saved-map-chapter { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:14px; }
+  #lesson-path-panel.map-full .saved-map-chapter > small,
+  #lesson-path-panel.map-full .saved-map-chapter > h3,
+  #lesson-path-panel.map-full .saved-map-chapter > .saved-map-context { grid-column:1 / -1; }
+}
+.saved-map-chapter.mt-here h3::after { content:"You are here"; display:inline-block; margin-left:10px; padding:2px 9px; border-radius:999px; vertical-align:3px; background:var(--accent); color:var(--paper); font:700 10.5px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; letter-spacing:.04em; }
+.saved-map-chapter.mt-done > small::after { content:" · done"; }
+.saved-map-chapter.mt-done h3 { color:var(--ink-soft); }

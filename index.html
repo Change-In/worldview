@@ -17,7 +17,9 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <link rel="stylesheet" href="lesson-entry-popup.css?v=2.1.38">
 <script src="lesson-entry-popup.js?v=2.1.71"></script>
 <link rel="stylesheet" href="lesson-folders.css?v=2.1.77">
-<link rel="stylesheet" href="courses.css?v=3.1.20">
+<link rel="stylesheet" href="courses.css?v=3.1.21">
+<link rel="stylesheet" href="boot-splash.css?v=3.1.21">
+<link rel="stylesheet" href="map-tools.css?v=3.1.21">
 <script src="lesson-folders.js?v=3.1.13"></script>
 <link rel="apple-touch-icon" href="icon.png">
 <style>
@@ -1253,10 +1255,12 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #carousel-wrap { position:relative; }
   /* NAV-149 (revised 2026-09-27): back and Edit sit just above the lesson
      cards, left and right; Done takes Edit's place. */
-  #home-shelf-bar { position:absolute; z-index:30; top:calc(50% - var(--cardH,320px) / 2 - 50px); left:max(16px,env(safe-area-inset-left)); right:max(16px,env(safe-area-inset-right)); display:flex; align-items:center; justify-content:space-between; pointer-events:none; }
+  #home-shelf-bar { position:absolute; z-index:30; top:calc(50% - var(--cardH,320px) / 2 - 50px); left:max(16px,env(safe-area-inset-left)); right:max(16px,env(safe-area-inset-right)); display:flex; align-items:center; justify-content:flex-end; pointer-events:none; }
   #home-shelf-bar[hidden] { display:none; }
   #home-shelf-bar > button { pointer-events:auto; }
-  #home-back-start { width:38px; height:38px; display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; background:var(--card); color:var(--ink); cursor:pointer; padding:0; }
+  /* NAV-158: the back arrow sits under the cards on the left, mirroring the edit
+     pencil above them on the right, so it no longer lands on the Archive rail. */
+  #home-back-start { position:absolute; left:0; top:calc(var(--cardH,320px) + 62px); width:38px; height:38px; display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; background:var(--card); color:var(--ink); cursor:pointer; padding:0; }
   #home-back-start[hidden] { visibility:hidden; display:grid; }
   #home-back-start svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   #home-edit-toggle { width:38px; height:38px; display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; background:var(--card); color:var(--ink); cursor:pointer; padding:0; }
@@ -1644,6 +1648,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <script src="appearance.js?v=3.1.1"></script>
 </head>
 <body>
+<div id="boot-splash" aria-hidden="true"><div class="boot-splash-in"><span class="boot-splash-word">Worldview</span><span class="boot-splash-sub">learn everything</span><span class="boot-splash-line"><i></i></span></div></div>
 <button id="theme-toggle" type="button" aria-label="Toggle appearance"><svg id="theme-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"></svg></button>
 
 <div id="file-warning">
@@ -2213,7 +2218,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.20 · Oct 2";
+const BUILD = "v3.1.21 · Oct 2";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2221,6 +2226,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.21",date:"Oct 2",changes:["Home opens in one go: a short loading screen while your account and lessons load, instead of the page filling in piece by piece.","The back-to-start arrow now sits under the cards on the left, so it no longer lands on the Archive button.","The light and dark button moved to the top-right corner.","Lesson maps (the map button on a lesson card) can show everything at once, go full screen, and copy the whole map as text. The chapter you are on is marked.","Owner preview: Courses opens with nothing expanded, Explore is organised by subject, and you can find your school and join a class."]},
   {tag:"v3.1.20",date:"Oct 2",changes:["Owner preview only: a Courses tab at the bottom of Home (Home · Courses · Profile). It has a sample course, The AI Race, where each lesson can start a real voice lesson, a quiz demo that remembers your earlier answer, and a course that builds itself as you talk.","Testers see no change."]},
   {tag:"v3.1.19",date:"Oct 1",changes:["You do more of the talking: the tutor no longer gets told to explain each idea first. It asks, or gives you the one fact you need, and lets you work it out.","If you ask something or say it doesn't make sense, the lesson stays put until that's answered. It also needs to be clearly sure you've got a part before moving on, not 50/50.","The tutor stays on the part you're on instead of running ahead.","New final teach-back, \"teach me\": the roles swap. The tutor plays a curious beginner and you teach it, while it asks naive why and what-if questions."]},
   {tag:"v3.1.18",date:"Sep 30",changes:["Fixed: when your lesson started, the screen could stop responding and the tutor could go silent. The voice connection now stays the same for the whole lesson instead of reconnecting at each new part.","The tutor is no longer cut off mid-sentence when the lesson starts. The next question waits until it has finished speaking.","If the tutor's words ever arrive without any sound, a big \"Tap to hear the tutor\" button appears. One tap brings the sound back.","A long lesson keeps its voice connection for up to 3 hours."]},
@@ -16500,7 +16506,10 @@ window.addEventListener("blur", () => {
 });
 </script>
 <!-- NAV-152/154: owner-only Courses preview (bottom tabs Home · Courses · Profile). -->
-<script src="courses.js?v=3.1.20"></script>
+<script src="courses.js?v=3.1.21"></script>
+<!-- NAV-157: lesson map tools; NAV-156: lift the loading screen when Home is ready. -->
+<script src="map-tools.js?v=3.1.21"></script>
+<script src="boot-splash.js?v=3.1.21"></script>
 </body>
 </html>
 

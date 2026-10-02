@@ -1,0 +1,18 @@
+/* NAV-156: a short loading screen while a signed-in account restores, so Home
+   opens with its lessons (and, for the owner, the tab bar) already in place
+   instead of filling in piece by piece. boot-splash.js lifts it; if that
+   script never runs, the animation below lifts it after 4 seconds anyway. */
+#boot-splash {
+  position:fixed; inset:0; z-index:1000; display:grid; place-items:center;
+  background:var(--paper); color:var(--ink);
+  animation:bootSplashAuto .35s ease 4s forwards;
+}
+#boot-splash.out { opacity:0; visibility:hidden; transition:opacity .28s ease, visibility 0s linear .28s; }
+.boot-splash-in { display:grid; justify-items:center; gap:6px; }
+.boot-splash-word { font:600 22px/1 Georgia,"Times New Roman",serif; letter-spacing:.22em; text-transform:uppercase; }
+.boot-splash-sub { font:italic 13px/1.2 Georgia,"Times New Roman",serif; color:var(--ink-soft); }
+.boot-splash-line { position:relative; width:120px; height:2px; margin-top:14px; border-radius:2px; background:var(--line); overflow:hidden; }
+.boot-splash-line i { position:absolute; left:-40%; top:0; bottom:0; width:40%; border-radius:2px; background:var(--accent); animation:bootSplashRun 1.1s ease-in-out infinite; }
+@keyframes bootSplashRun { to { left:100%; } }
+@keyframes bootSplashAuto { to { opacity:0; visibility:hidden; } }
+@media (prefers-reduced-motion:reduce) { .boot-splash-line i { animation:none; left:0; width:100%; opacity:.5; } }
