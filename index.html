@@ -17,6 +17,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <link rel="stylesheet" href="lesson-entry-popup.css?v=2.1.38">
 <script src="lesson-entry-popup.js?v=2.1.71"></script>
 <link rel="stylesheet" href="lesson-folders.css?v=2.1.77">
+<link rel="stylesheet" href="courses.css?v=3.1.20">
 <script src="lesson-folders.js?v=3.1.13"></script>
 <link rel="apple-touch-icon" href="icon.png">
 <style>
@@ -2212,7 +2213,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.19 · Oct 1";
+const BUILD = "v3.1.20 · Oct 2";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2220,6 +2221,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.20",date:"Oct 2",changes:["Owner preview only: a Courses tab at the bottom of Home (Home · Courses · Profile). It has a sample course, The AI Race, where each lesson can start a real voice lesson, a quiz demo that remembers your earlier answer, and a course that builds itself as you talk.","Testers see no change."]},
   {tag:"v3.1.19",date:"Oct 1",changes:["You do more of the talking: the tutor no longer gets told to explain each idea first. It asks, or gives you the one fact you need, and lets you work it out.","If you ask something or say it doesn't make sense, the lesson stays put until that's answered. It also needs to be clearly sure you've got a part before moving on, not 50/50.","The tutor stays on the part you're on instead of running ahead.","New final teach-back, \"teach me\": the roles swap. The tutor plays a curious beginner and you teach it, while it asks naive why and what-if questions."]},
   {tag:"v3.1.18",date:"Sep 30",changes:["Fixed: when your lesson started, the screen could stop responding and the tutor could go silent. The voice connection now stays the same for the whole lesson instead of reconnecting at each new part.","The tutor is no longer cut off mid-sentence when the lesson starts. The next question waits until it has finished speaking.","If the tutor's words ever arrive without any sound, a big \"Tap to hear the tutor\" button appears. One tap brings the sound back.","A long lesson keeps its voice connection for up to 3 hours."]},
   {tag:"v3.1.17",date:"Sep 28",changes:["The tutor now points instead of explaining: it gives you one fact or one question, lets you work it out out loud, and stops you at the edge when you drift, with what's right, what's off and the one fact you're missing. Mistakes are welcome.","If you ask a question, the tutor answers it before asking its own.","The tutor should no longer be cut off mid-sentence when a chapter starts: the next question waits for a moment of quiet.","The lesson card shows one short line: the chapter dots and \"Chapter 1 of 5\".","Coming back to the app after a screenshot no longer leaves a text box ready to type, which is what made your iPhone offer a password."]},
@@ -16497,6 +16499,8 @@ window.addEventListener("blur", () => {
   if (voice.active && voice.spaceHeld) pauseVoiceCapture("The Space-key recording paused when the window lost focus.");
 });
 </script>
+<!-- NAV-152/154: owner-only Courses preview (bottom tabs Home · Courses · Profile). -->
+<script src="courses.js?v=3.1.20"></script>
 </body>
 </html>
 
