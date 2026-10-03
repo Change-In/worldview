@@ -193,7 +193,7 @@
   /* ---------------- state ---------------- */
   const S = {open:false, scr:'home', tab:store.get('tab', 'mine'), expanded:null, added:store.get('added', []), joined:store.get('joined', []),
     cat:null, sub:'All', sort:'popular', query:'', schoolId:null, schoolQuery:'', view:null, openCh:0, openLesson:'0:0',
-    quiz:{step:0, answer:''}, make:{step:0, msgs:[], input:'', showAll:false}, sheet:null, back:'home'};
+    chap:{}, quiz:{step:0, answer:''}, make:{step:0, msgs:[], input:'', showAll:false}, sheet:null, back:'home'};
   const ICON = {
     home:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1z"/></svg>',
     courses:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18M3 12h18M3 17h18"/><circle cx="7" cy="7" r="1.9" fill="currentColor"/><circle cx="15" cy="12" r="1.9" fill="currentColor"/><circle cx="10" cy="17" r="1.9" fill="currentColor"/></svg>',
@@ -227,7 +227,9 @@
   }
   /* A course as rows of chapters, each a line of lesson cards ending in a quiz. */
   function chapterRows(chapters, opts) {
-    let idx = 0;
+    let idx = 0, cur = 0;
+    { let k = 0; chapters.forEach((ch, ci) => { if (opts.done >= k && opts.done <= k + ch.titles.length) cur = ci; k += ch.titles.length + 1; }); }
+    const show = opts.key && S.chap[opts.key] != null ? Math.min(S.chap[opts.key], chapters.length - 1) : cur;
     return chapters.map((ch, ci) => {
       const titles = ch.titles, start = idx; idx += titles.length + 1;
       const cards = titles.map((t, li) => {
@@ -235,9 +237,9 @@
         return `<button type="button" class="cv-lcard${cls}" ${opts.attr(ci, li)}><span class="k">Lesson ${li + 1}</span><span class="tt">${esc(t)}</span><span class="s">${g < opts.done ? '✓ Done' : g === opts.done ? 'Up next' : ''}</span></button>`;
       }).join('');
       const q = start + titles.length, qcls = q < opts.done ? ' done' : q === opts.done ? ' next' : '';
-      return `<div class="cv-chrow"><div class="cv-chrow-h"><span>${esc(ch.label || 'Chapter ' + (ci + 1))}</span><b>${esc(ch.title || '')}</b><span class="cv-arrows"><button type="button" data-scrollrow="-1" aria-label="Scroll back">‹</button><button type="button" data-scrollrow="1" aria-label="Scroll forward">›</button></span></div>
+      return `<div class="cv-chrow"><div class="cv-chrow-h"><span>${esc(ch.label || 'Chapter ' + (ci + 1))} of ${chapters.length}</span><b>${esc(ch.title || '')}</b>${opts.key ? `<span class="cv-chnav"><button type="button" data-chnav="${opts.key}:${ci - 1}" ${ci === 0 ? 'disabled' : ''} aria-label="Previous chapter">‹</button><button type="button" data-chnav="${opts.key}:${ci + 1}" ${ci === chapters.length - 1 ? 'disabled' : ''} aria-label="Next chapter">›</button></span>` : ''}</div>
         <div class="cv-strip" data-start="${Math.max(0, opts.done - start)}"><div class="cv-track">${cards}<button type="button" class="cv-lcard quiz${qcls}" ${opts.quizAttr(ci)}><span class="k">Quiz</span><span class="tt">${esc(opts.quizName || 'Chapter quiz')}</span><span class="s">${q < opts.done ? '✓ Done' : 'When you\'re ready'}</span></button></div></div></div>`;
-    }).join('');
+    }).filter((_, ci) => !opts.key || ci === show).join('');
   }
   const aiChapters = () => AIRACE.chapters.map(c => ({title:c.t, titles:c.lessons.map(l => l.t)}));
   const aiNext = () => { let i = 0; for (const c of AIRACE.chapters) { for (const l of c.lessons) { if (i === AI_DONE) return l.t; i++; } if (i === AI_DONE) return 'the chapter quiz'; i++; } return ''; };
@@ -254,26 +256,25 @@
     const head = `<span class="t"><b>${esc(c.title)}</b>${c.badge || ''}<span class="cv-chev${open ? ' up' : ''}">${ICON.chev}</span></span><span class="nx">${esc(c.sub)}</span>`;
     if (!open) return `<button type="button" class="cv-course" data-expand="${c.key}" aria-expanded="false">${head}${mini(c.items, c.done)}<span class="nx">${esc(c.next)}</span></button>`;
     return `<div class="cv-course open"><button type="button" class="cv-course-h" data-expand="${c.key}" aria-expanded="true">${head}</button>
-      <div class="cv-prog"><span style="width:${Math.round(c.done / c.items.length * 100)}%"></span></div><span class="nx">${esc(c.next)} · ${c.done} of ${c.items.length} done</span>
       ${c.rows}
       <div class="cv-row" style="flex-wrap:wrap">${c.actions}</div></div>`;
   }
   function mine() {
     const rows = [];
     rows.push(courseRow({key:'airace', title:'The AI Race', badge:chip('Yours', 'acc'), sub:'You made this · 3 chapters · 17 lessons', items:aiItems(), done:AI_DONE, next:'Next: ' + aiNext(),
-      rows:chapterRows(aiChapters(), {done:AI_DONE, attr:(ci, li) => `data-open-lesson="${ci}:${li}"`, quizAttr:ci => `data-go="quiz" data-quizch="${ci}"`}),
+      rows:chapterRows(aiChapters(), {key:'airace', done:AI_DONE, attr:(ci, li) => `data-open-lesson="${ci}:${li}"`, quizAttr:ci => `data-go="quiz" data-quizch="${ci}"`}),
       actions:'<button type="button" class="cv-pill" data-go="course">Open course</button><button type="button" class="cv-pill ghost" data-try="0:1">Continue for real</button>'}));
     S.added.filter(id => id !== 'airace' && course(id)).forEach(id => {
       const c = course(id), items = []; c.chapters.forEach(ch => { ch.forEach(() => items.push(false)); items.push(true); });
       rows.push(courseRow({key:id, title:c.title, sub:'by ' + c.by, items, done:0, next:'Next: ' + c.chapters[0][0],
-        rows:chapterRows(c.chapters.map((t, i) => ({title:'', titles:t})), {done:0, attr:() => `data-viewcourse="${id}"`, quizAttr:() => `data-viewcourse="${id}"`}),
+        rows:chapterRows(c.chapters.map((t, i) => ({title:'', titles:t})), {key:id, done:0, attr:() => `data-viewcourse="${id}"`, quizAttr:() => `data-viewcourse="${id}"`}),
         actions:`<button type="button" class="cv-pill" data-viewcourse="${id}">Open course</button><button type="button" class="cv-pill ghost" data-remove="${id}">Remove</button>`}));
     });
     const classes = S.joined.map(findClass).filter(Boolean);
     const classRows = classes.map(({school, cls}) => {
       const items = []; cls.chapters.forEach(ch => { ch.forEach(() => items.push(false)); items.push(true); });
       return courseRow({key:'class-' + cls.id, title:`${cls.code} · ${cls.title}`, badge:chip('Class', 'ok'), sub:`${school.name} · ${cls.teacher}`, items, done:1, next:cls.due,
-        rows:chapterRows(cls.chapters.map((t, i) => ({label:'Week ' + (i + 1), title:'', titles:t})), {done:1, quizName:'Friday quiz', attr:() => `data-viewclass="${cls.id}"`, quizAttr:() => `data-go="quiz"`}),
+        rows:chapterRows(cls.chapters.map((t, i) => ({label:'Week ' + (i + 1), title:'', titles:t})), {key:'class-' + cls.id, done:1, quizName:'Friday quiz', attr:() => `data-viewclass="${cls.id}"`, quizAttr:() => `data-go="quiz"`}),
         actions:`<button type="button" class="cv-pill" data-viewclass="${cls.id}">Open class</button><button type="button" class="cv-pill ghost" data-leave="${cls.id}">Leave</button>`});
     }).join('');
     return `<div class="cv-lab">Your courses</div>${rows.join('')}
@@ -343,11 +344,16 @@
         <div class="cv-row" style="flex-wrap:wrap"><button type="button" class="cv-pill" data-try="0:0">Try lesson 1 for real</button><button type="button" class="cv-pill ghost" data-go="quiz">See the quiz demo</button></div></div>
       <div class="cv-lab">Chapters · tap a lesson to see what happens in it</div>${chs}
       <div class="cv-side">${chip('Free side path', 'acc')}<b>${esc(AIRACE.side.t)}</b><p class="cv-muted" style="margin:0;font-size:13.5px">${esc(AIRACE.side.what)}</p><div class="cv-row" style="flex-wrap:wrap"><button type="button" class="cv-pill ghost" data-toast="Plays Cristian's video, then a short reflection">Watch Cristian's story</button><button type="button" class="cv-pill soft" data-sheet="person">Ask a person</button></div></div>
-      <div class="cv-lab">Versions</div>
-      <div class="cv-versions">
-        <div class="cv-ver now"><span class="cv-dot"></span><span><b>The AI Race</b><span>Version 1 · October 2026 · this one</span></span></div>
-        <div class="cv-ver"><span class="cv-dot soft"></span><span><b>The AI Race, part two</b><span>Coming next · picks up where this one ends</span></span></div>
-        <div class="cv-ver branch"><span class="cv-dot hollow"></span><span><b>Other makers' versions</b><span>None yet. Anyone can make their own take, and learners choose the best one.</span></span><button type="button" class="cv-pill ghost small" data-branch="1">Make your version</button></div>
+      <div class="cv-lab">What builds on this course</div>
+      <p class="cv-muted" style="margin:0">Courses link into a network. Most can be taken in any order; a few need something first, and say so.</p>
+      <div class="cv-net">
+        <div class="cv-node root"><b>The AI Race</b><span>This course</span></div>
+        <div class="cv-branches">
+          <div class="cv-node mine"><span class="cv-need">Needs chapter 2 first</span><b>AI and consciousness</b><span>By you · your recorded talk, with your face on video</span></div>
+          <div class="cv-node mine deep"><span class="cv-need">Best after AI and consciousness</span><b>The bigger questions first</b><span>By you · aliens may or may not exist, but you start from the existence of God; the rest is easier to process after the biggest question</span></div>
+          <div class="cv-node"><span class="cv-need open">Any order</span><b>The AI Race, part two</b><span>Coming · picks up where this one ends</span></div>
+          <div class="cv-node ghost"><span class="cv-need open">Any order</span><b>Other makers' takes</b><span>None yet. Anyone can make their own version; learners choose the best one.</span><button type="button" class="cv-pill ghost small" data-branch="1" style="justify-self:start">Make your version</button></div>
+        </div>
       </div>
       <p class="cv-muted cv-center">Clips and readings marked "to add" are placeholders for your links.</p>`;
   }
@@ -461,11 +467,12 @@
       h = `<h3>Join ${f ? esc(f.cls.code + ' · ' + f.cls.title) : 'a class'}</h3><p class="cv-muted">Type the class code from your teacher. Any code works in this demo.</p>
         <input class="cv-codein" id="cv-code" placeholder="e.g. LIN-ECON-A" autocomplete="off" autocapitalize="characters"><button type="button" class="cv-pill wide" data-join="${f ? f.cls.id : 'econ102'}">Join the class</button><button type="button" class="cv-pill ghost wide" data-close="1">Cancel</button>`;
     }
-    return `<div class="cv-ov" data-close="1"><div class="cv-sheet" role="dialog" aria-modal="true"><span class="grab"></span>${h}</div></div>`;
+    return `<div class="cv-ov" data-close="1"><div class="cv-sheet" role="dialog" aria-modal="true"><span class="grab"></span><button type="button" class="cv-x" data-close="1" aria-label="Close">✕</button>${h}</div></div>`;
   }
   function render() {
     const html = {course:scrCourse, quiz:scrQuiz, make:scrMake, cat:scrCategory, sample:scrSample, cls:scrClass, school:scrSchool}[S.scr]?.() ?? scrHome();
     view.innerHTML = `<div class="cv-wrap">${html}</div>${sheetHTML()}`;
+    document.body.classList.toggle('cv-sheet-open', !!S.sheet);
     view.querySelectorAll('.cv-strip[data-start]').forEach(el => { const card = el.querySelectorAll('.cv-lcard')[+el.dataset.start]; if (card && +el.dataset.start > 0) el.scrollLeft = Math.max(0, card.offsetLeft - 24); });
     syncBar();
   }
@@ -473,7 +480,7 @@
 
   /* ---------------- open / close and the bar ---------------- */
   function openCourses() { S.open = true; view.hidden = false; document.body.classList.add('cv-open'); render(); }
-  function closeCourses() { S.open = false; S.sheet = null; view.hidden = true; document.body.classList.remove('cv-open'); syncBar(); }
+  function closeCourses() { document.body.classList.remove('cv-sheet-open'); S.open = false; S.sheet = null; view.hidden = true; document.body.classList.remove('cv-open'); syncBar(); }
   let forcedTab = '', forcedAt = 0;
   function syncBar() {
     let active = 'home';
@@ -502,10 +509,11 @@
 
   /* ---------------- events ---------------- */
   view.addEventListener('click', e => {
-    const t = e.target.closest('[data-go],[data-ctab],[data-expand],[data-open-lesson],[data-ch],[data-lesson],[data-try],[data-start],[data-sheet],[data-close],[data-toast],[data-qstep],[data-qexample],[data-qpause],[data-msend],[data-mex],[data-mreset],[data-mall],[data-copyprompt],[data-cat],[data-sub],[data-sort],[data-add],[data-remove],[data-viewcourse],[data-viewclass],[data-school],[data-schoolback],[data-join],[data-leave],[data-branch],[data-scrollrow]');
+    const t = e.target.closest('[data-go],[data-ctab],[data-expand],[data-open-lesson],[data-ch],[data-lesson],[data-try],[data-start],[data-sheet],[data-close],[data-toast],[data-qstep],[data-qexample],[data-qpause],[data-msend],[data-mex],[data-mreset],[data-mall],[data-copyprompt],[data-cat],[data-sub],[data-sort],[data-add],[data-remove],[data-viewcourse],[data-viewclass],[data-school],[data-schoolback],[data-join],[data-leave],[data-branch],[data-scrollrow],[data-chnav]');
     if (!t) return;
     if (t.dataset.close && t.classList.contains('cv-ov') && e.target !== t) return;
     const d = t.dataset;
+    if (d.chnav) { const [k, i] = [d.chnav.slice(0, d.chnav.lastIndexOf(':')), +d.chnav.slice(d.chnav.lastIndexOf(':') + 1)]; S.chap[k] = i; return render(); }
     if (d.scrollrow) { const strip = t.closest('.cv-chrow')?.querySelector('.cv-strip'); if (strip) strip.scrollBy({left: +d.scrollrow * strip.clientWidth * 0.8, behavior:'smooth'}); return; }
     if (d.go) { if (d.go === 'quiz') S.quiz.step = 0; if (d.go === 'course') S.back = S.scr === 'quiz' || S.scr === 'make' ? 'home' : S.scr; if (d.go === 'school' && S.scr === 'home') S.schoolId = null; return go(d.go); }
     if (d.ctab) { S.tab = d.ctab; store.set('tab', S.tab); S.scr = 'home'; S.sheet = null; render(); view.scrollTop = 0; return; }

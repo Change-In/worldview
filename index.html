@@ -17,8 +17,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <link rel="stylesheet" href="lesson-entry-popup.css?v=2.1.38">
 <script src="lesson-entry-popup.js?v=2.1.71"></script>
 <link rel="stylesheet" href="lesson-folders.css?v=2.1.77">
-<link rel="stylesheet" href="courses.css?v=3.1.21">
-<link rel="stylesheet" href="boot-splash.css?v=3.1.21">
+<link rel="stylesheet" href="courses.css?v=3.1.22">
+<link rel="stylesheet" href="boot-splash.css?v=3.1.22">
 <link rel="stylesheet" href="map-tools.css?v=3.1.21">
 <script src="lesson-folders.js?v=3.1.13"></script>
 <link rel="apple-touch-icon" href="icon.png">
@@ -1255,12 +1255,13 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
   #carousel-wrap { position:relative; }
   /* NAV-149 (revised 2026-09-27): back and Edit sit just above the lesson
      cards, left and right; Done takes Edit's place. */
-  #home-shelf-bar { position:absolute; z-index:30; top:calc(50% - var(--cardH,320px) / 2 - 50px); left:max(16px,env(safe-area-inset-left)); right:max(16px,env(safe-area-inset-right)); display:flex; align-items:center; justify-content:flex-end; pointer-events:none; }
+  #home-shelf-bar { position:absolute; z-index:30; top:calc(50% - var(--cardH,320px) / 2 - 50px); left:max(16px,env(safe-area-inset-left)); right:max(16px,env(safe-area-inset-right)); display:flex; align-items:center; justify-content:space-between; pointer-events:none; }
   #home-shelf-bar[hidden] { display:none; }
   #home-shelf-bar > button { pointer-events:auto; }
-  /* NAV-158: the back arrow sits under the cards on the left, mirroring the edit
-     pencil above them on the right, so it no longer lands on the Archive rail. */
-  #home-back-start { position:absolute; left:0; top:calc(var(--cardH,320px) + 62px); width:38px; height:38px; display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; background:var(--card); color:var(--ink); cursor:pointer; padding:0; }
+  /* NAV-158 (revised): the back arrow stays above the cards on the left; while it
+     shows, the Profile/Explore/Archive rail steps aside so the two never overlap. */
+  #view-home:has(#home-shelf-bar:not([hidden]) #home-back-start:not([hidden])) .section-rail { opacity:0; pointer-events:none; transition:opacity .2s; }
+  #home-back-start { width:38px; height:38px; display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; background:var(--card); color:var(--ink); cursor:pointer; padding:0; }
   #home-back-start[hidden] { visibility:hidden; display:grid; }
   #home-back-start svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   #home-edit-toggle { width:38px; height:38px; display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; background:var(--card); color:var(--ink); cursor:pointer; padding:0; }
@@ -2218,7 +2219,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.21 · Oct 2";
+const BUILD = "v3.1.22 · Oct 3";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -16506,10 +16507,10 @@ window.addEventListener("blur", () => {
 });
 </script>
 <!-- NAV-152/154: owner-only Courses preview (bottom tabs Home · Courses · Profile). -->
-<script src="courses.js?v=3.1.21"></script>
+<script src="courses.js?v=3.1.22"></script>
 <!-- NAV-157: lesson map tools; NAV-156: lift the loading screen when Home is ready. -->
 <script src="map-tools.js?v=3.1.21"></script>
-<script src="boot-splash.js?v=3.1.21"></script>
+<script src="boot-splash.js?v=3.1.22"></script>
 </body>
 </html>
 
