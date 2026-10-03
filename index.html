@@ -17,7 +17,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <link rel="stylesheet" href="lesson-entry-popup.css?v=2.1.38">
 <script src="lesson-entry-popup.js?v=2.1.71"></script>
 <link rel="stylesheet" href="lesson-folders.css?v=2.1.77">
-<link rel="stylesheet" href="courses.css?v=3.1.22">
+<link rel="stylesheet" href="courses.css?v=3.1.23">
 <link rel="stylesheet" href="boot-splash.css?v=3.1.22">
 <link rel="stylesheet" href="map-tools.css?v=3.1.21">
 <script src="lesson-folders.js?v=3.1.13"></script>
@@ -2219,7 +2219,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.22 · Oct 3";
+const BUILD = "v3.1.23 · Oct 3";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2227,6 +2227,8 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.23",date:"Oct 3",changes:["When a newer version is out, the app now says so when you come back to it, with a Reload button. A laptop window no longer stays on an old version for days.","Owner preview only: switching to another window and back no longer throws you out of Courses.","Owner preview only: an opened course is now one metro line with every lesson title in full. It scrolls sideways and opens at your next lesson, and the arrows jump a chapter at a time.","Owner preview only: \"Ask a person\" is gone for now. It is kept as an idea for later."]},
+  {tag:"v3.1.22",date:"Oct 3",changes:["The loading screen is centred.","The back-to-start arrow is back above the cards. The Profile · Explore · Archive labels fade out while it shows, so the two never overlap.","Owner preview only: an opened course shows one chapter at a time, pop-ups have a close button and sit clear of the bottom bar, and a course page shows what builds on it."]},
   {tag:"v3.1.21",date:"Oct 2",changes:["Home opens in one go: a short loading screen while your account and lessons load, instead of the page filling in piece by piece.","The back-to-start arrow now sits under the cards on the left, so it no longer lands on the Archive button.","The light and dark button moved to the top-right corner.","Lesson maps (the map button on a lesson card) can show everything at once, go full screen, and copy the whole map as text. The chapter you are on is marked.","Owner preview: Courses opens with nothing expanded, Explore is organised by subject, and you can find your school and join a class."]},
   {tag:"v3.1.20",date:"Oct 2",changes:["Owner preview only: a Courses tab at the bottom of Home (Home · Courses · Profile). It has a sample course, The AI Race, where each lesson can start a real voice lesson, a quiz demo that remembers your earlier answer, and a course that builds itself as you talk.","Testers see no change."]},
   {tag:"v3.1.19",date:"Oct 1",changes:["You do more of the talking: the tutor no longer gets told to explain each idea first. It asks, or gives you the one fact you need, and lets you work it out.","If you ask something or say it doesn't make sense, the lesson stays put until that's answered. It also needs to be clearly sure you've got a part before moving on, not 50/50.","The tutor stays on the part you're on instead of running ahead.","New final teach-back, \"teach me\": the roles swap. The tutor plays a curious beginner and you teach it, while it asks naive why and what-if questions."]},
@@ -16507,10 +16509,12 @@ window.addEventListener("blur", () => {
 });
 </script>
 <!-- NAV-152/154: owner-only Courses preview (bottom tabs Home · Courses · Profile). -->
-<script src="courses.js?v=3.1.22"></script>
+<script src="courses.js?v=3.1.23"></script>
 <!-- NAV-157: lesson map tools; NAV-156: lift the loading screen when Home is ready. -->
 <script src="map-tools.js?v=3.1.21"></script>
 <script src="boot-splash.js?v=3.1.22"></script>
+<!-- NAV-161: offer a reload when the server has a newer build. -->
+<script src="update-check.js?v=3.1.23"></script>
 </body>
 </html>
 

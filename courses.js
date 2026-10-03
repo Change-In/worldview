@@ -4,6 +4,7 @@
      course, the courses you add from Explore, and the classes you join.
    - Explore: subjects you can browse (a library-style tree), search, sorting.
    - Find your school: join a class with a code; courses made by students.
+   - An opened course is one metro line, every lesson titled in full.
    - The owner's course, The AI Race, in full; a quiz demo that keeps the
      learner's answer as a snapshot; a course that builds while you talk.
    Nothing is stored on the server. "Try this lesson for real" starts an
@@ -33,14 +34,20 @@
   const identity = () => String(read(() => typeof identityRestoreStatus !== 'undefined' ? identityRestoreStatus : '') || '');
   const ownershipResolved = () => !!read(() => typeof accountOwnershipResolved !== 'undefined' && accountOwnershipResolved);
   const entitlementKnown = () => !!read(() => typeof backendEntitlementRecord !== 'undefined' && backendEntitlementRecord);
+  let ownerSeen = '';
   function allowed() {
     if (LOCAL_FLAG) return true;
-    if (verifiedOwner()) { const id = accountId(); if (id) store.set('owner', id); return true; }
+    if (verifiedOwner()) { const id = accountId(); if (id) { store.set('owner', id); ownerSeen = id; } return true; }
     const cached = store.get('owner', '');
     const status = identity();
     if (cached && status === 'verified' && ownershipResolved() && entitlementKnown()) { store.del('owner'); return false; }
     const stillChecking = ['pending', 'checking', ''].includes(status) || (status === 'verified' && !(ownershipResolved() && entitlementKnown()));
-    return !!cached && cached === (accountId() || rememberedId()) && stillChecking && Date.now() - BOOT < 20000;
+    /* Returning to the app (switching windows, unlocking the phone) runs the
+       account check again. Keep Courses open through it for an owner already
+       confirmed since the app opened. */
+    const same = !!cached && cached === (accountId() || rememberedId());
+    if (same && ownerSeen === cached && (stillChecking || status === 'offline')) return true;
+    return same && stillChecking && Date.now() - BOOT < 20000;
   }
 
   /* ---------------- the owner's course ---------------- */
@@ -137,7 +144,7 @@
           'Make and defend your own forecast of how fast AI will change the world.'),
       ], quiz:{kind:'Debate', fact:'', qs:['Will AI do most of your future job? Defend your answer.'], snapshot:true}},
     ],
-    side:{t:'Staying grounded', what:'Cristian\'s own story on video: how learning about AI shaped him, the questions he had to face, and what helped. Then a reflection, and a person to talk to if you want one. Free, optional, never graded, and labelled as his personal view.'},
+    side:{t:'Staying grounded', what:'Cristian\'s own story on video: how learning about AI shaped him, the questions he had to face, and what helped. Then a reflection. Free, optional, never graded, and labelled as his personal view.'},
   };
   const AI_DONE = 1; // in this sample the owner has finished lesson 1
 
@@ -193,7 +200,7 @@
   /* ---------------- state ---------------- */
   const S = {open:false, scr:'home', tab:store.get('tab', 'mine'), expanded:null, added:store.get('added', []), joined:store.get('joined', []),
     cat:null, sub:'All', sort:'popular', query:'', schoolId:null, schoolQuery:'', view:null, openCh:0, openLesson:'0:0',
-    chap:{}, quiz:{step:0, answer:''}, make:{step:0, msgs:[], input:'', showAll:false}, sheet:null, back:'home'};
+    quiz:{step:0, answer:''}, make:{step:0, msgs:[], input:'', showAll:false}, sheet:null, back:'home'};
   const ICON = {
     home:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1z"/></svg>',
     courses:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18M3 12h18M3 17h18"/><circle cx="7" cy="7" r="1.9" fill="currentColor"/><circle cx="15" cy="12" r="1.9" fill="currentColor"/><circle cx="10" cy="17" r="1.9" fill="currentColor"/></svg>',
@@ -225,21 +232,20 @@
     const k = Math.min(done, n - 1), fill = done ? `calc(${(k / Math.max(1, n - 1)) * 100}% - ${(k / Math.max(1, n - 1)) * 10}px + 5px)` : '0';
     return `<div class="cv-mini" aria-hidden="true"><span class="f" style="width:${fill}"></span>${items.map((q, i) => `<i class="${q ? 'q' : ''}${i < done ? ' d' : i === done ? ' n' : ''}" style="left:${x(i)}"></i>`).join('')}</div>`;
   }
-  /* A course as rows of chapters, each a line of lesson cards ending in a quiz. */
-  function chapterRows(chapters, opts) {
-    let idx = 0, cur = 0;
-    { let k = 0; chapters.forEach((ch, ci) => { if (opts.done >= k && opts.done <= k + ch.titles.length) cur = ci; k += ch.titles.length + 1; }); }
-    const show = opts.key && S.chap[opts.key] != null ? Math.min(S.chap[opts.key], chapters.length - 1) : cur;
-    return chapters.map((ch, ci) => {
-      const titles = ch.titles, start = idx; idx += titles.length + 1;
-      const cards = titles.map((t, li) => {
-        const g = start + li, cls = g < opts.done ? ' done' : g === opts.done ? ' next' : '';
-        return `<button type="button" class="cv-lcard${cls}" ${opts.attr(ci, li)}><span class="k">Lesson ${li + 1}</span><span class="tt">${esc(t)}</span><span class="s">${g < opts.done ? '✓ Done' : g === opts.done ? 'Up next' : ''}</span></button>`;
+  /* An opened course is one metro line: chapters side by side, each ending in
+     its quiz, every stop titled in full. The line scrolls sideways and opens
+     at the next stop; ‹ › jump a chapter at a time. */
+  function route(chapters, opts) {
+    let g = 0;
+    const segs = chapters.map((ch, ci) => {
+      const list = [...ch.titles.map((t, li) => ({t, attr:opts.attr(ci, li)})), {t:opts.quizName || 'Chapter quiz', q:true, attr:opts.quizAttr(ci)}];
+      const stops = list.map(x => {
+        const i = g++, st = i < opts.done ? ' done' : i === opts.done ? ' next' : '';
+        return `<button type="button" class="cv-stop${x.q ? ' q' : ''}${st}" ${x.attr}><i aria-hidden="true"></i><span class="l">${esc(x.t)}</span>${i === opts.done ? '<span class="up">Up next</span>' : i < opts.done ? '<span class="up done">Done</span>' : ''}</button>`;
       }).join('');
-      const q = start + titles.length, qcls = q < opts.done ? ' done' : q === opts.done ? ' next' : '';
-      return `<div class="cv-chrow"><div class="cv-chrow-h"><span>${esc(ch.label || 'Chapter ' + (ci + 1))} of ${chapters.length}</span><b>${esc(ch.title || '')}</b>${opts.key ? `<span class="cv-chnav"><button type="button" data-chnav="${opts.key}:${ci - 1}" ${ci === 0 ? 'disabled' : ''} aria-label="Previous chapter">‹</button><button type="button" data-chnav="${opts.key}:${ci + 1}" ${ci === chapters.length - 1 ? 'disabled' : ''} aria-label="Next chapter">›</button></span>` : ''}</div>
-        <div class="cv-strip" data-start="${Math.max(0, opts.done - start)}"><div class="cv-track">${cards}<button type="button" class="cv-lcard quiz${qcls}" ${opts.quizAttr(ci)}><span class="k">Quiz</span><span class="tt">${esc(opts.quizName || 'Chapter quiz')}</span><span class="s">${q < opts.done ? '✓ Done' : 'When you\'re ready'}</span></button></div></div></div>`;
-    }).filter((_, ci) => !opts.key || ci === show).join('');
+      return `<div class="cv-rseg"><div class="cv-rseg-h"><span>${esc(ch.label || 'Chapter ' + (ci + 1))}</span>${ch.title ? `<b>${esc(ch.title)}</b>` : ''}</div><div class="cv-rstops">${stops}</div></div>`;
+    }).join('');
+    return `<div class="cv-route" data-start="${opts.done}">${segs}</div>`;
   }
   const aiChapters = () => AIRACE.chapters.map(c => ({title:c.t, titles:c.lessons.map(l => l.t)}));
   const aiNext = () => { let i = 0; for (const c of AIRACE.chapters) { for (const l of c.lessons) { if (i === AI_DONE) return l.t; i++; } if (i === AI_DONE) return 'the chapter quiz'; i++; } return ''; };
@@ -257,24 +263,24 @@
     if (!open) return `<button type="button" class="cv-course" data-expand="${c.key}" aria-expanded="false">${head}${mini(c.items, c.done)}<span class="nx">${esc(c.next)}</span></button>`;
     return `<div class="cv-course open"><button type="button" class="cv-course-h" data-expand="${c.key}" aria-expanded="true">${head}</button>
       ${c.rows}
-      <div class="cv-row" style="flex-wrap:wrap">${c.actions}</div></div>`;
+      <div class="cv-row" style="flex-wrap:wrap">${c.actions}<span class="sp"></span><span class="cv-chnav"><button type="button" data-rnav="-1" aria-label="Previous chapter">‹</button><button type="button" data-rnav="1" aria-label="Next chapter">›</button></span></div></div>`;
   }
   function mine() {
     const rows = [];
     rows.push(courseRow({key:'airace', title:'The AI Race', badge:chip('Yours', 'acc'), sub:'You made this · 3 chapters · 17 lessons', items:aiItems(), done:AI_DONE, next:'Next: ' + aiNext(),
-      rows:chapterRows(aiChapters(), {key:'airace', done:AI_DONE, attr:(ci, li) => `data-open-lesson="${ci}:${li}"`, quizAttr:ci => `data-go="quiz" data-quizch="${ci}"`}),
+      rows:route(aiChapters(), {done:AI_DONE, attr:(ci, li) => `data-open-lesson="${ci}:${li}"`, quizAttr:ci => `data-go="quiz" data-quizch="${ci}"`}),
       actions:'<button type="button" class="cv-pill" data-go="course">Open course</button><button type="button" class="cv-pill ghost" data-try="0:1">Continue for real</button>'}));
     S.added.filter(id => id !== 'airace' && course(id)).forEach(id => {
       const c = course(id), items = []; c.chapters.forEach(ch => { ch.forEach(() => items.push(false)); items.push(true); });
       rows.push(courseRow({key:id, title:c.title, sub:'by ' + c.by, items, done:0, next:'Next: ' + c.chapters[0][0],
-        rows:chapterRows(c.chapters.map((t, i) => ({title:'', titles:t})), {key:id, done:0, attr:() => `data-viewcourse="${id}"`, quizAttr:() => `data-viewcourse="${id}"`}),
+        rows:route(c.chapters.map((t, i) => ({title:'', titles:t})), {done:0, attr:() => `data-viewcourse="${id}"`, quizAttr:() => `data-viewcourse="${id}"`}),
         actions:`<button type="button" class="cv-pill" data-viewcourse="${id}">Open course</button><button type="button" class="cv-pill ghost" data-remove="${id}">Remove</button>`}));
     });
     const classes = S.joined.map(findClass).filter(Boolean);
     const classRows = classes.map(({school, cls}) => {
       const items = []; cls.chapters.forEach(ch => { ch.forEach(() => items.push(false)); items.push(true); });
       return courseRow({key:'class-' + cls.id, title:`${cls.code} · ${cls.title}`, badge:chip('Class', 'ok'), sub:`${school.name} · ${cls.teacher}`, items, done:1, next:cls.due,
-        rows:chapterRows(cls.chapters.map((t, i) => ({label:'Week ' + (i + 1), title:'', titles:t})), {key:'class-' + cls.id, done:1, quizName:'Friday quiz', attr:() => `data-viewclass="${cls.id}"`, quizAttr:() => `data-go="quiz"`}),
+        rows:route(cls.chapters.map((t, i) => ({label:'Week ' + (i + 1), title:'', titles:t})), {done:1, quizName:'Friday quiz', attr:() => `data-viewclass="${cls.id}"`, quizAttr:() => `data-go="quiz"`}),
         actions:`<button type="button" class="cv-pill" data-viewclass="${cls.id}">Open class</button><button type="button" class="cv-pill ghost" data-leave="${cls.id}">Leave</button>`});
     }).join('');
     return `<div class="cv-lab">Your courses</div>${rows.join('')}
@@ -328,7 +334,7 @@
             ${lo ? `<div class="cv-ls-b"><p>${esc(l.what)}</p>
               ${l.src.map(s => `<div class="cv-src"><span class="th${s.k === 'doc' ? ' doc' : ''}">${s.k === 'clip' ? '▶' : '❐'}</span><span><b>${esc(s.title)}</b><span>${esc(s.meta)}</span>${s.rule ? `<span class="rule">Plays when: ${esc(s.rule.replace(/^Plays /, ''))}</span>` : ''}</span></div>`).join('')}
               ${l.bridge ? `<div class="cv-bridge">Bridge: "${esc(l.bridge)}"</div>` : ''}
-              <div class="cv-row" style="flex-wrap:wrap"><button type="button" class="cv-pill" data-try="${key}">Try this lesson for real</button><button type="button" class="cv-linkbtn" data-sheet="person">Stuck on something? Ask a person</button></div></div>` : ''}</div>`;
+              <div class="cv-row" style="flex-wrap:wrap"><button type="button" class="cv-pill" data-try="${key}">Try this lesson for real</button></div></div>` : ''}</div>`;
         }).join('') + `<div class="cv-quizcard"><span class="cv-row"><b>Chapter ${ci + 1} quiz</b><span class="sp"></span>${chip(c.quiz.kind, 'acc')}${c.quiz.snapshot ? chip('Snapshot', 'vi') : ''}</span>
           ${c.quiz.fact ? `<span class="fact">${esc(c.quiz.fact)}</span>` : ''}
           ${c.quiz.qs.map(q => `<q>${esc(q)}</q>`).join('')}
@@ -343,7 +349,7 @@
         <div class="cv-price"><b>First chapter free. Then $12 once for the rest.</b><span>A demo price. Nothing is charged. Taught in your own tutor style.</span></div>
         <div class="cv-row" style="flex-wrap:wrap"><button type="button" class="cv-pill" data-try="0:0">Try lesson 1 for real</button><button type="button" class="cv-pill ghost" data-go="quiz">See the quiz demo</button></div></div>
       <div class="cv-lab">Chapters · tap a lesson to see what happens in it</div>${chs}
-      <div class="cv-side">${chip('Free side path', 'acc')}<b>${esc(AIRACE.side.t)}</b><p class="cv-muted" style="margin:0;font-size:13.5px">${esc(AIRACE.side.what)}</p><div class="cv-row" style="flex-wrap:wrap"><button type="button" class="cv-pill ghost" data-toast="Plays Cristian's video, then a short reflection">Watch Cristian's story</button><button type="button" class="cv-pill soft" data-sheet="person">Ask a person</button></div></div>
+      <div class="cv-side">${chip('Free side path', 'acc')}<b>${esc(AIRACE.side.t)}</b><p class="cv-muted" style="margin:0;font-size:13.5px">${esc(AIRACE.side.what)}</p><div class="cv-row" style="flex-wrap:wrap"><button type="button" class="cv-pill ghost" data-toast="Plays Cristian's video, then a short reflection">Watch Cristian's story</button></div></div>
       <div class="cv-lab">What builds on this course</div>
       <p class="cv-muted" style="margin:0">Courses link into a network. Most can be taken in any order; a few need something first, and say so.</p>
       <div class="cv-net">
@@ -412,7 +418,7 @@
     if (q.step === 2) return head + `<div class="cv-stage"><span class="cv-lab cv-center">Two weeks later · Chapter 2 quiz</span>
       <div class="cv-snap"><b>Your answer from chapter 1</b><q>${esc(ans)}</q></div>
       <p class="cv-tut">After this chapter on AGI, would you say it differently?</p>
-      <div class="cv-check"><p style="margin:0">The next questions are about jobs and meaning, and they can feel heavy. You choose.</p><div class="cv-row" style="flex-wrap:wrap;gap:8px"><button type="button" class="cv-pill" data-qstep="3">Keep going</button><button type="button" class="cv-pill ghost" data-qpause="1">Pause</button><button type="button" class="cv-pill soft" data-sheet="person">Ask a person</button></div></div>
+      <div class="cv-check"><p style="margin:0">The next questions are about jobs and meaning, and they can feel heavy. You choose.</p><div class="cv-row" style="flex-wrap:wrap;gap:8px"><button type="button" class="cv-pill" data-qstep="3">Keep going</button><button type="button" class="cv-pill ghost" data-qpause="1">Pause</button></div></div>
       <button type="button" class="cv-link" data-sheet="support">Need support right now?</button></div>`;
     return head + `<div class="cv-stage"><span class="cv-lab cv-center">Chapter 2 quiz · question 2</span>
       <p class="cv-tut">Picture a computer that can do anything you ask. What is the first problem in the world you would hand it?</p>
@@ -452,12 +458,7 @@
   function sheetHTML() {
     if (!S.sheet) return '';
     let h = '';
-    if (S.sheet === 'person') {
-      h = `<h3>Ask a person</h3><p>Stuck on something the tutor can't help with, like why there's a second tide on the far side of the Earth, or how scary all this feels? Ask for a person.</p>
-        <p class="cv-muted">In the real version, Worldview connects you with someone it has hired, such as a former professor or an expert, during their office hours. They have seen this lesson. Usually within a few minutes.</p>
-        <p class="cv-muted" style="font-size:12.5px">They are real people, not therapists. If you are in crisis, use "Need support right now?".</p>
-        <button type="button" class="cv-pill wide" data-toast="Demo: the real version finds someone available.">Request a person</button><button type="button" class="cv-pill ghost wide" data-close="1">Not now</button>`;
-    } else if (S.sheet === 'support') {
+    if (S.sheet === 'support') {
       h = `<h3>Need support right now?</h3><p>If you are struggling or thinking about hurting yourself, you can call or text <b>988</b>, the Suicide &amp; Crisis Lifeline (US), any time. It is free and confidential.</p><p class="cv-muted">You can also pause this course. It will be here when you are ready.</p><button type="button" class="cv-pill wide" data-close="1">Close</button>`;
     } else if (S.sheet.startsWith('try:')) {
       const [ci, li] = S.sheet.slice(4).split(':').map(Number), l = AIRACE.chapters[ci].lessons[li];
@@ -473,7 +474,7 @@
     const html = {course:scrCourse, quiz:scrQuiz, make:scrMake, cat:scrCategory, sample:scrSample, cls:scrClass, school:scrSchool}[S.scr]?.() ?? scrHome();
     view.innerHTML = `<div class="cv-wrap">${html}</div>${sheetHTML()}`;
     document.body.classList.toggle('cv-sheet-open', !!S.sheet);
-    view.querySelectorAll('.cv-strip[data-start]').forEach(el => { const card = el.querySelectorAll('.cv-lcard')[+el.dataset.start]; if (card && +el.dataset.start > 0) el.scrollLeft = Math.max(0, card.offsetLeft - 24); });
+    view.querySelectorAll('.cv-route[data-start]').forEach(el => { const stop = el.querySelectorAll('.cv-stop')[+el.dataset.start]; if (stop) el.scrollLeft = Math.max(0, stop.offsetLeft - stop.offsetWidth - 16); });
     syncBar();
   }
   function go(scr) { S.scr = scr; S.sheet = null; render(); view.scrollTop = 0; }
@@ -509,12 +510,17 @@
 
   /* ---------------- events ---------------- */
   view.addEventListener('click', e => {
-    const t = e.target.closest('[data-go],[data-ctab],[data-expand],[data-open-lesson],[data-ch],[data-lesson],[data-try],[data-start],[data-sheet],[data-close],[data-toast],[data-qstep],[data-qexample],[data-qpause],[data-msend],[data-mex],[data-mreset],[data-mall],[data-copyprompt],[data-cat],[data-sub],[data-sort],[data-add],[data-remove],[data-viewcourse],[data-viewclass],[data-school],[data-schoolback],[data-join],[data-leave],[data-branch],[data-scrollrow],[data-chnav]');
+    const t = e.target.closest('[data-go],[data-ctab],[data-expand],[data-open-lesson],[data-ch],[data-lesson],[data-try],[data-start],[data-sheet],[data-close],[data-toast],[data-qstep],[data-qexample],[data-qpause],[data-msend],[data-mex],[data-mreset],[data-mall],[data-copyprompt],[data-cat],[data-sub],[data-sort],[data-add],[data-remove],[data-viewcourse],[data-viewclass],[data-school],[data-schoolback],[data-join],[data-leave],[data-branch],[data-rnav]');
     if (!t) return;
     if (t.dataset.close && t.classList.contains('cv-ov') && e.target !== t) return;
     const d = t.dataset;
-    if (d.chnav) { const [k, i] = [d.chnav.slice(0, d.chnav.lastIndexOf(':')), +d.chnav.slice(d.chnav.lastIndexOf(':') + 1)]; S.chap[k] = i; return render(); }
-    if (d.scrollrow) { const strip = t.closest('.cv-chrow')?.querySelector('.cv-strip'); if (strip) strip.scrollBy({left: +d.scrollrow * strip.clientWidth * 0.8, behavior:'smooth'}); return; }
+    if (d.rnav) {
+      const r = t.closest('.cv-course')?.querySelector('.cv-route'); if (!r) return;
+      const x = r.scrollLeft, starts = [...r.querySelectorAll('.cv-rseg')].map(el => Math.max(0, el.offsetLeft - 16));
+      const to = +d.rnav > 0 ? starts.find(v => v > x + 4) : starts.filter(v => v < x - 4).pop();
+      r.scrollTo({left: to ?? (+d.rnav > 0 ? r.scrollWidth : 0), behavior:'smooth'});
+      return;
+    }
     if (d.go) { if (d.go === 'quiz') S.quiz.step = 0; if (d.go === 'course') S.back = S.scr === 'quiz' || S.scr === 'make' ? 'home' : S.scr; if (d.go === 'school' && S.scr === 'home') S.schoolId = null; return go(d.go); }
     if (d.ctab) { S.tab = d.ctab; store.set('tab', S.tab); S.scr = 'home'; S.sheet = null; render(); view.scrollTop = 0; return; }
     if (d.expand) { S.expanded = S.expanded === d.expand ? null : d.expand; return render(); }
