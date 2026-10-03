@@ -81,3 +81,27 @@ test('saved completion finishes once without another question',()=>{
  assert.match(text,/Ask no question and do not begin another quiz/);
  assert.doesNotMatch(text,/concrete prediction or application/);
 });
+
+// LES-305: a lesson built from designed cards opens on the card's own beats.
+const cardsLesson=(extra={})=>({engine:'cards-v1',phase:'lesson',currentIndex:0,complete:false,packet:{opener:'Rome is thirsty.',cardPosition:{number:1,of:3,chapter:'Getting the water'},journeyContext:{chapter:{title:'Getting the water'}}},...extra});
+test('a card lesson opens with its cold open, then the card from its scene',()=>{
+ const text=harness(cardsLesson()).open(true);
+ assert.match(text,/The lesson starts now. Open with packet.opener/);
+ assert.match(text,/Run packet.card from its scene: say the scene in your own words, then the challenge and what a good answer would do. Then stop and listen\./);
+ assert.doesNotMatch(text,/only the saved current outcome|recap in their own words/);
+});
+test('a later card bridges from the learner, the recap asks what stood out, and the next chapter names itself once',()=>{
+ const h=harness(cardsLesson({currentIndex:1}));
+ assert.match(h.open(false),/Bridge in one sentence from what they said last, then Run packet.card/);
+ const review=cardsLesson({currentIndex:2});review.packet.chapterReview={chapterTitle:'Getting the water'};h.set(review);
+ const recap=h.open(false);
+ assert.match(recap,/CHAPTER RECAP/);assert.match(recap,/ask what stood out to them/);assert.doesNotMatch(recap,/in their own words/);
+ h.set(cardsLesson({currentIndex:3,packet:{cardPosition:{number:1,of:2,chapter:'Sharing the water'},opener:'Now the water has arrived.'}}));
+ assert.match(h.open(false),/The next chapter, "Sharing the water", begins now: say so in one sentence, using packet.opener as its bridge/);
+ assert.doesNotMatch(h.open(false),/next chapter/,'the bridge is used once');
+});
+test('a card lesson asks foundation questions while it is prepared, and ends with teach me and a read-back',()=>{
+ assert.match(harness(cardsLesson({phase:'extraction'})).open(false),/FOUNDATIONS\. While the lesson is prepared, ask ONE everyday foundation question/);
+ assert.match(harness(cardsLesson({phase:'quiz'})).open(true),/TEACH ME\. .*roles swap.*packet\.teachBack/);
+ assert.match(harness(cardsLesson({phase:'complete',complete:true})).open(false),/Read back the questions they can now answer as their own map/);
+});

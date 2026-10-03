@@ -82,7 +82,7 @@
   pill.replaceChildren();
   pill.classList.toggle('is-unavailable',!!r.unavailable);
   pill.classList.toggle('is-forward',!!r.forward);
-  pill.append(el('span','jev-readout-dot'),el('span','jev-readout-who',r.unavailable?'Checker':'Jev'),
+  pill.append(el('span','jev-readout-dot'),el('span','jev-readout-who',r.unavailable?(r.coach?'Coach':'Checker'):r.shadow?'Jev · watching':'Jev'),
    el('b',null,label(r.choice)),...(r.unavailable?[]:[el('span','jev-readout-p',pct(r.probability))]));
   pill.setAttribute('aria-expanded',String(open));
   pill.setAttribute('aria-label',(r.unavailable?'Older checker decided ':'Jev chose ')+label(r.choice)+(r.unavailable?'':' at '+pct(r.probability))+'. Show details.');
@@ -93,11 +93,14 @@
    if(r.version)meta.append(el('span',null,r.version));
    if(r.route)meta.append(el('span',null,r.route==='openrouter'?'via OpenRouter':'via OpenJEV'));
    panel.append(meta);
+   // LES-302: in a card lesson the tutor leads; Jev's judgement is recorded beside each move, never applied.
+   if(r.shadow||r.coach)panel.append(el('p','jev-readout-desc is-open','The tutor leads this lesson and moves on itself. Jev’s judgement is recorded beside each move, not applied; the coach writes the tutor’s private notes.'));
+   if(r.coach){const c=section('Coach');c.append(el('p',null,label(r.coach.verdict||'on_track')+(r.coach.note?': '+r.coach.note:'')));panel.append(c);}
    if(r.unavailable){
     panel.append(el('p','jev-readout-desc is-open','Jev was not used for this check ('+(r.decider||'older checker')+'). Its decision was: '+label(r.choice)+'.'));
    }else{
     if(r.description)panel.append(el('p','jev-readout-desc is-open',r.description));
-    if(r.steering){const s=section('Told the tutor');s.append(el('p','jev-readout-steer',r.steering));panel.append(s);}
+    if(r.steering){const s=section(r.shadow?'Would have told the tutor':'Told the tutor');s.append(el('p','jev-readout-steer',r.steering));panel.append(s);}
     const all=section('Every choice');all.append(bars(r.options,r.choice));panel.append(all);
     if(r.missing){const m=section('Would help most to know');m.append(bars(r.missing.options,r.missing.choice));panel.append(m);}
     if(r.kind){const k=section('Kind of lesson');k.append(bars(r.kind.options,r.kind.choice));panel.append(k);}

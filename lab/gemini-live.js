@@ -134,6 +134,10 @@ window.WorldviewGeminiLive=(()=>{
     flushContext();
    }
    if(message.sessionResumptionUpdate?.resumable&&message.sessionResumptionUpdate.newHandle)resumeHandle=message.sessionResumptionUpdate.newHandle;
+   // LES-302: the tutor calls next_card to move the lesson on. Its turn is still
+   // in progress, so nothing else is sent until the application answers.
+   if(Array.isArray(message.toolCall?.functionCalls)&&message.toolCall.functionCalls.length){modelActive=true;onEvent({type:'gemini.tool.call',calls:message.toolCall.functionCalls});}
+   if(Array.isArray(message.toolCallCancellation?.ids))onEvent({type:'gemini.tool.cancel',ids:message.toolCallCancellation.ids});
    const content=message.serverContent;
    if(content){
     if(content.interrupted){modelActive=false;interruptedAt=Date.now();clearAudio();}
@@ -207,7 +211,9 @@ window.WorldviewGeminiLive=(()=>{
   }
   // BUS-063: whether a note is still waiting to be sent (a newer one replaces it).
   const hasPending=()=>!!pendingContext;
-  const controls={context,hasPending,mute,resumeAudio,applyRoute,prompt,alive,close:()=>finish('client_closed'),dispose:()=>finish('client_closed')};
+  // The application's answer to a tool call; the tutor carries on speaking from it.
+  const respond=functionResponses=>{if(!active()||!ready)return false;send({toolResponse:{functionResponses}});return true;};
+  const controls={context,hasPending,mute,resumeAudio,applyRoute,prompt,respond,alive,close:()=>finish('client_closed'),dispose:()=>finish('client_closed')};
   onTransport(controls);
   try{
    await audio.audioWorklet.addModule('./gemini-pcm-worklet.js?v=2.1.37');

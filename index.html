@@ -2219,7 +2219,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.23 · Oct 3";
+const BUILD = "v3.1.24 · Oct 3";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2227,6 +2227,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.24",date:"Oct 3",changes:["New lessons are built from challenges. Each part opens with a short scene and a puzzle for you to work out, with a twist at the end, and the tutor moves on when you have got it or ask to, not when a separate checker decides.","Every lesson now asks how long you want it before it starts: a quick lesson of a few minutes, an overview, a deep dive, or your own time limit.","When sources disagree, the tutor tells you both sides and who holds them instead of getting stuck, and the lesson map marks those parts \"sources disagree\".","A part whose research cannot be found is skipped with a note instead of freezing the lesson.","Two new buttons beside the voice controls mark a good or a bad moment in a lesson, so it can be found and fixed later.","Lessons you already started keep the tutor they began with."]},
   {tag:"v3.1.23",date:"Oct 3",changes:["When a newer version is out, the app now says so when you come back to it, with a Reload button. A laptop window no longer stays on an old version for days.","Owner preview only: switching to another window and back no longer throws you out of Courses.","Owner preview only: an opened course is now one metro line with every lesson title in full. It scrolls sideways and opens at your next lesson, and the arrows jump a chapter at a time.","Owner preview only: \"Ask a person\" is gone for now. It is kept as an idea for later."]},
   {tag:"v3.1.22",date:"Oct 3",changes:["The loading screen is centred.","The back-to-start arrow is back above the cards. The Profile · Explore · Archive labels fade out while it shows, so the two never overlap.","Owner preview only: an opened course shows one chapter at a time, pop-ups have a close button and sit clear of the bottom bar, and a course page shows what builds on it."]},
   {tag:"v3.1.21",date:"Oct 2",changes:["Home opens in one go: a short loading screen while your account and lessons load, instead of the page filling in piece by piece.","The back-to-start arrow now sits under the cards on the left, so it no longer lands on the Archive button.","The light and dark button moved to the top-right corner.","Lesson maps (the map button on a lesson card) can show everything at once, go full screen, and copy the whole map as text. The chapter you are on is marked.","Owner preview: Courses opens with nothing expanded, Explore is organised by subject, and you can find your school and join a class."]},

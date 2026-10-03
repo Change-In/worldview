@@ -30,15 +30,22 @@ window.WorldviewLiveConversation=(()=>{
    mic:'<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/><path class="live-icon-slash" d="m4 4 16 16"/>',
    pause:'<rect x="7" y="5" width="3.5" height="14" rx="1.2"/><rect x="13.5" y="5" width="3.5" height="14" rx="1.2"/>',
    play:'<path d="M8 5.5v13l10.5-6.5z"/>',
-   transcript:'<path d="M5 6h14M5 10h14M5 14h10M5 18h7"/>'
+   transcript:'<path d="M5 6h14M5 10h14M5 14h10M5 18h7"/>',
+   good:'<path d="M7 11v9H4v-9zM7 11l4-7c1.5 0 2.5 1 2.2 2.6L12.6 10H19c1.1 0 2 1 1.8 2.1l-1.3 6.5c-.2 1-1 1.4-1.9 1.4H7"/>',
+   bad:'<path d="M17 13V4h3v9zM17 13l-4 7c-1.5 0-2.5-1-2.2-2.6l.6-3.4H5c-1.1 0-2-1-1.8-2.1l1.3-6.5C4.7 4.4 5.5 4 6.4 4H17"/>'
   };
   const iconButton=(name,label)=>{const b=element('button');b.className='live-icon-button';b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+ICONS[name]+'</svg>';b.setAttribute('aria-label',label);b.title=label;return b;};
   const mute=iconButton('mic','Mute mic'),end=iconButton('pause','Pause voice'),captions=iconButton('transcript','Show transcript'),textMode=element('button','Aa');
+  /* LES-307: mark this moment as good or bad. The mark saves where it happened
+     in the transcript, so a bad moment can become a test case. */
+  const markGood=iconButton('good','Mark this moment as good'),markBad=iconButton('bad','Mark this moment as bad');
+  markGood.classList.add('live-mark');markBad.classList.add('live-mark');
+  markGood.onclick=()=>void markMoment('good');markBad.onclick=()=>void markMoment('bad');
   /* Voice is the only mode being taken to release, so the switch to Text and
      the manual save retry are not on the learner's screen. Both stay built so
      nothing that references them breaks, and both stay hidden. */
   textMode.className='live-icon-button';textMode.hidden=true;textMode.setAttribute('aria-label','Switch to Text');textMode.title='Switch to Text';textMode.onclick=()=>host.onTextMode?.();
-  for(const b of [start,enableAudio,mute,end,retry,captions,textMode])b.type='button';actions.append(start,enableAudio,mute,end,retry,captions,textMode);
+  for(const b of [start,enableAudio,mute,end,retry,captions,textMode,markGood,markBad])b.type='button';actions.append(start,enableAudio,mute,end,retry,captions,markGood,markBad,textMode);
   const status=element('p','Connecting…');status.setAttribute('role','status');
   const usage=element('small'),progress=element('p');progress.className='live-conversation-progress';
   const audio=element('audio');audio.autoplay=true;audio.controls=false;audio.playsInline=true;audio.hidden=true;
@@ -47,7 +54,7 @@ window.WorldviewLiveConversation=(()=>{
   const costHost=document.getElementById('mock-learner-map-cost');
   if(costHost)costHost.append(note);
   root.append(...(costHost?[]:[note]),actions,status,usage,progress);adapter.container.append(root);(document.body||adapter.container).append(audio);
-  ui={root,note,rate,total,start,enableAudio,mute,end,retry,captions,status,usage,progress,audio};
+  ui={root,note,rate,total,start,enableAudio,mute,end,retry,captions,markGood,markBad,status,usage,progress,audio};
   output=window.WorldviewLiveAudioOutput?.create({audio,button:adapter.speakerButton,container:root});
   enableAudio.onclick=()=>{const s=session;if(!s||s.closing)return;const version=s.outputVersion;void output?.apply({user:true});void resumeAudio(s).then(()=>{if(session===s&&!s.closing&&s.outputVersion===version){enableAudio.hidden=true;message('Listening');}}).catch(()=>{if(session===s&&!s.closing&&s.outputVersion===version)message('Audio is blocked. Check the browser’s audio permission.');});};
   captions.onclick=()=>{showCaptions=!showCaptions;paint();};
@@ -73,6 +80,15 @@ window.WorldviewLiveConversation=(()=>{
   return api;
  }
  function message(text){if(ui)ui.status.textContent=text;}
+ // The owner's readout: Jev's judgement, and in a card lesson the coach's note beside it.
+ function jevView(value){return value?.jev?{...value.jev,...(value.coach?{coach:value.coach}:{})}:null;}
+ async function markMoment(mood){
+  if(!study||!request)return;
+  const button=mood==='good'?ui.markGood:ui.markBad;button.disabled=true;
+  try{await flush();await request({action:'journey_flag',studyId:study.id,mood});message(mood==='good'?'Marked as a good moment.':'Marked as a bad moment. Thanks: it becomes a test.');}
+  catch{message('That mark could not be saved. Try again.');}
+  finally{button.disabled=false;clearTimeout(restoreTimer);restoreTimer=setTimeout(()=>{if(!saveError)message(restingStatus());},3500);}
+ }
  function connectionState(){
   const current=session?.scope===context?.lineage&&session?.model===(context?.model||'gpt-live-1')?session:null;
   const state=!enabled?'disabled':startError?'error':paused?'paused':current?.closing?'stopped':current?.ready?'ready':loading?'preparing':current?'connecting':'idle';
@@ -200,6 +216,7 @@ window.WorldviewLiveConversation=(()=>{
   ui.start.textContent=paused||session?.softPaused?'Resume voice':'Try microphone again';
   ui.rate.hidden=true;ui.note.hidden=!context?.showCost;
 const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.setAttribute('aria-label',capsLabel);ui.captions.title=capsLabel;ui.captions.setAttribute('aria-pressed',String(showCaptions));
+  ui.markGood.hidden=ui.markBad.hidden=!study;ui.markGood.disabled=ui.markBad.disabled=!study||!request;
   ui.end.hidden=false;ui.end.disabled=!session&&!resumable;ui.mute.hidden=false;ui.mute.disabled=!session?.ready||!!session?.softPaused;ui.captions.hidden=false;const muteLabel=session?.muted?'Unmute mic':'Mute mic';ui.mute.setAttribute('aria-label',muteLabel);ui.mute.title=muteLabel;ui.mute.classList.toggle('is-muted',!!session?.muted);ui.mute.setAttribute('aria-pressed',String(!!session?.muted));
   ui.retry.hidden=true;ui.retry.disabled=!!saving;
   if(saveError)message(saveError);
@@ -392,7 +409,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
    if(token!==loadToken||context.lineage!==expected)return;
    prepareTiming={start:Math.round(began),end:Math.round(performance.now())};
    if(!ready.journeyMode)throw Error('Natural Live lessons are awaiting the server update. Standard voice remains available.');
-   study=result.study;host.onJev?.(study.jev||null,study.jevHistory);fragments=study.fragments.slice();ack=fragments.length;request=captured;scope=expected;draftKey='worldview-live-draft-v2:'+expected;
+   study=result.study;host.onJev?.(jevView(study),study.jevHistory);fragments=study.fragments.slice();ack=fragments.length;request=captured;scope=expected;draftKey='worldview-live-draft-v2:'+expected;
    const imported=fragments.filter(f=>f.id.startsWith('import:')),earlier=context.priorHistory||[];
    let at=-1;for(let i=earlier.length-imported.length;imported.length&&i>=0;i--){if(imported.every((f,j)=>earlier[i+j]?.role===f.role&&earlier[i+j]?.content===f.delta)){at=i;break;}}
    prefix=at>0?earlier.slice(0,at).map(t=>({role:t.role,content:t.content})):[];
@@ -575,7 +592,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
       the next focus, the last check, recorded gaps and the learner's own words
       (LES-267). */
    const packet=study.packet||{};
-   const heavy=JSON.stringify([studyStep(study),packet.research,packet.currentOutcome?.verifiedSupport?.status||'',(packet.preparationResearch||[]).length,!!packet.scopeApproved]);
+   const heavy=JSON.stringify([studyStep(study),packet.research,packet.currentOutcome?.verifiedSupport?.status||'',(packet.preparationResearch||[]).length,!!packet.scopeApproved,packet.card?.challenge||'',!!packet.card?.fallback]);
    const queuedFull=!!state.lastQueuedFull&&!!state.gemini.hasPending?.();
    const full=phaseChanged||queuedFull||state.heavyPublished!==heavy||(state.lightNotes||0)>=FULL_PACKET_EVERY;
    const policy=phaseChanged||(queuedFull&&state.lastQueuedPolicy);
@@ -668,12 +685,12 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
    // pending or failed response must remain eligible for the next bounded poll.
    const checked=Number.isInteger(prepared.study.checkedRevision)?prepared.study.checkedRevision:-1;
    const needsCheck=startedUserSeq>checked||changed||!!prepared.study.checkError||s.pendingDelegations.size>0;
-   const result=needsCheck?await captured({action:'journey_check',studyId:id}):prepared;
+   const result=needsCheck?await captured({action:'journey_check',studyId:id,tools:s.tools===true}):prepared;
    host.onCheckerUsage?.(s.costOwner,s.costRunId,result.checkerUsage);if(scope!==expected||session!==s||s.closing)return;
    study={...result.study,fragments};
    // LES-257: the owner's live Jev readout follows every check, including a
    // check that saved nothing because the learner kept talking.
-   host.onJev?.(study.jev||null,study.jevHistory);
+   host.onJev?.(jevView(study),study.jevHistory);
    const advanced=studyStep(study)!==startedStep;
    // The saved phase is what the lesson has actually reached, so the roadmap and
    // the visible move to the next outcome follow it straight away. Only the
@@ -710,6 +727,38 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
    paint();
   }catch{if(scope===expected&&session===s&&!s.closing)message('Live can keep teaching. The background understanding check is unavailable; no new progress was recorded.');}
   finally{clearTimeout(s.slowTimer);s.checking=false;}
+ }
+ /* LES-302: the tutor decides when to move on and calls next_card with the
+    learner's own words. The application checks the call (real words, no open
+    question, the next part researched), saves the move and answers with what
+    to run next, so the tutor carries straight on: no pause for a separate
+    opening. A refused call returns the reason and the tutor keeps going. */
+ async function toolCall(s,call){
+  const answer=response=>{if(session===s&&!s.closing&&!s.cancelledTools?.has(call.id))s.gemini?.respond([{id:call.id,name:call.name,response}]);};
+  if(call?.name!=='next_card'){answer({ok:false,reason:'Unknown tool.'});return;}
+  let response={ok:false,reason:'The lesson could not be updated just now. Keep going with the current challenge.'};
+  try{
+   if(!study||!s.request)throw Error('no lesson');
+   await flush();
+   if(session!==s||s.closing)return;
+   const args=call.args||{},before=studyStep(study);
+   const result=await s.request({action:'journey_next',studyId:study.id,learnerWords:String(args.learner_words||'').slice(0,1000),reason:String(args.reason||'').slice(0,40),outcomeId:study.packet?.currentOutcome?.id||''});
+   if(session!==s||s.closing)return;
+   response=result.tool||response;
+   if(result.study){
+    study={...result.study,fragments};
+    host.onJev?.(jevView(study),study.jevHistory);
+    await applyPhase();
+    if(studyStep(study)!==before){
+     // The result already carries the next card, so the tutor opens it itself.
+     s.openedPhase=studyStep(study);s.pendingOpeningStep=null;clearTimeout(s.openingTimer);
+     if(response.now==='Chapter finished.'){reviewedChapter=String(response.nextChapter||' ');s.openedPhase=null;s.pendingOpeningStep=studyStep(study);schedulePhaseOpening(s);}
+     if(study.phase==='quiz'||study.complete)announceTransition(s);
+    }
+   }
+  }catch{/* The default answer tells the tutor to keep going. */}
+  answer(response);
+  if(session===s&&!s.closing){s.deferredStudy=true;paint();}
  }
  /* VOI-159 (BUG-506). A Gemini lesson keeps one connection and one audio
     engine from start to finish. Swapping at a phase change hung up the tutor
@@ -793,6 +842,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
  /* LES-275: a lesson reopened after a couple of hours starts with a short
     recall of where it left off, which is what makes it stick. */
  const WARMUP_AFTER_MS=2*60*60*1000;
+ const CARDS_WARMUP_INSTRUCTION='WARM-UP: a new sitting of a saved lesson. In the selected language, with no greeting: bring back the last idea they reached with a quick new twist on it (one short question). React in a sentence, then carry on from the current card in packet.card. Then listen.';
  const WARMUP_INSTRUCTION='WARM-UP: a new sitting of a saved lesson. In the selected language, with no greeting and no welcome back, ask ONE short question inviting them to recall, in their own words, the key idea from the last part you covered together (use the saved conversation). React in a sentence and fill any gap plainly, then carry on from where you left off. If a new chapter is about to begin, name it in a few words and begin it after the warm-up. Then listen.';
  function warmupDue(){return study?.phase==='lesson'&&!study.complete&&Date.now()-(Date.parse(study.updatedAt||'')||Date.now())>WARMUP_AFTER_MS;}
  function recordTalk(s){if(s?.talkStartedAt)window.WorldviewLessonCost?.recordTalk?.(s.costOwner||context?.owner,s.costRunId||context?.runId,s.id,(Date.now()-s.talkStartedAt)/1000);}
@@ -838,8 +888,23 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
     and then waited; the learner waited too and the lesson sat in silence. One cue
     is sent per phase, and only when nobody has spoken since the change. */
  let reviewedChapter='';
+ /* LES-305: openings for a lesson built from designed cards. The card itself
+    is in the saved packet; these only say which beat to start from. */
+ function cardsOpeningInstruction(fresh,shared){
+  if(study.complete||study.phase==='complete')return shared+'The lesson is complete. Read back the questions they can now answer as their own map, in two or three sentences; name any skipped part honestly; leave one open question for next time. Then stop.';
+  if(study.phase==='quiz')return shared+'TEACH ME. Say in one sentence that the challenges are done and the roles swap: they teach you, and you are a curious newcomer. Ask them, in one short question, to teach you the big question in packet.teachBack. Then ask only naive questions. Then listen.';
+  if(study.phase==='extraction')return shared+'FOUNDATIONS. While the lesson is prepared, ask ONE everyday foundation question (packet.foundationQuestions when given): what problem this solves, what life would be like without it, or what they already believe. Teach no facts. Then listen.';
+  const review=study.packet?.chapterReview;
+  if(review){reviewedChapter=review.chapterTitle||' ';return shared+'CHAPTER RECAP. Say the chapter'+(review.chapterTitle?' "'+review.chapterTitle+'"':'')+' is done and ask what stood out to them, in one short question. Then listen; after their answer, give the deeper explanation that ties the chapter together.';}
+  const chapter=study.packet?.cardPosition?.chapter||study.packet?.journeyContext?.chapter?.title;
+  const card='Run packet.card from its scene: say the scene in your own words, then the challenge and what a good answer would do. Then stop and listen.';
+  if(reviewedChapter&&study.phase==='lesson'){reviewedChapter='';return shared+'The next chapter'+(chapter?', "'+chapter+'",':'')+' begins now: say so in one sentence'+(study.packet?.opener?', using packet.opener as its bridge':'')+'. '+card;}
+  if(fresh&&study.currentIndex===0)return shared+'The lesson starts now. Open with packet.opener as a short cold open if it is there, then '+card;
+  return shared+'Bridge in one sentence from what they said last, then '+card;
+ }
  function phaseOpeningInstruction(fresh=false){
   const shared='PHASE OPENING. Use the saved phase in the selected language. Continue from the learner\'s thinking; no greeting, repeated question, or readiness offer. ';
+  if(study?.engine==='cards-v1')return cardsOpeningInstruction(fresh,shared);
   if(study.complete||study.phase==='complete')return shared+'The final teach-back is saved as complete. Briefly connect their takeaway to the original purpose, acknowledge the finish once, then stop. Ask no question and do not begin another quiz.';
   // LES-290: the teach-back is "teach me". The roles swap and the tutor plays a curious newcomer.
   if(study.phase==='quiz')return shared+(study.currentIndex>0?'Stay the curious newcomer: in one short question, ask them to teach you the saved current outcome next.':(fresh?'Say in one short sentence that the lesson is covered and now the roles swap: they teach you, and you are a curious newcomer to the topic. Then':'As the curious newcomer,')+' ask them to teach you the current outcome, in one short question.')+' Never teach, hint or correct; later, ask only naive why, what-if or for-example questions about what they said. Do not announce completion or offer to restart. Then listen.';
@@ -899,6 +964,8 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   else if(e.type==='session.instructions.appended'&&state.openingEventId&&e.client_event_id===state.openingEventId){state.openingAcknowledged=true;if(state.lastTranscriptAt==null)message('Listening');}
   else if(e.type==='session.input_transcript.delta')append(state,e,'user');
   else if(e.type==='session.output_transcript.delta')append(state,e,'assistant');
+  else if(e.type==='gemini.tool.call'){for(const call of e.calls||[])void toolCall(state,call);}
+  else if(e.type==='gemini.tool.cancel'){for(const id of e.ids||[])(state.cancelledTools||(state.cancelledTools=new Set())).add(id);}
   else if(e.type==='gemini.turn.complete'){state.usageTurn=(state.usageTurn||0)+1;if(Date.now()-(state.connectedAt||Date.now())>=60000)autoAttempts=0;}
   // VOI-159: words arrived but no sound is playing; one tap starts it.
   else if(e.type==='gemini.audio.stalled'){ui.enableAudio.hidden=false;message('Tap to hear the tutor.');}
@@ -925,7 +992,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   // brief continuation (no greeting, VOI-153) and repeats its own unanswered question once; it does
   // not open the phase again.
   const resuming=!start&&fragments.some(f=>!f.id.startsWith('import:'));
-  const s={id:start?.id||crypto.randomUUID(),initiate:openingPending,openingText:start?.opening||(resuming?(warmupDue()?WARMUP_INSTRUCTION:RESUME_INSTRUCTION):''),refreshed:!!start?.phase,resumed:resuming,request,scope,model:context.model||'gpt-live-1',connectedAt:Date.now(),studyId:study.id,seen:new Set(),delegations:new Set(),pendingDelegations:new Set(),lastUserSeq:fragments.findLast(f=>f.role==='user')?.seq||0,seconds:0,ready:false,closing:false,dispatched:false,muted:false,t0:performance.now(),marks:{}};session=s;paint();
+  const s={id:start?.id||crypto.randomUUID(),initiate:openingPending,openingText:start?.opening||(resuming?(warmupDue()?(study?.engine==='cards-v1'?CARDS_WARMUP_INSTRUCTION:WARMUP_INSTRUCTION):RESUME_INSTRUCTION):''),refreshed:!!start?.phase,resumed:resuming,request,scope,model:context.model||'gpt-live-1',connectedAt:Date.now(),studyId:study.id,seen:new Set(),delegations:new Set(),pendingDelegations:new Set(),lastUserSeq:fragments.findLast(f=>f.role==='user')?.seq||0,seconds:0,ready:false,closing:false,dispatched:false,muted:false,t0:performance.now(),marks:{}};session=s;paint();
   try{
    host.releaseMedia();captureAudioType();output?.start();
    let mic=start?.mic?.getAudioTracks().some(t=>t.readyState==='live')?start.mic:null;
@@ -953,6 +1020,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
     if(result){s.dispatched=true;startVoiceCost(s);}
     else{
      result=await created;if(!result||session!==s||s.closing)return;
+     s.tools=result.tools===true;
      // A connection has to open within a minute of being authorized, and a
      // long microphone prompt can outlast that.
      if(Date.now()-s.serverAt>45000)throw Error('The microphone took a while to open. Tap play to try again.');

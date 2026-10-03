@@ -60,3 +60,6 @@
 .live-conversation .live-icon-button.is-resume { color:var(--wv-accent); border-color:color-mix(in srgb, var(--wv-accent) 55%, transparent); }
 .live-conversation .live-icon-button.is-resume svg { fill:currentColor; }
 .live-conversation .live-icon-button:disabled { opacity:.45; }
+
+/* BUG-509 (LES-308): parts whose sources disagree are marked on the lesson map. */
+.mock-chapter-outcomes .mock-chapter-disputed { flex:none; align-self:center; margin-left:auto; padding:1px 7px; border-radius:999px; border:1px solid color-mix(in srgb, var(--wv-accent) 45%, transparent); color:var(--wv-muted); font:500 11px/1.5 system-ui,sans-serif; white-space:nowrap; }

@@ -24,3 +24,7 @@
 /* VOI-159: when the tutor's words arrive but the phone plays nothing, one large
    button above the controls asks for the tap that starts sound. */
 .live-conversation .live-hear-tutor{order:-1;flex:1 1 100%;min-height:56px;padding:14px 18px;border:0;border-radius:14px;background:var(--wv-accent,#e2895a);color:#241f1a;font:600 17px/1.2 system-ui,sans-serif}
+
+/* LES-307: marking a good or bad moment sits beside the voice controls, a step quieter. */
+.live-conversation .live-icon-button.live-mark{min-width:40px;opacity:.78}
+.live-conversation .live-icon-button.live-mark svg{width:18px;height:18px}
