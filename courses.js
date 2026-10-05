@@ -160,6 +160,16 @@
     {id:'work', name:'Skills & work', icon:'⚒', subs:['Careers','Communication','Making things']},
     {id:'nature', name:'Nature & outdoors', icon:'⌂', subs:['Oceans','Animals','The outdoors']},
     {id:'food', name:'Food & drink', icon:'☕', subs:['Coffee & tea','Cooking','Wine & brewing']},
+    {id:'philosophy', name:'Philosophy & big questions', icon:'?', subs:['Mind & consciousness','Ethics','God & meaning','Science & truth']},
+    {id:'psych', name:'Psychology', icon:'◐', subs:['How we decide','Habits','Relationships']},
+    {id:'math', name:'Math', icon:'∑', subs:['Numbers','Probability','Geometry']},
+    {id:'language', name:'Languages', icon:'Ⓐ', subs:['Spanish','Mandarin','How languages work']},
+    {id:'climate', name:'Climate & environment', icon:'☁', subs:['Climate','Energy transition','Cities']},
+    {id:'design', name:'Design & architecture', icon:'△', subs:['Buildings','Products','Cities']},
+    {id:'sport', name:'Sports & games', icon:'◯', subs:['Strategy','Training','Chess']},
+    {id:'places', name:'Travel & places', icon:'⌖', subs:['Countries','Cities','Cultures']},
+    {id:'religion', name:'Religion & belief', icon:'✧', subs:['World religions','Faith and science','Sacred texts']},
+    {id:'law', name:'Law & rights', icon:'§', subs:['Your rights','Courts','Contracts']},
   ];
   const C = (id, title, by, cat, sub, learners, rating, added, price, chapters) => ({id, title, by, cat, sub, learners, rating, added, price, chapters});
   const CATALOG = [
@@ -179,6 +189,9 @@
     C('coffee', 'Coffee, Bean to Cup', 'Theo K.', 'food', 'Coffee & tea', 910, 4.7, '2026-08-14', '$8 once', [['From cherry to bean','Washed or natural','Roasting'],['Grind and water','Espresso vs. filter','Tasting like a pro']]),
   ];
   const course = id => CATALOG.find(c => c.id === id);
+  /* Sample progress, so added courses look lived-in. */
+  const PROGRESS = {coffee:3, moon:4, sleep:1, internet:2, rome:2};
+  const nextOf = (chapters, done) => { let i = 0; for (const ch of chapters) { for (const t of ch) { if (i === done) return t; i++; } if (i === done) return 'the chapter quiz'; i++; } return 'all done'; };
   const lessonCount = c => c.chapters.reduce((n, ch) => n + ch.length, 0);
 
   /* ---------------- schools (samples) ---------------- */
@@ -201,6 +214,12 @@
   const S = {open:false, scr:'home', tab:store.get('tab', 'mine'), expanded:null, added:store.get('added', []), joined:store.get('joined', []),
     cat:null, sub:'All', sort:'popular', query:'', schoolId:null, schoolQuery:'', view:null, openCh:0, openLesson:'0:0',
     quiz:{step:0, answer:''}, make:{step:0, msgs:[], input:'', showAll:false}, sheet:null, back:'home'};
+  /* Owner 2026-10-05: he wants to see My courses with several courses in it.
+     Add a few samples and a class once; he can still remove them. */
+  if (!store.get('seeded', false)) {
+    S.added = [...new Set([...S.added, 'coffee', 'moon', 'sleep'])]; S.joined = [...new Set([...S.joined, 'econ102'])];
+    store.set('added', S.added); store.set('joined', S.joined); store.set('seeded', true);
+  }
   const ICON = {
     home:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1z"/></svg>',
     courses:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18M3 12h18M3 17h18"/><circle cx="7" cy="7" r="1.9" fill="currentColor"/><circle cx="15" cy="12" r="1.9" fill="currentColor"/><circle cx="10" cy="17" r="1.9" fill="currentColor"/></svg>',
@@ -272,8 +291,9 @@
       actions:'<button type="button" class="cv-pill" data-go="course">Open course</button><button type="button" class="cv-pill ghost" data-try="0:1">Continue for real</button>'}));
     S.added.filter(id => id !== 'airace' && course(id)).forEach(id => {
       const c = course(id), items = []; c.chapters.forEach(ch => { ch.forEach(() => items.push(false)); items.push(true); });
-      rows.push(courseRow({key:id, title:c.title, sub:'by ' + c.by, items, done:0, next:'Next: ' + c.chapters[0][0],
-        rows:route(c.chapters.map((t, i) => ({title:'', titles:t})), {done:0, attr:() => `data-viewcourse="${id}"`, quizAttr:() => `data-viewcourse="${id}"`}),
+      const done = PROGRESS[id] || 0;
+      rows.push(courseRow({key:id, title:c.title, sub:'by ' + c.by + ' · ' + c.chapters.length + ' chapter' + (c.chapters.length === 1 ? '' : 's') + ' · ' + lessonCount(c) + ' lessons', items, done, next:'Next: ' + nextOf(c.chapters, done),
+        rows:route(c.chapters.map((t, i) => ({title:'', titles:t})), {done, attr:() => `data-viewcourse="${id}"`, quizAttr:() => `data-viewcourse="${id}"`}),
         actions:`<button type="button" class="cv-pill" data-viewcourse="${id}">Open course</button><button type="button" class="cv-pill ghost" data-remove="${id}">Remove</button>`}));
     });
     const classes = S.joined.map(findClass).filter(Boolean);
@@ -307,8 +327,8 @@
     return `${searchBox()}
       <div id="cv-results-wrap"${S.query ? '' : ' hidden'}><div class="cv-row"><span class="cv-lab" style="margin:0">Results</span><span class="sp"></span>${sortSeg()}</div><div class="cv-list" id="cv-results">${S.query ? results(CATALOG) : ''}</div></div>
       <div id="cv-browse"${S.query ? ' hidden' : ''}>
-        <div class="cv-lab">Browse by subject</div>
-        <div class="cv-cats">${CATS.map(c => `<button type="button" class="cv-cat" data-cat="${c.id}"><span class="i" aria-hidden="true">${c.icon}</span><b>${esc(c.name)}</b><span>${esc(c.subs.slice(0, 3).join(' · '))}</span><em>${counts(c.id)} course${counts(c.id) === 1 ? '' : 's'}</em></button>`).join('')}</div>
+        <div class="cv-row" style="margin-top:4px"><span class="cv-lab" style="margin:0">Browse by subject</span><span class="sp"></span><span class="cv-muted" style="font-size:12px">Scroll sideways for more →</span></div>
+        <div class="cv-cats cv-hscroll">${CATS.map(c => `<button type="button" class="cv-cat" data-cat="${c.id}"><span class="i" aria-hidden="true">${c.icon}</span><b>${esc(c.name)}</b><span>${esc(c.subs.slice(0, 3).join(' · '))}</span><em>${counts(c.id) ? counts(c.id) + ' course' + (counts(c.id) === 1 ? '' : 's') : 'Be the first'}</em></button>`).join('')}</div>
         <div class="cv-row" style="margin-top:6px"><span class="cv-lab" style="margin:0">All courses</span><span class="sp"></span>${sortSeg()}</div>
         <div class="cv-list">${CATALOG.slice().sort(sortFns[S.sort]).map(courseCard).join('')}</div>
         <p class="cv-muted cv-center">Every course except The AI Race is a sample, to show how a full catalog would look.</p>
@@ -564,6 +584,33 @@
     }
     if (id === 'cv-school-q') { S.schoolQuery = e.target.value; const q = S.schoolQuery.trim().toLowerCase(); const out = view.querySelector('#cv-school-list'); if (out) out.innerHTML = schoolList(SCHOOLS.filter(s => !q || s.name.toLowerCase().includes(q))); }
   });
+  /* Sideways lines (a course's stops, the subjects) also move with a mouse
+     wheel, one stop at a time, and with click-and-drag. At either end the
+     wheel scrolls the page as usual. Trackpads and touch scroll natively. */
+  let wheelAcc = 0, wheelAt = 0;
+  view.addEventListener('wheel', e => {
+    const r = e.target.closest('.cv-route, .cv-hscroll'); if (!r) return;
+    if (Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
+    if (e.deltaMode === 0 && Math.abs(e.deltaY) < 40) return; // a trackpad's small up/down steps scroll the page
+    const max = r.scrollWidth - r.clientWidth; if (max <= 1) return;
+    if ((e.deltaY < 0 && r.scrollLeft <= 1) || (e.deltaY > 0 && r.scrollLeft >= max - 1)) return;
+    e.preventDefault();
+    wheelAcc += e.deltaY; if (Date.now() - wheelAt < 180 || Math.abs(wheelAcc) < 1) return;
+    const step = r.querySelector('.cv-stop, .cv-cat')?.offsetWidth || 120;
+    r.scrollBy({left: Math.sign(wheelAcc) * step, behavior:'smooth'}); wheelAcc = 0; wheelAt = Date.now();
+  }, {passive:false});
+  let drag = null;
+  view.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    const r = e.target.closest('.cv-route, .cv-hscroll'); if (!r) return;
+    drag = {r, x:e.clientX, left:r.scrollLeft, moved:false};
+  });
+  window.addEventListener('pointermove', e => {
+    if (!drag) return; const dx = e.clientX - drag.x;
+    if (!drag.moved && Math.abs(dx) > 6) { drag.moved = true; drag.r.classList.add('dragging'); }
+    if (drag.moved) drag.r.scrollLeft = drag.left - dx;
+  });
+  window.addEventListener('pointerup', () => { if (!drag) return; const d = drag; drag = null; d.r.classList.remove('dragging'); if (d.moved) { const stop = ev => { ev.stopPropagation(); ev.preventDefault(); }; window.addEventListener('click', stop, {capture:true, once:true}); setTimeout(() => window.removeEventListener('click', stop, {capture:true}), 50); } });
   view.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'cv-code') view.querySelector('[data-join]')?.click(); });
   document.addEventListener('keydown', e => { if (e.key !== 'Escape' || !S.open) return; if (S.sheet) { S.sheet = null; render(); } else if (S.scr !== 'home') go('home'); });
 

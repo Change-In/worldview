@@ -281,3 +281,13 @@ body.cv-sheet-open #wv-tabbar { display:none; }
 .cv-x { all:unset; cursor:pointer; position:absolute; top:12px; right:14px; width:34px; height:34px; border-radius:50%; display:grid; place-items:center; background:var(--surface-soft); color:var(--ink-soft); font-size:15px; }
 /* the chapter arrows are for a mouse; on a phone the line is swiped */
 @media (hover:none) { .cv-course .cv-chnav { display:none; } }
+
+/* subjects in Explore: a sideways shelf, two rows tall */
+.cv-cats.cv-hscroll { display:grid; grid-auto-flow:column; grid-template-rows:repeat(2,auto); grid-auto-columns:158px; grid-template-columns:none; overflow-x:auto; overflow-y:hidden; scrollbar-width:none; margin:0 -16px; padding:2px 16px 6px; scroll-snap-type:x proximity; scroll-padding-left:16px; overscroll-behavior-x:contain; }
+@media (min-width:900px) { .cv-cats.cv-hscroll { grid-auto-columns:176px; } }
+.cv-cats.cv-hscroll::-webkit-scrollbar { display:none; }
+.cv-cats.cv-hscroll .cv-cat { scroll-snap-align:start; }
+.cv-route.dragging, .cv-hscroll.dragging { cursor:grabbing; scroll-snap-type:none; user-select:none; }
+.cv-route.dragging *, .cv-hscroll.dragging * { cursor:grabbing; }
+/* grid children must not stretch to fit a sideways shelf */
+.cv-wrap > * { min-width:0; }

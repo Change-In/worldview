@@ -17,7 +17,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <link rel="stylesheet" href="lesson-entry-popup.css?v=2.1.38">
 <script src="lesson-entry-popup.js?v=2.1.71"></script>
 <link rel="stylesheet" href="lesson-folders.css?v=2.1.77">
-<link rel="stylesheet" href="courses.css?v=3.1.23">
+<link rel="stylesheet" href="courses.css?v=3.1.25">
 <link rel="stylesheet" href="boot-splash.css?v=3.1.22">
 <link rel="stylesheet" href="map-tools.css?v=3.1.21">
 <script src="lesson-folders.js?v=3.1.13"></script>
@@ -2219,7 +2219,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.24 · Oct 3";
+const BUILD = "v3.1.25 · Oct 5";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2227,6 +2227,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.25",date:"Oct 5",changes:["Owner preview only: My courses now holds a few sample courses and a class, so you can see it full.","Owner preview only: a course's line and the subjects in Explore move sideways with a mouse wheel (one lesson at a time) or by dragging, as well as with a swipe.","Owner preview only: Explore's subjects are a sideways shelf you keep scrolling, with more subjects (philosophy, psychology, math, languages and others)."]},
   {tag:"v3.1.24",date:"Oct 3",changes:["New lessons are built from challenges. Each part opens with a short scene and a puzzle for you to work out, with a twist at the end, and the tutor moves on when you have got it or ask to, not when a separate checker decides.","Every lesson now asks how long you want it before it starts: a quick lesson of a few minutes, an overview, a deep dive, or your own time limit.","When sources disagree, the tutor tells you both sides and who holds them instead of getting stuck, and the lesson map marks those parts \"sources disagree\".","A part whose research cannot be found is skipped with a note instead of freezing the lesson.","Two new buttons beside the voice controls mark a good or a bad moment in a lesson, so it can be found and fixed later.","Lessons you already started keep the tutor they began with."]},
   {tag:"v3.1.23",date:"Oct 3",changes:["When a newer version is out, the app now says so when you come back to it, with a Reload button. A laptop window no longer stays on an old version for days.","Owner preview only: switching to another window and back no longer throws you out of Courses.","Owner preview only: an opened course is now one metro line with every lesson title in full. It scrolls sideways and opens at your next lesson, and the arrows jump a chapter at a time.","Owner preview only: \"Ask a person\" is gone for now. It is kept as an idea for later."]},
   {tag:"v3.1.22",date:"Oct 3",changes:["The loading screen is centred.","The back-to-start arrow is back above the cards. The Profile · Explore · Archive labels fade out while it shows, so the two never overlap.","Owner preview only: an opened course shows one chapter at a time, pop-ups have a close button and sit clear of the bottom bar, and a course page shows what builds on it."]},
@@ -16510,7 +16511,7 @@ window.addEventListener("blur", () => {
 });
 </script>
 <!-- NAV-152/154: owner-only Courses preview (bottom tabs Home · Courses · Profile). -->
-<script src="courses.js?v=3.1.23"></script>
+<script src="courses.js?v=3.1.25"></script>
 <!-- NAV-157: lesson map tools; NAV-156: lift the loading screen when Home is ready. -->
 <script src="map-tools.js?v=3.1.21"></script>
 <script src="boot-splash.js?v=3.1.22"></script>
