@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Worldview lesson</title>
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="teacher.css?v=3.1.27">
+<style>
+  .wrap { max-width:560px; }
+  .intro { display:grid; gap:12px; }
+  .intro h1 { font-size:30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a class="mark" href="./" aria-label="Worldview">W</a><b class="grow" id="title">Worldview</b></div>
+
+  <div class="card intro" id="intro">
+    <p class="muted" id="loading">Opening the lesson…</p>
+    <div id="ready" hidden>
+      <h1 id="ltitle"></h1>
+      <p class="muted small">A lesson made by a teacher on Worldview. Your answers are saved and shared with that teacher.</p>
+      <label class="small" for="name">Your first name (optional, so your teacher knows it's you)</label>
+      <input type="text" id="name" maxlength="60" autocomplete="given-name">
+      <div class="row"><button type="button" class="btn" id="start">Start the lesson</button></div>
+    </div>
+    <p id="missing" hidden>This lesson isn't shared, or the link is wrong. Ask your teacher for a new link.</p>
+  </div>
+
+  <div id="lesson" hidden style="display:grid;gap:10px">
+    <div class="phone"><iframe id="frame" sandbox="allow-scripts allow-forms" title="The lesson" referrerpolicy="no-referrer"></iframe></div>
+    <div class="bar"><i id="prog"></i></div>
+    <div class="ph-panel" id="panel" aria-live="polite"></div>
+    <p class="status" id="saved"></p>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="port-host.js?v=3.1.27"></script>
+<script>
+(() => {
+  const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT';
+  const $ = s => document.querySelector(s);
+  const id = new URLSearchParams(location.search).get('l') || '';
+  const db = window.supabase.createClient(URL_, KEY, {auth: {persistSession: false, autoRefreshToken: false, detectSessionInUrl: false}});
+  const runId = (crypto.randomUUID && crypto.randomUUID()) || ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+  let lesson = null, latest = [], finished = false, timer = 0, saving = false, again = false;
+  async function save() {
+    if (saving) { again = true; return; }
+    saving = true; $('#saved').textContent = 'Saving your answers…';
+    const {error} = await db.rpc('worldview_teacher_lesson_run_save', {p_run: runId, p_lesson: lesson.id, p_name: $('#name').value.trim(), p_answers: latest, p_finished: finished});
+    $('#saved').textContent = error ? 'Your answers couldn\'t be saved just now. Keep going; they\'ll save with your next answer.' : (finished ? 'Saved. Your teacher can see your answers.' : 'Your answers are saved as you go.');
+    saving = false; if (again) { again = false; save(); }
+  }
+  (async () => {
+    if (!/^[0-9a-f-]{36}$/i.test(id)) { $('#loading').hidden = true; $('#missing').hidden = false; return; }
+    const {data, error} = await db.rpc('worldview_teacher_lesson_get', {p_lesson: id});
+    $('#loading').hidden = true;
+    lesson = !error && Array.isArray(data) && data[0];
+    if (!lesson) { $('#missing').hidden = false; return; }
+    $('#ltitle').textContent = lesson.title; document.title = lesson.title + ' · Worldview'; $('#ready').hidden = false;
+  })();
+  $('#start').addEventListener('click', () => {
+    $('#intro').hidden = true; $('#lesson').hidden = false; $('#title').textContent = lesson.title;
+    const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'),
+      onChange: (record, done) => { latest = record; finished = done; clearTimeout(timer); timer = setTimeout(save, done ? 0 : 800); }});
+    host.run(lesson.html);
+    save();
+  });
+})();
+</script>
+</body>
+</html>

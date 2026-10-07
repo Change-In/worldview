@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Teacher Studio · Worldview</title>
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="teacher.css?v=3.1.27">
+<style>
+  .layout { display:grid; gap:16px; grid-template-columns:minmax(0,1fr) minmax(300px,400px); align-items:start; }
+  .col { display:grid; gap:14px; min-width:0; }
+  .side { position:sticky; top:12px; }
+  .lessons { display:grid; gap:6px; }
+  .lesson { appearance:none; text-align:left; cursor:pointer; display:flex; gap:8px; align-items:center; padding:9px 12px; border-radius:12px; border:1px solid var(--line); background:var(--paper); }
+  .lesson.on { border-color:var(--accent); background:var(--accent-100); }
+  .steps { margin:0; padding-left:20px; display:grid; gap:6px; font-size:14px; }
+  .ck { display:grid; grid-template-columns:20px minmax(0,1fr); gap:8px; font-size:14px; }
+  .ck i { font-style:normal; font-weight:800; }
+  .ck .y { color:var(--ok); } .ck .n { color:var(--warn); }
+  .ck span { display:block; font-size:12.5px; color:var(--ink-soft); }
+  .link { display:flex; gap:8px; align-items:center; padding:8px 10px; border-radius:12px; background:var(--soft); font:12.5px ui-monospace,Consolas,monospace; overflow-wrap:anywhere; }
+  .run { border-top:1px solid var(--line); padding-top:10px; display:grid; gap:4px; font-size:14px; }
+  .run dl { margin:4px 0 0; display:grid; gap:6px; }
+  .run dt { font-size:12.5px; color:var(--ink-soft); }
+  .run dd { margin:0; }
+  .toggle { display:flex; gap:10px; align-items:center; font-weight:650; cursor:pointer; }
+  .toggle input { width:20px; height:20px; accent-color:var(--accent); }
+  @media (max-width:860px) { .layout { grid-template-columns:minmax(0,1fr); } .side { position:static; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a class="mark" href="./" aria-label="Back to Worldview">W</a><b class="grow">Teacher Studio</b><span class="status" id="who"></span></div>
+
+  <div class="card" id="signedout" hidden>
+    <h2>Sign in first</h2>
+    <p>Teacher Studio uses your Worldview account. Sign in on Worldview, then come back to this page.</p>
+    <div class="row"><a class="btn" href="./">Go to Worldview</a></div>
+  </div>
+
+  <div class="layout" id="app" hidden>
+    <div class="col">
+      <div class="card">
+        <div class="row"><h2 class="grow">Your lessons</h2><button type="button" class="btn small" id="new">New lesson</button></div>
+        <div class="lessons" id="list"><p class="muted small">Loading…</p></div>
+      </div>
+
+      <div class="card">
+        <h2>Make it with your own AI</h2>
+        <ol class="steps">
+          <li>Copy the <b>starting prompt</b> into a new chat in ChatGPT, Claude or Gemini. It interviews you, then builds the lesson.</li>
+          <li>Ask for changes until you like it.</li>
+          <li>Copy the <b>finishing prompt</b> into the same chat. It checks the lesson and gives you one complete file.</li>
+          <li>Paste that file below and press Save.</li>
+        </ol>
+        <div class="row"><button type="button" class="btn ghost small" id="copystart">Copy the starting prompt</button><button type="button" class="btn ghost small" id="copyfinish">Copy the finishing prompt</button></div>
+        <textarea class="code" id="promptbox" hidden readonly aria-label="Prompt"></textarea>
+      </div>
+
+      <div class="card">
+        <div class="row"><h2 class="grow" id="edtitle">New lesson</h2><span class="status" id="savestate"></span></div>
+        <label class="small" for="title">Title</label>
+        <input type="text" id="title" maxlength="120" placeholder="Filled in from the lesson when you save">
+        <label class="small" for="html">The lesson file</label>
+        <textarea class="code" id="html" spellcheck="false" placeholder="Paste the whole file your AI gave you"></textarea>
+        <div class="row"><button type="button" class="btn" id="save">Save</button><label class="btn ghost small" for="file">Upload a file</label><input type="file" id="file" accept=".html,.htm,text/html,.txt" hidden><button type="button" class="btn ghost small" id="del" hidden>Delete</button></div>
+        <div id="checks" style="display:grid;gap:8px"></div>
+      </div>
+
+      <div class="card" id="sharecard" hidden>
+        <h2>Share with students</h2>
+        <label class="toggle"><input type="checkbox" id="shared"> Students can open it with the link</label>
+        <div id="linkbox" hidden style="display:grid;gap:8px">
+          <div class="link"><span class="grow" id="link"></span></div>
+          <div class="row"><button type="button" class="btn small" id="copylink">Copy the link</button><a class="btn ghost small" id="openlink" target="_blank" rel="noopener">Open it</a></div>
+          <p class="muted small">Students don't need an account. They can add their first name, and their answers appear below.</p>
+        </div>
+      </div>
+
+      <div class="card" id="resultscard" hidden>
+        <div class="row"><h2 class="grow">Students' answers</h2><button type="button" class="btn ghost small" id="refresh">Refresh</button></div>
+        <div id="runs"></div>
+      </div>
+    </div>
+
+    <div class="col side">
+      <div class="row"><h3 class="grow">Try it as a student</h3><button type="button" class="btn ghost small" id="restart">Restart</button></div>
+      <div class="phone"><iframe id="frame" sandbox="allow-scripts allow-forms" title="Your lesson, as a student sees it" referrerpolicy="no-referrer"></iframe></div>
+      <div class="bar"><i id="prog"></i></div>
+      <div class="ph-panel" id="panel" aria-live="polite"></div>
+      <p class="muted small">Nothing you answer here is saved. Students' answers are saved when they use the link.</p>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="port-host.js?v=3.1.27"></script>
+<script>
+(() => {
+  const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT';
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const db = window.supabase.createClient(URL_, KEY, {auth: {persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'worldview-alpha-auth'}});
+  const T = 'worldview_teacher_lessons';
+  const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog')});
+  let cur = null, lessons = [];
+  function toast(m) { document.querySelectorAll('.toast').forEach(t => t.remove()); const t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3500); }
+  async function copy(text) { try { await navigator.clipboard.writeText(text); return true; } catch (e) { return false; } }
+
+  const RULES = `WORLDVIEW RULES
+Worldview provides a global function WorldviewPort. Never define it yourself, and never call an AI or any server directly: Worldview runs the AI and holds every key.
+
+const wv = WorldviewPort({
+  title: 'Short title',
+  by: 'Teacher name',
+  pitch: 'One sentence that makes a learner want to try it',
+  for: 'Who it is for',
+  minutes: 15,
+  outcomes: [ { id: 'o1', text: 'Can explain …' }, { id: 'o2', text: 'Can predict …' } ],
+  humans: ['teacher']
+});
+
+The calls:
+- const n = await wv.predict(id, question, unit, { outcome }) → the learner's number, or null. Ask BEFORE revealing something.
+- wv.result(id, actualNumber, 'one sentence about what happened') → right after the reveal. Worldview compares it with the prediction and asks why.
+- const text = await wv.ask(id, question, { goal, outcome }) → the learner's written answer. Worldview shows the question under the lesson and saves the answer for the teacher.
+- await wv.human(id, { to: 'teacher', kind: 'review', text, outcome }) → sends a moment to the teacher (they read it later). The lesson continues.
+- wv.evidence(outcomeId, 'what the learner showed') → saves evidence for the teacher.
+- wv.say(text) → a line shown to the learner under the lesson.
+- wv.progress(0..1) as the learner moves on, and wv.done() at the end.
+
+One self-contained HTML file: no external scripts, fonts, images or requests. Draw with CSS, SVG or canvas. For a video clip, a button that opens it at its start time.`;
+  const QUALITY = `WHAT MAKES A GOOD WORLDVIEW LESSON
+- Start with something to do or a question, not a lecture. Keep text short.
+- Learners predict before they see, then compare and explain the gap.
+- Ask open questions with wv.ask and a clear goal. Never mark an open answer wrong.
+- Every screen has a visible next step. If a learner says "I don't know", give a hint and let them continue.
+- Tie every outcome to at least one question.
+- Phone first: fits 360px wide, buttons at least 44px tall, text at least 15px, nothing that needs hovering.
+- Accurate facts only. Plain words for the audience.`;
+  const START = `You're helping me make an interactive lesson for Worldview, an app where students use lessons that teachers design. I'm a teacher, not a programmer. Never ask me to write code, install anything or get an API key.
+
+First, interview me like a good colleague would. Ask one question at a time, and let each question follow from my last answer, until you understand: what the lesson is about and who it's for, what students should be able to do or explain afterwards, what they should figure out for themselves, how I'd teach it in person, where I want to step in myself, and how long it should take. Stop asking when you have enough; don't ask what you can sensibly decide.
+
+Then build the lesson as ONE complete HTML file that follows the rules below. Show me a preview if you can. Every time you change it, give me the whole file again.
+
+${QUALITY}
+
+${RULES}`;
+  const FINISH = `Let's finish this lesson for Worldview. Check it against this list and fix anything that fails. Then go through it once as a confused student who answers "I don't know", and fix any place where they could get stuck.
+
+1. Every question to the student goes through WorldviewPort (wv.ask or wv.predict). No API keys, no AI, no requests to other websites.
+2. WorldviewPort({...}) has a title, a one-line pitch, who it's for, the minutes, and two to four outcomes with ids.
+3. Each outcome is tied to at least one question.
+4. Every screen has a clear next step, even after "I don't know".
+5. It works on a phone: fits 360px wide, big buttons, readable text, nothing that needs hovering.
+6. It calls wv.progress as the student moves on and ends with wv.done().
+7. The facts are accurate.
+
+Then reply with the complete final file in one html code block (the whole file, never "rest unchanged"), and after it three short lines on what you changed. I'll paste the file into Worldview.
+
+Worldview's rules, in case you need them again:
+
+${RULES}`;
+
+  const htmlFrom = raw => { raw = String(raw || ''); const m = raw.match(/```(?:html)?[ \t]*\r?\n([\s\S]*?)```/i) || raw.match(/```(?:html)?[ \t]*\r?\n([\s\S]*)$/i); return (m ? m[1] : raw).trim(); };
+  const titleOf = h => { const m = String(h).match(/\btitle\s*:\s*(['"`])((?:\\.|(?!\1).){2,120}?)\1/); return m ? m[2].replace(/\\(.)/g, '$1') : ''; };
+  const linkFor = id => new URL('play.html?l=' + id, location.href).href;
+
+  function renderList() {
+    $('#list').innerHTML = lessons.length ? lessons.map(l => `<button type="button" class="lesson${cur && cur.id === l.id ? ' on' : ''}" data-open="${l.id}"><span class="grow">${esc(l.title)}</span>${l.shared ? '<span class="chip ok">Shared</span>' : ''}</button>`).join('') : '<p class="muted small">No lessons yet. Make one with your own AI below, then paste and save it.</p>';
+  }
+  function renderChecks() {
+    const h = $('#html').value; if (!h.trim()) { $('#checks').innerHTML = ''; return; }
+    $('#checks').innerHTML = WorldviewPortHost.checkLesson(h).map(c => `<div class="ck"><i class="${c.ok ? 'y' : 'n'}">${c.ok ? '✓' : '!'}</i><div>${esc(c.label)}${c.ok ? '' : `<span>${esc(c.detail)}</span>`}</div></div>`).join('');
+  }
+  function show(lesson) {
+    cur = lesson; $('#title').value = lesson ? lesson.title : ''; $('#html').value = lesson ? lesson.html : '';
+    $('#edtitle').textContent = lesson ? lesson.title : 'New lesson'; $('#del').hidden = !lesson; $('#savestate').textContent = '';
+    $('#sharecard').hidden = $('#resultscard').hidden = !lesson;
+    if (lesson) { $('#shared').checked = !!lesson.shared; renderLink(); loadRuns(); }
+    renderList(); renderChecks(); host.run(lesson ? lesson.html : '<p style="font:16px sans-serif;padding:20px;color:#6f6355">Your lesson shows here.</p>');
+  }
+  function renderLink() { const on = cur && cur.shared; $('#linkbox').hidden = !on; if (on) { $('#link').textContent = linkFor(cur.id); $('#openlink').href = linkFor(cur.id); } }
+  async function loadList() {
+    const {data, error} = await db.from(T).select('id,title,shared,updated_at').order('updated_at', {ascending: false});
+    if (error) { $('#list').innerHTML = `<p class="small">Couldn't load your lessons (${esc(error.message)}).</p>`; return; }
+    lessons = data || []; renderList();
+  }
+  async function open(id) {
+    const {data, error} = await db.from(T).select('*').eq('id', id).single();
+    if (error) { toast('Couldn\'t open that lesson.'); return; }
+    show(data);
+  }
+  async function save() {
+    const html = htmlFrom($('#html').value); if (!html) { toast('Paste the lesson file first.'); return; }
+    $('#html').value = html;
+    const title = ($('#title').value.trim() || titleOf(html) || 'Untitled lesson').slice(0, 120);
+    $('#save').disabled = true; $('#savestate').textContent = 'Saving…';
+    const q = cur ? db.from(T).update({title, html}).eq('id', cur.id).select('*').single() : db.from(T).insert({title, html}).select('*').single();
+    const {data, error} = await q;
+    $('#save').disabled = false;
+    if (error) { $('#savestate').textContent = /lesson_limit/.test(error.message) ? 'You have 50 lessons; delete one first.' : 'Not saved: ' + error.message; return; }
+    await loadList(); show(data); $('#savestate').textContent = 'Saved';
+  }
+  async function loadRuns() {
+    if (!cur) return; $('#runs').innerHTML = '<p class="muted small">Loading…</p>';
+    const {data, error} = await db.from('worldview_teacher_lesson_runs').select('id,learner_name,answers,finished,updated_at').eq('lesson_id', cur.id).order('updated_at', {ascending: false}).limit(100);
+    if (error) { $('#runs').innerHTML = `<p class="small">Couldn't load answers (${esc(error.message)}).</p>`; return; }
+    $('#runs').innerHTML = (data || []).length ? data.map(r => `<div class="run"><div class="row"><b class="grow">${esc(r.learner_name || 'A student')}</b>${r.finished ? '<span class="chip ok">Finished</span>' : '<span class="chip">Not finished</span>'}<span class="muted small">${esc(new Date(r.updated_at).toLocaleString())}</span></div><dl>${(Array.isArray(r.answers) ? r.answers : []).map(a => `<div><dt>${esc(a.kind)}${a.question ? ': ' + esc(a.question) : ''}</dt><dd>${esc(a.answer || '—')}</dd></div>`).join('') || '<dd class="muted small">No answers yet.</dd>'}</dl></div>`).join('') : '<p class="muted small">No students yet. Share the link, then press Refresh.</p>';
+  }
+
+  document.addEventListener('click', async e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.open) return open(b.dataset.open);
+    switch (b.id) {
+      case 'new': show(null); $('#html').focus(); return;
+      case 'save': return save();
+      case 'restart': host.run(cur ? cur.html : htmlFrom($('#html').value)); return;
+      case 'copystart': case 'copyfinish': { const t = b.id === 'copystart' ? START : FINISH; const ok = await copy(t); if (!ok) { $('#promptbox').hidden = false; $('#promptbox').value = t; $('#promptbox').select(); } toast(ok ? 'Copied. Paste it into your AI.' : 'Selected below. Copy it from there.'); return; }
+      case 'copylink': { const ok = await copy(linkFor(cur.id)); toast(ok ? 'Link copied.' : 'Copy the link from the box above.'); return; }
+      case 'refresh': return loadRuns();
+      case 'del': {
+        if (!cur) return;
+        if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Press again to delete'; setTimeout(() => { b.dataset.sure = ''; b.textContent = 'Delete'; }, 4000); return; }
+        const {error} = await db.from(T).delete().eq('id', cur.id); if (error) { toast('Couldn\'t delete it.'); return; }
+        b.dataset.sure = ''; b.textContent = 'Delete'; await loadList(); show(null); toast('Deleted.'); return;
+      }
+    }
+  });
+  $('#shared').addEventListener('change', async e => {
+    if (!cur) return; const shared = e.target.checked;
+    const {data, error} = await db.from(T).update({shared}).eq('id', cur.id).select('*').single();
+    if (error) { e.target.checked = !shared; toast('Couldn\'t change sharing.'); return; }
+    cur = data; renderLink(); loadList();
+  });
+  $('#html').addEventListener('input', () => { renderChecks(); $('#savestate').textContent = cur ? 'Not saved yet' : ''; });
+  $('#html').addEventListener('change', () => { const h = htmlFrom($('#html').value); if (h) host.run(h); });
+  $('#file').addEventListener('change', async e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return; if (f.size > 400000) { toast('That file is too big (over 400 KB).'); return; } $('#html').value = await f.text(); renderChecks(); host.run(htmlFrom($('#html').value)); toast('Loaded. Press Save to keep it.'); });
+
+  (async () => {
+    const {data} = await db.auth.getSession();
+    const s = data && data.session;
+    if (!s || !s.user || s.user.is_anonymous) { $('#signedout').hidden = false; return; }
+    $('#who').textContent = s.user.email || ''; $('#app').hidden = false;
+    show(null); await loadList();
+  })();
+})();
+</script>
+</body>
+</html>

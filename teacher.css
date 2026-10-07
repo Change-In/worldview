@@ -1,0 +1,43 @@
+/* Teacher Studio and the student lesson page (NAV-171 Phase 1). Same colors as Home. */
+:root { --ink:#2c241c; --ink-soft:#6f6355; --paper:#f8f4ec; --card:#fdfaf5; --line:#e4dccb; --accent:#bd5a30; --accent-100:#f3ded0; --accent-700:#8a3f22; --on-accent:#fff; --ok:#3d7650; --ok-100:#dcebe0; --warn:#a1600e; --warn-100:#f5e5c4; --soft:rgba(44,36,28,.05); --bezel:#1d1813; color-scheme:light; }
+@media (prefers-color-scheme:dark) { :root { --ink:#f4ece0; --ink-soft:#b6a894; --paper:#241f1a; --card:#332c25; --line:rgba(244,236,224,.14); --accent:#e2895a; --accent-100:rgba(226,137,90,.18); --accent-700:#eec7ab; --on-accent:#241f1a; --ok:#7db38e; --ok-100:rgba(125,179,142,.16); --warn:#e6ad52; --warn-100:rgba(230,173,82,.17); --soft:rgba(255,255,255,.045); --bezel:#0d0b09; color-scheme:dark; } }
+* { box-sizing:border-box; }
+html, body { margin:0; }
+body { background:var(--paper); color:var(--ink); font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px); }
+h1, h2, h3 { font-family:Georgia,"Times New Roman",serif; font-weight:400; margin:0; text-wrap:balance; }
+a { color:var(--accent-700); }
+button, input, textarea, select { font:inherit; color:inherit; }
+.wrap { max-width:1180px; margin:0 auto; padding:16px; }
+.top { display:flex; align-items:center; gap:10px; padding-block:6px 14px; }
+.top .mark { width:32px; height:32px; border-radius:10px; background:var(--accent); color:var(--on-accent); display:grid; place-items:center; font:700 17px Georgia,serif; flex:none; text-decoration:none; }
+.top b { font:400 20px Georgia,serif; }
+.grow { flex:1; min-width:0; }
+.btn { appearance:none; border:0; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:40px; padding:8px 16px; border-radius:999px; background:var(--accent); color:var(--on-accent); font-weight:700; font-size:14px; }
+.btn.ghost { background:transparent; color:var(--ink); box-shadow:inset 0 0 0 1.5px var(--line); }
+.btn.small { min-height:32px; padding:5px 12px; font-size:13px; }
+.btn[disabled] { opacity:.45; cursor:default; }
+.btn:focus-visible, input:focus-visible, textarea:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:14px 16px; display:grid; gap:10px; }
+.row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.muted { color:var(--ink-soft); } .small { font-size:13px; }
+.chip { display:inline-flex; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:700; background:var(--soft); color:var(--ink-soft); }
+.chip.ok { background:var(--ok-100); color:var(--ok); }
+input[type=text], textarea { width:100%; background:var(--paper); border:1px solid var(--line); border-radius:12px; padding:9px 11px; }
+textarea.code { min-height:150px; font:12px/1.45 ui-monospace,Consolas,monospace; resize:vertical; }
+.status { font-size:13px; font-weight:650; color:var(--ink-soft); }
+.toast { position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom,0px) + 18px); transform:translateX(-50%); z-index:50; padding:10px 16px; border-radius:12px; background:var(--ink); color:var(--paper); font-size:14px; font-weight:600; max-width:calc(100vw - 32px); }
+[hidden] { display:none !important; }
+/* the lesson in a phone, with the questions under it */
+.phone { padding:8px; border-radius:30px; background:var(--bezel); }
+.phone iframe { display:block; width:100%; height:min(560px,64vh); min-height:380px; border:0; border-radius:23px; background:#fbf8f2; }
+.bar { height:5px; border-radius:3px; background:var(--soft); overflow:hidden; }
+.bar i { display:block; height:100%; width:0; background:var(--ok); transition:width .4s; }
+.ph-panel { display:grid; gap:8px; }
+.ph-line { padding:9px 12px; border-radius:14px; font-size:14.5px; }
+.ph-tutor { background:var(--soft); font-family:Georgia,serif; }
+.ph-me { justify-self:end; background:var(--accent); color:var(--on-accent); max-width:90%; }
+.ph-note { color:var(--ink-soft); font-size:13px; padding:4px 2px; }
+.ph-done { background:var(--ok-100); color:var(--ok); font-weight:700; }
+.ph-ask { display:grid; gap:8px; padding:12px; border-radius:16px; background:var(--card); border:1.5px solid var(--accent); }
+.ph-q { margin:0; font:400 17px/1.4 Georgia,serif; }
+.ph-ask button { justify-self:start; appearance:none; border:0; border-radius:999px; min-height:40px; padding:8px 18px; background:var(--accent); color:var(--on-accent); font-weight:700; cursor:pointer; }
