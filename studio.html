@@ -5,27 +5,45 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Teacher Studio · Worldview</title>
 <link rel="icon" href="icon.png">
-<link rel="stylesheet" href="teacher.css?v=3.1.27">
+<link rel="stylesheet" href="teacher.css?v=3.1.28">
 <style>
-  .layout { display:grid; gap:16px; grid-template-columns:minmax(0,1fr) minmax(300px,400px); align-items:start; }
-  .col { display:grid; gap:14px; min-width:0; }
-  .side { position:sticky; top:12px; }
-  .lessons { display:grid; gap:6px; }
-  .lesson { appearance:none; text-align:left; cursor:pointer; display:flex; gap:8px; align-items:center; padding:9px 12px; border-radius:12px; border:1px solid var(--line); background:var(--paper); }
-  .lesson.on { border-color:var(--accent); background:var(--accent-100); }
-  .steps { margin:0; padding-left:20px; display:grid; gap:6px; font-size:14px; }
-  .ck { display:grid; grid-template-columns:20px minmax(0,1fr); gap:8px; font-size:14px; }
-  .ck i { font-style:normal; font-weight:800; }
-  .ck .y { color:var(--ok); } .ck .n { color:var(--warn); }
-  .ck span { display:block; font-size:12.5px; color:var(--ink-soft); }
-  .link { display:flex; gap:8px; align-items:center; padding:8px 10px; border-radius:12px; background:var(--soft); font:12.5px ui-monospace,Consolas,monospace; overflow-wrap:anywhere; }
-  .run { border-top:1px solid var(--line); padding-top:10px; display:grid; gap:4px; font-size:14px; }
-  .run dl { margin:4px 0 0; display:grid; gap:6px; }
-  .run dt { font-size:12.5px; color:var(--ink-soft); }
-  .run dd { margin:0; }
+  .grid { display:grid; gap:14px; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); }
+  .tile { appearance:none; cursor:pointer; padding:0; text-align:left; border-radius:18px; border:1px solid var(--line); background:var(--card); overflow:hidden; display:grid; grid-template-rows:170px auto; color:inherit; }
+  .tile:hover { border-color:var(--accent); }
+  .thumb { position:relative; overflow:hidden; background:var(--soft); }
+  .thumb iframe { position:absolute; left:0; top:0; width:390px; height:620px; border:0; transform:scale(.56); transform-origin:top left; pointer-events:none; background:#fbf8f2; }
+  .info { padding:10px 12px 12px; display:grid; gap:3px; }
+  .info b { font:400 18px/1.25 Georgia,serif; }
+  .new { appearance:none; cursor:pointer; border:2px dashed var(--line); background:none; border-radius:18px; min-height:236px; display:grid; place-items:center; color:var(--ink-soft); font:400 20px Georgia,serif; }
+  .new:hover { border-color:var(--accent); color:var(--accent-700); }
+  .bar2 { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding-bottom:12px; }
+  .ttl { flex:1; min-width:160px; font:400 22px Georgia,serif; border:0; background:transparent; padding:4px 6px; border-radius:8px; color:inherit; }
+  .ttl:hover, .ttl:focus { background:var(--soft); }
+  .seg { display:inline-flex; background:var(--soft); border-radius:10px; padding:3px; gap:2px; }
+  .seg button { appearance:none; border:0; background:none; cursor:pointer; padding:6px 11px; border-radius:8px; font-size:13px; font-weight:650; color:var(--ink-soft); }
+  .seg button.on { background:var(--card); color:var(--ink); }
+  .work { display:grid; gap:16px; grid-template-columns:minmax(0,1fr) 340px; align-items:start; }
+  .stage { display:grid; gap:10px; justify-items:center; min-width:0; }
+  .phone { width:100%; max-width:400px; transition:max-width .25s; }
+  .phone.laptop { max-width:960px; border-radius:16px; }
+  .phone.laptop iframe { border-radius:10px; }
+  .under { width:100%; max-width:400px; display:grid; gap:8px; }
+  .stage.wide .under { max-width:960px; }
+  .side { display:grid; gap:12px; position:sticky; top:12px; }
+  .conn { display:flex; gap:8px; align-items:center; font-size:13.5px; }
+  .conn i { width:9px; height:9px; border-radius:50%; background:var(--line); flex:none; }
+  .conn.on i { background:var(--ok); } .conn.off i { background:var(--warn); }
+  .link { padding:8px 10px; border-radius:12px; background:var(--soft); font:12.5px ui-monospace,Consolas,monospace; overflow-wrap:anywhere; }
   .toggle { display:flex; gap:10px; align-items:center; font-weight:650; cursor:pointer; }
   .toggle input { width:20px; height:20px; accent-color:var(--accent); }
-  @media (max-width:860px) { .layout { grid-template-columns:minmax(0,1fr); } .side { position:static; } }
+  .run { border-top:1px solid var(--line); padding-top:10px; display:grid; gap:4px; font-size:14px; }
+  .run dl { margin:4px 0 0; display:grid; gap:6px; } .run dt { font-size:12.5px; color:var(--ink-soft); } .run dd { margin:0; }
+  details > summary { cursor:pointer; font-weight:650; }
+  dialog { border:1px solid var(--line); border-radius:18px; background:var(--card); color:var(--ink); padding:18px; width:min(420px,calc(100vw - 32px)); }
+  dialog::backdrop { background:rgba(0,0,0,.35); }
+  dialog form { display:grid; gap:10px; }
+  .steps2 { margin:0; padding-left:20px; display:grid; gap:6px; font-size:14px; }
+  @media (max-width:880px) { .work { grid-template-columns:minmax(0,1fr); } .side { position:static; } }
 </style>
 </head>
 <body>
@@ -38,74 +56,110 @@
     <div class="row"><a class="btn" href="./">Go to Worldview</a></div>
   </div>
 
-  <div class="layout" id="app" hidden>
-    <div class="col">
-      <div class="card">
-        <div class="row"><h2 class="grow">Your lessons</h2><button type="button" class="btn small" id="new">New lesson</button></div>
-        <div class="lessons" id="list"><p class="muted small">Loading…</p></div>
-      </div>
+  <!-- ALL LESSONS -->
+  <div id="gridview" hidden>
+    <div class="row" style="margin-bottom:14px"><h1 class="grow" style="font-size:30px">Your lessons</h1></div>
+    <div class="grid" id="grid"><p class="muted">Loading…</p></div>
+  </div>
 
-      <div class="card">
-        <h2>Make it with your own AI</h2>
-        <ol class="steps">
-          <li>Copy the <b>starting prompt</b> into a new chat in ChatGPT, Claude or Gemini. It interviews you, then builds the lesson.</li>
-          <li>Ask for changes until you like it.</li>
-          <li>Copy the <b>finishing prompt</b> into the same chat. It checks the lesson and gives you one complete file.</li>
-          <li>Paste that file below and press Save.</li>
-        </ol>
-        <div class="row"><button type="button" class="btn ghost small" id="copystart">Copy the starting prompt</button><button type="button" class="btn ghost small" id="copyfinish">Copy the finishing prompt</button></div>
-        <textarea class="code" id="promptbox" hidden readonly aria-label="Prompt"></textarea>
+  <!-- ONE LESSON -->
+  <div id="workview" hidden>
+    <div class="bar2">
+      <button type="button" class="btn ghost small" id="back">← All lessons</button>
+      <input class="ttl" id="title" maxlength="120" aria-label="Lesson title">
+      <span class="chip" id="sharedchip"></span>
+      <div class="seg" role="group" aria-label="Preview size"><button type="button" class="on" data-dev="phone">Phone</button><button type="button" data-dev="laptop">Laptop</button></div>
+      <button type="button" class="btn ghost small" id="restart">Restart</button>
+      <button type="button" class="btn" id="edit">Edit with Claude Code</button>
+    </div>
+    <div class="work">
+      <div class="stage" id="stage">
+        <div class="phone" id="phone"><iframe id="frame" sandbox="allow-scripts allow-forms allow-popups" title="The lesson, as a student sees it" referrerpolicy="no-referrer"></iframe></div>
+        <div class="bar" style="width:100%;max-width:400px" id="barw"><i id="prog"></i></div>
+        <div class="under"><div class="ph-panel" id="panel" aria-live="polite"></div><p class="muted small">This is what students see. Nothing you answer here is saved.</p></div>
       </div>
-
-      <div class="card">
-        <div class="row"><h2 class="grow" id="edtitle">New lesson</h2><span class="status" id="savestate"></span></div>
-        <label class="small" for="title">Title</label>
-        <input type="text" id="title" maxlength="120" placeholder="Filled in from the lesson when you save">
-        <label class="small" for="html">The lesson file</label>
-        <textarea class="code" id="html" spellcheck="false" placeholder="Paste the whole file your AI gave you"></textarea>
-        <div class="row"><button type="button" class="btn" id="save">Save</button><label class="btn ghost small" for="file">Upload a file</label><input type="file" id="file" accept=".html,.htm,text/html,.txt" hidden><button type="button" class="btn ghost small" id="del" hidden>Delete</button></div>
-        <div id="checks" style="display:grid;gap:8px"></div>
-      </div>
-
-      <div class="card" id="sharecard" hidden>
-        <h2>Share with students</h2>
-        <label class="toggle"><input type="checkbox" id="shared"> Students can open it with the link</label>
-        <div id="linkbox" hidden style="display:grid;gap:8px">
-          <div class="link"><span class="grow" id="link"></span></div>
-          <div class="row"><button type="button" class="btn small" id="copylink">Copy the link</button><a class="btn ghost small" id="openlink" target="_blank" rel="noopener">Open it</a></div>
-          <p class="muted small">Students don't need an account. They can add their first name, and their answers appear below.</p>
+      <div class="side">
+        <div class="card">
+          <h3>Editing</h3>
+          <div class="conn" id="conn"><i></i><span>Checking your computer…</span></div>
+          <p class="small muted" id="savestate"></p>
+          <div id="kithelp" hidden>
+            <ol class="steps2">
+              <li>On your computer, double-click <b>Worldview Lessons</b> on the Desktop and leave its window open.</li>
+              <li>Press <b>Edit with Claude Code</b> again. If your browser asks to let this site reach your computer, allow it.</li>
+            </ol>
+          </div>
+          <details><summary class="small">Other ways to edit</summary>
+            <div style="display:grid;gap:8px;margin-top:8px">
+              <p class="small muted">Use ChatGPT, Claude or Gemini in a chat: copy the starting prompt, then the finishing prompt, and paste the file it gives you here.</p>
+              <div class="row"><button type="button" class="btn ghost small" id="copystart">Copy the starting prompt</button><button type="button" class="btn ghost small" id="copyfinish">Copy the finishing prompt</button></div>
+              <textarea class="code" id="html" spellcheck="false" placeholder="Paste a new version of the whole lesson here"></textarea>
+              <div class="row"><button type="button" class="btn small" id="savepaste">Save this version</button><button type="button" class="btn ghost small" id="del">Delete lesson</button></div>
+            </div>
+          </details>
+        </div>
+        <div class="card">
+          <h3>Share with students</h3>
+          <label class="toggle"><input type="checkbox" id="shared"> Students can open it with a link</label>
+          <div id="linkbox" hidden style="display:grid;gap:8px"><div class="link" id="link"></div><div class="row"><button type="button" class="btn small" id="copylink">Copy the link</button><a class="btn ghost small" id="openlink" target="_blank" rel="noopener">Open it</a></div></div>
+          <p class="small muted">No account needed. Students' answers appear below.</p>
+        </div>
+        <div class="card">
+          <div class="row"><h3 class="grow">Students' answers</h3><button type="button" class="btn ghost small" id="refresh">Refresh</button></div>
+          <div id="runs"></div>
         </div>
       </div>
-
-      <div class="card" id="resultscard" hidden>
-        <div class="row"><h2 class="grow">Students' answers</h2><button type="button" class="btn ghost small" id="refresh">Refresh</button></div>
-        <div id="runs"></div>
-      </div>
-    </div>
-
-    <div class="col side">
-      <div class="row"><h3 class="grow">Try it as a student</h3><button type="button" class="btn ghost small" id="restart">Restart</button></div>
-      <div class="phone"><iframe id="frame" sandbox="allow-scripts allow-forms" title="Your lesson, as a student sees it" referrerpolicy="no-referrer"></iframe></div>
-      <div class="bar"><i id="prog"></i></div>
-      <div class="ph-panel" id="panel" aria-live="polite"></div>
-      <p class="muted small">Nothing you answer here is saved. Students' answers are saved when they use the link.</p>
     </div>
   </div>
 </div>
+
+<dialog id="newdlg"><form id="newform"><h2>New lesson</h2><label class="small" for="newtitle">What's it called? You can change it later.</label><input type="text" id="newtitle" maxlength="120" placeholder="e.g. Why the Moon has phases"><div class="row"><button type="submit" class="btn">Create</button><button type="button" class="btn ghost" data-close>Cancel</button></div></form></dialog>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.27"></script>
+<script src="port-host.js?v=3.1.28"></script>
 <script>
 (() => {
-  const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT';
+  const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT', KIT = 'http://localhost:8195';
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const db = window.supabase.createClient(URL_, KEY, {auth: {persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'worldview-alpha-auth'}});
   const T = 'worldview_teacher_lessons';
   const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog')});
-  let cur = null, lessons = [];
-  function toast(m) { document.querySelectorAll('.toast').forEach(t => t.remove()); const t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3500); }
-  async function copy(text) { try { await navigator.clipboard.writeText(text); return true; } catch (e) { return false; } }
-
+  let cur = null, kit = null, es = null, saveTimer = 0, lastSaved = '';
+  const toast = m => { document.querySelectorAll('.toast').forEach(t => t.remove()); const t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3500); };
+  const copy = async t => { try { await navigator.clipboard.writeText(t); return true; } catch (e) { return false; } };
+  const ago = t => { const m = Math.round((Date.now() - new Date(t).getTime()) / 60000); return m < 1 ? 'edited just now' : m < 60 ? `edited ${m} min ago` : m < 1440 ? `edited ${Math.round(m / 60)} h ago` : 'edited ' + new Date(t).toLocaleDateString(); };
+  const linkFor = id => new URL('play.html?l=' + id, location.href).href;
+  const STARTER = t => `<\!-- WORLDVIEW-STARTER: replace this whole page with the lesson. -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${t}</title>
+<style>
+  body { margin:0; min-height:100vh; display:grid; place-items:center; padding:24px; box-sizing:border-box; font:17px/1.5 -apple-system,"Segoe UI",Roboto,sans-serif; background:#f8f4ec; color:#2c241c; text-align:center; }
+  h1 { font:400 30px/1.2 Georgia,serif; margin:0 0 10px; }
+  p { max-width:32ch; margin:0 auto 18px; color:#6f6355; }
+  button { border:0; border-radius:999px; padding:12px 22px; background:#bd5a30; color:#fff; font:inherit; font-weight:700; cursor:pointer; }
+</style>
+</head>
+<body>
+<main>
+  <h1>${t}</h1>
+  <p>This is your new lesson. Press Edit with Claude Code and tell it what you want to teach. This page will change as it works.</p>
+  <button id="go">Try a question</button>
+</main>
+<\script>
+  const wv = WorldviewPort({title: '${t}', outcomes: [{id: 'o1', text: 'Can say what they hope to learn'}]});
+  document.getElementById('go').onclick = async () => {
+    await wv.ask('hope', 'What would you like to understand by the end of this lesson?', {outcome: 'o1'});
+    wv.progress(1); wv.done();
+  };
+<\/script>
+</body>
+</html>
+`;
   const RULES = `WORLDVIEW RULES
 Worldview provides a global function WorldviewPort. Never define it yourself, and never call an AI or any server directly: Worldview runs the AI and holds every key.
 
@@ -161,88 +215,105 @@ Then reply with the complete final file in one html code block (the whole file, 
 Worldview's rules, in case you need them again:
 
 ${RULES}`;
-
   const htmlFrom = raw => { raw = String(raw || ''); const m = raw.match(/```(?:html)?[ \t]*\r?\n([\s\S]*?)```/i) || raw.match(/```(?:html)?[ \t]*\r?\n([\s\S]*)$/i); return (m ? m[1] : raw).trim(); };
-  const titleOf = h => { const m = String(h).match(/\btitle\s*:\s*(['"`])((?:\\.|(?!\1).){2,120}?)\1/); return m ? m[2].replace(/\\(.)/g, '$1') : ''; };
-  const linkFor = id => new URL('play.html?l=' + id, location.href).href;
 
-  function renderList() {
-    $('#list').innerHTML = lessons.length ? lessons.map(l => `<button type="button" class="lesson${cur && cur.id === l.id ? ' on' : ''}" data-open="${l.id}"><span class="grow">${esc(l.title)}</span>${l.shared ? '<span class="chip ok">Shared</span>' : ''}</button>`).join('') : '<p class="muted small">No lessons yet. Make one with your own AI below, then paste and save it.</p>';
+  /* ---------- all lessons ---------- */
+  async function showGrid() {
+    cur = null; stopWatch(); $('#workview').hidden = true; $('#gridview').hidden = false; document.title = 'Teacher Studio · Worldview';
+    const {data, error} = await db.from(T).select('id,title,shared,updated_at,html').order('updated_at', {ascending: false});
+    if (error) { $('#grid').innerHTML = `<p class="small">Couldn't load your lessons (${esc(error.message)}).</p>`; return; }
+    $('#grid').innerHTML = '<button type="button" class="new" id="new">+ New lesson</button>' + (data || []).map(l => `<button type="button" class="tile" data-open="${l.id}"><div class="thumb"><iframe sandbox="allow-scripts" scrolling="no" tabindex="-1" title="" data-thumb="${l.id}"></iframe></div><div class="info"><b>${esc(l.title)}</b><span class="small muted">${ago(l.updated_at)}${l.shared ? ' · shared' : ''}</span></div></button>`).join('');
+    (data || []).forEach(l => { const f = document.querySelector(`[data-thumb="${l.id}"]`); if (f) f.srcdoc = WorldviewPortHost.compose(l.html); });
   }
-  function renderChecks() {
-    const h = $('#html').value; if (!h.trim()) { $('#checks').innerHTML = ''; return; }
-    $('#checks').innerHTML = WorldviewPortHost.checkLesson(h).map(c => `<div class="ck"><i class="${c.ok ? 'y' : 'n'}">${c.ok ? '✓' : '!'}</i><div>${esc(c.label)}${c.ok ? '' : `<span>${esc(c.detail)}</span>`}</div></div>`).join('');
-  }
-  function show(lesson) {
-    cur = lesson; $('#title').value = lesson ? lesson.title : ''; $('#html').value = lesson ? lesson.html : '';
-    $('#edtitle').textContent = lesson ? lesson.title : 'New lesson'; $('#del').hidden = !lesson; $('#savestate').textContent = '';
-    $('#sharecard').hidden = $('#resultscard').hidden = !lesson;
-    if (lesson) { $('#shared').checked = !!lesson.shared; renderLink(); loadRuns(); }
-    renderList(); renderChecks(); host.run(lesson ? lesson.html : '<p style="font:16px sans-serif;padding:20px;color:#6f6355">Your lesson shows here.</p>');
-  }
-  function renderLink() { const on = cur && cur.shared; $('#linkbox').hidden = !on; if (on) { $('#link').textContent = linkFor(cur.id); $('#openlink').href = linkFor(cur.id); } }
-  async function loadList() {
-    const {data, error} = await db.from(T).select('id,title,shared,updated_at').order('updated_at', {ascending: false});
-    if (error) { $('#list').innerHTML = `<p class="small">Couldn't load your lessons (${esc(error.message)}).</p>`; return; }
-    lessons = data || []; renderList();
-  }
-  async function open(id) {
+  /* ---------- one lesson ---------- */
+  async function showLesson(id, push) {
     const {data, error} = await db.from(T).select('*').eq('id', id).single();
-    if (error) { toast('Couldn\'t open that lesson.'); return; }
-    show(data);
+    if (error || !data) { toast('Couldn\'t open that lesson.'); return showGrid(); }
+    if (push) history.pushState({l: id}, '', '?l=' + id);
+    cur = data; lastSaved = data.html; $('#gridview').hidden = true; $('#workview').hidden = false; document.title = data.title + ' · Teacher Studio';
+    $('#title').value = data.title; $('#html').value = ''; renderShare(); host.run(data.html); loadRuns(); $('#savestate').textContent = '';
+    kit = await ping(); renderConn();
+    if (kit && await syncFromComputer()) startWatch();
   }
-  async function save() {
-    const html = htmlFrom($('#html').value); if (!html) { toast('Paste the lesson file first.'); return; }
-    $('#html').value = html;
-    const title = ($('#title').value.trim() || titleOf(html) || 'Untitled lesson').slice(0, 120);
-    $('#save').disabled = true; $('#savestate').textContent = 'Saving…';
-    const q = cur ? db.from(T).update({title, html}).eq('id', cur.id).select('*').single() : db.from(T).insert({title, html}).select('*').single();
-    const {data, error} = await q;
-    $('#save').disabled = false;
-    if (error) { $('#savestate').textContent = /lesson_limit/.test(error.message) ? 'You have 50 lessons; delete one first.' : 'Not saved: ' + error.message; return; }
-    await loadList(); show(data); $('#savestate').textContent = 'Saved';
+  function renderShare() { $('#shared').checked = !!cur.shared; $('#sharedchip').textContent = cur.shared ? 'Shared' : 'Only you'; $('#sharedchip').className = 'chip' + (cur.shared ? ' ok' : ''); $('#linkbox').hidden = !cur.shared; if (cur.shared) { $('#link').textContent = linkFor(cur.id); $('#openlink').href = linkFor(cur.id); } }
+  async function save(fields, quiet) {
+    const {data, error} = await db.from(T).update(fields).eq('id', cur.id).select('*').single();
+    if (error) { $('#savestate').textContent = 'Not saved: ' + error.message; return false; }
+    cur = data; if (fields.html) { lastSaved = data.html; $('#savestate').textContent = 'Saved to Worldview at ' + new Date().toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) + '.'; }
+    if (!quiet) toast('Saved.'); return true;
   }
+  /* ---------- your computer (the Worldview Lessons program) ---------- */
+  async function ping() { try { const r = await fetch(KIT + '/api/ping', {cache: 'no-store'}); return r.ok ? await r.json() : null; } catch (e) { return null; } }
+  function renderConn() {
+    const c = $('#conn');
+    if (kit) { c.className = 'conn on'; c.querySelector('span').textContent = 'Connected to Worldview Lessons on this computer.'; $('#kithelp').hidden = true; $('#edit').textContent = kit.tools && !kit.tools.claude && kit.tools.codex ? 'Edit with Codex' : 'Edit with Claude Code'; }
+    else { c.className = 'conn off'; c.querySelector('span').textContent = 'Worldview Lessons isn\'t running on this computer.'; }
+  }
+  async function syncFromComputer() {
+    try { const r = await fetch(KIT + '/api/bridge/file?w=' + cur.id, {cache: 'no-store'}).then(x => x.json()); if (r.exists && r.html && r.html !== lastSaved) { host.run(r.html); queueSave(r.html); } return !!r.exists; } catch (e) { return false; }
+  }
+  function queueSave(html) { clearTimeout(saveTimer); $('#savestate').textContent = 'Saving…'; saveTimer = setTimeout(() => { if (html.length > 400000) { $('#savestate').textContent = 'The lesson is over 400 KB, so it can\'t be saved. Ask Claude Code to make it smaller.'; return; } save({html}, true); }, 1200); }
+  function startWatch() {
+    stopWatch(); if (!cur) return;
+    try { es = new EventSource(KIT + '/api/bridge/watch?w=' + cur.id); es.onmessage = () => syncFromComputer(); es.onerror = () => {}; } catch (e) {}
+  }
+  function stopWatch() { if (es) { es.close(); es = null; } }
+  async function editOnComputer() {
+    kit = await ping(); renderConn();
+    if (!kit) { $('#kithelp').hidden = false; toast('Start Worldview Lessons on your computer first.'); return; }
+    const tool = kit.tools && kit.tools.claude ? 'claude' : kit.tools && kit.tools.codex ? 'codex' : 'folder';
+    try {
+      const r = await fetch(KIT + '/api/bridge/open', {method: 'POST', headers: {'content-type': 'application/json', 'x-worldview-kit': '1'}, body: JSON.stringify({worldviewId: cur.id, title: cur.title, html: cur.html, tool})}).then(x => x.json());
+      if (!r.ok) throw 0;
+      $('#savestate').textContent = (tool === 'folder' ? 'The lesson folder opened' : (tool === 'codex' ? 'Codex' : 'Claude Code') + ' opened') + ' on your computer. Changes it makes show here and save to Worldview by themselves.';
+      startWatch(); syncFromComputer();
+    } catch (e) { toast('Couldn\'t reach Worldview Lessons. Is its window open?'); }
+  }
+  /* ---------- students' answers ---------- */
   async function loadRuns() {
-    if (!cur) return; $('#runs').innerHTML = '<p class="muted small">Loading…</p>';
+    $('#runs').innerHTML = '<p class="muted small">Loading…</p>';
     const {data, error} = await db.from('worldview_teacher_lesson_runs').select('id,learner_name,answers,finished,updated_at').eq('lesson_id', cur.id).order('updated_at', {ascending: false}).limit(100);
     if (error) { $('#runs').innerHTML = `<p class="small">Couldn't load answers (${esc(error.message)}).</p>`; return; }
-    $('#runs').innerHTML = (data || []).length ? data.map(r => `<div class="run"><div class="row"><b class="grow">${esc(r.learner_name || 'A student')}</b>${r.finished ? '<span class="chip ok">Finished</span>' : '<span class="chip">Not finished</span>'}<span class="muted small">${esc(new Date(r.updated_at).toLocaleString())}</span></div><dl>${(Array.isArray(r.answers) ? r.answers : []).map(a => `<div><dt>${esc(a.kind)}${a.question ? ': ' + esc(a.question) : ''}</dt><dd>${esc(a.answer || '—')}</dd></div>`).join('') || '<dd class="muted small">No answers yet.</dd>'}</dl></div>`).join('') : '<p class="muted small">No students yet. Share the link, then press Refresh.</p>';
+    $('#runs').innerHTML = (data || []).length ? data.map(r => `<div class="run"><div class="row"><b class="grow">${esc(r.learner_name || 'A student')}</b>${r.finished ? '<span class="chip ok">Finished</span>' : '<span class="chip">Not finished</span>'}</div><span class="muted small">${esc(new Date(r.updated_at).toLocaleString())}</span><dl>${(Array.isArray(r.answers) ? r.answers : []).map(a => `<div><dt>${esc(a.kind)}${a.question ? ': ' + esc(a.question) : ''}</dt><dd>${esc(a.answer || '—')}</dd></div>`).join('') || '<dd class="muted small">No answers yet.</dd>'}</dl></div>`).join('') : '<p class="muted small">No students yet. Share the link, then press Refresh.</p>';
   }
 
   document.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.open) return open(b.dataset.open);
+    if (b.dataset.close != null) return b.closest('dialog').close();
+    if (b.dataset.open) return showLesson(b.dataset.open, true);
+    if (b.dataset.dev) { document.querySelectorAll('[data-dev]').forEach(x => x.classList.toggle('on', x === b)); const wide = b.dataset.dev === 'laptop'; $('#phone').classList.toggle('laptop', wide); $('#stage').classList.toggle('wide', wide); $('#barw').style.maxWidth = wide ? '960px' : '400px'; return; }
     switch (b.id) {
-      case 'new': show(null); $('#html').focus(); return;
-      case 'save': return save();
-      case 'restart': host.run(cur ? cur.html : htmlFrom($('#html').value)); return;
-      case 'copystart': case 'copyfinish': { const t = b.id === 'copystart' ? START : FINISH; const ok = await copy(t); if (!ok) { $('#promptbox').hidden = false; $('#promptbox').value = t; $('#promptbox').select(); } toast(ok ? 'Copied. Paste it into your AI.' : 'Selected below. Copy it from there.'); return; }
-      case 'copylink': { const ok = await copy(linkFor(cur.id)); toast(ok ? 'Link copied.' : 'Copy the link from the box above.'); return; }
+      case 'new': $('#newtitle').value = ''; return $('#newdlg').showModal();
+      case 'back': history.pushState({}, '', 'studio.html'); return showGrid();
+      case 'restart': return host.run(lastSaved || cur.html);
+      case 'edit': return editOnComputer();
       case 'refresh': return loadRuns();
+      case 'copylink': { const ok = await copy(linkFor(cur.id)); return toast(ok ? 'Link copied.' : 'Copy the link from the box.'); }
+      case 'copystart': case 'copyfinish': { const ok = await copy(b.id === 'copystart' ? START : FINISH); return toast(ok ? 'Copied. Paste it into your AI.' : 'Copying didn\'t work here.'); }
+      case 'savepaste': { const h = htmlFrom($('#html').value); if (!h) return toast('Paste the whole lesson first.'); if (await save({html: h})) { host.run(h); $('#html').value = ''; } return; }
       case 'del': {
-        if (!cur) return;
-        if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Press again to delete'; setTimeout(() => { b.dataset.sure = ''; b.textContent = 'Delete'; }, 4000); return; }
-        const {error} = await db.from(T).delete().eq('id', cur.id); if (error) { toast('Couldn\'t delete it.'); return; }
-        b.dataset.sure = ''; b.textContent = 'Delete'; await loadList(); show(null); toast('Deleted.'); return;
+        if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Press again to delete'; setTimeout(() => { b.dataset.sure = ''; b.textContent = 'Delete lesson'; }, 4000); return; }
+        const {error} = await db.from(T).delete().eq('id', cur.id); if (error) return toast('Couldn\'t delete it.');
+        history.pushState({}, '', 'studio.html'); toast('Deleted.'); return showGrid();
       }
     }
   });
-  $('#shared').addEventListener('change', async e => {
-    if (!cur) return; const shared = e.target.checked;
-    const {data, error} = await db.from(T).update({shared}).eq('id', cur.id).select('*').single();
-    if (error) { e.target.checked = !shared; toast('Couldn\'t change sharing.'); return; }
-    cur = data; renderLink(); loadList();
+  $('#newform').addEventListener('submit', async e => {
+    e.preventDefault(); const t = ($('#newtitle').value.trim() || 'New lesson').replace(/[<>`'"\\]/g, '').slice(0, 120);
+    const {data, error} = await db.from(T).insert({title: t, html: STARTER(t)}).select('id').single();
+    $('#newdlg').close(); if (error) return toast(/lesson_limit/.test(error.message) ? 'You have 50 lessons; delete one first.' : 'Couldn\'t create it: ' + error.message);
+    await showLesson(data.id, true); editOnComputer();
   });
-  $('#html').addEventListener('input', () => { renderChecks(); $('#savestate').textContent = cur ? 'Not saved yet' : ''; });
-  $('#html').addEventListener('change', () => { const h = htmlFrom($('#html').value); if (h) host.run(h); });
-  $('#file').addEventListener('change', async e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return; if (f.size > 400000) { toast('That file is too big (over 400 KB).'); return; } $('#html').value = await f.text(); renderChecks(); host.run(htmlFrom($('#html').value)); toast('Loaded. Press Save to keep it.'); });
+  $('#title').addEventListener('change', () => { const t = $('#title').value.trim(); if (t && cur && t !== cur.title) save({title: t.slice(0, 120)}); });
+  $('#shared').addEventListener('change', async e => { if (!(await save({shared: e.target.checked}, true))) e.target.checked = !e.target.checked; renderShare(); });
+  addEventListener('popstate', () => { const l = new URLSearchParams(location.search).get('l'); if (l) showLesson(l); else showGrid(); });
+  addEventListener('focus', () => { if (cur && kit) syncFromComputer(); });
 
   (async () => {
-    const {data} = await db.auth.getSession();
-    const s = data && data.session;
+    const {data} = await db.auth.getSession(); const s = data && data.session;
     if (!s || !s.user || s.user.is_anonymous) { $('#signedout').hidden = false; return; }
-    $('#who').textContent = s.user.email || ''; $('#app').hidden = false;
-    show(null); await loadList();
+    $('#who').textContent = s.user.email || '';
+    const l = new URLSearchParams(location.search).get('l'); if (l) showLesson(l); else showGrid();
   })();
 })();
 </script>

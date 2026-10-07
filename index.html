@@ -2219,7 +2219,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.27 · Oct 7";
+const BUILD = "v3.1.28 · Oct 7";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2227,6 +2227,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.28",date:"Oct 7",changes:["Teacher Studio (a test for teachers, at studio.html): your lessons are rectangles. Open one to see it live on a phone or laptop screen. Edit with Claude Code opens it on your computer (start Worldview Lessons there first), and its changes appear and save by themselves."]},
   {tag:"v3.1.27",date:"Oct 7",changes:["Teacher Studio (a test for teachers): open studio.html on this site while signed in. Paste a lesson your own AI made with the starting and finishing prompts, try it as a student, then share a link. Students open the link without an account, and their answers show up for you."]},
   {tag:"v3.1.26",date:"Oct 6",changes:["Owner preview only: Explore is compact: a \"Happening now\" row, subjects as one row of small chips, and courses on sideways shelves (Essentials, Popular, New) with See all.","Owner preview only: hover over a course, or tap it once on a phone, to see its description, rating and reviews. Tap again or press Open to open it."]},
   {tag:"v3.1.25",date:"Oct 5",changes:["Owner preview only: My courses now holds a few sample courses and a class, so you can see it full.","Owner preview only: a course's line and the subjects in Explore move sideways with a mouse wheel (one lesson at a time) or by dragging, as well as with a swipe.","Owner preview only: Explore's subjects are a sideways shelf you keep scrolling, with more subjects (philosophy, psychology, math, languages and others)."]},
