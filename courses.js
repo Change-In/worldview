@@ -2,7 +2,8 @@
    A bottom tab bar (Home · Courses · Profile) and a Courses page:
    - My courses: Focus only, nothing open until you tap a course. Your own
      course, the courses you add from Explore, and the classes you join.
-   - Explore: subjects you can browse (a library-style tree), search, sorting.
+   - Explore: hand-picked alerts, a row of subject chips, sideways course shelves
+     with previews (description, rating, reviews) on hover or first tap; search.
    - Find your school: join a class with a code; courses made by students.
    - An opened course is one metro line, every lesson titled in full.
    - The owner's course, The AI Race, in full; a quiz demo that keeps the
@@ -193,6 +194,25 @@
   const PROGRESS = {coffee:3, moon:4, sleep:1, internet:2, rome:2};
   const nextOf = (chapters, done) => { let i = 0; for (const ch of chapters) { for (const t of ch) { if (i === done) return t; i++; } if (i === done) return 'the chapter quiz'; i++; } return 'all done'; };
   const lessonCount = c => c.chapters.reduce((n, ch) => n + ch.length, 0);
+  /* NAV-167: each course's description and a few reviews, shown in its preview
+     (hover, or the first tap on a phone). Reviews here are samples. */
+  const DESC = {
+    airace:{reviews:['Finally understood why chips matter.', 'It remembered what I said in lesson one.']},
+    quantum:{pitch:'What a qubit is, why quantum computers are so hard to build, and what one could break or fix.', reviews:['No hype, just the ideas.', 'Entanglement finally clicked.']},
+    internet:{pitch:'Packets, addresses, the cables under the sea, encryption, and who actually runs the internet.', reviews:['The undersea cables part amazed me.', 'Great for people who are not technical.']},
+    grid:{pitch:'How power gets from the plant to your plug, why grids fail, and the grid AI now needs.', reviews:['Explains the AI power story well.', 'Short and clear.']},
+    moon:{pitch:'Why there are two tides a day, how the Moon\'s uneven pull works, and when the Sun joins in.', reviews:['I can finally explain the second tide.', 'Perfect for a commute.']},
+    sky:{pitch:'Find north, see why stars twinkle and planets wander, and look at light from the past.', reviews:['Went outside and found north.', 'Calm, lovely lessons.']},
+    rome:{pitch:'How a republic became an empire, and why its fall was many falls, not one.', reviews:['Many falls, not one. Changed how I see it.', 'The money chapter was great.']},
+    bill:{pitch:'Who writes laws, what committees and lobbyists do, and how votes and vetoes decide.', reviews:['Clearer than school civics.', 'The lobbyists lesson was eye-opening.']},
+    inflation:{pitch:'What inflation is, how it is measured, who wins and loses, and how it is fought.', reviews:['Clear without being dumbed down.', 'I wish there was a chapter on housing.']},
+    sleep:{pitch:'Why we sleep, what dreams do, what one bad night costs, and how to sleep better.', reviews:['Changed my bedtime.', 'A good mix of science and tips.']},
+    film:{pitch:'How cuts, music, silence and faces make a movie make you feel something.', reviews:['I watch movies differently now.', 'The lesson on silence is brilliant.']},
+    raise:{pitch:'Know your worth, say the first number, handle a no, and get it in writing.', reviews:['Got my raise.', 'Practical and calm.']},
+    kayak:{pitch:'How Arctic peoples built skin-on-frame kayaks fitted to one body, and how they rolled back up.', reviews:['Niche and wonderful.', 'Made me want to build one.']},
+    coffee:{pitch:'From cherry to cup: processing, roasting, grinding, brewing, and tasting like a pro.', reviews:['My morning cup tastes different now.', 'The tasting lesson was fun.']},
+  };
+  const pitchOf = c => c.id === 'airace' ? AIRACE.pitch : (DESC[c.id] || {}).pitch || '';
 
   /* ---------------- schools (samples) ---------------- */
   const SCHOOLS = [
@@ -235,6 +255,9 @@
   const view = document.createElement('section');
   view.id = 'courses-view'; view.className = 'cv'; view.hidden = true; view.setAttribute('aria-label', 'Courses');
   document.body.append(view, bar);
+  const peek = document.createElement('div');
+  peek.id = 'cv-peek'; peek.hidden = true; peek.setAttribute('role', 'dialog'); peek.setAttribute('aria-label', 'Course preview');
+  document.body.appendChild(peek);
 
   /* ---------------- helpers ---------------- */
   let toastTimer = 0;
@@ -322,16 +345,33 @@
   }
   const sortSeg = () => `<div class="cv-seg small" role="group" aria-label="Sort">${[['popular','Popular'],['new','New'],['rated','Top rated']].map(([k, l]) => `<button type="button" data-sort="${k}" class="${S.sort === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
   const searchBox = () => `<label class="cv-search">${ICON.search}<input id="cv-q" type="search" placeholder="Search courses, subjects, makers" value="${esc(S.query)}" autocomplete="off"></label>`;
+  /* NAV-165: "Happening now" starts with alerts the owner picks by hand. */
+  const ALERTS = [
+    {kind:'Worth knowing now', id:'airace', line:'Why the AI labs are racing, in short lessons', by:'Picked by Worldview'},
+    {kind:'Many are learning', id:'inflation', line:'Prices and interest rates, explained', by:'980 learners this week (sample)'},
+    {kind:'Many are learning', id:'grid', line:'Why AI needs so much power', by:'Rising this week (sample)'},
+  ];
+  const HOT = ['tech', 'money'];
+  const ESSENTIALS = ['airace', 'inflation', 'rome', 'internet', 'sleep'];
+  const tile = c => `<button type="button" class="cv-tile" data-viewcourse="${c.id}"><span class="art" aria-hidden="true"></span><b>${esc(c.title)}</b><span>${esc(c.by)} · ★ ${c.rating}</span></button>`;
+  const shelf = (label, list) => `<div class="cv-row" style="margin-top:2px"><span class="cv-lab" style="margin:0">${label}</span><span class="sp"></span><button type="button" class="cv-linkbtn" data-allcourses="1">See all</button></div><div class="cv-shelf cv-hscroll">${list.filter(Boolean).map(tile).join('')}</div>`;
+  /* NAV-166: compact Explore. Subjects are one row of chips and courses sit on
+     sideways shelves, so more subjects never push the courses down. */
   function explore() {
-    const counts = id => CATALOG.filter(c => c.cat === id).length;
+    if (S.allCourses) return `<div class="cv-head"><button type="button" class="cv-back" data-allback="1" aria-label="Back">‹</button><h1 class="sm">All courses</h1></div>
+      <div class="cv-row"><span class="cv-muted">${CATALOG.length} courses</span><span class="sp"></span>${sortSeg()}</div>
+      <div class="cv-list">${CATALOG.slice().sort(sortFns[S.sort]).map(courseCard).join('')}</div>`;
     return `${searchBox()}
       <div id="cv-results-wrap"${S.query ? '' : ' hidden'}><div class="cv-row"><span class="cv-lab" style="margin:0">Results</span><span class="sp"></span>${sortSeg()}</div><div class="cv-list" id="cv-results">${S.query ? results(CATALOG) : ''}</div></div>
       <div id="cv-browse"${S.query ? ' hidden' : ''}>
-        <div class="cv-row" style="margin-top:4px"><span class="cv-lab" style="margin:0">Browse by subject</span><span class="sp"></span><span class="cv-muted" style="font-size:12px">Scroll sideways for more →</span></div>
-        <div class="cv-cats cv-hscroll">${CATS.map(c => `<button type="button" class="cv-cat" data-cat="${c.id}"><span class="i" aria-hidden="true">${c.icon}</span><b>${esc(c.name)}</b><span>${esc(c.subs.slice(0, 3).join(' · '))}</span><em>${counts(c.id) ? counts(c.id) + ' course' + (counts(c.id) === 1 ? '' : 's') : 'Be the first'}</em></button>`).join('')}</div>
-        <div class="cv-row" style="margin-top:6px"><span class="cv-lab" style="margin:0">All courses</span><span class="sp"></span>${sortSeg()}</div>
-        <div class="cv-list">${CATALOG.slice().sort(sortFns[S.sort]).map(courseCard).join('')}</div>
-        <p class="cv-muted cv-center">Every course except The AI Race is a sample, to show how a full catalog would look.</p>
+        <span class="cv-lab" style="margin:0">Happening now</span>
+        <div class="cv-alerts cv-hscroll">${ALERTS.map(x => { const c = course(x.id); return c ? `<button type="button" class="cv-alert" data-viewcourse="${c.id}"><span class="k"><i></i>${esc(x.kind)}</span><b>${esc(c.title)}</b><span>${esc(x.line)}</span><em>${esc(x.by)}</em></button>` : ''; }).join('')}</div>
+        <div class="cv-row" style="margin-top:2px"><span class="cv-lab" style="margin:0">Subjects</span><span class="sp"></span><span class="cv-muted" style="font-size:12px">${CATS.length} · scroll →</span></div>
+        <div class="cv-chips cv-hscroll">${CATS.map(c => `<button type="button" class="cv-chip-s" data-cat="${c.id}"><span class="i" aria-hidden="true">${c.icon}</span>${esc(c.name)}${HOT.includes(c.id) ? '<em title="Something is happening here"></em>' : ''}</button>`).join('')}</div>
+        ${shelf('Worldview Essentials', ESSENTIALS.map(course))}
+        ${shelf('Popular this week', CATALOG.slice().sort(sortFns.popular).slice(0, 8))}
+        ${shelf('New', CATALOG.slice().sort(sortFns.new).slice(0, 8))}
+        <p class="cv-muted cv-center">Hover over a course, or tap it on a phone, for its description and reviews. Every course except The AI Race is a sample.</p>
       </div>`;
   }
   function scrCategory() {
@@ -491,6 +531,7 @@
     return `<div class="cv-ov" data-close="1"><div class="cv-sheet" role="dialog" aria-modal="true"><span class="grab"></span><button type="button" class="cv-x" data-close="1" aria-label="Close">✕</button>${h}</div></div>`;
   }
   function render() {
+    hidePeek();
     const html = {course:scrCourse, quiz:scrQuiz, make:scrMake, cat:scrCategory, sample:scrSample, cls:scrClass, school:scrSchool}[S.scr]?.() ?? scrHome();
     view.innerHTML = `<div class="cv-wrap">${html}</div>${sheetHTML()}`;
     document.body.classList.toggle('cv-sheet-open', !!S.sheet);
@@ -501,7 +542,7 @@
 
   /* ---------------- open / close and the bar ---------------- */
   function openCourses() { S.open = true; view.hidden = false; document.body.classList.add('cv-open'); render(); }
-  function closeCourses() { document.body.classList.remove('cv-sheet-open'); S.open = false; S.sheet = null; view.hidden = true; document.body.classList.remove('cv-open'); syncBar(); }
+  function closeCourses() { hidePeek(); document.body.classList.remove('cv-sheet-open'); S.open = false; S.sheet = null; view.hidden = true; document.body.classList.remove('cv-open'); syncBar(); }
   let forcedTab = '', forcedAt = 0;
   function syncBar() {
     let active = 'home';
@@ -528,9 +569,49 @@
     if (S.open) requestAnimationFrame(() => requestAnimationFrame(closeCourses)); else syncBar();
   });
 
+  /* ---------------- course previews (NAV-167) ---------------- */
+  const touchMode = () => matchMedia('(hover: none)').matches;
+  let peekTimer = 0, peekId = '';
+  function peekHTML(c) {
+    const d = DESC[c.id] || {}, isAdded = c.id === 'airace' || S.added.includes(c.id);
+    return `<b class="pt">${esc(c.title)}</b><span class="by">${esc(c.by)} · ${lessonCount(c)} lessons</span><p>${esc(pitchOf(c))}</p>
+      <span class="st">★ ${c.rating} · ${fmt(c.learners)} learners</span>${(d.reviews || []).map(r => `<q>${esc(r)}</q>`).join('')}
+      <div class="cv-row"><span class="price">${esc(c.price)}</span><span class="sp"></span>${c.id === 'airace' ? '' : `<button type="button" class="cv-pill ${isAdded ? 'soft' : 'ghost'} small" data-peekadd="${c.id}">${isAdded ? '✓ Added' : '+ Add'}</button>`}<button type="button" class="cv-pill small" data-peekopen="${c.id}">Open</button></div>
+      <span class="note">Sample reviews</span>`;
+  }
+  function showPeek(el) {
+    const c = course(el.dataset.viewcourse); if (!c) return;
+    clearTimeout(peekTimer); peekId = c.id; peek.innerHTML = peekHTML(c); peek.hidden = false;
+    view.querySelectorAll('.cv-tile.peek').forEach(x => x.classList.remove('peek')); el.classList.add('peek');
+    const r = el.getBoundingClientRect(), w = peek.offsetWidth, h = peek.offsetHeight;
+    let x = Math.min(Math.max(12, r.left + r.width / 2 - w / 2), innerWidth - w - 12), y = r.bottom + 8;
+    if (y + h > innerHeight - 76) y = Math.max(12, r.top - h - 8);
+    peek.style.left = x + 'px'; peek.style.top = y + 'px';
+  }
+  function hidePeek() { clearTimeout(peekTimer); peekId = ''; peek.hidden = true; view.querySelectorAll('.cv-tile.peek').forEach(x => x.classList.remove('peek')); }
+  function peekTap(e) {
+    const el = e.target.closest('.cv-tile'); if (!el || !touchMode()) return false;
+    if (peekId === el.dataset.viewcourse) return false;
+    e.preventDefault(); showPeek(el); return true;
+  }
+  view.addEventListener('mouseover', e => { if (touchMode()) return; const el = e.target.closest('.cv-tile'); if (!el || el.classList.contains('peek')) return; clearTimeout(peekTimer); peekTimer = setTimeout(() => showPeek(el), 250); });
+  view.addEventListener('mouseout', e => { const el = e.target.closest('.cv-tile'); if (!el || el.contains(e.relatedTarget)) return; clearTimeout(peekTimer); peekTimer = setTimeout(hidePeek, 220); });
+  peek.addEventListener('mouseenter', () => clearTimeout(peekTimer));
+  peek.addEventListener('mouseleave', () => { if (!touchMode()) peekTimer = setTimeout(hidePeek, 220); });
+  view.addEventListener('scroll', () => { if (!peek.hidden) hidePeek(); }, {capture:true, passive:true});
+  document.addEventListener('click', e => { if (!peek.hidden && !peek.contains(e.target) && !e.target.closest('.cv-tile')) hidePeek(); }, true);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !peek.hidden) { hidePeek(); e.stopImmediatePropagation(); } }, true);
+  peek.addEventListener('click', e => {
+    const b = e.target.closest('[data-peekadd],[data-peekopen]'); if (!b) return;
+    const id = b.dataset.peekadd || b.dataset.peekopen; hidePeek();
+    if (b.dataset.peekadd) { if (S.added.includes(id)) { S.added = S.added.filter(x => x !== id); toast('Removed from My courses'); } else { S.added = [...S.added, id]; toast('Added to My courses'); } store.set('added', S.added); return render(); }
+    S.back = S.scr; if (id === 'airace') return go('course'); S.view = id; go('sample');
+  });
+
   /* ---------------- events ---------------- */
   view.addEventListener('click', e => {
-    const t = e.target.closest('[data-go],[data-ctab],[data-expand],[data-open-lesson],[data-ch],[data-lesson],[data-try],[data-start],[data-sheet],[data-close],[data-toast],[data-qstep],[data-qexample],[data-qpause],[data-msend],[data-mex],[data-mreset],[data-mall],[data-copyprompt],[data-cat],[data-sub],[data-sort],[data-add],[data-remove],[data-viewcourse],[data-viewclass],[data-school],[data-schoolback],[data-join],[data-leave],[data-branch],[data-rnav]');
+    if (peekTap(e)) return;
+    const t = e.target.closest('[data-go],[data-ctab],[data-expand],[data-open-lesson],[data-ch],[data-lesson],[data-try],[data-start],[data-sheet],[data-close],[data-toast],[data-qstep],[data-qexample],[data-qpause],[data-msend],[data-mex],[data-mreset],[data-mall],[data-copyprompt],[data-cat],[data-sub],[data-sort],[data-add],[data-remove],[data-viewcourse],[data-viewclass],[data-school],[data-schoolback],[data-join],[data-leave],[data-branch],[data-rnav],[data-allcourses],[data-allback]');
     if (!t) return;
     if (t.dataset.close && t.classList.contains('cv-ov') && e.target !== t) return;
     const d = t.dataset;
@@ -555,6 +636,8 @@
     if (d.cat) { S.cat = d.cat; S.sub = 'All'; return go('cat'); }
     if (d.sub) { S.sub = d.sub; return render(); }
     if (d.sort) { S.sort = d.sort; return render(); }
+    if (d.allcourses) { S.allCourses = true; render(); view.scrollTop = 0; return; }
+    if (d.allback) { S.allCourses = false; render(); view.scrollTop = 0; return; }
     if (d.add) { const id = d.add; if (S.added.includes(id)) { S.added = S.added.filter(x => x !== id); toast('Removed from My courses'); } else { S.added = [...S.added, id]; toast('Added to My courses'); } store.set('added', S.added); return render(); }
     if (d.remove) { S.added = S.added.filter(x => x !== d.remove); store.set('added', S.added); S.expanded = null; toast('Removed from My courses'); return render(); }
     if (d.viewcourse) { if (d.viewcourse === 'airace') { S.back = S.scr === 'home' ? 'home' : S.scr; return go('course'); } S.back = S.scr; S.view = d.viewcourse; return go('sample'); }
@@ -596,7 +679,7 @@
     if ((e.deltaY < 0 && r.scrollLeft <= 1) || (e.deltaY > 0 && r.scrollLeft >= max - 1)) return;
     e.preventDefault();
     wheelAcc += e.deltaY; if (Date.now() - wheelAt < 180 || Math.abs(wheelAcc) < 1) return;
-    const step = r.querySelector('.cv-stop, .cv-cat')?.offsetWidth || 120;
+    const step = r.querySelector('.cv-stop, .cv-cat, .cv-tile, .cv-alert, .cv-chip-s')?.offsetWidth || 120;
     r.scrollBy({left: Math.sign(wheelAcc) * step, behavior:'smooth'}); wheelAcc = 0; wheelAt = Date.now();
   }, {passive:false});
   let drag = null;
