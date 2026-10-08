@@ -290,9 +290,9 @@ The recovery ladder, each step automatic and logged:
 
 ### Conventions to keep
 - Match the existing compact one-line JS style. Put a ticket-style comment above each change explaining **why** (for example `/* VOI-160: … */`), as the surrounding code does.
-- Tests use `node:test` + `node:vm` against the shipped file (see `tests/live-phase-opening.test.mjs`). Run them with `node --test tests/`.
+- Tests use `node:test` + `node:vm` against the shipped file (see `tests/live-phase-opening.test.mjs`). Run them with `node --test tests/*.test.mjs`.
 - Bump the `?v=` cache-busting query on any changed `lab/*.js` in `lab/index.html`.
 - Never send speech or text in telemetry: counts, times and fixed reason words only.
 
 ### Prompt to hand to Sonnet (one PR at a time)
-> Read `docs/lesson-review-superconductors-2026-10.md`. Implement PR A only (Issue 1: F1.1, F1.2, F1.3, F1.5, F1.6) in `lab/live-conversation.js` and `lab/gemini-live.js`. Extract the idle and floor decisions into pure functions and add `tests/voice-idle.test.mjs` covering acceptance tests 1–5 of Issue 1. Keep the existing code style and comment conventions, bump the `?v=` for changed files in `lab/index.html`, run `node --test tests/`, and stop for review before any other PR.
+> Read `docs/lesson-review-superconductors-2026-10.md`. Implement PR A only (Issue 1: F1.1, F1.2, F1.3, F1.5, F1.6) in `lab/live-conversation.js` and `lab/gemini-live.js`. Extract the idle and floor decisions into pure functions and add `tests/voice-idle.test.mjs` covering acceptance tests 1–5 of Issue 1. Keep the existing code style and comment conventions, bump the `?v=` for changed files in `lab/index.html`, run `node --test tests/*.test.mjs`, and stop for review before any other PR.
