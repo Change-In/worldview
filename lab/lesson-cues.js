@@ -17,7 +17,8 @@ window.WorldviewLessonCues=(()=>{
  // tap simply stays quiet, and the banner still marks the moment.
  function chime(kind='begin'){
   const ctx=audio();if(!ctx)return;
-  const notes=kind==='pause'?[659.25,523.25]:[523.25,783.99];
+  // 'lost' is a low three-note dip, unlike the others, so it is recognised without looking (the microphone input is being repaired).
+  const notes=kind==='lost'?[392,329.63,261.63]:kind==='pause'?[659.25,523.25]:[523.25,783.99];
   const play=()=>{
    const start=ctx.currentTime+.02;
    notes.forEach((frequency,index)=>{

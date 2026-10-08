@@ -2219,7 +2219,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.28 · Oct 7";
+const BUILD = "v3.1.29 · Oct 8";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2227,6 +2227,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.29",date:"Oct 8",changes:["Voice lessons no longer pause while you are still talking. The quiet-minute pause now listens for your voice, not just for words on the screen, and it waits longer.","If you are talking and the tutor has not answered, the lesson no longer makes the tutor interrupt you. If your microphone stops reaching the tutor, the lesson now notices within a few seconds, plays a low three-note sound, reopens the microphone or the connection by itself, and gives you a Fix button."]},
   {tag:"v3.1.28",date:"Oct 7",changes:["Teacher Studio (a test for teachers, at studio.html): your lessons are rectangles. Open one to see it live on a phone or laptop screen. Edit with Claude Code opens it on your computer (start Worldview Lessons there first), and its changes appear and save by themselves."]},
   {tag:"v3.1.27",date:"Oct 7",changes:["Teacher Studio (a test for teachers): open studio.html on this site while signed in. Paste a lesson your own AI made with the starting and finishing prompts, try it as a student, then share a link. Students open the link without an account, and their answers show up for you."]},
   {tag:"v3.1.26",date:"Oct 6",changes:["Owner preview only: Explore is compact: a \"Happening now\" row, subjects as one row of small chips, and courses on sideways shelves (Essentials, Popular, New) with See all.","Owner preview only: hover over a course, or tap it once on a phone, to see its description, rating and reviews. Tap again or press Open to open it."]},

@@ -11,6 +11,34 @@ This document is a handoff: each fix names the file and function to change, says
 
 ---
 
+## Implementation status (Oct 8, v3.1.29)
+
+**Shipped in the frontend (this repo), with tests (`node --test tests/*.test.mjs`, 39 passing):**
+
+| Plan item | What was built | Where |
+|---|---|---|
+| F1.1 voice counts as activity | Rolling room-noise floor + `shouldIdlePause`; pause needs 90 s of no voice, no words, no tutor audio and never fires within 15 s of voice | `lab/voice-activity.js`, `idleCheck` in `lab/live-conversation.js` |
+| F1.2 pause never ends a live turn | `audioStreamEnd` only if no voice for 5 s; held audio is now 3 s | `mute()` in `lab/gemini-live.js` |
+| F1.3 auto-resume | Uses the floor learned before the pause; needs 250 ms of voice | `inputLevel` in `lab/live-conversation.js` |
+| F1.5 never talk over a thinking learner | App prompts wait 2.5 s after voice, notes 2 s; "didn't catch that" is now a screen hint, not speech | `promptWait`, `hearMic` |
+| F1.6 telemetry | **Local only**: last 40 voice events (times and reasons) in the owner's copied transcript. Saving them to `worldview_lesson_events` needs a new backend action (see below) | `voiceEvents` |
+| F2.3, F2.4 input watchdog | Once-a-second check of audio engine, mic track, capture frames, digital silence, socket backlog and server silence; ordered repair ladder (resume audio → reopen mic → resume connection with the last 8 s of audio resent → fresh connection) | `lab/voice-activity.js` (`diagnoseInput`, `recoveryStep`), `lab/gemini-live.js` |
+| F2.5 tell the learner | Distinct low three-note "lost you" cue, on-screen message, a "Voice not working? Tap to fix" button, and one spoken sentence after recovery if nothing was answered | `lab/live-conversation.js`, `lab/lesson-cues.js` |
+
+**Differences from the plan above (found while building):**
+- Speech threshold is `max(floor × 1.6, floor + 0.02)`, not 2.5×: at 2.5× a car-noise floor of 0.05 would have hidden ordinary speech at 0.09.
+- Steady noise (an engine) is recognised in about 3 s by its low frame-to-frame variation and learned at once, so a lesson that *starts* in a car does not treat the engine as speech. Speech inside a run cannot raise the floor, so a long unbroken answer is not mistaken for the room.
+- "Unheard speech" needs at least 1.5 s of speech, 6 s of quiet and nothing at all from the server since the speech began. The first two times it is only a hint; the third within two minutes reconnects.
+- A reconnect opens the new socket immediately instead of waiting for a dead link to report that it closed.
+
+**Not done (needs the backend repo or on-device testing):**
+- F1.4 / F2.2: `silenceDurationMs` 1200 → 2200, `prefixPaddingMs`, `startOfSpeechSensitivity: HIGH` in `functions/live-trial/gemini-policy.mjs`. **This is the single most valuable remaining change for Issue 1** and takes a few lines.
+- F1.6 server side: a small `voice_event` action that writes counts and times to `worldview_lesson_events`.
+- The A/B drive test of browser `noiseSuppression` (F2.2) and the 20-minute drive test in Issue 2's "done" list. The decision logic is unit-tested against a fake clock, microphone and socket; nothing here has run on a real phone yet.
+- Issues 3–8 (re-entry brief, lesson design, move-on rules, honesty and tone, clarification loop, smaller items).
+
+---
+
 ## 0. Summary
 
 | # | Problem | Severity | Where |

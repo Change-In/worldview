@@ -8,9 +8,18 @@ window.WorldviewLiveConversation=(()=>{
     hides the page for a moment. Ending the voice session on every hide made
     each of those a full reconnect, so a short absence is now ridden out and
     only a real departure stops the session. */
- const BACKGROUND_GRACE_MS=30000,IDLE_PAUSE_MS=60000,IDLE_LISTEN_MS=2*60*1000,REFRESH_WAIT_MS=45000;
+ const BACKGROUND_GRACE_MS=30000,IDLE_LISTEN_MS=2*60*1000,REFRESH_WAIT_MS=45000;
+ /* VOI-160: the quiet-minute pause now waits for 90 s of real quiet (no voice on the
+    microphone, no words, no tutor audio) and never fires within 15 s of the
+    learner's voice; see shouldIdlePause in voice-activity.js. */
+ const Voice=window.WorldviewVoiceActivity;
  let hiddenAt=0,hiddenTimer=null,nextStart=null,starting=null,prepareTiming=null;const timingLog=[];
  const fragmentTimes=new Map();
+ /* VOI-160 / BUG-510: what the voice did on its own (pauses, resumes, repairs), as
+    fixed words and times only, kept for the last 40 events and copied into the
+    owner's transcript beside the start timings. Never speech or text. */
+ const voiceEvents=[];
+ function voiceEvent(kind,detail={}){voiceEvents.push({at:Date.now(),kind,...detail});if(voiceEvents.length>40)voiceEvents.shift();}
  // VOI-144: a spoken fragment keeps the clock time it arrived (start_ms, epoch
  // milliseconds, when the provider sends no timing of its own), so a reopened
  // lesson and the copied transcript both show when each thing was said.
@@ -23,6 +32,9 @@ window.WorldviewLiveConversation=(()=>{
   const actions=element('div');actions.className='live-conversation-actions';
   const enableAudio=element('button','Tap to hear the tutor');enableAudio.className='live-hear-tutor';enableAudio.hidden=true;
   const start=element('button','Start GPT Live'),retry=element('button','Retry saving');retry.hidden=true;
+  /* BUG-510: shown only while the input watchdog is repairing the microphone, so a
+     driver always has one obvious thing to press. */
+  const fix=element('button','Voice not working? Tap to fix');fix.className='live-hear-tutor live-fix-voice';fix.hidden=true;
   // Mute, Pause and the transcript toggle are icon-only. Each keeps a real
   // aria-label and title, kept in sync by paint(), so the control is still
   // named for screen readers and on hover once the words are gone.
@@ -45,7 +57,7 @@ window.WorldviewLiveConversation=(()=>{
      the manual save retry are not on the learner's screen. Both stay built so
      nothing that references them breaks, and both stay hidden. */
   textMode.className='live-icon-button';textMode.hidden=true;textMode.setAttribute('aria-label','Switch to Text');textMode.title='Switch to Text';textMode.onclick=()=>host.onTextMode?.();
-  for(const b of [start,enableAudio,mute,end,retry,captions,textMode,markGood,markBad])b.type='button';actions.append(start,enableAudio,mute,end,retry,captions,markGood,markBad,textMode);
+  for(const b of [start,enableAudio,fix,mute,end,retry,captions,textMode,markGood,markBad])b.type='button';actions.append(start,enableAudio,fix,mute,end,retry,captions,markGood,markBad,textMode);
   const status=element('p','Connecting…');status.setAttribute('role','status');
   const usage=element('small'),progress=element('p');progress.className='live-conversation-progress';
   const audio=element('audio');audio.autoplay=true;audio.controls=false;audio.playsInline=true;audio.hidden=true;
@@ -54,9 +66,10 @@ window.WorldviewLiveConversation=(()=>{
   const costHost=document.getElementById('mock-learner-map-cost');
   if(costHost)costHost.append(note);
   root.append(...(costHost?[]:[note]),actions,status,usage,progress);adapter.container.append(root);(document.body||adapter.container).append(audio);
-  ui={root,note,rate,total,start,enableAudio,mute,end,retry,captions,markGood,markBad,status,usage,progress,audio};
+  ui={root,note,rate,total,start,enableAudio,fix,mute,end,retry,captions,markGood,markBad,status,usage,progress,audio};
   output=window.WorldviewLiveAudioOutput?.create({audio,button:adapter.speakerButton,container:root});
   enableAudio.onclick=()=>{const s=session;if(!s||s.closing)return;const version=s.outputVersion;void output?.apply({user:true});void resumeAudio(s).then(()=>{if(session===s&&!s.closing&&s.outputVersion===version){enableAudio.hidden=true;message('Listening');}}).catch(()=>{if(session===s&&!s.closing&&s.outputVersion===version)message('Audio is blocked. Check the browser’s audio permission.');});};
+  fix.onclick=()=>{const s=session;if(!s||s.closing)return;voiceEvent('fix_tapped');message('Fixing your microphone…');s.gemini?.fixNow?.();};
   captions.onclick=()=>{showCaptions=!showCaptions;paint();};
   start.onclick=()=>{if(session?.softPaused){softResume(session);return;}openingPending=true;paused=false;startError=false;autoAttempts=0;void(study?begin():prepare());};end.onclick=()=>{if(session?.softPaused){softResume(session);return;}if(!session){start.onclick();return;}paused=true;void stop('Voice paused.',{pause:true});};retry.onclick=()=>void flush();
   mute.onclick=()=>{const s=session;if(!s?.ready||s.closing)return;if(s.softPaused){s.softPaused=false;s.lastActivityAt=performance.now();}s.muted=!s.muted;s.mic?.getAudioTracks().forEach(t=>t.enabled=!s.muted);s.gemini?.mute(s.muted);message(s.muted?'Mic muted':'Listening');paint();};
@@ -850,36 +863,36 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   recordTalk(s);
   if(session!==s||s.closing||!s.ready||document.hidden)return;
   if(s.softPaused){if(performance.now()-s.softPausedAt>IDLE_LISTEN_MS)void stop('Voice paused. Tap play when you are ready.',{pause:true});return;}
-  if(s.speaking||s.checking||s.refreshStep===studyStep(study))return;
-  if(performance.now()-(s.lastActivityAt||0)<IDLE_PAUSE_MS)return;
-  void idlePause(s);
+  if(s.refreshStep===studyStep(study))return;
+  const info=s.gemini?.idleInfo?.(),now=Date.now();
+  const gap={sinceActivityMs:performance.now()-(s.lastActivityAt||0),sinceVoiceMs:info?.lastVoiceAt?now-info.lastVoiceAt:Infinity,sinceTutorAudioMs:info?.tutorAudio?now-info.tutorAudio:Infinity};
+  if(!Voice.shouldIdlePause({...gap,speaking:s.speaking,checking:s.checking}))return;
+  void idlePause(s,gap);
  }
- async function idlePause(s){
+ async function idlePause(s,gap={}){
   if(session!==s||s.closing)return;
   window.WorldviewLessonCues?.chime('pause');
+  voiceEvent('idle_pause',{sinceActivityMs:Math.round(gap.sinceActivityMs||0),sinceVoiceMs:Number.isFinite(gap.sinceVoiceMs)?Math.round(gap.sinceVoiceMs):null});
   if(s.gemini&&!s.muted){
-   s.softPaused=true;s.softPausedAt=performance.now();s.levelFloor=[];s.loudSince=0;
+   s.softPaused=true;s.softPausedAt=performance.now();
    s.gemini.mute(true,{hold:true});
    message('Paused after a quiet minute. Just start talking, or tap play.');paint();return;
   }
   await stop('Paused after a quiet minute. Tap play to carry on.',{pause:true});
  }
- function softResume(s){
+ function softResume(s,by='tap'){
   if(session!==s||!s.softPaused)return;
+  voiceEvent('soft_resume',{by});
   s.softPaused=false;s.lastActivityAt=performance.now();
   s.gemini?.mute(false,{flush:true});
   message(s.muted?'Mic muted':'Listening');paint();
  }
- // Speech is judged against the room measured in the first second of the
- // pause, so steady road noise does not count as talking.
- function inputLevel(s,level){
-  if(session!==s||!s.softPaused)return;
-  if(s.levelFloor.length<10){s.levelFloor.push(level);return;}
-  const threshold=Math.max(.02,s.levelFloor.slice().sort((a,b)=>a-b)[5]*3);
-  const now=performance.now();
-  if(level<=threshold){s.loudSince=0;return;}
-  if(!s.loudSince)s.loudSince=now;
-  if(now-s.loudSince>=250)softResume(s);
+ // VOI-160: while paused, speech is judged against the room as it was BEFORE the
+ // pause (the rolling floor kept by the microphone detector), not against the
+ // first second after it, which was usually the learner still talking.
+ function inputLevel(s,level,info){
+  if(session!==s||!s.softPaused||!info)return;
+  if(info.voiceMs>=250)softResume(s,'voice');
  }
  // One entry cue, not a learner turn. Acknowledgment is not playback proof.
  /* The application moves the lesson to its next part, but nothing asks the tutor
@@ -964,6 +977,12 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   else if(e.type==='session.instructions.appended'&&state.openingEventId&&e.client_event_id===state.openingEventId){state.openingAcknowledged=true;if(state.lastTranscriptAt==null)message('Listening');}
   else if(e.type==='session.input_transcript.delta')append(state,e,'user');
   else if(e.type==='session.output_transcript.delta')append(state,e,'assistant');
+  else if(e.type==='gemini.interrupted')voiceEvent('barge_in');
+  else if(e.type==='gemini.track.muted')voiceEvent('track_muted');
+  else if(e.type==='gemini.input.trouble')inputTrouble(state,e);
+  else if(e.type==='gemini.input.ok'){voiceEvent('input_ok');ui.fix.hidden=true;if(!saveError)message(restingStatus());}
+  else if(e.type==='gemini.recovered'){voiceEvent('reconnected_replayed');sayLost(state,3000);}
+  else if(e.type==='gemini.recovery.failed')voiceEvent('recovery_failed');
   else if(e.type==='gemini.tool.call'){for(const call of e.calls||[])void toolCall(state,call);}
   else if(e.type==='gemini.tool.cancel'){for(const id of e.ids||[])(state.cancelledTools||(state.cancelledTools=new Set())).add(id);}
   else if(e.type==='gemini.turn.complete'){state.usageTurn=(state.usageTurn||0)+1;if(Date.now()-(state.connectedAt||Date.now())>=60000)autoAttempts=0;}
@@ -978,6 +997,28 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
    // spoken reconnect in a quiet car.
    if(e.type==='session.closed'){if(state.softPaused)paused=true;void flush();if(state.model==='gemini-3.8-live')closeGeminiReceipt(state);if(!state.closing&&!['expired','connection_lost'].includes(e.reason))startError=true;cleanup(state);message(paused?'Voice paused. Tap Resume voice when you are ready.':startError?'Voice stopped. Your conversation is saved.':'Reconnecting…');maybeStart();}
   }else if(e.type==='error'){startError=true;void stop('Voice had a connection error. Try again.');}
+ }
+/* BUG-510: the input watchdog found that the learner's voice may not be reaching
+    the tutor. Say so out loud on screen and by a distinct cue (a driver is not
+    looking), keep a Fix button in reach after the first failed repair, and, once the
+    link is back, have the tutor say one sentence asking for the last part again. */
+ const LOST_NOTE='APP NOTE: the connection dropped for a few seconds and the learner may have said something that was not heard. In one short sentence say you lost them for a moment and ask them to say the last part again. Do not guess what they said.';
+ function inputTrouble(s,e){
+  voiceEvent('input_trouble',{fault:e.fault,step:e.step,attempt:e.attempt});
+  window.WorldviewLessonCues?.chime('lost');
+  message(e.step==='hint'?'Didn’t catch that. Try saying it again.':'Lost your voice for a moment. Fixing it…');
+  if(e.step!=='hint'||e.attempt>=2)ui.fix.hidden=false;
+  if(e.step==='reconnect'||e.step==='reacquire_mic')s.lostNote=true;
+  clearTimeout(restoreTimer);restoreTimer=setTimeout(()=>{if(session===s&&!s.closing&&!saveError)message(restingStatus());},6000);
+ }
+ function sayLost(s,after=3000){
+  if(!s.lostNote)return;s.lostNote=false;
+  const seq=s.lastUserSeq||0;let tries=0;
+  // If the learner's words came through after all, or the tutor already answered, say nothing.
+  setTimeout(()=>{const timer=setInterval(()=>{
+   if(session!==s||s.closing||tries++>8||(s.lastUserSeq||0)!==seq||s.lastAssistantAt>performance.now()-4000){clearInterval(timer);return;}
+   if(s.gemini?.prompt?.(LOST_NOTE))clearInterval(timer);
+  },1000);},after);
  }
  async function begin(){
   // A prepared start (phase refresh or resuming after a quiet pause) carries the
@@ -1015,7 +1056,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
    message(start?.phase?{lesson:'Starting your lesson…',quiz:'Starting the final teach-back…',complete:'Wrapping up…'}[start.phase]||'Moving on…':'Connecting voice…');
    s.startup=setTimeout(()=>{if(session!==s||s.closing)return;startError=true;reportStartFailure(s,'timeout');void stop('Voice could not connect. Try again.');},45000);
    if(s.model==='gemini-3.8-live'){
-    mic.getAudioTracks().forEach(t=>t.addEventListener('ended',()=>{if(session===s&&!s.closing)void stop('Microphone disconnected.');}));
+    // The microphone track is watched by the input watchdog (gemini-live.js), which reopens it by itself.
     let result=start?.transport?{transport:start.transport}:null;
     if(result){s.dispatched=true;startVoiceCost(s);}
     else{
@@ -1026,7 +1067,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
      if(Date.now()-s.serverAt>45000)throw Error('The microphone took a while to open. Tap play to try again.');
     }
     if(session!==s||s.closing){void s.request({action:'close',requestId:s.id}).catch(()=>{});return;}
-    await window.WorldviewGeminiLive.connect({transport:result.transport,mic,outputAudio:ui.audio,initiate:s.initiate,openingText:s.openingText,onInputLevel:level=>inputLevel(s,level),isCurrent:()=>session===s&&!s.closing,onTransport:value=>{s.gemini=value;output?.attach({applyRoute:loud=>value.applyRoute?value.applyRoute(loud):'unavailable'});},onEvent:e=>event(s,e),onUsage:metadata=>recordVoiceCost(s,{metadata,usageId:s.usageTurn||0}),onStatus:text=>{if(session===s){message(text);if(text.includes('Tap to hear the tutor.'))ui.enableAudio.hidden=false;}}});
+    await window.WorldviewGeminiLive.connect({transport:result.transport,mic,outputAudio:ui.audio,initiate:s.initiate,openingText:s.openingText,onInputLevel:(level,info)=>inputLevel(s,level,info),reacquireMic:()=>acquireMic(s),onMicReplaced:stream=>{s.mic=stream;voiceEvent('mic_reopened');sayLost(s,3000);},isCurrent:()=>session===s&&!s.closing,onTransport:value=>{s.gemini=value;output?.attach({applyRoute:loud=>value.applyRoute?value.applyRoute(loud):'unavailable'});},onEvent:e=>event(s,e),onUsage:metadata=>recordVoiceCost(s,{metadata,usageId:s.usageTurn||0}),onStatus:text=>{if(session===s){message(text);if(text.includes('Tap to hear the tutor.'))ui.enableAudio.hidden=false;}}});
     return;
    }
    const peer=s.peer=new RTCPeerConnection();mic.getAudioTracks().forEach(t=>{peer.addTrack(t,mic);t.addEventListener('ended',()=>{if(session===s&&!s.closing)void stop('Microphone disconnected.');});});
@@ -1068,7 +1109,7 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   if(!s.dispatched||options.refresh||options.pause&&s.keepMic){cleanup(s);message(reason);return;}
   s.closeTimer=setTimeout(()=>{if(session===s){cleanup(s);message(reason);maybeStart();}},8000);paint();
  }
- function cleanup(s){recordTalk(s);stopVoiceCost(s);clearTimeout(s.openingTimer);clearTimeout(s.speakingTimer);s.speaking=false;clearTimeout(s.disconnectTimer);clearTimeout(s.quietTimer);clearTimeout(s.slowTimer);clearTimeout(restoreTimer);s.closing=true;clearTimeout(s.startup);clearTimeout(s.closeTimer);clearInterval(s.checkTimer);clearInterval(s.idleTimer);clearInterval(s.refreshTimer);if(!s.keepMic)s.mic?.getTracks().forEach(t=>t.stop());s.gemini?.dispose();detachOutput(s);s.channel?.close();s.peer?.close();if(session===s){session=null;output?.stop();captureAudioType('auto');ui.audio.pause?.();ui.audio.srcObject=null;ui.audio.hidden=true;ui.enableAudio.hidden=true;paint();}}
+ function cleanup(s){recordTalk(s);stopVoiceCost(s);clearTimeout(s.openingTimer);clearTimeout(s.speakingTimer);s.speaking=false;clearTimeout(s.disconnectTimer);clearTimeout(s.quietTimer);clearTimeout(s.slowTimer);clearTimeout(restoreTimer);s.closing=true;clearTimeout(s.startup);clearTimeout(s.closeTimer);clearInterval(s.checkTimer);clearInterval(s.idleTimer);clearInterval(s.refreshTimer);if(!s.keepMic)s.mic?.getTracks().forEach(t=>t.stop());s.gemini?.dispose();detachOutput(s);s.channel?.close();s.peer?.close();if(session===s){session=null;output?.stop();captureAudioType('auto');ui.audio.pause?.();ui.audio.srcObject=null;ui.audio.hidden=true;ui.enableAudio.hidden=true;ui.fix.hidden=true;paint();}}
  /* Two replies in one Live session arrive as adjacent native deltas and merge
     into one turn, so a finished sentence runs straight into the next reply:
     "...late nineties?Moving into our first chapter...". A delta that opens a
@@ -1125,19 +1166,26 @@ const capsLabel=showCaptions?'Hide transcript':'Show transcript';ui.captions.set
   if(timingLog.length>6)timingLog.shift();
  }
  function timingSummary(){
-  if(!timingLog.length)return '';
-  const secs=ms=>(ms/1000).toFixed(1)+' s';
-  const lines=timingLog.map(t=>{
-   const steps=[];
-   if(t.prepare)steps.push('saved lesson '+secs(t.prepare.end-t.prepare.start));
-   if(t.mic!=null)steps.push('microphone '+secs(t.mic-t.t0));
-   if(t.server!=null)steps.push('voice server '+secs(t.server-t.t0));
-   if(t.ready!=null)steps.push('connected '+secs(t.ready-t.t0));
-   steps.push('first words '+secs(t.words-t.t0));
-   const lead=t.kind==='Opened'&&t.prepare?' ('+secs(t.words)+' after the page opened)':'';
-   return t.kind+lead+': '+steps.join(' · ');
-  });
-  return 'Voice start timing ('+(timingLog.at(-1).model==='gemini-3.8-live'?'Gemini Live':'GPT Live')+')\n'+lines.join('\n');
+  const parts=[];
+  if(timingLog.length){
+   const secs=ms=>(ms/1000).toFixed(1)+' s';
+   const lines=timingLog.map(t=>{
+    const steps=[];
+    if(t.prepare)steps.push('saved lesson '+secs(t.prepare.end-t.prepare.start));
+    if(t.mic!=null)steps.push('microphone '+secs(t.mic-t.t0));
+    if(t.server!=null)steps.push('voice server '+secs(t.server-t.t0));
+    if(t.ready!=null)steps.push('connected '+secs(t.ready-t.t0));
+    steps.push('first words '+secs(t.words-t.t0));
+    const lead=t.kind==='Opened'&&t.prepare?' ('+secs(t.words)+' after the page opened)':'';
+    return t.kind+lead+': '+steps.join(' · ');
+   });
+   parts.push('Voice start timing ('+(timingLog.at(-1).model==='gemini-3.8-live'?'Gemini Live':'GPT Live')+')\n'+lines.join('\n'));
+  }
+  if(voiceEvents.length){
+   const clock=at=>new Date(at).toTimeString().slice(0,8);
+   parts.push('Voice events (times and reasons only)\n'+voiceEvents.map(({at,kind,...rest})=>clock(at)+' '+kind+(Object.keys(rest).length?' '+JSON.stringify(rest):'')).join('\n'));
+  }
+  return parts.join('\n\n');
  }
  function transcriptTurns(expectedLineage,currentHistory){
   if(!expectedLineage||scope!==expectedLineage||context?.lineage!==expectedLineage||!(study||exportStudyId))return null;
