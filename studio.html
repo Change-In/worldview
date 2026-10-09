@@ -70,7 +70,7 @@
       <span class="chip" id="sharedchip"></span>
       <div class="seg" role="group" aria-label="Preview size"><button type="button" class="on" data-dev="phone">Phone</button><button type="button" data-dev="laptop">Laptop</button></div>
       <button type="button" class="btn ghost small" id="restart">Restart</button>
-      <button type="button" class="btn" id="edit">Edit with Claude Code</button>
+      <button type="button" class="btn" id="edit">Edit with your AI</button>
     </div>
     <div class="work">
       <div class="stage" id="stage">
@@ -85,8 +85,8 @@
           <p class="small muted" id="savestate"></p>
           <div id="kithelp" hidden>
             <ol class="steps2">
-              <li>If the new tab says the page can't be reached, Worldview Lessons isn't running: double-click <b>Worldview Lessons</b> on the Desktop, then press Edit with Claude Code again.</li>
-              <li>The first time, that tab asks you to sign in to Worldview once.</li>
+              <li>If the small window says the page can't be reached, Worldview Lessons isn't running: double-click <b>Worldview Lessons</b> on the Desktop, then press Edit with your AI again.</li>
+              <li>The first time, that window asks you to sign in to Worldview once.</li>
             </ol>
           </div>
           <details><summary class="small">Other ways to edit</summary>
@@ -148,7 +148,7 @@
 <body>
 <main>
   <h1>${t}</h1>
-  <p>This is your new lesson. Press Edit with Claude Code and tell it what you want to teach. This page will change as it works.</p>
+  <p>This is your new lesson. Press Edit with your AI and tell it what you want to teach. This page will change as it works.</p>
   <button id="go">Try a question</button>
 </main>
 <\script>
@@ -246,7 +246,7 @@ ${RULES}`;
   function renderConn(state) {
     const c = $('#conn');
     c.className = 'conn' + (state === 'on' ? ' on' : '');
-    c.querySelector('span').textContent = state === 'on' ? 'Editing on your computer. Changes appear here by themselves.' : 'Press Edit with Claude Code to edit this lesson on your computer.';
+    c.querySelector('span').textContent = state === 'on' ? 'Editing on your computer. Changes appear here by themselves.' : 'Press Edit with your AI to edit this lesson on your computer.';
   }
   async function poll() {
     if (!cur || document.visibilityState !== 'visible') return;
@@ -255,55 +255,55 @@ ${RULES}`;
   }
   setInterval(poll, 3000);
   /* ---------- New to AI? A short setup walk-through ---------- */
-  const G = {i: 0, ai: localStorage.getItem('wv-guide-ai') || ''};
+  let saved = []; try { saved = JSON.parse(localStorage.getItem('wv-guide-ais') || '[]'); } catch (e) {}
+  const G = {i: 0, ais: Array.isArray(saved) ? saved : []};
   const AIS = [
     ['claude', 'Claude', 'Pro or Max plan', 'Claude Code'],
     ['chatgpt', 'ChatGPT', 'Plus or Pro plan', 'Codex'],
     ['gemini', 'Google Gemini', 'Google AI plan', 'Gemini CLI'],
-    ['cursor', 'Cursor', 'Cursor app', 'Cursor'],
+    ['cursor', 'Cursor', 'Cursor plan', 'Cursor'],
     ['none', 'None of these', 'or not sure', ''],
   ];
-  const cmdBox = c => `<div class="link" style="display:flex;gap:8px;align-items:center"><span class="grow">${esc(c)}</span><button type="button" class="btn ghost small" data-copycmd="${esc(c)}">Copy</button></div>`;
+  const cmdBox = c => '<div class="link" style="display:flex;gap:8px;align-items:center"><span class="grow">' + esc(c) + '</span><button type="button" class="btn ghost small" data-copycmd="' + esc(c) + '">Copy</button></div>';
+  const PS = '<b>PowerShell</b> (press the Windows key, type PowerShell, press Enter)';
+  const NODE = 'First install <b>Node.js</b> with the "LTS" button at <a href="https://nodejs.org" target="_blank" rel="noopener">nodejs.org</a>. ';
   const INSTALL = {
-    claude: `<p>Open <b>PowerShell</b>: press the Windows key, type <b>PowerShell</b>, press Enter. Paste this line and press Enter:</p>${cmdBox('irm https://claude.ai/install.ps1 | iex')}<p class="small muted">On a Mac, open Terminal and paste: <code>curl -fsSL https://claude.ai/install.sh | bash</code></p>`,
-    chatgpt: `<p>First install <b>Node.js</b> (the "LTS" button at <a href="https://nodejs.org" target="_blank" rel="noopener">nodejs.org</a>). Then open <b>PowerShell</b> (Windows key, type PowerShell, Enter), paste this and press Enter:</p>${cmdBox('npm install -g @openai/codex')}`,
-    gemini: `<p>First install <b>Node.js</b> (the "LTS" button at <a href="https://nodejs.org" target="_blank" rel="noopener">nodejs.org</a>). Then open <b>PowerShell</b>, paste this and press Enter:</p>${cmdBox('npm install -g @google/gemini-cli')}`,
-    cursor: '<p>Download and install Cursor from <a href="https://cursor.com" target="_blank" rel="noopener">cursor.com</a>, then sign in when it opens.</p>',
-  };
-  const SIGNIN = {
-    claude: 'The first time Claude Code opens, it asks how to sign in. Choose <b>Claude account with subscription</b>. Your browser opens; press <b>Authorize</b>, then come back to the black window.',
-    chatgpt: 'The first time Codex opens, choose <b>Sign in with ChatGPT</b> and approve it in your browser.',
-    gemini: 'The first time Gemini CLI opens, choose <b>Login with Google</b> and approve it in your browser.',
-    cursor: 'Cursor asks you to sign in the first time it opens. Use its chat panel on the right to talk to it.',
+    claude: ['Claude Code', '<p>Open ' + PS + ', paste this line and press Enter:</p>' + cmdBox('irm https://claude.ai/install.ps1 | iex') + '<p class="small muted">The first time it opens, choose <b>Claude account with subscription</b>, then press <b>Authorize</b> in your browser.</p>'],
+    chatgpt: ['Codex', '<p>' + NODE + 'Then open ' + PS + ', paste this and press Enter:</p>' + cmdBox('npm install -g @openai/codex') + '<p class="small muted">The first time it opens, choose <b>Sign in with ChatGPT</b>.</p>'],
+    gemini: ['Gemini CLI', '<p>' + NODE + 'Then open ' + PS + ', paste this and press Enter:</p>' + cmdBox('npm install -g @google/gemini-cli') + '<p class="small muted">The first time it opens, choose <b>Login with Google</b>.</p>'],
+    cursor: ['Cursor', '<p>Download Cursor from <a href="https://cursor.com" target="_blank" rel="noopener">cursor.com</a> and sign in when it opens. Talk to it in its chat panel.</p>'],
   };
   function guideSteps() {
-    const a = AIS.find(x => x[0] === G.ai), tool = a && a[3];
+    const picks = G.ais.filter(x => x !== 'none'), last = cur ? 'Start editing' : 'Make a lesson';
     return [
-      ['Which AI do you already pay for?', `<p>Worldview lessons are made by an AI helper on your computer. You type your idea in plain words, and it builds the lesson while you watch. It uses the AI plan you may already have.</p><div style="display:grid;gap:6px">${AIS.map(([id, n, d]) => `<button type="button" class="lesson-pick btn ${G.ai === id ? '' : 'ghost'}" data-ai="${id}" style="justify-content:flex-start">${n} <span class="small" style="opacity:.75;font-weight:500">${d}</span></button>`).join('')}</div>`],
-      G.ai === 'none'
-        ? ['You\'ll need one AI plan', '<p>The helper runs on an AI subscription. The simplest choice is <b>Claude Pro</b> (about $20 a month), which comes with Claude Code. <b>ChatGPT Plus</b> also works, with Codex.</p><p>No plan? You can still make lessons for free: open "Other ways to edit" on a lesson, copy the starting prompt into any free AI chat, and paste back what it gives you.</p>']
-        : ['Install ' + tool, INSTALL[G.ai] || ''],
-      ['Install Worldview Lessons', '<p><b>Worldview Lessons</b> is a small program that connects Teacher Studio to the AI on your computer. It opens your AI in the right folder and saves its changes here.</p><p class="small muted">A download is coming soon. If it is already on this computer, go on to the next step.</p>'],
-      ['The first time it opens', `<p>${SIGNIN[G.ai] || SIGNIN.claude}</p><p>If it asks <b>"Is this a project you created or one you trust?"</b>, choose <b>Yes, I trust this folder</b>. That's your lesson's folder.</p><p class="small muted">The first time you press Edit, a Worldview Lessons tab also asks you to sign in to Worldview once, and where to keep the lesson.</p>`],
-      ['Make your first lesson', `<ol class="steps2"><li>Press <b>+ New lesson</b> and give it a name.</li><li>Press <b>Edit with ${tool || 'Claude Code'}</b>. A Worldview Lessons tab opens, then your AI.</li><li>Type your idea the way you'd tell a colleague, then press Enter. For example:<div class="link" style="margin-top:6px">A 10-minute lesson for 8th graders on why the Moon has phases. Start with a question, then let them drag the Moon around Earth and see its shape change.</div></li><li>Come back to Teacher Studio and watch the lesson change. Ask for changes in plain words: "make the buttons bigger", "add a question after the simulation".</li><li>When it's ready, switch on <b>Students can open it with a link</b>.</li></ol>`],
+      ['Which AI do you pay for?', '<p>Lessons are built by an AI helper on your computer. You type your idea in plain words, and it builds the lesson while you watch. It uses the AI plan you already have. Pick all that apply.</p><div style="display:grid;gap:6px">' + AIS.map(([id, n, d]) => '<button type="button" class="btn ' + (G.ais.includes(id) ? '' : 'ghost') + '" data-ai="' + id + '" style="justify-content:flex-start">' + (G.ais.includes(id) ? '✓ ' : '') + n + ' <span class="small" style="opacity:.75;font-weight:500">' + d + '</span></button>').join('') + '</div>'],
+      picks.length
+        ? ['Install your AI helper', '<p class="small muted">Already installed? Skip ahead.</p>' + picks.map(p => '<h3>' + INSTALL[p][0] + '</h3>' + INSTALL[p][1]).join('')]
+        : ['You\'ll need one AI plan', '<p>The helper runs on an AI subscription. The simplest is <b>Claude Pro</b> (about $20 a month), which includes Claude Code. <b>ChatGPT Plus</b> also works, with Codex.</p><p>No plan? You can still make lessons for free: on a lesson, open "Other ways to edit", copy the starting prompt into any free AI chat, and paste back what it gives you.</p>'],
+      ['Install Worldview Lessons', '<p><b>Worldview Lessons</b> is a small program that connects Teacher Studio to the AI on your computer. It opens your AI in the lesson\'s folder and saves its changes here.</p><p class="small muted">A download is coming soon. If it\'s already on this computer, continue.</p>'],
+      ['What happens when you press Edit', '<ol class="steps2"><li>A <b>small Worldview Lessons window</b> opens. The first time, sign in to Worldview there, and choose where the lesson lives and which AI edits it. Leave that small window open: it saves your changes.</li><li>Your AI opens in a black window. If it asks <b>"Is this a project you trust?"</b>, choose <b>Yes, I trust this folder</b>.</li><li>Type your idea the way you\'d tell a colleague, then press Enter. For example:<div class="link" style="margin-top:6px">A 10-minute lesson for 8th graders on why the Moon has phases. Start with a question, then let them drag the Moon around Earth and see its shape change.</div></li><li>Watch the lesson change here in Teacher Studio. Ask for changes in plain words.</li><li>When it\'s ready, switch on <b>Students can open it with a link</b>.</li></ol>'],
+      [last === 'Start editing' ? 'Ready' : 'Make your first lesson', last === 'Start editing' ? '<p>Press <b>Start editing</b> to open this lesson with your AI.</p>' : '<p>Press <b>Make a lesson</b>, give it a name, then press <b>Edit with your AI</b>.</p>'],
     ];
   }
   function guideRender() {
-    const steps = guideSteps(), [t, body] = steps[G.i];
-    $('#gstep').textContent = `Step ${G.i + 1} of ${steps.length}`;
-    $('#gbody').innerHTML = `<h2>${t}</h2>${body}`;
-    $('#gback').hidden = G.i === 0; $('#gnext').textContent = G.i === steps.length - 1 ? 'Got it' : 'Next'; $('#gnext').disabled = G.i === 0 && !G.ai;
+    const steps = guideSteps(), [t, body] = steps[G.i], lastStep = G.i === steps.length - 1;
+    $('#gstep').textContent = 'Step ' + (G.i + 1) + ' of ' + steps.length;
+    $('#gbody').innerHTML = '<h2>' + t + '</h2>' + body;
+    $('#gback').hidden = G.i === 0; $('#gnext').textContent = lastStep ? (cur ? 'Start editing' : 'Make a lesson') : 'Next'; $('#gnext').disabled = G.i === 0 && !G.ais.length;
   }
-  function editLabel() { const a = AIS.find(x => x[0] === G.ai); $('#edit').textContent = 'Edit with ' + ((a && a[3]) || 'Claude Code'); }
-  editLabel();
-  function openGuide() { G.i = 0; guideRender(); $('#guide').showModal(); localStorage.setItem('wv-guide-seen', '1'); }
+  function openGuide() { G.i = 0; guideRender(); $('#guide').showModal(); }
+  function finishGuide() { localStorage.setItem('wv-guide-seen', '1'); $('#guide').close(); if (cur) openEditor(); else { $('#newtitle').value = ''; $('#newdlg').showModal(); } }
   function editOnComputer() {
     if (!cur) return;
     if (!localStorage.getItem('wv-guide-seen')) { openGuide(); return; }
-    const tab = window.open(KIT + '/edit?w=' + cur.id, 'wvedit-' + cur.id);
-    renderConn('on'); $('#kithelp').hidden = false;
-    $('#savestate').textContent = tab ? 'A Worldview Lessons tab opened. It starts Claude Code and saves its changes. Keep that tab open while you edit.' : 'Your browser blocked the new tab. Allow pop-ups for this site, then press Edit with Claude Code again.';
+    openEditor();
   }
+  function openEditor() {
+    const left = Math.max(0, (screen.availWidth || 1200) - 500), win = window.open(KIT + '/edit?w=' + cur.id, 'wvedit-' + cur.id, 'popup=yes,width=480,height=680,left=' + left + ',top=60');
+    renderConn('on'); $('#kithelp').hidden = false;
+    $('#savestate').textContent = win ? 'A small Worldview Lessons window opened. It starts your AI and saves its changes; leave it open while you edit. Watch the lesson here.' : 'Your browser blocked the window. Allow pop-ups for this site, then press Edit with your AI again.';
+  }
+
   /* ---------- students' answers ---------- */
   async function loadRuns() {
     $('#runs').innerHTML = '<p class="muted small">Loading…</p>';
@@ -316,10 +316,10 @@ ${RULES}`;
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.close != null) return b.closest('dialog').close();
     if (b.dataset.guide) return openGuide();
-    if (b.dataset.ai) { G.ai = b.dataset.ai; localStorage.setItem('wv-guide-ai', G.ai); editLabel(); return guideRender(); }
+    if (b.dataset.ai) { const id = b.dataset.ai; G.ais = id === 'none' ? (G.ais.includes('none') ? [] : ['none']) : (G.ais.includes(id) ? G.ais.filter(x => x !== id) : [...G.ais.filter(x => x !== 'none'), id]); localStorage.setItem('wv-guide-ais', JSON.stringify(G.ais)); return guideRender(); }
     if (b.dataset.copycmd) { const ok = await copy(b.dataset.copycmd); return toast(ok ? 'Copied. Paste it into PowerShell.' : 'Select the line and copy it.'); }
     if (b.id === 'gback') { G.i = Math.max(0, G.i - 1); return guideRender(); }
-    if (b.id === 'gnext') { if (G.i >= guideSteps().length - 1) return $('#guide').close(); G.i++; return guideRender(); }
+    if (b.id === 'gnext') { if (G.i >= guideSteps().length - 1) return finishGuide(); G.i++; return guideRender(); }
     if (b.dataset.open) return showLesson(b.dataset.open, true);
     if (b.dataset.dev) { document.querySelectorAll('[data-dev]').forEach(x => x.classList.toggle('on', x === b)); const wide = b.dataset.dev === 'laptop'; $('#phone').classList.toggle('laptop', wide); $('#stage').classList.toggle('wide', wide); $('#barw').style.maxWidth = wide ? '960px' : '400px'; return; }
     switch (b.id) {
