@@ -296,7 +296,7 @@
   /* ---------------- screens ---------------- */
   function scrHome() {
     const tabs = `<div class="cv-seg" role="tablist"><button type="button" role="tab" data-ctab="mine" class="${S.tab === 'mine' ? 'on' : ''}" aria-selected="${S.tab === 'mine'}">My courses</button><button type="button" role="tab" data-ctab="explore" class="${S.tab === 'explore' ? 'on' : ''}" aria-selected="${S.tab === 'explore'}">Explore</button></div>`;
-    const head = `<div class="cv-head"><h1>Courses</h1><button type="button" class="cv-pill" data-go="make">+ Make a course</button></div><span class="cv-note"><i></i>Preview · only your account sees this</span>`;
+    const head = `<div class="cv-head"><h1>Courses</h1><a class="cv-pill" href="studio.html" style="text-decoration:none">Teacher Studio</a></div><span class="cv-note"><i></i>Preview · only your account sees this</span>`;
     return head + tabs + (S.tab === 'mine' ? mine() : explore());
   }
   function courseRow(c) {

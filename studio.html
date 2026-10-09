@@ -85,7 +85,7 @@
           <p class="small muted" id="savestate"></p>
           <div id="kithelp" hidden>
             <ol class="steps2">
-              <li>On your computer, double-click <b>Worldview Lessons</b> on the Desktop and leave its window open.</li>
+              <li>On your computer, double-click <b>Worldview Lessons</b> on the Desktop. (On your laptop it now starts by itself when Windows starts.)</li>
               <li>Press <b>Edit with Claude Code</b> again. If your browser asks to let this site reach your computer, allow it.</li>
             </ol>
           </div>
@@ -307,7 +307,7 @@ ${RULES}`;
   $('#title').addEventListener('change', () => { const t = $('#title').value.trim(); if (t && cur && t !== cur.title) save({title: t.slice(0, 120)}); });
   $('#shared').addEventListener('change', async e => { if (!(await save({shared: e.target.checked}, true))) e.target.checked = !e.target.checked; renderShare(); });
   addEventListener('popstate', () => { const l = new URLSearchParams(location.search).get('l'); if (l) showLesson(l); else showGrid(); });
-  addEventListener('focus', () => { if (cur && kit) syncFromComputer(); });
+  addEventListener('focus', async () => { if (!cur) return; if (!kit) { kit = await ping(); renderConn(); } if (kit) syncFromComputer(); });
 
   (async () => {
     const {data} = await db.auth.getSession(); const s = data && data.session;
