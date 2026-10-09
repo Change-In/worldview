@@ -2219,7 +2219,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.30 · Oct 8";
+const BUILD = "v3.1.31 · Oct 8";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2227,6 +2227,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.31",date:"Oct 8",changes:["Teacher Studio has a New to AI? guide: which AI you pay for, how to install its helper, signing in the first time, and how to type your first lesson idea.","Editing on your computer now lets you choose where each lesson lives (including a folder you already use) and which AI edits it: Claude Code, Codex, Gemini CLI, Cursor or VS Code."]},
   {tag:"v3.1.30",date:"Oct 8",changes:["Teacher Studio: Edit with Claude Code now opens a Worldview Lessons tab on your computer. That tab starts Claude Code and saves its changes, and the lesson in Teacher Studio updates by itself."]},
   {tag:"v3.1.29",date:"Oct 8",changes:["Owner preview: the Courses page has a Teacher Studio button.","Teacher Studio notices when Worldview Lessons starts on your computer, so Edit with Claude Code works without reloading the page."]},
   {tag:"v3.1.28",date:"Oct 7",changes:["Teacher Studio (a test for teachers, at studio.html): your lessons are rectangles. Open one to see it live on a phone or laptop screen. Edit with Claude Code opens it on your computer (start Worldview Lessons there first), and its changes appear and save by themselves."]},
