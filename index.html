@@ -2219,7 +2219,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.32 · Oct 8";
+const BUILD = "v3.1.33 · Oct 9";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2227,6 +2227,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.33",date:"Oct 9",changes:["Teacher Studio: the Edit button has a menu to pick which AI edits the lesson (Claude Code, Codex, Gemini CLI, Cursor, VS Code). The small window that opens walks you through the rest, and shows how to install your AI if it is missing.","New to AI? is two short steps and then points at the button. Restart moved under the preview."]},
   {tag:"v3.1.32",date:"Oct 8",changes:["Teacher Studio: one Edit with your AI button. It opens a small Worldview Lessons window that starts your AI and saves its changes, while the lesson stays here.","The New to AI? guide lets you pick every AI you pay for and ends with Start editing."]},
   {tag:"v3.1.31",date:"Oct 8",changes:["Teacher Studio has a New to AI? guide: which AI you pay for, how to install its helper, signing in the first time, and how to type your first lesson idea.","Editing on your computer now lets you choose where each lesson lives (including a folder you already use) and which AI edits it: Claude Code, Codex, Gemini CLI, Cursor or VS Code."]},
   {tag:"v3.1.30",date:"Oct 8",changes:["Teacher Studio: Edit with Claude Code now opens a Worldview Lessons tab on your computer. That tab starts Claude Code and saves its changes, and the lesson in Teacher Studio updates by itself."]},
