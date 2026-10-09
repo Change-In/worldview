@@ -85,8 +85,8 @@
           <p class="small muted" id="savestate"></p>
           <div id="kithelp" hidden>
             <ol class="steps2">
-              <li>On your computer, double-click <b>Worldview Lessons</b> on the Desktop. (On your laptop it now starts by itself when Windows starts.)</li>
-              <li>Press <b>Edit with Claude Code</b> again. If your browser asks to let this site reach your computer, allow it.</li>
+              <li>If the new tab says the page can't be reached, Worldview Lessons isn't running: double-click <b>Worldview Lessons</b> on the Desktop, then press Edit with Claude Code again.</li>
+              <li>The first time, that tab asks you to sign in to Worldview once.</li>
             </ol>
           </div>
           <details><summary class="small">Other ways to edit</summary>
@@ -125,7 +125,7 @@
   const db = window.supabase.createClient(URL_, KEY, {auth: {persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'worldview-alpha-auth'}});
   const T = 'worldview_teacher_lessons';
   const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog')});
-  let cur = null, kit = null, es = null, saveTimer = 0, lastSaved = '';
+  let cur = null, lastSaved = '';
   const toast = m => { document.querySelectorAll('.toast').forEach(t => t.remove()); const t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3500); };
   const copy = async t => { try { await navigator.clipboard.writeText(t); return true; } catch (e) { return false; } };
   const ago = t => { const m = Math.round((Date.now() - new Date(t).getTime()) / 60000); return m < 1 ? 'edited just now' : m < 60 ? `edited ${m} min ago` : m < 1440 ? `edited ${Math.round(m / 60)} h ago` : 'edited ' + new Date(t).toLocaleDateString(); };
@@ -219,7 +219,7 @@ ${RULES}`;
 
   /* ---------- all lessons ---------- */
   async function showGrid() {
-    cur = null; stopWatch(); $('#workview').hidden = true; $('#gridview').hidden = false; document.title = 'Teacher Studio · Worldview';
+    cur = null; $('#workview').hidden = true; $('#gridview').hidden = false; document.title = 'Teacher Studio · Worldview';
     const {data, error} = await db.from(T).select('id,title,shared,updated_at,html').order('updated_at', {ascending: false});
     if (error) { $('#grid').innerHTML = `<p class="small">Couldn't load your lessons (${esc(error.message)}).</p>`; return; }
     $('#grid').innerHTML = '<button type="button" class="new" id="new">+ New lesson</button>' + (data || []).map(l => `<button type="button" class="tile" data-open="${l.id}"><div class="thumb"><iframe sandbox="allow-scripts" scrolling="no" tabindex="-1" title="" data-thumb="${l.id}"></iframe></div><div class="info"><b>${esc(l.title)}</b><span class="small muted">${ago(l.updated_at)}${l.shared ? ' · shared' : ''}</span></div></button>`).join('');
@@ -232,8 +232,7 @@ ${RULES}`;
     if (push) history.pushState({l: id}, '', '?l=' + id);
     cur = data; lastSaved = data.html; $('#gridview').hidden = true; $('#workview').hidden = false; document.title = data.title + ' · Teacher Studio';
     $('#title').value = data.title; $('#html').value = ''; renderShare(); host.run(data.html); loadRuns(); $('#savestate').textContent = '';
-    kit = await ping(); renderConn();
-    if (kit && await syncFromComputer()) startWatch();
+    renderConn();
   }
   function renderShare() { $('#shared').checked = !!cur.shared; $('#sharedchip').textContent = cur.shared ? 'Shared' : 'Only you'; $('#sharedchip').className = 'chip' + (cur.shared ? ' ok' : ''); $('#linkbox').hidden = !cur.shared; if (cur.shared) { $('#link').textContent = linkFor(cur.id); $('#openlink').href = linkFor(cur.id); } }
   async function save(fields, quiet) {
@@ -242,32 +241,23 @@ ${RULES}`;
     cur = data; if (fields.html) { lastSaved = data.html; $('#savestate').textContent = 'Saved to Worldview at ' + new Date().toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) + '.'; }
     if (!quiet) toast('Saved.'); return true;
   }
-  /* ---------- your computer (the Worldview Lessons program) ---------- */
-  async function ping() { try { const r = await fetch(KIT + '/api/ping', {cache: 'no-store'}); return r.ok ? await r.json() : null; } catch (e) { return null; } }
-  function renderConn() {
+  /* ---------- your computer: Worldview Lessons opens Claude Code and saves its changes here ---------- */
+  function renderConn(state) {
     const c = $('#conn');
-    if (kit) { c.className = 'conn on'; c.querySelector('span').textContent = 'Connected to Worldview Lessons on this computer.'; $('#kithelp').hidden = true; $('#edit').textContent = kit.tools && !kit.tools.claude && kit.tools.codex ? 'Edit with Codex' : 'Edit with Claude Code'; }
-    else { c.className = 'conn off'; c.querySelector('span').textContent = 'Worldview Lessons isn\'t running on this computer.'; }
+    c.className = 'conn' + (state === 'on' ? ' on' : '');
+    c.querySelector('span').textContent = state === 'on' ? 'Editing on your computer. Changes appear here by themselves.' : 'Press Edit with Claude Code to edit this lesson on your computer.';
   }
-  async function syncFromComputer() {
-    try { const r = await fetch(KIT + '/api/bridge/file?w=' + cur.id, {cache: 'no-store'}).then(x => x.json()); if (r.exists && r.html && r.html !== lastSaved) { host.run(r.html); queueSave(r.html); } return !!r.exists; } catch (e) { return false; }
+  async function poll() {
+    if (!cur || document.visibilityState !== 'visible') return;
+    const {data} = await db.from(T).select('html,updated_at,title').eq('id', cur.id).single();
+    if (data && data.html !== lastSaved) { lastSaved = data.html; cur.html = data.html; host.run(data.html); renderConn('on'); $('#savestate').textContent = 'Updated from Claude Code at ' + new Date().toLocaleTimeString([], {hour: 'numeric', minute: '2-digit', second: '2-digit'}) + '.'; }
   }
-  function queueSave(html) { clearTimeout(saveTimer); $('#savestate').textContent = 'Saving…'; saveTimer = setTimeout(() => { if (html.length > 400000) { $('#savestate').textContent = 'The lesson is over 400 KB, so it can\'t be saved. Ask Claude Code to make it smaller.'; return; } save({html}, true); }, 1200); }
-  function startWatch() {
-    stopWatch(); if (!cur) return;
-    try { es = new EventSource(KIT + '/api/bridge/watch?w=' + cur.id); es.onmessage = () => syncFromComputer(); es.onerror = () => {}; } catch (e) {}
-  }
-  function stopWatch() { if (es) { es.close(); es = null; } }
-  async function editOnComputer() {
-    kit = await ping(); renderConn();
-    if (!kit) { $('#kithelp').hidden = false; toast('Start Worldview Lessons on your computer first.'); return; }
-    const tool = kit.tools && kit.tools.claude ? 'claude' : kit.tools && kit.tools.codex ? 'codex' : 'folder';
-    try {
-      const r = await fetch(KIT + '/api/bridge/open', {method: 'POST', headers: {'content-type': 'application/json', 'x-worldview-kit': '1'}, body: JSON.stringify({worldviewId: cur.id, title: cur.title, html: cur.html, tool})}).then(x => x.json());
-      if (!r.ok) throw 0;
-      $('#savestate').textContent = (tool === 'folder' ? 'The lesson folder opened' : (tool === 'codex' ? 'Codex' : 'Claude Code') + ' opened') + ' on your computer. Changes it makes show here and save to Worldview by themselves.';
-      startWatch(); syncFromComputer();
-    } catch (e) { toast('Couldn\'t reach Worldview Lessons. Is its window open?'); }
+  setInterval(poll, 3000);
+  function editOnComputer() {
+    if (!cur) return;
+    const tab = window.open(KIT + '/edit?w=' + cur.id, 'wvedit-' + cur.id);
+    renderConn('on'); $('#kithelp').hidden = false;
+    $('#savestate').textContent = tab ? 'A Worldview Lessons tab opened. It starts Claude Code and saves its changes. Keep that tab open while you edit.' : 'Your browser blocked the new tab. Allow pop-ups for this site, then press Edit with Claude Code again.';
   }
   /* ---------- students' answers ---------- */
   async function loadRuns() {
@@ -307,7 +297,7 @@ ${RULES}`;
   $('#title').addEventListener('change', () => { const t = $('#title').value.trim(); if (t && cur && t !== cur.title) save({title: t.slice(0, 120)}); });
   $('#shared').addEventListener('change', async e => { if (!(await save({shared: e.target.checked}, true))) e.target.checked = !e.target.checked; renderShare(); });
   addEventListener('popstate', () => { const l = new URLSearchParams(location.search).get('l'); if (l) showLesson(l); else showGrid(); });
-  addEventListener('focus', async () => { if (!cur) return; if (!kit) { kit = await ping(); renderConn(); } if (kit) syncFromComputer(); });
+  addEventListener('focus', poll);
 
   (async () => {
     const {data} = await db.auth.getSession(); const s = data && data.session;
