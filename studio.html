@@ -110,9 +110,14 @@
               <p class="small muted">Use ChatGPT, Claude or Gemini in a chat: copy the starting prompt, then the finishing prompt, and paste the file it gives you here.</p>
               <div class="row"><button type="button" class="btn ghost small" id="copystart">Copy the starting prompt</button><button type="button" class="btn ghost small" id="copyfinish">Copy the finishing prompt</button></div>
               <textarea class="code" id="html" spellcheck="false" placeholder="Paste a new version of the whole lesson here"></textarea>
-              <div class="row"><button type="button" class="btn small" id="savepaste">Save this version</button><button type="button" class="btn ghost small" id="del">Delete lesson</button></div>
+              <div class="row"><button type="button" class="btn small" id="savepaste">Save this version</button></div>
             </div>
           </details>
+        </div>
+        <div class="card">
+          <h3>Lesson</h3>
+          <div class="row"><label class="btn ghost small" for="upfile">Upload a new version</label><input type="file" id="upfile" accept=".html,.htm,text/html" hidden><button type="button" class="btn ghost small" id="download">Download</button><button type="button" class="btn ghost small" id="dup">Duplicate</button><button type="button" class="btn ghost small" id="del">Delete</button></div>
+          <details id="histbox"><summary class="small">History: go back to an earlier version</summary><div id="hist" style="display:grid;gap:6px;margin-top:8px"></div></details>
         </div>
         <div class="card">
           <h3>Share with students</h3>
@@ -120,10 +125,11 @@
           <div id="linkbox" hidden style="display:grid;gap:8px"><div class="link" id="link"></div><div class="row"><button type="button" class="btn small" id="copylink">Copy the link</button><a class="btn ghost small" id="openlink" target="_blank" rel="noopener">Open it</a></div></div>
           <p class="small muted">No account needed. Students' answers appear below.</p>
         </div>
-        <div class="card">
-          <div class="row"><h3 class="grow">Students' answers</h3><button type="button" class="btn ghost small" id="refresh">Refresh</button></div>
+        <details class="card" id="answersbox">
+          <summary class="row"><h3 class="grow" style="display:inline">Students' answers</h3><span class="chip" id="runcount">0</span></summary>
+          <div class="row"><button type="button" class="btn ghost small" id="refresh">Refresh</button></div>
           <div id="runs"></div>
-        </div>
+        </details>
       </div>
     </div>
   </div>
@@ -235,12 +241,28 @@ ${RULES}`;
   const htmlFrom = raw => { raw = String(raw || ''); const m = raw.match(/```(?:html)?[ \t]*\r?\n([\s\S]*?)```/i) || raw.match(/```(?:html)?[ \t]*\r?\n([\s\S]*)$/i); return (m ? m[1] : raw).trim(); };
 
   /* ---------- all lessons ---------- */
+  let THUMBS = {};
+  function thumbPlay(tile, on) {
+    const f = tile && tile.querySelector('[data-thumb]'); if (!f || (f.getAttribute('sandbox') === 'allow-scripts') === on) return;
+    f.setAttribute('sandbox', on ? 'allow-scripts' : ''); f.srcdoc = WorldviewPortHost.compose(THUMBS[f.dataset.thumb] || '');
+  }
+  document.addEventListener('mouseover', e => { const t = e.target.closest('.tile'); if (t) thumbPlay(t, true); });
+  document.addEventListener('mouseout', e => { const t = e.target.closest('.tile'); if (t && !t.contains(e.relatedTarget)) thumbPlay(t, false); });
+  /* ---------- lesson tools: history, upload, download, duplicate ---------- */
+  async function loadHistory() {
+    const {data, error} = await db.from('worldview_teacher_lesson_versions').select('id,saved_at,html').eq('lesson_id', cur.id).order('saved_at', {ascending: false}).limit(40);
+    if (error) { $('#hist').innerHTML = '<p class="small muted">History isn\'t available yet.</p>'; return; }
+    HIST = data || [];
+    $('#hist').innerHTML = HIST.length ? HIST.map((v, i) => `<div class="row"><span class="small grow">${esc(new Date(v.saved_at).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}))}</span><button type="button" class="btn ghost small" data-peek="${i}">Look</button><button type="button" class="btn small" data-restore="${i}">Restore</button></div>`).join('') : '<p class="small muted">No earlier versions yet. Each burst of changes keeps the version from before it.</p>';
+  }
+  let HIST = [];
+  async function readFileHtml(input) { const file = input.files && input.files[0]; input.value = ''; if (!file) return null; if (file.size > 400000) { toast('That file is over 400 KB.'); return null; } return file.text(); }
   async function showGrid() {
     cur = null; $('#workview').hidden = true; $('#gridview').hidden = false; document.title = 'Teacher Studio · Worldview';
     const {data, error} = await db.from(T).select('id,title,shared,updated_at,html').order('updated_at', {ascending: false});
     if (error) { $('#grid').innerHTML = `<p class="small">Couldn't load your lessons (${esc(error.message)}).</p>`; return; }
-    $('#grid').innerHTML = '<button type="button" class="new" id="new">+ New lesson</button>' + (data || []).map(l => `<button type="button" class="tile" data-open="${l.id}"><div class="thumb"><iframe sandbox="allow-scripts" scrolling="no" tabindex="-1" title="" data-thumb="${l.id}"></iframe></div><div class="info"><b>${esc(l.title)}</b><span class="small muted">${ago(l.updated_at)}${l.shared ? ' · shared' : ''}</span></div></button>`).join('');
-    (data || []).forEach(l => { const f = document.querySelector(`[data-thumb="${l.id}"]`); if (f) f.srcdoc = WorldviewPortHost.compose(l.html); });
+    $('#grid').innerHTML = '<div style="display:grid;gap:10px"><button type="button" class="new" id="new" style="min-height:180px">+ New lesson</button><label class="new" for="upnew" style="min-height:46px;font-size:15px;cursor:pointer">Upload a lesson file</label><input type="file" id="upnew" accept=".html,.htm,text/html" hidden></div>' + (data || []).map(l => `<button type="button" class="tile" data-open="${l.id}"><div class="thumb"><iframe sandbox="" scrolling="no" tabindex="-1" title="" data-thumb="${l.id}"></iframe></div><div class="info"><b>${esc(l.title)}</b><span class="small muted">${ago(l.updated_at)}${l.shared ? ' · shared' : ''}</span></div></button>`).join('');
+    THUMBS = {}; (data || []).forEach(l => { THUMBS[l.id] = l.html; const f = document.querySelector(`[data-thumb="${l.id}"]`); if (f) f.srcdoc = WorldviewPortHost.compose(l.html); });
   }
   /* ---------- one lesson ---------- */
   async function showLesson(id, push) {
@@ -248,7 +270,7 @@ ${RULES}`;
     if (error || !data) { toast('Couldn\'t open that lesson.'); return showGrid(); }
     if (push) history.pushState({l: id}, '', '?l=' + id);
     cur = data; lastSaved = data.html; $('#gridview').hidden = true; $('#workview').hidden = false; document.title = data.title + ' · Teacher Studio';
-    $('#title').value = data.title; $('#html').value = ''; renderShare(); host.run(data.html); loadRuns(); $('#savestate').textContent = '';
+    $('#title').value = data.title; $('#html').value = ''; renderShare(); host.run(data.html); loadRuns(); $('#savestate').textContent = ''; $('#histbox').open = false; loadHistory();
     renderConn();
   }
   function renderShare() { $('#shared').checked = !!cur.shared; $('#sharedchip').textContent = cur.shared ? 'Shared' : 'Only you'; $('#sharedchip').className = 'chip' + (cur.shared ? ' ok' : ''); $('#linkbox').hidden = !cur.shared; if (cur.shared) { $('#link').textContent = linkFor(cur.id); $('#openlink').href = linkFor(cur.id); } }
@@ -267,7 +289,7 @@ ${RULES}`;
   async function poll() {
     if (!cur || document.visibilityState !== 'visible') return;
     const {data} = await db.from(T).select('html,updated_at,title').eq('id', cur.id).single();
-    if (data && data.html !== lastSaved) { lastSaved = data.html; cur.html = data.html; host.run(data.html); renderConn('on'); $('#savestate').textContent = 'Updated from Claude Code at ' + new Date().toLocaleTimeString([], {hour: 'numeric', minute: '2-digit', second: '2-digit'}) + '.'; }
+    if (data && data.html !== lastSaved) { lastSaved = data.html; cur.html = data.html; host.run(data.html); loadHistory(); renderConn('on'); $('#savestate').textContent = 'Updated from Claude Code at ' + new Date().toLocaleTimeString([], {hour: 'numeric', minute: '2-digit', second: '2-digit'}) + '.'; }
   }
   setInterval(poll, 3000);
   /* ---------- which AI edits: chosen from the Edit button's menu ---------- */
@@ -329,6 +351,7 @@ ${RULES}`;
     $('#runs').innerHTML = '<p class="muted small">Loading…</p>';
     const {data, error} = await db.from('worldview_teacher_lesson_runs').select('id,learner_name,answers,finished,updated_at').eq('lesson_id', cur.id).order('updated_at', {ascending: false}).limit(100);
     if (error) { $('#runs').innerHTML = `<p class="small">Couldn't load answers (${esc(error.message)}).</p>`; return; }
+    $('#runcount').textContent = String((data || []).length);
     $('#runs').innerHTML = (data || []).length ? data.map(r => `<div class="run"><div class="row"><b class="grow">${esc(r.learner_name || 'A student')}</b>${r.finished ? '<span class="chip ok">Finished</span>' : '<span class="chip">Not finished</span>'}</div><span class="muted small">${esc(new Date(r.updated_at).toLocaleString())}</span><dl>${(Array.isArray(r.answers) ? r.answers : []).map(a => `<div><dt>${esc(a.kind)}${a.question ? ': ' + esc(a.question) : ''}</dt><dd>${esc(a.answer || '—')}</dd></div>`).join('') || '<dd class="muted small">No answers yet.</dd>'}</dl></div>`).join('') : '<p class="muted small">No students yet. Share the link, then press Refresh.</p>';
   }
 
@@ -337,6 +360,8 @@ ${RULES}`;
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.close != null) return b.closest('dialog').close();
     if (b.dataset.guide) return openGuide();
+    if (b.dataset.peek) { const v = HIST[+b.dataset.peek]; if (v) { host.run(v.html); toast('Showing an earlier version. Press Restore to keep it, or Restart the preview to go back.'); } return; }
+    if (b.dataset.restore) { const v = HIST[+b.dataset.restore]; if (v && await save({html: v.html})) { host.run(v.html); loadHistory(); toast('Restored. The version before is in History too.'); } return; }
     if (b.dataset.tool) { tool = b.dataset.tool; localStorage.setItem('wv-tool', tool); renderTool(); toolMenu(false); return editOnComputer(); }
     if (b.dataset.gtool) { tool = b.dataset.gtool; localStorage.setItem('wv-tool', tool); renderTool(); return guideRender(); }
     if (b.dataset.coachoff) { b.closest('.coach').remove(); $('#edit').classList.remove('pulse'); return; }
@@ -352,6 +377,8 @@ ${RULES}`;
       case 'restart': return host.run(lastSaved || cur.html);
       case 'edit': return editOnComputer();
       case 'refresh': return loadRuns();
+      case 'download': { const blob = new Blob([lastSaved || cur.html], {type: 'text/html'}), a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (cur.title || 'lesson').replace(/[^a-z0-9 _-]+/gi, '').trim().replace(/\s+/g, '-').toLowerCase() + '.html'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); return; }
+      case 'dup': { const {data, error} = await db.from(T).insert({title: (cur.title + ' (copy)').slice(0, 120), html: lastSaved || cur.html}).select('id').single(); if (error) return toast('Couldn\'t duplicate it: ' + error.message); toast('Duplicated.'); return showLesson(data.id, true); }
       case 'copylink': { const ok = await copy(linkFor(cur.id)); return toast(ok ? 'Link copied.' : 'Copy the link from the box.'); }
       case 'copystart': case 'copyfinish': { const ok = await copy(b.id === 'copystart' ? START : FINISH); return toast(ok ? 'Copied. Paste it into your AI.' : 'Copying didn\'t work here.'); }
       case 'savepaste': { const h = htmlFrom($('#html').value); if (!h) return toast('Paste the whole lesson first.'); if (await save({html: h})) { host.run(h); $('#html').value = ''; } return; }
@@ -368,6 +395,9 @@ ${RULES}`;
     $('#newdlg').close(); if (error) return toast(/lesson_limit/.test(error.message) ? 'You have 50 lessons; delete one first.' : 'Couldn\'t create it: ' + error.message);
     await showLesson(data.id, true); editOnComputer();
   });
+  $('#upfile').addEventListener('change', async e => { const h = await readFileHtml(e.target); if (h && await save({html: h})) { host.run(h); loadHistory(); } });
+  document.addEventListener('change', async e => { if (e.target.id !== 'upnew') return; const name = (e.target.files && e.target.files[0] && e.target.files[0].name || 'Uploaded lesson').replace(/\.html?$/i, ''); const h = await readFileHtml(e.target); if (!h) return; const t = (titleFromHtml(h) || name).slice(0, 120); const {data, error} = await db.from(T).insert({title: t, html: h}).select('id').single(); if (error) return toast('Couldn\'t upload it: ' + error.message); showLesson(data.id, true); });
+  const titleFromHtml = h => { const m = String(h).match(/\btitle\s*:\s*(['"`])((?:\\.|(?!\1).){2,120}?)\1/) || String(h).match(/<title>([^<]{2,120})<\/title>/i); return m ? (m[2] || m[1]).trim() : ''; };
   $('#title').addEventListener('change', () => { const t = $('#title').value.trim(); if (t && cur && t !== cur.title) save({title: t.slice(0, 120)}); });
   $('#shared').addEventListener('change', async e => { if (!(await save({shared: e.target.checked}, true))) e.target.checked = !e.target.checked; renderShare(); });
   addEventListener('popstate', () => { const l = new URLSearchParams(location.search).get('l'); if (l) showLesson(l); else showGrid(); });
