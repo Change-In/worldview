@@ -2219,7 +2219,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.34 · Oct 9";
+const BUILD = "v3.1.35 · Oct 10";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2227,6 +2227,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.35",date:"Oct 10",changes:["Teacher Studio: pictures, sounds and videos in a lesson folder now upload to Worldview, so students see them too.","Lessons can record what each student understood (levels 0 to 3 for each goal), shown with their answers."]},
   {tag:"v3.1.34",date:"Oct 9",changes:["Teacher Studio: lesson pictures stay still and only play while you point at them.","Each lesson has History (go back to an earlier version), Upload a new version, Download, Duplicate and Delete. You can also upload a lesson file to start a new lesson.","Students' answers fold away until you need them."]},
   {tag:"v3.1.33",date:"Oct 9",changes:["Teacher Studio: the Edit button has a menu to pick which AI edits the lesson (Claude Code, Codex, Gemini CLI, Cursor, VS Code). The small window that opens walks you through the rest, and shows how to install your AI if it is missing.","New to AI? is two short steps and then points at the button. Restart moved under the preview."]},
   {tag:"v3.1.32",date:"Oct 8",changes:["Teacher Studio: one Edit with your AI button. It opens a small Worldview Lessons window that starts your AI and saves its changes, while the lesson stays here.","The New to AI? guide lets you pick every AI you pay for and ends with Start editing."]},

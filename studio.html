@@ -244,7 +244,7 @@ ${RULES}`;
   let THUMBS = {};
   function thumbPlay(tile, on) {
     const f = tile && tile.querySelector('[data-thumb]'); if (!f || (f.getAttribute('sandbox') === 'allow-scripts') === on) return;
-    f.setAttribute('sandbox', on ? 'allow-scripts' : ''); f.srcdoc = WorldviewPortHost.compose(THUMBS[f.dataset.thumb] || '');
+    f.setAttribute('sandbox', on ? 'allow-scripts' : ''); f.srcdoc = WorldviewPortHost.compose(THUMBS[f.dataset.thumb] || '', f.dataset.thumb);
   }
   document.addEventListener('mouseover', e => { const t = e.target.closest('.tile'); if (t) thumbPlay(t, true); });
   document.addEventListener('mouseout', e => { const t = e.target.closest('.tile'); if (t && !t.contains(e.relatedTarget)) thumbPlay(t, false); });
@@ -262,7 +262,7 @@ ${RULES}`;
     const {data, error} = await db.from(T).select('id,title,shared,updated_at,html').order('updated_at', {ascending: false});
     if (error) { $('#grid').innerHTML = `<p class="small">Couldn't load your lessons (${esc(error.message)}).</p>`; return; }
     $('#grid').innerHTML = '<div style="display:grid;gap:10px"><button type="button" class="new" id="new" style="min-height:180px">+ New lesson</button><label class="new" for="upnew" style="min-height:46px;font-size:15px;cursor:pointer">Upload a lesson file</label><input type="file" id="upnew" accept=".html,.htm,text/html" hidden></div>' + (data || []).map(l => `<button type="button" class="tile" data-open="${l.id}"><div class="thumb"><iframe sandbox="" scrolling="no" tabindex="-1" title="" data-thumb="${l.id}"></iframe></div><div class="info"><b>${esc(l.title)}</b><span class="small muted">${ago(l.updated_at)}${l.shared ? ' · shared' : ''}</span></div></button>`).join('');
-    THUMBS = {}; (data || []).forEach(l => { THUMBS[l.id] = l.html; const f = document.querySelector(`[data-thumb="${l.id}"]`); if (f) f.srcdoc = WorldviewPortHost.compose(l.html); });
+    THUMBS = {}; (data || []).forEach(l => { THUMBS[l.id] = l.html; const f = document.querySelector(`[data-thumb="${l.id}"]`); if (f) f.srcdoc = WorldviewPortHost.compose(l.html, l.id); });
   }
   /* ---------- one lesson ---------- */
   async function showLesson(id, push) {
@@ -270,7 +270,7 @@ ${RULES}`;
     if (error || !data) { toast('Couldn\'t open that lesson.'); return showGrid(); }
     if (push) history.pushState({l: id}, '', '?l=' + id);
     cur = data; lastSaved = data.html; $('#gridview').hidden = true; $('#workview').hidden = false; document.title = data.title + ' · Teacher Studio';
-    $('#title').value = data.title; $('#html').value = ''; renderShare(); host.run(data.html); loadRuns(); $('#savestate').textContent = ''; $('#histbox').open = false; loadHistory();
+    $('#title').value = data.title; $('#html').value = ''; renderShare(); host.o.lessonId = data.id; host.run(data.html); loadRuns(); $('#savestate').textContent = ''; $('#histbox').open = false; loadHistory();
     renderConn();
   }
   function renderShare() { $('#shared').checked = !!cur.shared; $('#sharedchip').textContent = cur.shared ? 'Shared' : 'Only you'; $('#sharedchip').className = 'chip' + (cur.shared ? ' ok' : ''); $('#linkbox').hidden = !cur.shared; if (cur.shared) { $('#link').textContent = linkFor(cur.id); $('#openlink').href = linkFor(cur.id); } }
@@ -352,7 +352,7 @@ ${RULES}`;
     const {data, error} = await db.from('worldview_teacher_lesson_runs').select('id,learner_name,answers,finished,updated_at').eq('lesson_id', cur.id).order('updated_at', {ascending: false}).limit(100);
     if (error) { $('#runs').innerHTML = `<p class="small">Couldn't load answers (${esc(error.message)}).</p>`; return; }
     $('#runcount').textContent = String((data || []).length);
-    $('#runs').innerHTML = (data || []).length ? data.map(r => `<div class="run"><div class="row"><b class="grow">${esc(r.learner_name || 'A student')}</b>${r.finished ? '<span class="chip ok">Finished</span>' : '<span class="chip">Not finished</span>'}</div><span class="muted small">${esc(new Date(r.updated_at).toLocaleString())}</span><dl>${(Array.isArray(r.answers) ? r.answers : []).map(a => `<div><dt>${esc(a.kind)}${a.question ? ': ' + esc(a.question) : ''}</dt><dd>${esc(a.answer || '—')}</dd></div>`).join('') || '<dd class="muted small">No answers yet.</dd>'}</dl></div>`).join('') : '<p class="muted small">No students yet. Share the link, then press Refresh.</p>';
+    $('#runs').innerHTML = (data || []).length ? data.map(r => `<div class="run"><div class="row"><b class="grow">${esc(r.learner_name || 'A student')}</b>${r.finished ? '<span class="chip ok">Finished</span>' : '<span class="chip">Not finished</span>'}</div><span class="muted small">${esc(new Date(r.updated_at).toLocaleString())}</span><dl>${(Array.isArray(r.answers) ? r.answers : []).map(a => a.kind === 'understanding' ? `<div><dt>Understanding</dt><dd>${Object.entries(a.levels || {}).map(([k, v]) => `<span class="chip${v >= 2 ? ' ok' : ''}">${esc(k)}: ${['not yet', 'partly', 'can explain', 'can apply'][v] || v}</span>`).join(' ')}</dd></div>` : `<div><dt>${esc(a.kind)}${a.question ? ': ' + esc(a.question) : ''}${a.level != null ? ' · level ' + a.level + ' of 3' : ''}</dt><dd>${esc(a.answer || '—')}</dd></div>`).join('') || '<dd class="muted small">No answers yet.</dd>'}</dl></div>`).join('') : '<p class="muted small">No students yet. Share the link, then press Refresh.</p>';
   }
 
   document.addEventListener('click', async e => {

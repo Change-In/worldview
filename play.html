@@ -64,7 +64,7 @@
     $('#intro').hidden = true; $('#lesson').hidden = false; $('#title').textContent = lesson.title;
     const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'),
       onChange: (record, done) => { latest = record; finished = done; clearTimeout(timer); timer = setTimeout(save, done ? 0 : 800); }});
-    host.run(lesson.html);
+    host.run(lesson.html, lesson.id);
     save();
   });
 })();

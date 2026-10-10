@@ -20,8 +20,10 @@
     "progress:function(v,n){send('progress',{value:v,note:n||''});},done:function(s){send('done',{summary:s||{}});}};};})();" +
     "addEventListener('error',function(e){try{parent.postMessage({port:'worldview',v:1,type:'crash',message:String(e.message||'error').slice(0,200)},'*');}catch(x){}});";
 
-  function compose(body) {
-    var head = '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script>' + SDK + '<\/script>';
+  var FILES = 'https://eqppapoepynjvsfnoodj.supabase.co/storage/v1/object/public/lesson-files/';
+  function compose(body, lessonId) {
+    var base = lessonId && !/<base\s/i.test(body) ? '<base href="' + FILES + encodeURIComponent(lessonId) + '/">' : '';
+    var head = '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' + base + '<script>' + SDK + '<\/script>';
     if (/<head[^>]*>/i.test(body)) return body.replace(/<head[^>]*>/i, function (m) { return m + head; });
     if (/<html[^>]*>/i.test(body)) return body.replace(/<html[^>]*>/i, function (m) { return m + '<head>' + head + '</head>'; });
     return '<!doctype html><html><head>' + head + '</head><body>' + body + '</body></html>';
@@ -35,10 +37,10 @@
     this._listener = function (e) { if (e.source === self.o.frame.contentWindow) self._message(e.data); };
     addEventListener('message', this._listener);
   }
-  PortHost.prototype.run = function (html) {
+  PortHost.prototype.run = function (html, lessonId) {
     this.q = []; this.preds = {}; this.record = []; this.connected = false; this.done = false; this.manifest = null;
     this.o.panel.innerHTML = ''; if (this.o.progress) this.o.progress.style.width = '0';
-    this.o.frame.srcdoc = compose(String(html || ''));
+    this.o.frame.srcdoc = compose(String(html || ''), lessonId || this.o.lessonId);
     var self = this; clearTimeout(this._t);
     this._t = setTimeout(function () { if (!self.connected) self._line('note', 'This lesson isn\'t connected to Worldview, so its questions won\'t appear here. You can still use it above.'); }, 3500);
   };
@@ -112,9 +114,9 @@
         setTimeout(function () { self._send('answer', {id: clip(m.id, 40), value: 'Your teacher will read this and reply later.'}); }, 400);
         break;
       }
-      case 'evidence': this.record.push({kind: 'evidence', question: '', answer: clip(m.text, 400), outcome: clip(m.outcome, 20)}); this._changed(); break;
+      case 'evidence': { var lv = m.data && m.data.level != null ? Math.max(0, Math.min(3, Math.round(+m.data.level) || 0)) : null; this.record.push({kind: 'evidence', question: '', answer: clip(m.text, 400), outcome: clip(m.outcome, 20), level: lv}); this._changed(); break; }
       case 'progress': if (this.o.progress) this.o.progress.style.width = Math.round(Math.max(0, Math.min(1, +m.value || 0)) * 100) + '%'; break;
-      case 'done': this.done = true; if (this.o.progress) this.o.progress.style.width = '100%'; this._line('done', 'Finished. Nice work.'); this._changed(); break;
+      case 'done': this.done = true; if (m.summary && typeof m.summary === 'object' && m.summary.levels && typeof m.summary.levels === 'object') { var L = {}; Object.keys(m.summary.levels).slice(0, 8).forEach(function (k) { L[clip(k, 20)] = Math.max(0, Math.min(3, Math.round(+m.summary.levels[k]) || 0)); }); this.record.push({kind: 'understanding', question: '', answer: '', outcome: '', levels: L}); } if (this.o.progress) this.o.progress.style.width = '100%'; this._line('done', 'Finished. Nice work.'); this._changed(); break;
       case 'crash': this._line('note', 'The lesson hit a problem: ' + clip(m.message, 160)); break;
     }
   };
