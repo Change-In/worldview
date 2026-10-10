@@ -84,6 +84,7 @@
       <button type="button" class="btn ghost small" id="back">← All lessons</button>
       <input class="ttl" id="title" maxlength="120" aria-label="Lesson title">
       <span class="chip" id="sharedchip"></span>
+      <div class="seg" role="group" aria-label="See it as"><button type="button" class="on" data-view="student">Student</button><button type="button" data-view="teacher">Teacher</button></div>
       <div class="seg" role="group" aria-label="Preview size"><button type="button" class="on" data-dev="phone">Phone</button><button type="button" data-dev="laptop">Laptop</button></div>
       <div class="editwrap"><button type="button" class="btn" id="edit">Edit with <span id="toolname">your AI</span></button><button type="button" class="btn caret" id="editmenu" aria-label="Choose which AI" aria-haspopup="menu">▾</button>
         <div class="menu" id="toolmenu" role="menu" hidden></div></div>
@@ -92,7 +93,7 @@
       <div class="stage" id="stage">
         <div class="phone" id="phone"><iframe id="frame" sandbox="allow-scripts allow-forms allow-popups" title="The lesson, as a student sees it" referrerpolicy="no-referrer"></iframe></div>
         <div class="bar" style="width:100%;max-width:400px" id="barw"><i id="prog"></i></div>
-        <div class="under"><div class="ph-panel" id="panel" aria-live="polite"></div><p class="muted small"><button type="button" class="linkbtn" id="restart">↻ Restart the preview</button> · This is what students see. Nothing you answer here is saved.</p></div>
+        <div class="under"><div class="ph-panel" id="panel" aria-live="polite"></div><p class="muted small"><button type="button" class="linkbtn" id="restart">↻ Restart the preview</button> · <span id="viewnote">This is what students see.</span> Nothing you answer here is saved.</p></div>
       </div>
       <div class="side">
         <div class="card">
@@ -144,7 +145,7 @@
 <dialog id="newdlg"><form id="newform"><h2>New lesson</h2><label class="small" for="newtitle">What's it called? You can change it later.</label><input type="text" id="newtitle" maxlength="120" placeholder="e.g. Why the Moon has phases"><div class="row"><button type="submit" class="btn">Create</button><button type="button" class="btn ghost" data-close>Cancel</button></div></form></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.36"></script>
+<script src="port-host.js?v=3.1.37"></script>
 <script>
 (() => {
   const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT', KIT = 'http://localhost:8195';
@@ -163,6 +164,14 @@
   };
   const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), showTiming: true, ai: req => { const r = askAI(req, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }});
   let cur = null, lastSaved = '';
+  // Student or Teacher: the lesson gets wv.viewer and can show the teacher extra things (NAV-173).
+  function setView(v) {
+    host.o.viewer = v === 'teacher' ? 'teacher' : 'student';
+    document.querySelectorAll('[data-view]').forEach(x => x.classList.toggle('on', x.dataset.view === host.o.viewer));
+    $('#viewnote').textContent = host.o.viewer === 'teacher' ? 'Your teacher view: only you see this, here in Teacher Studio.' : 'This is what students see.';
+    try { localStorage.setItem('wv-view', host.o.viewer); } catch (e) {}
+  }
+  try { setView(localStorage.getItem('wv-view') || 'student'); } catch (e) { setView('student'); }
   const toast = m => { document.querySelectorAll('.toast').forEach(t => t.remove()); const t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3500); };
   const copy = async t => { try { await navigator.clipboard.writeText(t); return true; } catch (e) { return false; } };
   const ago = t => { const m = Math.round((Date.now() - new Date(t).getTime()) / 60000); return m < 1 ? 'edited just now' : m < 60 ? `edited ${m} min ago` : m < 1440 ? `edited ${Math.round(m / 60)} h ago` : 'edited ' + new Date(t).toLocaleDateString(); };
@@ -399,6 +408,7 @@ ${RULES}`;
     if (b.id === 'gback') { G.i = Math.max(0, G.i - 1); return guideRender(); }
     if (b.id === 'gnext') { if (G.i >= guideSteps().length - 1) return finishGuide(); G.i++; return guideRender(); }
     if (b.dataset.open) return showLesson(b.dataset.open, true);
+    if (b.dataset.view) { setView(b.dataset.view); host.run(lastSaved || cur.html); return; }
     if (b.dataset.dev) { document.querySelectorAll('[data-dev]').forEach(x => x.classList.toggle('on', x === b)); const wide = b.dataset.dev === 'laptop'; $('#phone').classList.toggle('laptop', wide); $('#stage').classList.toggle('wide', wide); $('#barw').style.maxWidth = wide ? '960px' : '400px'; return; }
     switch (b.id) {
       case 'new': $('#newtitle').value = ''; return $('#newdlg').showModal();

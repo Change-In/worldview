@@ -4,21 +4,23 @@
    the result; a moment for the teacher is noted for the teacher. Used by
    studio.html (try it as a student) and play.html (the student's link).
    wv.ai asks Worldview's AI for a reply (NAV-171 Phase 2a) through o.ai, which
-   the page supplies; the lesson decides how to show the reply. */
+   the page supplies; the lesson decides how to show the reply. wv.video plays a
+   YouTube video in a sheet over the lesson: YouTube can't play inside the sealed
+   frame, and the frame stays sealed so a lesson can never read a Worldview sign-in. */
 (function () {
   'use strict';
   var SDK = "(function(){window.WorldviewPort=function(manifest,handlers){handlers=handlers||{};var waiting={},aiN=0,inFrame=window.parent!==window;" +
     "function send(type,body){try{parent.postMessage(Object.assign({port:'worldview',v:1,type:type},body||{}),'*');}catch(e){}}" +
     "addEventListener('message',function(e){var m=e.data;if(!m||m.port!=='worldview'||e.source!==parent)return;" +
-    "if(m.type==='welcome'&&handlers.onWelcome)handlers.onWelcome(m);if(m.type==='answer'&&waiting[m.id]){var d=waiting[m.id];delete waiting[m.id];d(m.value);}" +
+    "if(m.type==='welcome'){api.viewer=m.viewer==='teacher'?'teacher':'student';if(handlers.onWelcome)handlers.onWelcome(m);}if(m.type==='answer'&&waiting[m.id]){var d=waiting[m.id];delete waiting[m.id];d(m.value);}" +
     "if(m.type==='control'&&handlers.onControl)handlers.onControl(m.key,m.value);});" +
     "function wait(id,type,body){return new Promise(function(res){if(!inFrame)return res(null);waiting[id]=res;send(type,Object.assign({id:id},body));});}" +
     "send('hello',{manifest:manifest});" +
-    "return{say:function(t){send('say',{text:t});},event:function(n,d,s,o){send('event',{name:n,data:d||{},say:s||'',react:!!(o&&o.react)});}," +
+    "var api={viewer:'student',say:function(t){send('say',{text:t});},event:function(n,d,s,o){send('event',{name:n,data:d||{},say:s||'',react:!!(o&&o.react)});}," +
     "predict:function(id,q,u,o){return wait(id,'predict',Object.assign({question:q,unit:u||''},o||{}));},result:function(id,a,s){send('result',{id:id,actual:a,say:s||''});}," +
     "ask:function(id,q,o){return wait(id,'ask',Object.assign({question:q},o||{}));},human:function(id,r){return wait(id,'human',Object.assign({to:'teacher',kind:'question'},r||{}));}," +
     "evidence:function(o,t,d){send('evidence',{outcome:o,text:t,data:d||{}});},remember:function(k,v){send('remember',{key:k,value:v});}," +
-    "progress:function(v,n){send('progress',{value:v,note:n||''});},ai:function(x,o){o=o||{};return wait('ai'+(++aiN),'ai',{messages:typeof x==='string'?[{role:'user',content:x}]:(x||[]),system:o.system||'',maxTokens:o.maxTokens||0});},done:function(s){send('done',{summary:s||{}});}};};})();" +
+    "progress:function(v,n){send('progress',{value:v,note:n||''});},video:function(src,o){return wait('v'+(++aiN),'video',Object.assign({src:String(src||'')},o||{}));},ai:function(x,o){o=o||{};return wait('ai'+(++aiN),'ai',{messages:typeof x==='string'?[{role:'user',content:x}]:(x||[]),system:o.system||'',maxTokens:o.maxTokens||0});},done:function(s){send('done',{summary:s||{}});}};return api;};})();" +
     "addEventListener('error',function(e){try{parent.postMessage({port:'worldview',v:1,type:'crash',message:String(e.message||'error').slice(0,200)},'*');}catch(x){}});";
 
   var FILES = 'https://eqppapoepynjvsfnoodj.supabase.co/storage/v1/object/public/lesson-files/';
@@ -41,9 +43,32 @@
   PortHost.prototype.run = function (html, lessonId) {
     this.q = []; this.preds = {}; this.record = []; this.connected = false; this.done = false; this.manifest = null; this.aiCount = 0; this.gen = (this.gen || 0) + 1;
     this.o.panel.innerHTML = ''; if (this.o.progress) this.o.progress.style.width = '0';
+    this._closeVideo();
     this.o.frame.srcdoc = compose(String(html || ''), lessonId || this.o.lessonId);
     var self = this; clearTimeout(this._t);
     this._t = setTimeout(function () { if (!self.connected) self._line('note', 'This lesson isn\'t connected to Worldview, so its questions won\'t appear here. You can still use it above.'); }, 3500);
+  };
+  function youtubeId(src) {
+    var s = String(src || '').trim(), m = s.match(/(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/|\/live\/)([A-Za-z0-9_-]{11})/);
+    return m ? m[1] : (/^[A-Za-z0-9_-]{11}$/.test(s) ? s : '');
+  }
+  PortHost.prototype._closeVideo = function () { if (this._sheet) { this._sheet.remove(); this._sheet = null; } };
+  PortHost.prototype._video = function (m) {
+    var self = this, id = clip(m.id, 40), vid = youtubeId(m.src);
+    if (!vid) { this._line('note', 'This video link isn\'t a YouTube video Worldview can play.'); this._send('answer', {id: id, value: false}); return; }
+    this._closeVideo();
+    var q = '?rel=0&playsinline=1', st = Math.max(0, Math.floor(+m.start || 0)), en = Math.max(0, Math.floor(+m.end || 0));
+    if (st) q += '&start=' + st; if (en > st) q += '&end=' + en;
+    var box = this.o.frame.parentNode; if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
+    var sheet = document.createElement('div'); sheet.className = 'ph-video';
+    sheet.style.cssText = 'position:absolute;inset:0;z-index:5;background:#000;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:10px;border-radius:inherit';
+    if (m.title) { var t = document.createElement('p'); t.textContent = clip(m.title, 120); t.style.cssText = 'color:#fff;margin:0;font-weight:700;font-size:15px'; sheet.appendChild(t); }
+    var v = document.createElement('iframe'); v.src = 'https://www.youtube-nocookie.com/embed/' + vid + q; v.title = clip(m.title, 120) || 'Video';
+    v.allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture'; v.allowFullscreen = true; v.referrerPolicy = 'strict-origin-when-cross-origin';
+    v.style.cssText = 'flex:none;width:100%;height:auto;min-height:0;aspect-ratio:16/9;border:0;border-radius:10px;background:#111';
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = 'Done watching'; b.className = 'btn';
+    b.addEventListener('click', function () { self._closeVideo(); self._send('answer', {id: id, value: true}); });
+    sheet.appendChild(v); sheet.appendChild(b); box.appendChild(sheet); this._sheet = sheet;
   };
   PortHost.prototype.destroy = function () { removeEventListener('message', this._listener); clearTimeout(this._t); };
   PortHost.prototype._send = function (type, body) { try { this.o.frame.contentWindow.postMessage(Object.assign({port: 'worldview', v: 1, type: type}, body || {}), '*'); } catch (e) {} };
@@ -92,7 +117,7 @@
         this.connected = true; clearTimeout(this._t);
         this.manifest = {title: clip(man.title, 120), by: clip(man.by, 80), outcomes: Array.isArray(man.outcomes) ? man.outcomes.slice(0, 6).map(function (o, i) { return {id: clip(o && o.id || 'o' + (i + 1), 20), text: clip(o && o.text || o, 200)}; }) : []};
         if (this.o.onTitle && this.manifest.title) this.o.onTitle(this.manifest.title);
-        this._send('welcome', {memory: []});
+        this._send('welcome', {memory: [], viewer: this.o.viewer === 'teacher' ? 'teacher' : 'student'});
         break;
       }
       case 'say': this._line('tutor', clip(m.text, 500)); break;
@@ -118,6 +143,7 @@
       case 'evidence': { var lv = m.data && m.data.level != null ? Math.max(0, Math.min(3, Math.round(+m.data.level) || 0)) : null; this.record.push({kind: 'evidence', question: '', answer: clip(m.text, 400), outcome: clip(m.outcome, 20), level: lv}); this._changed(); break; }
       case 'progress': if (this.o.progress) this.o.progress.style.width = Math.round(Math.max(0, Math.min(1, +m.value || 0)) * 100) + '%'; break;
       case 'done': this.done = true; if (m.summary && typeof m.summary === 'object' && m.summary.levels && typeof m.summary.levels === 'object') { var L = {}; Object.keys(m.summary.levels).slice(0, 8).forEach(function (k) { L[clip(k, 20)] = Math.max(0, Math.min(3, Math.round(+m.summary.levels[k]) || 0)); }); this.record.push({kind: 'understanding', question: '', answer: '', outcome: '', levels: L}); } if (this.o.progress) this.o.progress.style.width = '100%'; this._line('done', 'Finished. Nice work.'); this._changed(); break;
+      case 'video': this._video(m); break;
       case 'ai': {
         var aid = clip(m.id, 40), gen = this.gen, t0 = Date.now();
         var msgs = (Array.isArray(m.messages) ? m.messages : []).slice(-40).map(function (x) { return {role: x && x.role === 'assistant' ? 'assistant' : 'user', content: clip(x && x.content, 4000)}; });
@@ -150,6 +176,7 @@
     add(/outcomes\s*:/.test(h), 'Says what students will be able to do', 'Add outcomes like "Can explain why…".');
     add(/\.(ask|predict)\s*\(/.test(h), 'Asks students something', 'Use wv.ask or wv.predict so their thinking is saved for you.');
     add(/\.done\s*\(/.test(h), 'Says when it\'s finished', 'Call wv.done() at the end.');
+    add(!/<iframe[^>]+(youtube\.com|youtube-nocookie\.com|youtu\.be)/i.test(h), 'Videos play', 'YouTube can\'t play inside the lesson itself. Use wv.video(\'YouTube link\') instead.');
     var wide = (h.match(/(?:^|[;{\s"'])(?:min-)?width\s*:\s*(\d{3,4})px/g) || []).map(function (x) { return +x.match(/(\d{3,4})px/)[1]; }).filter(function (n) { return n >= 480; });
     add(!wide.length, 'Fits a phone', wide.length ? 'It sets a fixed width of ' + Math.max.apply(null, wide) + 'px; phones are about 360–430px wide.' : '');
     return out;
