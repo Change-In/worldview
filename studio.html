@@ -125,6 +125,11 @@
           <div id="linkbox" hidden style="display:grid;gap:8px"><div class="link" id="link"></div><div class="row"><button type="button" class="btn small" id="copylink">Copy the link</button><a class="btn ghost small" id="openlink" target="_blank" rel="noopener">Open it</a></div></div>
           <p class="small muted">No account needed. Students' answers appear below.</p>
         </div>
+        <div class="card">
+          <h3>Worldview AI</h3>
+          <p class="small" id="aiuse">No AI replies yet.</p>
+          <p class="small muted">Lessons can ask Worldview's AI for replies (Claude Code knows how). Worldview pays and keeps the key; each lesson can use up to 300 replies a day, 30 per student.</p>
+        </div>
         <details class="card" id="answersbox">
           <summary class="row"><h3 class="grow" style="display:inline">Students' answers</h3><span class="chip" id="runcount">0</span></summary>
           <div class="row"><button type="button" class="btn ghost small" id="refresh">Refresh</button></div>
@@ -139,7 +144,7 @@
 <dialog id="newdlg"><form id="newform"><h2>New lesson</h2><label class="small" for="newtitle">What's it called? You can change it later.</label><input type="text" id="newtitle" maxlength="120" placeholder="e.g. Why the Moon has phases"><div class="row"><button type="submit" class="btn">Create</button><button type="button" class="btn ghost" data-close>Cancel</button></div></form></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.35"></script>
+<script src="port-host.js?v=3.1.36"></script>
 <script>
 (() => {
   const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT', KIT = 'http://localhost:8195';
@@ -147,7 +152,16 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const db = window.supabase.createClient(URL_, KEY, {auth: {persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'worldview-alpha-auth'}});
   const T = 'worldview_teacher_lessons';
-  const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog')});
+  const askAI = async (req, lessonId, runId) => {
+    // A plain request: the library's invoke adds a header the gateway's CORS list doesn't allow.
+    let token = KEY; try { const s = (await db.auth.getSession()).data.session; if (s) token = s.access_token; } catch (e) {}
+    try {
+      const r = await fetch(URL_ + '/functions/v1/lesson-ai', {method: 'POST', headers: {'content-type': 'application/json', apikey: KEY, authorization: 'Bearer ' + token}, body: JSON.stringify(Object.assign({lesson: lessonId, run: runId || null}, req))});
+      const j = await r.json().catch(() => ({}));
+      return r.ok ? j : {error: (j.error && j.error.message) || 'The AI couldn\'t answer just now.'};
+    } catch (e) { return {error: 'The AI couldn\'t answer just now. Check the internet connection.'}; }
+  };
+  const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), showTiming: true, ai: req => { const r = askAI(req, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }});
   let cur = null, lastSaved = '';
   const toast = m => { document.querySelectorAll('.toast').forEach(t => t.remove()); const t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3500); };
   const copy = async t => { try { await navigator.clipboard.writeText(t); return true; } catch (e) { return false; } };
@@ -270,7 +284,7 @@ ${RULES}`;
     if (error || !data) { toast('Couldn\'t open that lesson.'); return showGrid(); }
     if (push) history.pushState({l: id}, '', '?l=' + id);
     cur = data; lastSaved = data.html; $('#gridview').hidden = true; $('#workview').hidden = false; document.title = data.title + ' · Teacher Studio';
-    $('#title').value = data.title; $('#html').value = ''; renderShare(); host.o.lessonId = data.id; host.run(data.html); loadRuns(); $('#savestate').textContent = ''; $('#histbox').open = false; loadHistory();
+    $('#title').value = data.title; $('#html').value = ''; renderShare(); host.o.lessonId = data.id; host.run(data.html); loadRuns(); loadAiUse(); $('#savestate').textContent = ''; $('#histbox').open = false; loadHistory();
     renderConn();
   }
   function renderShare() { $('#shared').checked = !!cur.shared; $('#sharedchip').textContent = cur.shared ? 'Shared' : 'Only you'; $('#sharedchip').className = 'chip' + (cur.shared ? ' ok' : ''); $('#linkbox').hidden = !cur.shared; if (cur.shared) { $('#link').textContent = linkFor(cur.id); $('#openlink').href = linkFor(cur.id); } }
@@ -346,13 +360,28 @@ ${RULES}`;
     $('#savestate').textContent = win ? 'A small Worldview Lessons window opened. It starts your AI and saves its changes; leave it open while you edit. Watch the lesson here.' : 'Your browser blocked the window. Allow pop-ups for this site, then press Edit with your AI again.';
   }
 
+  /* ---------- Worldview AI use (counts only; no words are kept) ---------- */
+  const RATES = {'gemini-3.8-flash': [0.75, 3.75], 'claude-haiku-4-5': [1, 5]};
+  async function loadAiUse() {
+    if (!cur) return;
+    const since = new Date(Date.now() - 30 * 864e5).toISOString();
+    const {data, error} = await db.from('worldview_teacher_lesson_ai_calls').select('state,by_owner,model,input_tokens,output_tokens,server_ms,created_at').eq('lesson_id', cur.id).gte('created_at', since).order('created_at', {ascending: false}).limit(2000);
+    if (error) { $('#aiuse').textContent = 'AI use couldn\'t load.'; return; }
+    const ok = (data || []).filter(r => r.state === 'ok');
+    if (!ok.length) { $('#aiuse').textContent = (data || []).length ? 'The AI hasn\'t answered yet (' + data.length + ' tries failed).' : 'No AI replies yet.'; return; }
+    const day = new Date(Date.now() - 864e5).toISOString(), today = ok.filter(r => r.created_at > day).length, students = ok.filter(r => !r.by_owner).length;
+    const usd = ok.reduce((s, r) => { const k = RATES[r.model] || [1, 5]; return s + ((r.input_tokens || 0) * k[0] + (r.output_tokens || 0) * k[1]) / 1e6; }, 0);
+    const avg = ok.reduce((s, r) => s + (r.server_ms || 0), 0) / ok.length / 1000;
+    $('#aiuse').textContent = ok.length + ' AI repl' + (ok.length === 1 ? 'y' : 'ies') + ' in the last 30 days (' + today + ' today; ' + students + ' to students, ' + (ok.length - students) + ' to you) · about $' + (usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2)) + ' · the AI took ' + avg.toFixed(1) + ' s on average.';
+  }
+
   /* ---------- students' answers ---------- */
   async function loadRuns() {
     $('#runs').innerHTML = '<p class="muted small">Loading…</p>';
     const {data, error} = await db.from('worldview_teacher_lesson_runs').select('id,learner_name,answers,finished,updated_at').eq('lesson_id', cur.id).order('updated_at', {ascending: false}).limit(100);
     if (error) { $('#runs').innerHTML = `<p class="small">Couldn't load answers (${esc(error.message)}).</p>`; return; }
     $('#runcount').textContent = String((data || []).length);
-    $('#runs').innerHTML = (data || []).length ? data.map(r => `<div class="run"><div class="row"><b class="grow">${esc(r.learner_name || 'A student')}</b>${r.finished ? '<span class="chip ok">Finished</span>' : '<span class="chip">Not finished</span>'}</div><span class="muted small">${esc(new Date(r.updated_at).toLocaleString())}</span><dl>${(Array.isArray(r.answers) ? r.answers : []).map(a => a.kind === 'understanding' ? `<div><dt>Understanding</dt><dd>${Object.entries(a.levels || {}).map(([k, v]) => `<span class="chip${v >= 2 ? ' ok' : ''}">${esc(k)}: ${['not yet', 'partly', 'can explain', 'can apply'][v] || v}</span>`).join(' ')}</dd></div>` : `<div><dt>${esc(a.kind)}${a.question ? ': ' + esc(a.question) : ''}${a.level != null ? ' · level ' + a.level + ' of 3' : ''}</dt><dd>${esc(a.answer || '—')}</dd></div>`).join('') || '<dd class="muted small">No answers yet.</dd>'}</dl></div>`).join('') : '<p class="muted small">No students yet. Share the link, then press Refresh.</p>';
+    $('#runs').innerHTML = (data || []).length ? data.map(r => `<div class="run"><div class="row"><b class="grow">${esc(r.learner_name || 'A student')}</b>${r.finished ? '<span class="chip ok">Finished</span>' : '<span class="chip">Not finished</span>'}</div><span class="muted small">${esc(new Date(r.updated_at).toLocaleString())}</span><dl>${(Array.isArray(r.answers) ? r.answers : []).map(a => a.kind === 'understanding' ? `<div><dt>Understanding</dt><dd>${Object.entries(a.levels || {}).map(([k, v]) => `<span class="chip${v >= 2 ? ' ok' : ''}">${esc(k)}: ${['not yet', 'partly', 'can explain', 'can apply'][v] || v}</span>`).join(' ')}</dd></div>` : a.kind === 'ai' ? `<div><dt>Student to the AI: ${esc(a.question)}</dt><dd>AI: ${esc(a.answer)}</dd></div>` : `<div><dt>${esc(a.kind)}${a.question ? ': ' + esc(a.question) : ''}${a.level != null ? ' · level ' + a.level + ' of 3' : ''}</dt><dd>${esc(a.answer || '—')}</dd></div>`).join('') || '<dd class="muted small">No answers yet.</dd>'}</dl></div>`).join('') : '<p class="muted small">No students yet. Share the link, then press Refresh.</p>';
   }
 
   document.addEventListener('click', async e => {

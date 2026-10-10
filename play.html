@@ -36,7 +36,7 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.35"></script>
+<script src="port-host.js?v=3.1.36"></script>
 <script>
 (() => {
   const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT';
@@ -44,6 +44,15 @@
   const id = new URLSearchParams(location.search).get('l') || '';
   const db = window.supabase.createClient(URL_, KEY, {auth: {persistSession: false, autoRefreshToken: false, detectSessionInUrl: false}});
   const runId = (crypto.randomUUID && crypto.randomUUID()) || ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+  const askAI = async (req, lessonId, runId) => {
+    // A plain request: the library's invoke adds a header the gateway's CORS list doesn't allow.
+    let token = KEY; try { const s = (await db.auth.getSession()).data.session; if (s) token = s.access_token; } catch (e) {}
+    try {
+      const r = await fetch(URL_ + '/functions/v1/lesson-ai', {method: 'POST', headers: {'content-type': 'application/json', apikey: KEY, authorization: 'Bearer ' + token}, body: JSON.stringify(Object.assign({lesson: lessonId, run: runId || null}, req))});
+      const j = await r.json().catch(() => ({}));
+      return r.ok ? j : {error: (j.error && j.error.message) || 'The AI couldn\'t answer just now.'};
+    } catch (e) { return {error: 'The AI couldn\'t answer just now. Check the internet connection.'}; }
+  };
   let lesson = null, latest = [], finished = false, timer = 0, saving = false, again = false;
   async function save() {
     if (saving) { again = true; return; }
@@ -62,7 +71,7 @@
   })();
   $('#start').addEventListener('click', () => {
     $('#intro').hidden = true; $('#lesson').hidden = false; $('#title').textContent = lesson.title;
-    const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'),
+    const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), ai: req => askAI(req, lesson.id, runId),
       onChange: (record, done) => { latest = record; finished = done; clearTimeout(timer); timer = setTimeout(save, done ? 0 : 800); }});
     host.run(lesson.html, lesson.id);
     save();
