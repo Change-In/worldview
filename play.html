@@ -36,7 +36,7 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.37"></script>
+<script src="port-host.js?v=3.1.39"></script>
 <script>
 (() => {
   const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT';
@@ -57,7 +57,7 @@
   async function save() {
     if (saving) { again = true; return; }
     saving = true; $('#saved').textContent = 'Saving your answers…';
-    const {error} = await db.rpc('worldview_teacher_lesson_run_save', {p_run: runId, p_lesson: lesson.id, p_name: $('#name').value.trim(), p_answers: latest, p_finished: finished});
+    const {error} = await db.rpc('worldview_teacher_lesson_run_save', {p_run: runId, p_lesson: lesson.id, p_name: $('#name').value.trim(), p_answers: latest, p_finished: finished, p_version: lesson.version || null});
     $('#saved').textContent = error ? 'Your answers couldn\'t be saved just now. Keep going; they\'ll save with your next answer.' : (finished ? 'Saved. Your teacher can see your answers.' : 'Your answers are saved as you go.');
     saving = false; if (again) { again = false; save(); }
   }

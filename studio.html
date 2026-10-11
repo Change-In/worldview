@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Teacher Studio · Worldview</title>
 <link rel="icon" href="icon.png">
-<link rel="stylesheet" href="teacher.css?v=3.1.38">
+<link rel="stylesheet" href="teacher.css?v=3.1.39">
 <style>
   .grid { display:grid; gap:14px; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); }
   .tile { appearance:none; cursor:pointer; padding:0; text-align:left; border-radius:18px; border:1px solid var(--line); background:var(--card); overflow:hidden; display:grid; grid-template-rows:170px auto; color:inherit; }
@@ -88,6 +88,24 @@
   .menu label { padding:9px 11px; border-radius:10px; cursor:pointer; font-size:14px; }
   .menu label:hover { background:var(--accent-100); }
   .menu .danger { color:var(--warn); }
+  /* v3.1.39: draft and published */
+  .tile { position:relative; }
+  .ribbon { position:absolute; top:12px; right:0; z-index:2; background:var(--ok); color:#fff; font-size:12px; font-weight:750; padding:4px 10px 4px 12px; border-radius:8px 0 0 8px; box-shadow:0 3px 10px rgba(0,0,0,.25); cursor:pointer; }
+  .ribbon .b { display:none; } .ribbon:hover .a { display:none; } .ribbon:hover .b { display:inline; }
+  .tilemore { position:absolute; right:8px; bottom:10px; z-index:2; appearance:none; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:9px; padding:2px 9px; cursor:pointer; font-weight:800; }
+  .tilemore:hover { border-color:var(--accent); }
+  .ttlwrap { display:flex; align-items:center; gap:2px; flex:1; min-width:160px; cursor:text; }
+  .ttlwrap .ttl { flex:0 1 auto; min-width:120px; field-sizing:content; max-width:100%; }
+  .pen { opacity:.35; font-size:15px; } .ttlwrap:hover .pen, .ttl:focus + .pen { opacity:.9; }
+  .pubbar { display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; font-size:14px; color:var(--ink-soft); margin:0 0 12px; }
+  .corner { position:absolute; top:14px; right:14px; z-index:3; display:flex; gap:6px; }
+  .cbtn { appearance:none; display:inline-flex; align-items:center; height:30px; border:0; border-radius:999px; background:rgba(20,16,12,.62); color:#fff; padding:0 9px; cursor:pointer; font-size:13px; font-weight:650; backdrop-filter:blur(4px); }
+  .cbtn em { font-style:normal; max-width:0; overflow:hidden; white-space:nowrap; transition:max-width .2s, margin .2s; }
+  .cbtn:hover em, .cbtn:focus-visible em { max-width:120px; margin-left:6px; }
+  .stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+  .stats > div { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; display:grid; }
+  .stats b { font:400 28px Georgia,serif; } .stats span { font-size:13px; color:var(--ink-soft); }
+  #pubside { max-width:860px; margin:0 auto; display:grid; gap:14px; }
 </style>
 </head>
 <body>
@@ -110,84 +128,84 @@
   <div id="workview" hidden>
     <div class="bar2">
       <button type="button" class="btn ghost small" id="back">← All lessons</button>
-      <input class="ttl" id="title" maxlength="120" aria-label="Lesson title">
-      <button type="button" class="pill" id="conn" title=""><span class="term">&gt;_</span><i></i><span id="connlabel">Not connected</span></button>
-      <button type="button" class="btn ghost small" id="sharebtn">Share <span class="chip" id="sharedchip"></span></button>
-      <div class="editwrap"><button type="button" class="btn" id="edit">Edit with <span id="toolname">your AI</span></button><button type="button" class="btn caret" id="editmenu" aria-label="Choose which AI" aria-haspopup="menu">▾</button>
+      <label class="ttlwrap" title="Click to rename"><input class="ttl" id="title" maxlength="120" aria-label="Lesson title (click to rename)"><span class="pen" aria-hidden="true">✎</span></label>
+      <div class="seg" role="group" aria-label="Draft or published"><button type="button" class="on" data-side="draft">Draft</button><button type="button" data-side="pub" id="pubtab">Published</button></div>
+      <button type="button" class="pill draftonly" id="conn"><span class="term">&gt;_</span><i></i><span id="connlabel">Not connected</span></button>
+      <div class="editwrap draftonly"><button type="button" class="btn" id="edit">Edit with <span id="toolname">your AI</span></button><button type="button" class="btn caret" id="editmenu" aria-label="Choose which AI" aria-haspopup="menu">▾</button>
         <div class="menu" id="toolmenu" role="menu" hidden></div></div>
       <div class="morewrap"><button type="button" class="iconbtn" id="more" aria-label="More lesson actions" aria-haspopup="menu">⋯</button>
         <div class="menu" id="moremenu" role="menu" hidden>
-          <label for="upfile" role="menuitem">Upload a new version</label>
           <button type="button" role="menuitem" id="download">Download the file</button>
-          <button type="button" role="menuitem" id="dup">Duplicate</button>
-          <button type="button" role="menuitem" data-tab="hist">History</button>
+          <button type="button" role="menuitem" id="dup">Make a copy</button>
           <div class="sep"></div>
           <button type="button" role="menuitem" class="danger" id="del">Delete lesson</button>
         </div></div>
-      <input type="file" id="upfile" accept=".html,.htm,text/html" hidden>
     </div>
-    <div class="stage" id="stage">
-      <div class="tools">
-        <div class="seg" role="group" aria-label="See it as"><button type="button" class="on" data-view="student">Student</button><button type="button" data-view="teacher">Teacher</button></div>
-        <div class="seg" role="group" aria-label="Preview size"><button type="button" class="on" data-dev="phone">Phone</button><button type="button" data-dev="laptop">Laptop</button></div>
-        <button type="button" class="iconbtn" id="fs">⛶ <span id="fslabel">Full screen</span></button>
-        <button type="button" class="iconbtn" id="restart">↻ Restart</button>
-      </div>
-      <div class="phone" id="phone"><div class="livebadge" id="livebadge" hidden></div><iframe id="frame" sandbox="allow-scripts allow-forms allow-popups" title="The lesson preview" referrerpolicy="no-referrer"></iframe></div>
-      <div class="bar" style="width:100%;max-width:400px" id="barw"><i id="prog"></i></div>
-      <div class="under">
-        <div class="ph-panel" id="panel" aria-live="polite"></div>
-        <p class="muted small"><span id="viewnote">This is what students see.</span> Nothing you answer here is saved.</p>
-        <p class="small muted" id="savestate"></p>
-        <div id="kithelp" class="card" hidden style="padding:12px">
-          <b class="small">The small window didn't connect.</b>
-          <ol class="steps2">
-            <li>If it says the page can't be reached, Worldview Lessons isn't running on this computer: double-click <b>Worldview Lessons</b> on the Desktop, then press Edit again.</li>
-            <li>The first time, that window asks you to sign in to Worldview once.</li>
-            <li>No window at all? Allow pop-ups for this site.</li>
-          </ol>
+
+    <div id="draftside">
+      <div class="pubbar"><span id="pubmsg"></span><button type="button" class="btn small" id="publish">Publish</button></div>
+      <div class="stage" id="stage">
+        <div class="tools">
+          <div class="seg" role="group" aria-label="See it as"><button type="button" class="on" data-view="student">Student</button><button type="button" data-view="teacher">Teacher</button></div>
+          <div class="seg" role="group" aria-label="Preview size"><button type="button" class="on" data-dev="phone">Phone</button><button type="button" data-dev="laptop">Laptop</button></div>
+        </div>
+        <div class="phone" id="phone"><div class="livebadge" id="livebadge" hidden></div>
+          <div class="corner"><button type="button" class="cbtn" id="restart" aria-label="Refresh the preview"><span>↻</span><em>Refresh</em></button><button type="button" class="cbtn" id="fs" aria-label="Full screen"><span>⛶</span><em id="fslabel">Full screen</em></button></div>
+          <iframe id="frame" sandbox="allow-scripts allow-forms allow-popups" title="The lesson preview" referrerpolicy="no-referrer"></iframe></div>
+        <div class="bar" style="width:100%;max-width:400px" id="barw"><i id="prog"></i></div>
+        <div class="under">
+          <div class="ph-panel" id="panel" aria-live="polite"></div>
+          <span id="viewnote" hidden></span><p id="savestate" hidden></p>
+          <div id="kithelp" class="card" hidden style="padding:12px">
+            <b class="small">The small window didn't connect.</b>
+            <ol class="steps2">
+              <li>If it says the page can't be reached, Worldview Lessons isn't running on this computer: double-click <b>Worldview Lessons</b> on the Desktop, then press Edit again.</li>
+              <li>The first time, that window asks you to sign in to Worldview once.</li>
+              <li>No window at all? Allow pop-ups for this site.</li>
+            </ol>
+          </div>
+          <p class="small muted" id="draftcost"></p>
         </div>
       </div>
     </div>
 
-    <div class="tabs" role="tablist">
-      <button type="button" role="tab" class="on" data-tab="answers">Students' answers <span class="chip" id="runcount">0</span></button>
-      <button type="button" role="tab" data-tab="ai">Worldview AI</button>
-      <button type="button" role="tab" data-tab="hist">History</button>
-      <button type="button" role="tab" data-tab="other">Other ways to edit</button>
-    </div>
-    <div class="pane" id="pane-answers">
-      <div class="row"><span class="small muted grow">What students sent and how far they got. Share the lesson to get answers.</span><button type="button" class="btn ghost small" id="refresh">Refresh</button></div>
-      <div id="runs"></div>
-    </div>
-    <div class="pane" id="pane-ai" hidden>
-      <p id="aiuse">No AI replies yet.</p>
-      <p class="small muted">Lessons can ask Worldview's AI for replies (your AI knows how). Worldview pays and keeps the key; each lesson can use up to 300 replies a day, 30 per student.</p>
-    </div>
-    <div class="pane" id="pane-hist" hidden>
-      <p class="small muted">Each burst of changes keeps the version from before it. Look at one in the preview, or restore it.</p>
-      <div id="hist" style="display:grid;gap:6px"></div>
-    </div>
-    <div class="pane" id="pane-other" hidden>
-      <p class="small muted">Use ChatGPT, Claude or Gemini in a chat: copy the starting prompt, then the finishing prompt, and paste the file it gives you here.</p>
-      <div class="row"><button type="button" class="btn ghost small" id="copystart">Copy the starting prompt</button><button type="button" class="btn ghost small" id="copyfinish">Copy the finishing prompt</button><button type="button" class="btn ghost small" data-guide="1">New to AI?</button></div>
-      <textarea class="code" id="html" spellcheck="false" placeholder="Paste a new version of the whole lesson here"></textarea>
-      <div class="row"><button type="button" class="btn small" id="savepaste">Save this version</button></div>
+    <div id="pubside" hidden>
+      <div class="card" id="pubempty" hidden style="text-align:center;padding:28px">
+        <h2>Not published yet</h2>
+        <p class="muted">Students get a frozen copy of the draft when you publish it. Keep editing the draft any time; publish again when it's ready.</p>
+        <div class="row" style="justify-content:center"><button type="button" class="btn" id="publish2">Publish the draft</button></div>
+      </div>
+      <div id="pubfull" style="display:grid;gap:14px">
+        <div class="card">
+          <div class="row"><label class="toggle grow"><input type="checkbox" id="shared"> Open to students</label><span class="chip ok" id="livever"></span></div>
+          <div id="linkbox" style="display:grid;gap:8px"><div class="link" id="link"></div><div class="row"><button type="button" class="btn small" id="copylink">Copy the link</button><a class="btn ghost small" id="openlink" target="_blank" rel="noopener">Open it as a student</a></div></div>
+        </div>
+        <div class="stats"><div><b id="st-students">0</b><span>students</span></div><div><b id="st-finished">0</b><span>finished</span></div><div><b id="st-cost">$0</b><span>AI cost so far</span></div></div>
+        <div class="row"><h3 class="grow">Results</h3><button type="button" class="btn ghost small" id="refresh">Refresh</button></div>
+        <div id="runs"></div>
+        <details><summary class="small">Published versions</summary><div id="rels" style="display:grid;gap:6px;margin-top:8px"></div></details>
+      </div>
     </div>
   </div>
 </div>
 
-<dialog id="sharedlg"><div style="display:grid;gap:12px">
-  <div class="row"><h2 class="grow">Share with students</h2><button type="button" class="btn ghost small" data-close>Close</button></div>
-  <label class="toggle"><input type="checkbox" id="shared"> Students can open it with a link</label>
-  <div id="linkbox" hidden style="display:grid;gap:8px"><div class="link" id="link"></div><div class="row"><button type="button" class="btn small" id="copylink">Copy the link</button><a class="btn ghost small" id="openlink" target="_blank" rel="noopener">Open it</a></div></div>
-  <p class="small muted">No account needed. Students always see the student view; their answers appear under the lesson.</p>
+<dialog id="otherdlg" style="width:min(560px,calc(100vw - 32px))"><div style="display:grid;gap:10px">
+  <div class="row"><h2 class="grow">Use a chat AI instead</h2><button type="button" class="btn ghost small" data-close>Close</button></div>
+  <p class="small muted">In ChatGPT, Claude or Gemini: paste the starting prompt, then the finishing prompt, and paste the file it gives you here.</p>
+  <div class="row"><button type="button" class="btn ghost small" id="copystart">Copy the starting prompt</button><button type="button" class="btn ghost small" id="copyfinish">Copy the finishing prompt</button></div>
+  <textarea class="code" id="html" spellcheck="false" placeholder="Paste the whole lesson here"></textarea>
+  <div class="row"><button type="button" class="btn small" id="savepaste">Save it to the draft</button></div>
 </div></dialog>
+<div class="menu" id="tilemenu" role="menu" hidden style="position:fixed;right:auto">
+  <button type="button" role="menuitem" id="tcopy">Make a copy</button>
+  <button type="button" role="menuitem" class="danger" id="tdel">Delete lesson</button>
+</div>
+
 <dialog id="guide" style="width:min(560px,calc(100vw - 32px))"><div style="display:grid;gap:12px"><div class="row"><span class="small muted grow" id="gstep"></span><button type="button" class="btn ghost small" data-close>Close</button></div><div id="gbody" style="display:grid;gap:10px"></div><div class="row"><button type="button" class="btn ghost" id="gback">Back</button><span class="grow"></span><button type="button" class="btn" id="gnext">Next</button></div></div></dialog>
 <dialog id="newdlg"><form id="newform"><h2>New lesson</h2><label class="small" for="newtitle">What's it called? You can change it later.</label><input type="text" id="newtitle" maxlength="120" placeholder="e.g. Why the Moon has phases"><div class="row"><button type="submit" class="btn">Create</button><button type="button" class="btn ghost" data-close>Cancel</button></div></form></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.38"></script>
+<script src="port-host.js?v=3.1.39"></script>
 <script>
 (() => {
   const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT', KIT = 'http://localhost:8195';
@@ -313,35 +331,76 @@ ${RULES}`;
   }
   document.addEventListener('mouseover', e => { const t = e.target.closest('.tile'); if (t) thumbPlay(t, true); });
   document.addEventListener('mouseout', e => { const t = e.target.closest('.tile'); if (t && !t.contains(e.relatedTarget)) thumbPlay(t, false); });
-  /* ---------- lesson tools: history, upload, download, duplicate ---------- */
-  async function loadHistory() {
-    const {data, error} = await db.from('worldview_teacher_lesson_versions').select('id,saved_at,html').eq('lesson_id', cur.id).order('saved_at', {ascending: false}).limit(40);
-    if (error) { $('#hist').innerHTML = '<p class="small muted">History isn\'t available yet.</p>'; return; }
-    HIST = data || [];
-    $('#hist').innerHTML = HIST.length ? HIST.map((v, i) => `<div class="row"><span class="small grow">${esc(new Date(v.saved_at).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}))}</span><button type="button" class="btn ghost small" data-peek="${i}">Look</button><button type="button" class="btn small" data-restore="${i}">Restore</button></div>`).join('') : '<p class="small muted">No earlier versions yet. Each burst of changes keeps the version from before it.</p>';
-  }
-  let HIST = [];
+  /* ---------- lessons ---------- */
   async function readFileHtml(input) { const file = input.files && input.files[0]; input.value = ''; if (!file) return null; if (file.size > 400000) { toast('That file is over 400 KB.'); return null; } return file.text(); }
   async function showGrid() {
     cur = null; if (live) { db.removeChannel(live); live = null; liveInfo = null; } $('#workview').hidden = true; $('#gridview').hidden = false; document.title = 'Teacher Studio · Worldview';
-    const {data, error} = await db.from(T).select('id,title,shared,updated_at,html').order('updated_at', {ascending: false});
+    const [{data, error}, rels] = await Promise.all([db.from(T).select('id,title,shared,updated_at,html').order('updated_at', {ascending: false}), db.from('worldview_teacher_lesson_releases').select('lesson_id,version')]);
     if (error) { $('#grid').innerHTML = `<p class="small">Couldn't load your lessons (${esc(error.message)}).</p>`; return; }
-    $('#grid').innerHTML = '<div style="display:grid;gap:10px"><button type="button" class="new" id="new" style="min-height:180px">+ New lesson</button><label class="new" for="upnew" style="min-height:46px;font-size:15px;cursor:pointer">Upload a lesson file</label><input type="file" id="upnew" accept=".html,.htm,text/html" hidden></div>' + (data || []).map(l => `<button type="button" class="tile" data-open="${l.id}"><div class="thumb"><iframe sandbox="" scrolling="no" tabindex="-1" title="" data-thumb="${l.id}"></iframe></div><div class="info"><b>${esc(l.title)}</b><span class="small muted">${ago(l.updated_at)}${l.shared ? ' · shared' : ''}</span></div></button>`).join('');
-    THUMBS = {}; (data || []).forEach(l => { THUMBS[l.id] = l.html; const f = document.querySelector(`[data-thumb="${l.id}"]`); if (f) f.srcdoc = WorldviewPortHost.compose(l.html, l.id); });
+    const V = {}; ((rels && rels.data) || []).forEach(r => { V[r.lesson_id] = Math.max(V[r.lesson_id] || 0, r.version); });
+    const list = (data || []).map(l => Object.assign(l, {pub: l.shared ? (V[l.id] || -1) : 0})).sort((a, b) => (b.pub !== 0) - (a.pub !== 0));
+    $('#grid').innerHTML = '<div style="display:grid;gap:10px"><button type="button" class="new" id="new" style="min-height:180px">+ New lesson</button><label class="new" for="upnew" style="min-height:46px;font-size:15px;cursor:pointer">Upload a lesson file</label><input type="file" id="upnew" accept=".html,.htm,text/html" hidden></div>'
+      + list.map(l => `<div class="tile" role="button" tabindex="0" data-open="${l.id}"><div class="thumb"><iframe sandbox="" scrolling="no" tabindex="-1" title="" data-thumb="${l.id}"></iframe></div>${l.pub ? `<span class="ribbon" data-results="${l.id}" title="See students' results"><span class="a">Published${l.pub > 0 ? ' v' + l.pub : ''}</span><span class="b">See results →</span></span>` : ''}<div class="info"><b>${esc(l.title)}</b><span class="small muted">${ago(l.updated_at)}</span></div><button type="button" class="tilemore" data-tilemenu="${l.id}" aria-label="More">⋯</button></div>`).join('');
+    THUMBS = {}; list.forEach(l => { THUMBS[l.id] = l.html; const f = document.querySelector(`[data-thumb="${l.id}"]`); if (f) f.srcdoc = WorldviewPortHost.compose(l.html, l.id); });
   }
-  /* ---------- one lesson ---------- */
-  async function showLesson(id, push) {
+  let tileTarget = null;
+  function tileMenu(btn) {
+    const m = $('#tilemenu'), r = btn.getBoundingClientRect();
+    if (!m.hidden && tileTarget === btn.dataset.tilemenu) { m.hidden = true; return; }
+    tileTarget = btn.dataset.tilemenu; $('#tdel').dataset.sure = ''; $('#tdel').textContent = 'Delete lesson';
+    m.hidden = false; m.style.top = (r.bottom + 6) + 'px'; m.style.left = Math.max(8, r.right - m.offsetWidth) + 'px';
+  }
+  async function copyLesson(id) {
+    const {data: l} = await db.from(T).select('title,html').eq('id', id).single(); if (!l) return toast('Couldn\'t copy it.');
+    const {data, error} = await db.from(T).insert({title: (l.title + ' (copy)').slice(0, 120), html: l.html}).select('id').single();
+    if (error) return toast(/lesson_limit/.test(error.message) ? 'You have 50 lessons; delete one first.' : 'Couldn\'t copy it: ' + error.message);
+    toast('Copied. The copy is a new draft.'); return data.id;
+  }
+  /* ---------- one lesson: the draft you edit, and what students get ---------- */
+  let RELS = [], RUNS = [], side = 'draft';
+  async function showLesson(id, push, want) {
     const {data, error} = await db.from(T).select('*').eq('id', id).single();
     if (error || !data) { toast('Couldn\'t open that lesson.'); return showGrid(); }
     if (push) history.pushState({l: id}, '', '?l=' + id);
-    cur = data; lastSaved = data.html; $('#gridview').hidden = true; $('#workview').hidden = false; document.title = data.title + ' · Teacher Studio';
-    $('#title').value = data.title; $('#html').value = ''; renderShare(); host.o.lessonId = data.id; host.run(data.html); loadRuns(); loadAiUse(); $('#savestate').textContent = ''; showTab('answers'); loadHistory();
+    cur = data; lastSaved = data.html; RELS = []; RUNS = []; $('#gridview').hidden = true; $('#workview').hidden = false; document.title = data.title + ' · Teacher Studio';
+    $('#title').value = data.title; $('#html').value = ''; host.o.lessonId = data.id; host.run(data.html);
+    showSide(want === 'pub' ? 'pub' : 'draft'); renderShare(); loadReleases(); loadRuns(); loadAiUse();
     joinLive(data.id);
   }
-  function renderShare() { $('#shared').checked = !!cur.shared; $('#sharedchip').textContent = cur.shared ? 'On' : 'Off'; $('#sharedchip').className = 'chip' + (cur.shared ? ' ok' : ''); $('#linkbox').hidden = !cur.shared; if (cur.shared) { $('#link').textContent = linkFor(cur.id); $('#openlink').href = linkFor(cur.id); } }
+  function showSide(v) {
+    side = v; document.querySelectorAll('[data-side]').forEach(x => x.classList.toggle('on', x.dataset.side === v));
+    $('#draftside').hidden = v !== 'draft'; $('#pubside').hidden = v !== 'pub';
+    document.querySelectorAll('.draftonly').forEach(x => { x.hidden = v !== 'draft'; });
+    if (v === 'pub') { loadRuns(); loadAiUse(); }
+  }
+  async function loadReleases() {
+    const {data} = await db.from('worldview_teacher_lesson_releases').select('version,html,published_at').eq('lesson_id', cur.id).order('version', {ascending: false}).limit(50);
+    RELS = data || []; renderPubBar(); renderShare();
+  }
+  function renderPubBar() {
+    const latest = RELS[0];
+    $('#pubtab').textContent = latest ? 'Published v' + latest.version : 'Published';
+    if (!latest) { $('#pubmsg').textContent = cur.shared ? 'Students get this draft as it changes.' : 'Only you can see this draft.'; $('#publish').textContent = 'Publish to students'; $('#publish').hidden = false; }
+    else if (latest.html !== lastSaved) { $('#pubmsg').textContent = 'Students have v' + latest.version + '. This draft has changes since.'; $('#publish').textContent = 'Publish v' + (latest.version + 1); $('#publish').hidden = false; }
+    else { $('#pubmsg').textContent = 'Students have this version (v' + latest.version + ').'; $('#publish').hidden = true; }
+  }
+  async function publish() {
+    const {data, error} = await db.rpc('worldview_teacher_lesson_publish', {p_lesson: cur.id});
+    if (error) return toast('Couldn\'t publish it: ' + error.message);
+    cur.shared = true; await loadReleases(); toast('Published v' + data + '. Students now get this version.');
+  }
+  function renderShare() {
+    const latest = RELS[0], has = !!latest || cur.shared;
+    $('#pubempty').hidden = has; $('#pubfull').hidden = !has;
+    $('#shared').checked = !!cur.shared; $('#linkbox').hidden = !cur.shared;
+    $('#livever').textContent = latest ? (cur.shared ? 'v' + latest.version + ' is live' : 'v' + latest.version + ' (closed)') : (cur.shared ? 'Live draft' : '');
+    $('#livever').hidden = !$('#livever').textContent;
+    if (cur.shared) { $('#link').textContent = linkFor(cur.id); $('#openlink').href = linkFor(cur.id); }
+    $('#rels').innerHTML = RELS.length ? RELS.map(r => `<div class="row"><b>v${r.version}</b><span class="small muted grow">${esc(new Date(r.published_at).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}))}</span><span class="small">${RUNS.filter(x => x.version === r.version).length} students</span></div>`).join('') : '<p class="small muted">None yet.</p>';
+  }
   async function save(fields, quiet) {
     const {data, error} = await db.from(T).update(fields).eq('id', cur.id).select('*').single();
-    if (error) { $('#savestate').textContent = 'Not saved: ' + error.message; return false; }
+    if (error) { toast('Not saved: ' + error.message); return false; }
     cur = data; if (fields.html) { lastSaved = data.html; $('#savestate').textContent = 'Saved to Worldview at ' + new Date().toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) + '.'; }
     if (!quiet) toast('Saved.'); return true;
   }
@@ -372,7 +431,7 @@ ${RULES}`;
   async function poll(force) {
     if (!cur || (!force && document.visibilityState !== 'visible')) return;
     const {data} = await db.from(T).select('html,updated_at,title').eq('id', cur.id).single();
-    if (data && data.html !== lastSaved) { lastSaved = data.html; cur.html = data.html; host.run(data.html); loadHistory(); lastSaveAt = lastSaveAt || Date.now(); renderLive(); $('#savestate').textContent = 'Updated from your computer at ' + new Date().toLocaleTimeString([], {hour: 'numeric', minute: '2-digit', second: '2-digit'}) + '.'; }
+    if (data && data.html !== lastSaved) { lastSaved = data.html; cur.html = data.html; host.run(data.html); renderPubBar(); lastSaveAt = lastSaveAt || Date.now(); renderLive(); }
   }
   setInterval(poll, 3000);
   /* ---------- which AI edits: chosen from the Edit button's menu ---------- */
@@ -383,7 +442,7 @@ ${RULES}`;
   renderTool();
   function toolMenu(show) {
     const m = $('#toolmenu'); if (show === false || (show == null && !m.hidden)) { m.hidden = true; return; }
-    m.innerHTML = '<span class="small muted" style="padding:6px 11px">Edit this lesson with…</span>' + TOOLS.map(([id, n, d]) => '<button type="button" role="menuitem" data-tool="' + id + '" class="' + (tool === id ? 'on' : '') + '"><b>' + n + '</b><span class="small muted">' + d + '</span></button>').join('') + '<div class="sep"></div><button type="button" role="menuitem" data-tool="folder" class="' + (tool === 'folder' ? 'on' : '') + '">Just open the folder</button><button type="button" role="menuitem" data-guide="1">New to AI? Set up step by step</button>';
+    m.innerHTML = '<span class="small muted" style="padding:6px 11px">Edit this lesson with…</span>' + TOOLS.map(([id, n, d]) => '<button type="button" role="menuitem" data-tool="' + id + '" class="' + (tool === id ? 'on' : '') + '"><b>' + n + '</b><span class="small muted">' + d + '</span></button>').join('') + '<div class="sep"></div><button type="button" role="menuitem" data-otherdlg="1">Use a chat AI instead (copy and paste)</button><button type="button" role="menuitem" data-tool="folder" class="' + (tool === 'folder' ? 'on' : '') + '">Just open the folder</button><button type="button" role="menuitem" data-guide="1">New to AI? Set up step by step</button>';
     m.hidden = false;
   }
   /* ---------- New to AI? two short steps, then a pointer at the real button ---------- */
@@ -426,37 +485,33 @@ ${RULES}`;
   function openEditor() {
     const left = Math.max(0, (screen.availWidth || 1200) - 500), win = window.open(KIT + '/edit?w=' + cur.id + '&tool=' + encodeURIComponent(tool), 'wvedit-' + cur.id, 'popup=yes,width=480,height=680,left=' + left + ',top=60');
     clearTimeout(kitWait); $('#kithelp').hidden = true; kitWait = setTimeout(() => { if (!liveInfo) $('#kithelp').hidden = false; }, 20000);
-    $('#savestate').textContent = win ? 'A small Worldview Lessons window opened. It starts your AI and saves every change; the light at the top turns green once it is connected.' : 'Your browser blocked the window. Allow pop-ups for this site, then press Edit with your AI again.';
+    if (!win) toast('Your browser blocked the window. Allow pop-ups for this site, then press Edit again.');
   }
 
-  /* ---------- Worldview AI use (counts only; no words are kept) ---------- */
+  /* ---------- Worldview AI cost (counts only; no words are kept) ---------- */
   const RATES = {'gemini-3.8-flash': [0.75, 3.75], 'claude-haiku-4-5': [1, 5]};
+  const money = n => '$' + (n === 0 ? '0' : n < 0.01 ? n.toFixed(4) : n.toFixed(2));
   async function loadAiUse() {
     if (!cur) return;
-    const since = new Date(Date.now() - 30 * 864e5).toISOString();
-    const {data, error} = await db.from('worldview_teacher_lesson_ai_calls').select('state,by_owner,model,input_tokens,output_tokens,server_ms,created_at').eq('lesson_id', cur.id).gte('created_at', since).order('created_at', {ascending: false}).limit(2000);
-    if (error) { $('#aiuse').textContent = 'AI use couldn\'t load.'; return; }
-    const ok = (data || []).filter(r => r.state === 'ok');
-    if (!ok.length) { $('#aiuse').textContent = (data || []).length ? 'The AI hasn\'t answered yet (' + data.length + ' tries failed).' : 'No AI replies yet.'; return; }
-    const day = new Date(Date.now() - 864e5).toISOString(), today = ok.filter(r => r.created_at > day).length, students = ok.filter(r => !r.by_owner).length;
-    const usd = ok.reduce((s, r) => { const k = RATES[r.model] || [1, 5]; return s + ((r.input_tokens || 0) * k[0] + (r.output_tokens || 0) * k[1]) / 1e6; }, 0);
-    const avg = ok.reduce((s, r) => s + (r.server_ms || 0), 0) / ok.length / 1000;
-    $('#aiuse').textContent = ok.length + ' AI repl' + (ok.length === 1 ? 'y' : 'ies') + ' in the last 30 days (' + today + ' today; ' + students + ' to students, ' + (ok.length - students) + ' to you) · about $' + (usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2)) + ' · the AI took ' + avg.toFixed(1) + ' s on average.';
+    const {data, error} = await db.from('worldview_teacher_lesson_ai_calls').select('state,by_owner,model,input_tokens,output_tokens').eq('lesson_id', cur.id).eq('state', 'ok').limit(5000);
+    if (error) return;
+    const cost = rows => rows.reduce((t, r) => { const k = RATES[r.model] || [1, 5]; return t + ((r.input_tokens || 0) * k[0] + (r.output_tokens || 0) * k[1]) / 1e6; }, 0);
+    const mine = (data || []).filter(r => r.by_owner), theirs = (data || []).filter(r => !r.by_owner);
+    $('#draftcost').textContent = mine.length ? 'AI cost while testing: ' + money(cost(mine)) : '';
+    $('#st-cost').textContent = money(cost(theirs));
   }
 
-  /* ---------- students' answers ---------- */
+  /* ---------- students' results (published side) ---------- */
   async function loadRuns() {
-    $('#runs').innerHTML = '<p class="muted small">Loading…</p>';
-    const {data, error} = await db.from('worldview_teacher_lesson_runs').select('id,learner_name,answers,finished,updated_at').eq('lesson_id', cur.id).order('updated_at', {ascending: false}).limit(100);
-    if (error) { $('#runs').innerHTML = `<p class="small">Couldn't load answers (${esc(error.message)}).</p>`; return; }
-    $('#runcount').textContent = String((data || []).length);
-    $('#runs').innerHTML = (data || []).length ? data.map(r => `<div class="run"><div class="row"><b class="grow">${esc(r.learner_name || 'A student')}</b>${r.finished ? '<span class="chip ok">Finished</span>' : '<span class="chip">Not finished</span>'}</div><span class="muted small">${esc(new Date(r.updated_at).toLocaleString())}</span><dl>${(Array.isArray(r.answers) ? r.answers : []).map(a => a.kind === 'understanding' ? `<div><dt>Understanding</dt><dd>${Object.entries(a.levels || {}).map(([k, v]) => `<span class="chip${v >= 2 ? ' ok' : ''}">${esc(k)}: ${['not yet', 'partly', 'can explain', 'can apply'][v] || v}</span>`).join(' ')}</dd></div>` : a.kind === 'ai' ? `<div><dt>Student to the AI: ${esc(a.question)}</dt><dd>AI: ${esc(a.answer)}</dd></div>` : `<div><dt>${esc(a.kind)}${a.question ? ': ' + esc(a.question) : ''}${a.level != null ? ' · level ' + a.level + ' of 3' : ''}</dt><dd>${esc(a.answer || '—')}</dd></div>`).join('') || '<dd class="muted small">No answers yet.</dd>'}</dl></div>`).join('') : '<p class="muted small">No students yet. Share the link, then press Refresh.</p>';
+    if (!cur) return;
+    const {data, error} = await db.from('worldview_teacher_lesson_runs').select('id,learner_name,answers,finished,updated_at,version').eq('lesson_id', cur.id).order('updated_at', {ascending: false}).limit(200);
+    if (error) { $('#runs').innerHTML = `<p class="small">Couldn't load results (${esc(error.message)}).</p>`; return; }
+    RUNS = data || [];
+    $('#st-students').textContent = String(RUNS.length); $('#st-finished').textContent = String(RUNS.filter(r => r.finished).length);
+    $('#runs').innerHTML = RUNS.length ? RUNS.map(r => `<div class="run"><div class="row"><b class="grow">${esc(r.learner_name || 'A student')}</b>${r.version ? '<span class="chip">v' + r.version + '</span>' : ''}${r.finished ? '<span class="chip ok">Finished</span>' : '<span class="chip">Not finished</span>'}</div><span class="muted small">${esc(new Date(r.updated_at).toLocaleString())}</span><dl>${(Array.isArray(r.answers) ? r.answers : []).map(a => a.kind === 'understanding' ? `<div><dt>Understanding</dt><dd>${Object.entries(a.levels || {}).map(([k, v]) => `<span class="chip${v >= 2 ? ' ok' : ''}">${esc(k)}: ${['not yet', 'partly', 'can explain', 'can apply'][v] || v}</span>`).join(' ')}</dd></div>` : a.kind === 'ai' ? `<div><dt>Student to the AI: ${esc(a.question)}</dt><dd>AI: ${esc(a.answer)}</dd></div>` : `<div><dt>${esc(a.kind)}${a.question ? ': ' + esc(a.question) : ''}${a.level != null ? ' · level ' + a.level + ' of 3' : ''}</dt><dd>${esc(a.answer || '—')}</dd></div>`).join('') || '<dd class="muted small">No answers yet.</dd>'}</dl></div>`).join('') : '<p class="muted small">No students yet. Copy the link above and send it to them.</p>';
+    renderShare();
   }
 
-  function showTab(t) {
-    document.querySelectorAll('.tabs [data-tab]').forEach(x => x.classList.toggle('on', x.dataset.tab === t));
-    ['answers', 'ai', 'hist', 'other'].forEach(k => { $('#pane-' + k).hidden = k !== t; });
-  }
   function moreMenu(show) { const m = $('#moremenu'); m.hidden = show === false ? true : show === true ? false : !m.hidden; }
   function setFs(on) {
     $('#stage').classList.toggle('fs', on); $('#fslabel').textContent = on ? 'Exit full screen' : 'Full screen';
@@ -466,13 +521,16 @@ ${RULES}`;
   addEventListener('keydown', e => { if (e.key === 'Escape' && $('#stage').classList.contains('fs')) setFs(false); });
   document.addEventListener('click', async e => {
     if (!e.target.closest('.editwrap')) toolMenu(false);
-    if (!e.target.closest('.morewrap') || e.target.closest('#moremenu label')) setTimeout(() => moreMenu(false), 0);
+    if (!e.target.closest('.morewrap')) moreMenu(false);
+    if (!e.target.closest('#tilemenu') && !e.target.closest('[data-tilemenu]')) $('#tilemenu').hidden = true;
+    const rb = e.target.closest('[data-results]'); if (rb) return showLesson(rb.dataset.results, true, 'pub');
+    const tm = e.target.closest('[data-tilemenu]'); if (tm) return tileMenu(tm);
+    const tile = e.target.closest('.tile[data-open]'); if (tile && !e.target.closest('button')) return showLesson(tile.dataset.open, true);
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.close != null) return b.closest('dialog').close();
-    if (b.dataset.tab) { moreMenu(false); showTab(b.dataset.tab); if (b.closest('#moremenu')) $('.tabs').scrollIntoView({behavior: 'smooth', block: 'start'}); return; }
+    if (b.dataset.side) return showSide(b.dataset.side);
+    if (b.dataset.otherdlg) { toolMenu(false); return $('#otherdlg').showModal(); }
     if (b.dataset.guide) return openGuide();
-    if (b.dataset.peek) { const v = HIST[+b.dataset.peek]; if (v) { host.run(v.html); toast('Showing an earlier version. Press Restore to keep it, or Restart the preview to go back.'); } return; }
-    if (b.dataset.restore) { const v = HIST[+b.dataset.restore]; if (v && await save({html: v.html})) { host.run(v.html); loadHistory(); toast('Restored. The version before is in History too.'); } return; }
     if (b.dataset.tool) { tool = b.dataset.tool; localStorage.setItem('wv-tool', tool); renderTool(); toolMenu(false); return editOnComputer(); }
     if (b.dataset.gtool) { tool = b.dataset.gtool; localStorage.setItem('wv-tool', tool); renderTool(); return guideRender(); }
     if (b.dataset.coachoff) { b.closest('.coach').remove(); $('#edit').classList.remove('pulse'); return; }
@@ -489,15 +547,20 @@ ${RULES}`;
       case 'restart': return host.run(lastSaved || cur.html);
       case 'fs': return setFs(!$('#stage').classList.contains('fs'));
       case 'more': return moreMenu();
-      case 'sharebtn': return $('#sharedlg').showModal();
+      case 'publish': case 'publish2': return publish();
+      case 'tcopy': { $('#tilemenu').hidden = true; if (await copyLesson(tileTarget)) showGrid(); return; }
+      case 'tdel': {
+        if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Press again to delete'; return; }
+        $('#tilemenu').hidden = true; const {error} = await db.from(T).delete().eq('id', tileTarget); if (error) return toast('Couldn\'t delete it.'); toast('Deleted.'); return showGrid();
+      }
       case 'conn': return liveInfo ? toast('Connected: every save in your AI appears here within seconds.') : editOnComputer();
       case 'edit': return editOnComputer();
       case 'refresh': return loadRuns();
       case 'download': { const blob = new Blob([lastSaved || cur.html], {type: 'text/html'}), a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (cur.title || 'lesson').replace(/[^a-z0-9 _-]+/gi, '').trim().replace(/\s+/g, '-').toLowerCase() + '.html'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); return; }
-      case 'dup': { const {data, error} = await db.from(T).insert({title: (cur.title + ' (copy)').slice(0, 120), html: lastSaved || cur.html}).select('id').single(); if (error) return toast('Couldn\'t duplicate it: ' + error.message); toast('Duplicated.'); return showLesson(data.id, true); }
+      case 'dup': { moreMenu(false); const id = await copyLesson(cur.id); if (id) showLesson(id, true); return; }
       case 'copylink': { const ok = await copy(linkFor(cur.id)); return toast(ok ? 'Link copied.' : 'Copy the link from the box.'); }
       case 'copystart': case 'copyfinish': { const ok = await copy(b.id === 'copystart' ? START : FINISH); return toast(ok ? 'Copied. Paste it into your AI.' : 'Copying didn\'t work here.'); }
-      case 'savepaste': { const h = htmlFrom($('#html').value); if (!h) return toast('Paste the whole lesson first.'); if (await save({html: h})) { host.run(h); $('#html').value = ''; } return; }
+      case 'savepaste': { const h = htmlFrom($('#html').value); if (!h) return toast('Paste the whole lesson first.'); if (await save({html: h})) { host.run(h); $('#html').value = ''; $('#otherdlg').close(); renderPubBar(); } return; }
       case 'del': {
         if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Press again to delete'; setTimeout(() => { b.dataset.sure = ''; b.textContent = 'Delete lesson'; }, 4000); return; }
         moreMenu(false);
@@ -512,11 +575,11 @@ ${RULES}`;
     $('#newdlg').close(); if (error) return toast(/lesson_limit/.test(error.message) ? 'You have 50 lessons; delete one first.' : 'Couldn\'t create it: ' + error.message);
     await showLesson(data.id, true); editOnComputer();
   });
-  $('#upfile').addEventListener('change', async e => { const h = await readFileHtml(e.target); if (h && await save({html: h})) { host.run(h); loadHistory(); } });
+  document.addEventListener('keydown', e => { const t = e.target.closest && e.target.closest('.tile[data-open]'); if (t && (e.key === 'Enter' || e.key === ' ') && e.target === t) { e.preventDefault(); showLesson(t.dataset.open, true); } });
   document.addEventListener('change', async e => { if (e.target.id !== 'upnew') return; const name = (e.target.files && e.target.files[0] && e.target.files[0].name || 'Uploaded lesson').replace(/\.html?$/i, ''); const h = await readFileHtml(e.target); if (!h) return; const t = (titleFromHtml(h) || name).slice(0, 120); const {data, error} = await db.from(T).insert({title: t, html: h}).select('id').single(); if (error) return toast('Couldn\'t upload it: ' + error.message); showLesson(data.id, true); });
   const titleFromHtml = h => { const m = String(h).match(/\btitle\s*:\s*(['"`])((?:\\.|(?!\1).){2,120}?)\1/) || String(h).match(/<title>([^<]{2,120})<\/title>/i); return m ? (m[2] || m[1]).trim() : ''; };
   $('#title').addEventListener('change', () => { const t = $('#title').value.trim(); if (t && cur && t !== cur.title) save({title: t.slice(0, 120)}); });
-  $('#shared').addEventListener('change', async e => { if (!(await save({shared: e.target.checked}, true))) e.target.checked = !e.target.checked; renderShare(); });
+  $('#shared').addEventListener('change', async e => { if (!(await save({shared: e.target.checked}, true))) e.target.checked = !e.target.checked; renderShare(); renderPubBar(); toast(e.target.checked ? 'Open: the link works again.' : 'Closed: the link stops working until you open it again.'); });
   addEventListener('popstate', () => { const l = new URLSearchParams(location.search).get('l'); if (l) showLesson(l); else showGrid(); });
   addEventListener('focus', poll);
 
