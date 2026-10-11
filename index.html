@@ -2219,7 +2219,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.37 · Oct 10";
+const BUILD = "v3.1.38 · Oct 11";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2227,6 +2227,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.38",date:"Oct 11",changes:["Teacher Studio: a cleaner lesson page. The preview sits in the middle with Full screen; Upload, Download, Duplicate and Delete moved into a ⋯ menu; Share opens its own window; answers, AI use, history and other ways to edit are tabs under the lesson.","A live light shows when your AI on your computer is connected (for example: Codex connected), and the preview updates the moment it saves."]},
   {tag:"v3.1.37",date:"Oct 10",changes:["Teacher Studio: switch the preview between Student and Teacher. Lessons can show the teacher extra things (notes, shortcuts, model answers) that students never see.","Lessons can play YouTube videos: Worldview shows the video over the lesson with a Done watching button."]},
   {tag:"v3.1.36",date:"Oct 10",changes:["Teacher Studio: lessons can ask Worldview's AI for replies (a tutor, a character, feedback). Worldview pays and keeps the key; each lesson gets up to 300 replies a day, 30 per student.","Each lesson shows how many AI replies it used, about what they cost and how long the AI took. Students' conversations with the AI appear with their answers."]},
   {tag:"v3.1.35",date:"Oct 10",changes:["Teacher Studio: pictures, sounds and videos in a lesson folder now upload to Worldview, so students see them too.","Lessons can record what each student understood (levels 0 to 3 for each goal), shown with their answers."]},
