@@ -36,7 +36,7 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.39"></script>
+<script src="port-host.js?v=3.1.40"></script>
 <script>
 (() => {
   const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT';
@@ -44,14 +44,16 @@
   const id = new URLSearchParams(location.search).get('l') || '';
   const db = window.supabase.createClient(URL_, KEY, {auth: {persistSession: false, autoRefreshToken: false, detectSessionInUrl: false}});
   const runId = (crypto.randomUUID && crypto.randomUUID()) || ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+  // Worldview's AI and transcription for lessons (lesson-ai): plain requests, results always {ok, text, json, error, type, …}.
+  const norm = async r => { const j = await r.json().catch(() => ({})); if (r.ok && j.ok !== false) return Object.assign({}, j, {ok: true}); const e = j.error; return Object.assign({}, j, {ok: false, error: (e && e.message) || (typeof e === 'string' && e) || 'The AI couldn\'t answer just now.', type: (e && e.type) || j.type || 'http_' + r.status}); };
+  const authHeaders = async () => { let token = KEY; try { const s = (await db.auth.getSession()).data.session; if (s) token = s.access_token; } catch (e) {} return {apikey: KEY, authorization: 'Bearer ' + token}; };
   const askAI = async (req, lessonId, runId) => {
-    // A plain request: the library's invoke adds a header the gateway's CORS list doesn't allow.
-    let token = KEY; try { const s = (await db.auth.getSession()).data.session; if (s) token = s.access_token; } catch (e) {}
-    try {
-      const r = await fetch(URL_ + '/functions/v1/lesson-ai', {method: 'POST', headers: {'content-type': 'application/json', apikey: KEY, authorization: 'Bearer ' + token}, body: JSON.stringify(Object.assign({lesson: lessonId, run: runId || null}, req))});
-      const j = await r.json().catch(() => ({}));
-      return r.ok ? j : {error: (j.error && j.error.message) || 'The AI couldn\'t answer just now.'};
-    } catch (e) { return {error: 'The AI couldn\'t answer just now. Check the internet connection.'}; }
+    try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai', {method: 'POST', headers: Object.assign({'content-type': 'application/json'}, await authHeaders()), body: JSON.stringify(Object.assign({lesson: lessonId, run: runId || null}, req))})); }
+    catch (e) { return {ok: false, error: 'The AI couldn\'t answer just now. Check the internet connection.', type: 'network'}; }
+  };
+  const hearAI = async (blob, lang, lessonId, runId) => {
+    try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai?mode=transcribe&lesson=' + lessonId + (runId ? '&run=' + runId : '') + (lang ? '&lang=' + lang : ''), {method: 'POST', headers: Object.assign({'content-type': blob.type || 'audio/webm'}, await authHeaders()), body: blob})); }
+    catch (e) { return {ok: false, error: 'Worldview couldn\'t turn that recording into text. Check the internet connection.', type: 'network'}; }
   };
   let lesson = null, latest = [], finished = false, timer = 0, saving = false, again = false;
   async function save() {
@@ -71,7 +73,7 @@
   })();
   $('#start').addEventListener('click', () => {
     $('#intro').hidden = true; $('#lesson').hidden = false; $('#title').textContent = lesson.title;
-    const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), ai: req => askAI(req, lesson.id, runId),
+    const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), ai: req => askAI(req, lesson.id, runId), transcribe: (b, l) => hearAI(b, l, lesson.id, runId),
       onChange: (record, done) => { latest = record; finished = done; clearTimeout(timer); timer = setTimeout(save, done ? 0 : 800); }});
     host.run(lesson.html, lesson.id);
     save();
