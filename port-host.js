@@ -8,7 +8,10 @@
    YouTube video in a sheet over the lesson: YouTube can't play inside the sealed
    frame, and the frame stays sealed so a lesson can never read a Worldview sign-in.
    wv.listen records the microphone here (a sealed frame can't use it) and returns
-   Worldview's transcript (NAV-176). */
+   Worldview's transcript (NAV-176). wv.record (camera + mic, review, save) and
+   wv.saveFile work only in Teacher Studio, for the lesson's owner: files go to the
+   lesson's Worldview files (and the teacher's lesson folder); wv.readFile reads them
+   back for anyone (NAV-178). */
 (function () {
   'use strict';
   var SDK = "(function(){window.WorldviewPort=function(manifest,handlers){handlers=handlers||{};var waiting={},aiN=0,inFrame=window.parent!==window;" +
@@ -22,7 +25,7 @@
     "predict:function(id,q,u,o){return wait(id,'predict',Object.assign({question:q,unit:u||''},o||{}));},result:function(id,a,s){send('result',{id:id,actual:a,say:s||''});}," +
     "ask:function(id,q,o){return wait(id,'ask',Object.assign({question:q},o||{}));},human:function(id,r){return wait(id,'human',Object.assign({to:'teacher',kind:'question'},r||{}));}," +
     "evidence:function(o,t,d){send('evidence',{outcome:o,text:t,data:d||{}});},remember:function(k,v){send('remember',{key:k,value:v});}," +
-    "progress:function(v,n){send('progress',{value:v,note:n||''});},video:function(src,o){return wait('v'+(++aiN),'video',Object.assign({src:String(src||'')},o||{}));},ai:function(x,o){o=o||{};return wait('ai'+(++aiN),'ai',{messages:typeof x==='string'?[{role:'user',content:x}]:(x||[]),system:o.system||'',maxTokens:o.maxTokens||0,json:!!o.json,full:!!o.full});},listen:function(o){o=o||{};return wait('l'+(++aiN),'listen',{prompt:o.prompt||'',maxSeconds:o.maxSeconds||0,lang:o.lang||'',full:!!o.full});},done:function(s){send('done',{summary:s||{}});}};return api;};})();" +
+    "progress:function(v,n){send('progress',{value:v,note:n||''});},video:function(src,o){return wait('v'+(++aiN),'video',Object.assign({src:String(src||'')},o||{}));},ai:function(x,o){o=o||{};return wait('ai'+(++aiN),'ai',{messages:typeof x==='string'?[{role:'user',content:x}]:(x||[]),system:o.system||'',maxTokens:o.maxTokens||0,json:!!o.json,full:!!o.full});},record:function(o){o=o||{};return wait('r'+(++aiN),'record',{kind:o.kind||'video',maxSeconds:o.maxSeconds||0,title:o.title||'',folder:o.folder||'',name:o.name||''});},saveFile:function(p,c){return wait('f'+(++aiN),'savefile',{path:String(p||''),content:c});},readFile:function(p){return wait('g'+(++aiN),'readfile',{path:String(p||'')});},listen:function(o){o=o||{};return wait('l'+(++aiN),'listen',{prompt:o.prompt||'',maxSeconds:o.maxSeconds||0,lang:o.lang||'',full:!!o.full});},done:function(s){send('done',{summary:s||{}});}};return api;};})();" +
     "addEventListener('error',function(e){try{parent.postMessage({port:'worldview',v:1,type:'crash',message:String(e.message||'error').slice(0,200)},'*');}catch(x){}});";
 
   var FILES = 'https://eqppapoepynjvsfnoodj.supabase.co/storage/v1/object/public/lesson-files/';
@@ -55,6 +58,98 @@
     return m ? m[1] : (/^[A-Za-z0-9_-]{11}$/.test(s) ? s : '');
   }
   PortHost.prototype._closeVideo = function () { if (this._stopRec) { var f = this._stopRec; this._stopRec = null; f(true); } if (this._sheet) { this._sheet.remove(); this._sheet = null; } };
+  // Lesson file paths: relative, inside the lesson, never the files Worldview manages itself.
+  var MEDIA = /\.(mp4|webm|ogg|ogv|mov|m4v|mp3|m4a|wav|oga|png|jpe?g|gif|webp|svg)$/i, DATA = /\.(json|txt|csv|md)$/i;
+  function cleanPath(p) {
+    p = String(p || '').trim().replace(/^\.\//, '');
+    if (!p || p.length > 160 || /(^|\/)\.|\.\.|\\|^\/|[^A-Za-z0-9._\/ -]/.test(p)) return '';
+    if (/^(index\.html?|lesson\.json|claude\.md|agents\.md|gemini\.md)$/i.test(p)) return '';
+    return MEDIA.test(p) || DATA.test(p) ? p : '';
+  }
+  var FILES_BASE = FILES;
+  PortHost.prototype._fileReply = function (id, r) { this._send('answer', {id: id, value: r}); };
+  PortHost.prototype._saveFile = function (m) {
+    var self = this, id = clip(m.id, 40), path = cleanPath(m.path), c = m.content;
+    if (!this.o.saveFile) return this._fileReply(id, {ok: false, error: 'Saving files works only in Teacher Studio.', type: 'unsupported'});
+    if (!path) return this._fileReply(id, {ok: false, error: 'Use a relative path like map.json or video/clip.webm.', type: 'bad_path'});
+    var blob = c instanceof Blob ? c : new Blob([typeof c === 'string' ? c : JSON.stringify(c)], {type: /\.json$/i.test(path) ? 'application/json' : 'text/plain'});
+    if (DATA.test(path) && blob.size > 1024 * 1024) return this._fileReply(id, {ok: false, error: 'Text files can be at most 1 MB.', type: 'too_large'});
+    if (blob.size >= 50 * 1024 * 1024) return this._fileReply(id, {ok: false, error: 'Files must be under 50 MB.', type: 'too_large'});
+    Promise.resolve(this.o.saveFile(path, blob)).catch(function () { return null; }).then(function (r) { self._fileReply(id, r || {ok: false, error: 'Saving failed.', type: 'save_failed'}); });
+  };
+  PortHost.prototype._readFile = function (m) {
+    var self = this, id = clip(m.id, 40), path = cleanPath(m.path), lid = this.o.lessonId;
+    if (!path || !lid) return this._fileReply(id, null);
+    fetch(FILES_BASE + encodeURIComponent(lid) + '/' + path.split('/').map(encodeURIComponent).join('/') + '?t=' + Date.now(), {cache: 'no-store'})
+      .then(function (r) { return r.ok ? r.text() : null; }).catch(function () { return null; }).then(function (t) { self._fileReply(id, t); });
+  };
+  PortHost.prototype._record = function (m) {
+    var self = this, id = clip(m.id, 40), gen = this.gen, finished = false, stream = null, rec = null, blob = null, url = '', tick = 0;
+    var done = function (r) {
+      if (finished) return; finished = true; self._stopRec = null; clearInterval(tick);
+      if (stream) stream.getTracks().forEach(function (t) { t.stop(); }); if (url) URL.revokeObjectURL(url);
+      if (self._sheet) { self._sheet.remove(); self._sheet = null; }
+      if (gen === self.gen) self._fileReply(id, r);
+    };
+    if (!this.o.saveFile) return done({ok: false, error: 'Recording works only in Teacher Studio.', type: 'unsupported'});
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) return done({ok: false, error: 'This browser can\'t record video.', type: 'unsupported'});
+    this._closeVideo();
+    var folder = cleanPath((m.folder || 'video') + '/x.webm') ? (m.folder || 'video') : 'video';
+    var max = Math.max(5, Math.min(240, +m.maxSeconds || 90));
+    var box = this.o.frame.parentNode; if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
+    var sheet = document.createElement('div'); sheet.className = 'ph-video ph-record';
+    sheet.style.cssText = 'position:absolute;inset:0;z-index:6;background:#0d0b09;color:#fff;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:12px;border-radius:inherit';
+    var h = document.createElement('p'); h.style.cssText = 'margin:0;font-weight:700'; h.textContent = clip(m.title, 120) ? 'Record: ' + clip(m.title, 120) : 'Record a video';
+    var v = document.createElement('video'); v.muted = true; v.playsInline = true; v.autoplay = true; v.style.cssText = 'width:100%;aspect-ratio:16/9;background:#000;border-radius:10px;object-fit:cover';
+    var st = document.createElement('p'); st.style.cssText = 'margin:0;font-size:14px;opacity:.85'; st.textContent = 'Asking for the camera and microphone…';
+    var row = document.createElement('div'); row.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
+    var b = function (t, cls) { var x = document.createElement('button'); x.type = 'button'; x.className = cls || 'btn'; x.textContent = t; x.hidden = true; row.appendChild(x); return x; };
+    var bRec = b('● Record'), bStop = b('■ Stop'), bSave = b('Save'), bRetake = b('Retake', 'btn ghost'), bCancel = b('Cancel', 'btn ghost');
+    bRetake.style.color = bCancel.style.color = '#fff'; bCancel.hidden = false;
+    sheet.appendChild(h); sheet.appendChild(v); sheet.appendChild(st); sheet.appendChild(row); box.appendChild(sheet); this._sheet = sheet;
+    this._stopRec = function () { done({ok: false, error: 'Cancelled.', type: 'cancelled'}); };
+    bCancel.onclick = function () { done({ok: false, error: 'Cancelled.', type: 'cancelled'}); };
+    function live() {
+      blob = null; if (url) { URL.revokeObjectURL(url); url = ''; } v.removeAttribute('src'); v.controls = false; v.muted = true; v.srcObject = stream; v.play().catch(function () {});
+      st.textContent = 'Ready. Press Record (up to ' + max + ' seconds).'; bRec.hidden = false; bStop.hidden = bSave.hidden = bRetake.hidden = true;
+    }
+    navigator.mediaDevices.getUserMedia({video: {width: {ideal: 1280}, height: {ideal: 720}}, audio: true}).then(function (s2) {
+      if (finished) { s2.getTracks().forEach(function (t) { t.stop(); }); return; }
+      stream = s2; live();
+    }).catch(function (e) {
+      var denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError'), none = e && (e.name === 'NotFoundError' || e.name === 'OverconstrainedError');
+      done({ok: false, error: denied ? 'Worldview needs the camera and microphone. Allow them for this site and try again.' : none ? 'No camera or microphone was found.' : 'The camera couldn\'t start.', type: denied ? 'camera_denied' : none ? 'no_camera' : 'camera_failed'});
+    });
+    bRec.onclick = function () {
+      var types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'], type = '';
+      for (var i = 0; i < types.length; i++) if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(types[i])) { type = types[i]; break; }
+      var chunks = [], bytes = 0, t0 = Date.now();
+      rec = new MediaRecorder(stream, Object.assign(type ? {mimeType: type} : {}, {videoBitsPerSecond: 1500000, audioBitsPerSecond: 96000}));
+      rec.ondataavailable = function (e) { if (e.data && e.data.size) { chunks.push(e.data); bytes += e.data.size; if (bytes >= 48 * 1024 * 1024 && rec.state === 'recording') rec.stop(); } };
+      rec.onstop = function () {
+        clearInterval(tick); if (finished) return;
+        blob = new Blob(chunks, {type: (rec.mimeType || type || 'video/webm').split(';')[0]});
+        v.srcObject = null; url = URL.createObjectURL(blob); v.src = url; v.muted = false; v.controls = true;
+        st.textContent = 'Review it. Save attaches it to the lesson; Retake records again.' + (blob.size >= 50 * 1024 * 1024 ? ' It is too large to save: record a shorter clip.' : '');
+        bStop.hidden = true; bSave.hidden = false; bSave.disabled = blob.size >= 50 * 1024 * 1024 || !blob.size; bRetake.hidden = false;
+      };
+      rec.start(500); bRec.hidden = true; bStop.hidden = false;
+      tick = setInterval(function () { var sec = Math.round((Date.now() - t0) / 1000); st.textContent = '● Recording ' + Math.floor(sec / 60) + ':' + ('0' + sec % 60).slice(-2) + ' / ' + Math.floor(max / 60) + ':' + ('0' + max % 60).slice(-2); if (sec >= max && rec.state === 'recording') rec.stop(); }, 250);
+    };
+    bStop.onclick = function () { if (rec && rec.state === 'recording') rec.stop(); };
+    bRetake.onclick = function () { live(); };
+    bSave.onclick = function () {
+      if (!blob) return;
+      var ext = /mp4/.test(blob.type) ? '.mp4' : '.webm', base = String(m.name || m.title || 'clip').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'clip';
+      var path = folder + '/' + base + '-' + new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14) + ext;
+      bSave.disabled = bRetake.disabled = bCancel.disabled = true; st.textContent = 'Saving to the lesson…';
+      Promise.resolve(self.o.saveFile(path, blob)).catch(function () { return null; }).then(function (r) {
+        if (r && r.ok) return done(Object.assign({}, r, {seconds: Math.round(v.duration) || null, mime: blob.type}));
+        bSave.disabled = bRetake.disabled = bCancel.disabled = false;
+        st.textContent = (r && r.error) || 'Saving failed.'; st.textContent += ' Try Save again, or Cancel.';
+      });
+    };
+  };
   PortHost.prototype._listen = function (m) {
     var self = this, id = clip(m.id, 40), full = !!m.full, gen = this.gen, finished = false;
     var done = function (r) {
@@ -188,6 +283,9 @@
       case 'done': this.done = true; if (m.summary && typeof m.summary === 'object' && m.summary.levels && typeof m.summary.levels === 'object') { var L = {}; Object.keys(m.summary.levels).slice(0, 8).forEach(function (k) { L[clip(k, 20)] = Math.max(0, Math.min(3, Math.round(+m.summary.levels[k]) || 0)); }); this.record.push({kind: 'understanding', question: '', answer: '', outcome: '', levels: L}); } if (this.o.progress) this.o.progress.style.width = '100%'; this._line('done', 'Finished. Nice work.'); this._changed(); break;
       case 'video': this._video(m); break;
       case 'listen': this._listen(m); break;
+      case 'record': this._record(m); break;
+      case 'savefile': this._saveFile(m); break;
+      case 'readfile': this._readFile(m); break;
       case 'ai': {
         var aid = clip(m.id, 40), gen = this.gen, t0 = Date.now();
         var msgs = (Array.isArray(m.messages) ? m.messages : []).slice(-40).map(function (x) { return {role: x && x.role === 'assistant' ? 'assistant' : 'user', content: clip(x && x.content, 4000)}; });
@@ -223,6 +321,7 @@
     add(/outcomes\s*:/.test(h), 'Says what students will be able to do', 'Add outcomes like "Can explain why…".');
     add(/\.(ask|predict)\s*\(/.test(h), 'Asks students something', 'Use wv.ask or wv.predict so their thinking is saved for you.');
     add(/\.done\s*\(/.test(h), 'Says when it\'s finished', 'Call wv.done() at the end.');
+    add(!/getUserMedia/.test(h), 'Recording works', 'Lessons can\'t use the camera themselves. Use wv.record() instead.');
     add(!/(webkit)?SpeechRecognition/.test(h), 'Voice works everywhere', 'Browser speech recognition doesn\'t work in Worldview lessons. Use wv.listen() instead.');
     add(!/<iframe[^>]+(youtube\.com|youtube-nocookie\.com|youtu\.be)/i.test(h), 'Videos play', 'YouTube can\'t play inside the lesson itself. Use wv.video(\'YouTube link\') instead.');
     var wide = (h.match(/(?:^|[;{\s"'])(?:min-)?width\s*:\s*(\d{3,4})px/g) || []).map(function (x) { return +x.match(/(\d{3,4})px/)[1]; }).filter(function (n) { return n >= 480; });

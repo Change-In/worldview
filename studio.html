@@ -205,7 +205,7 @@
 <dialog id="newdlg"><form id="newform"><h2>New lesson</h2><label class="small" for="newtitle">What's it called? You can change it later.</label><input type="text" id="newtitle" maxlength="120" placeholder="e.g. Why the Moon has phases"><div class="row"><button type="submit" class="btn">Create</button><button type="button" class="btn ghost" data-close>Cancel</button></div></form></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.40"></script>
+<script src="port-host.js?v=3.1.41"></script>
 <script>
 (() => {
   const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT', KIT = 'http://localhost:8195';
@@ -224,7 +224,7 @@
     try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai?mode=transcribe&lesson=' + lessonId + (runId ? '&run=' + runId : '') + (lang ? '&lang=' + lang : ''), {method: 'POST', headers: Object.assign({'content-type': blob.type || 'audio/webm'}, await authHeaders()), body: blob})); }
     catch (e) { return {ok: false, error: 'Worldview couldn\'t turn that recording into text. Check the internet connection.', type: 'network'}; }
   };
-  const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), showTiming: true, ai: req => { const r = askAI(req, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }, transcribe: (b, l) => { const r = hearAI(b, l, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }});
+  const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), showTiming: true, ai: req => { const r = askAI(req, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }, transcribe: (b, l) => { const r = hearAI(b, l, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }, saveFile: (p, b) => saveLessonFile(p, b)});
   let cur = null, lastSaved = '';
   // Student or Teacher: the lesson gets wv.viewer and can show the teacher extra things (NAV-173).
   function setView(v) {
@@ -488,6 +488,17 @@ ${RULES}`;
     const left = Math.max(0, (screen.availWidth || 1200) - 500), win = window.open(KIT + '/edit?w=' + cur.id + '&tool=' + encodeURIComponent(tool), 'wvedit-' + cur.id, 'popup=yes,width=480,height=680,left=' + left + ',top=60');
     clearTimeout(kitWait); $('#kithelp').hidden = true; kitWait = setTimeout(() => { if (!liveInfo) $('#kithelp').hidden = false; }, 20000);
     if (!win) toast('Your browser blocked the window. Allow pop-ups for this site, then press Edit again.');
+  }
+
+  /* ---------- lesson files saved from the lesson itself (wv.record, wv.saveFile; NAV-178) ---------- */
+  const FILES = URL_ + '/storage/v1/object/public/lesson-files/';
+  async function saveLessonFile(path, blob) {
+    if (!cur) return {ok: false, error: 'No lesson is open.', type: 'no_lesson'};
+    const {error} = await db.storage.from('lesson-files').upload(cur.id + '/' + path, blob, {upsert: true, contentType: blob.type || undefined, cacheControl: '10'});
+    if (error) return {ok: false, error: 'Saving to Worldview failed: ' + error.message, type: 'save_failed'};
+    let desktop = 'not_connected';
+    if (live && liveInfo) { try { const r = await live.send({type: 'broadcast', event: 'file', payload: {path}}); if (r === 'ok') desktop = 'sent'; } catch (e) {} }
+    return {ok: true, path, url: FILES + cur.id + '/' + path.split('/').map(encodeURIComponent).join('/'), size: blob.size, desktop};
   }
 
   /* ---------- Worldview AI cost (counts only; no words are kept) ---------- */
