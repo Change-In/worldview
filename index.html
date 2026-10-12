@@ -2219,7 +2219,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.43 · Oct 12";
+const BUILD = "v3.1.44 · Oct 12";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2227,6 +2227,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.44",date:"Oct 12",changes:["Student links now load a lesson's saved map and recordings (they showed empty boxes before).","Publishing locks in the videos, map and pictures with that version; recording or editing afterwards changes only the draft until you publish again.","After publishing: the link, a check that every file the lesson uses is on Worldview, and reminders. Published lessons have a Copy link button on the lessons page."]},
   {tag:"v3.1.43",date:"Oct 12",changes:["Teacher Studio notices when it has been updated and offers a Reload (or reloads by itself on the lessons page), so an open tab never runs old code.","Lessons never hang waiting: the player answers any request it doesn't know with a clear message."]},
   {tag:"v3.1.42",date:"Oct 12",changes:["Teacher Studio opens the preview as Teacher on a Laptop, and remembers your Student/Teacher and Phone/Laptop choices after refreshing or reopening. Student links always show the Student view."]},
   {tag:"v3.1.41",date:"Oct 12",changes:["Teacher Studio: lessons can record video with your camera and microphone (record, review, save). Clips are saved with the lesson so students can play them, and copied into your lesson folder.","Lessons can save their own data (like an edited map) with the lesson, so it works in every browser and for students."]},

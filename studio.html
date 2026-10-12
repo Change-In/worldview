@@ -106,6 +106,10 @@
   .stats > div { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; display:grid; }
   .stats b { font:400 28px Georgia,serif; } .stats span { font-size:13px; color:var(--ink-soft); }
   #pubside { max-width:860px; margin:0 auto; display:grid; gap:14px; }
+  .tilelink { position:absolute; left:10px; top:12px; z-index:2; appearance:none; border:0; background:var(--card); color:var(--ink); border-radius:999px; padding:4px 10px; font-size:12px; font-weight:750; cursor:pointer; box-shadow:0 3px 10px rgba(0,0,0,.25); }
+  .tilelink:hover { background:var(--accent); color:var(--on-accent); }
+  .checks { list-style:none; margin:0; padding:0; display:grid; gap:6px; font-size:14px; }
+  .checks li { display:flex; gap:8px; } .checks .warn { color:var(--warn); }
 </style>
 </head>
 <body>
@@ -189,6 +193,12 @@
   </div>
 </div>
 
+<dialog id="pubdlg" style="width:min(560px,calc(100vw - 32px))"><div style="display:grid;gap:12px">
+  <div class="row"><h2 class="grow" id="pubdlgtitle">Published</h2><button type="button" class="btn ghost small" data-close>Close</button></div>
+  <div class="link" id="pubdlglink"></div>
+  <div class="row"><button type="button" class="btn small" id="pubdlgcopy">Copy the link</button><a class="btn ghost small" id="pubdlgopen" target="_blank" rel="noopener">Open it as a student</a></div>
+  <ul class="checks" id="pubdlgchecks"></ul>
+</div></dialog>
 <dialog id="otherdlg" style="width:min(560px,calc(100vw - 32px))"><div style="display:grid;gap:10px">
   <div class="row"><h2 class="grow">Use a chat AI instead</h2><button type="button" class="btn ghost small" data-close>Close</button></div>
   <p class="small muted">In ChatGPT, Claude or Gemini: paste the starting prompt, then the finishing prompt, and paste the file it gives you here.</p>
@@ -197,6 +207,7 @@
   <div class="row"><button type="button" class="btn small" id="savepaste">Save it to the draft</button></div>
 </div></dialog>
 <div class="menu" id="tilemenu" role="menu" hidden style="position:fixed;right:auto">
+  <button type="button" role="menuitem" id="tlink">Copy student link</button>
   <button type="button" role="menuitem" id="tcopy">Make a copy</button>
   <button type="button" role="menuitem" class="danger" id="tdel">Delete lesson</button>
 </div>
@@ -205,7 +216,7 @@
 <dialog id="newdlg"><form id="newform"><h2>New lesson</h2><label class="small" for="newtitle">What's it called? You can change it later.</label><input type="text" id="newtitle" maxlength="120" placeholder="e.g. Why the Moon has phases"><div class="row"><button type="submit" class="btn">Create</button><button type="button" class="btn ghost" data-close>Cancel</button></div></form></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.43"></script>
+<script src="port-host.js?v=3.1.44"></script>
 <script>
 (() => {
   const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT', KIT = 'http://localhost:8195';
@@ -346,14 +357,14 @@ ${RULES}`;
     const V = {}; ((rels && rels.data) || []).forEach(r => { V[r.lesson_id] = Math.max(V[r.lesson_id] || 0, r.version); });
     const list = (data || []).map(l => Object.assign(l, {pub: l.shared ? (V[l.id] || -1) : 0})).sort((a, b) => (b.pub !== 0) - (a.pub !== 0));
     $('#grid').innerHTML = '<div style="display:grid;gap:10px"><button type="button" class="new" id="new" style="min-height:180px">+ New lesson</button><label class="new" for="upnew" style="min-height:46px;font-size:15px;cursor:pointer">Upload a lesson file</label><input type="file" id="upnew" accept=".html,.htm,text/html" hidden></div>'
-      + list.map(l => `<div class="tile" role="button" tabindex="0" data-open="${l.id}"><div class="thumb"><iframe sandbox="" scrolling="no" tabindex="-1" title="" data-thumb="${l.id}"></iframe></div>${l.pub ? `<span class="ribbon" data-results="${l.id}" title="See students' results"><span class="a">Published${l.pub > 0 ? ' v' + l.pub : ''}</span><span class="b">See results →</span></span>` : ''}<div class="info"><b>${esc(l.title)}</b><span class="small muted">${ago(l.updated_at)}</span></div><button type="button" class="tilemore" data-tilemenu="${l.id}" aria-label="More">⋯</button></div>`).join('');
+      + list.map(l => `<div class="tile" role="button" tabindex="0" data-open="${l.id}"><div class="thumb"><iframe sandbox="" scrolling="no" tabindex="-1" title="" data-thumb="${l.id}"></iframe></div>${l.pub ? `<span class="ribbon" data-results="${l.id}" title="See students' results"><span class="a">Published${l.pub > 0 ? ' v' + l.pub : ''}</span><span class="b">See results →</span></span><button type="button" class="tilelink" data-copylink="${l.id}">Copy link</button>` : ''}<div class="info"><b>${esc(l.title)}</b><span class="small muted">${ago(l.updated_at)}</span></div><button type="button" class="tilemore" data-tilemenu="${l.id}" aria-label="More">⋯</button></div>`).join('');
     THUMBS = {}; list.forEach(l => { THUMBS[l.id] = l.html; const f = document.querySelector(`[data-thumb="${l.id}"]`); if (f) f.srcdoc = WorldviewPortHost.compose(l.html, l.id); });
   }
   let tileTarget = null;
   function tileMenu(btn) {
     const m = $('#tilemenu'), r = btn.getBoundingClientRect();
     if (!m.hidden && tileTarget === btn.dataset.tilemenu) { m.hidden = true; return; }
-    tileTarget = btn.dataset.tilemenu; $('#tdel').dataset.sure = ''; $('#tdel').textContent = 'Delete lesson';
+    tileTarget = btn.dataset.tilemenu; $('#tdel').dataset.sure = ''; $('#tdel').textContent = 'Delete lesson'; $('#tlink').hidden = !btn.closest('.tile').querySelector('.ribbon');
     m.hidden = false; m.style.top = (r.bottom + 6) + 'px'; m.style.left = Math.max(8, r.right - m.offsetWidth) + 'px';
   }
   async function copyLesson(id) {
@@ -380,20 +391,78 @@ ${RULES}`;
     if (v === 'pub') { loadRuns(); loadAiUse(); }
   }
   async function loadReleases() {
-    const {data} = await db.from('worldview_teacher_lesson_releases').select('version,html,published_at').eq('lesson_id', cur.id).order('version', {ascending: false}).limit(50);
+    const {data} = await db.from('worldview_teacher_lesson_releases').select('version,html,published_at,files_frozen').eq('lesson_id', cur.id).order('version', {ascending: false}).limit(50);
     RELS = data || []; renderPubBar(); renderShare();
   }
   function renderPubBar() {
     const latest = RELS[0];
     $('#pubtab').textContent = latest ? 'Published v' + latest.version : 'Published';
     if (!latest) { $('#pubmsg').textContent = cur.shared ? 'Students get this draft as it changes.' : 'Only you can see this draft.'; $('#publish').textContent = 'Publish to students'; $('#publish').hidden = false; }
+    else if (!latest.files_frozen && latest.html === lastSaved) { $('#pubmsg').textContent = 'Students have v' + latest.version + ', but its videos and map aren\'t locked in yet.'; $('#publish').textContent = 'Lock in v' + latest.version; $('#publish').hidden = false; }
     else if (latest.html !== lastSaved) { $('#pubmsg').textContent = 'Students have v' + latest.version + '. This draft has changes since.'; $('#publish').textContent = 'Publish v' + (latest.version + 1); $('#publish').hidden = false; }
     else { $('#pubmsg').textContent = 'Students have this version (v' + latest.version + ').'; $('#publish').hidden = true; }
   }
+  /* NAV-179: a published version gets its own copy of the lesson's files (lesson-files/<id>/_v/<n>/),
+     so later recordings or map edits in the draft don't change what students have. */
+  const MEDIA_REF = /["'(\s]((?:[\w -]+\/)*[\w .-]+\.(?:mp4|webm|ogg|ogv|mov|m4v|mp3|m4a|wav|png|jpe?g|gif|webp|svg|json))(?=["')?#\s])/gi;
+  async function listLessonFiles(prefix, depth) {
+    const out = [], {data, error} = await db.storage.from('lesson-files').list(prefix, {limit: 1000});
+    if (error) throw error;
+    for (const it of data || []) {
+      if (it.name.startsWith('.')) continue;
+      const p = prefix + '/' + it.name;
+      if (!it.id) { if (depth === 0 && it.name === '_v') continue; if (depth < 4) out.push(...await listLessonFiles(p, depth + 1)); }
+      else out.push(p.slice(cur.id.length + 1));
+    }
+    return out;
+  }
+  async function removeFolder(prefix, depth) {
+    const {data} = await db.storage.from('lesson-files').list(prefix, {limit: 1000}); const files = [];
+    for (const it of data || []) { const p = prefix + '/' + it.name; if (!it.id) { if (depth < 5) await removeFolder(p, depth + 1); } else files.push(p); }
+    for (let i = 0; i < files.length; i += 100) await db.storage.from('lesson-files').remove(files.slice(i, i + 100));
+  }
+  async function lockInFiles(version) {
+    const files = await listLessonFiles(cur.id, 0);
+    let copied = 0;
+    for (const f of files) {
+      $('#pubmsg').textContent = 'Locking files into v' + version + ' (' + (copied + 1) + ' of ' + files.length + ')…';
+      const {error} = await db.storage.from('lesson-files').copy(cur.id + '/' + f, cur.id + '/_v/' + version + '/' + f);
+      if (error && !/exist/i.test(error.message)) throw new Error('Couldn\'t lock in ' + f + ': ' + error.message);
+      copied++;
+    }
+    const {error} = await db.rpc('worldview_teacher_lesson_release_files_done', {p_lesson: cur.id, p_version: version});
+    if (error) throw error;
+    // keep the two newest versions' copies (students mid-lesson on the previous one keep working)
+    try { const {data} = await db.storage.from('lesson-files').list(cur.id + '/_v', {limit: 1000}); for (const it of data || []) if (!it.id && /^\d+$/.test(it.name) && +it.name < version - 1) await removeFolder(cur.id + '/_v/' + it.name, 0); } catch (e) {}
+    // anything the lesson uses that isn't on Worldview
+    let mapText = ''; try { const r = await fetch(FILES + cur.id + '/map.json?t=' + Date.now(), {cache: 'no-store'}); if (r.ok) mapText = await r.text(); } catch (e) {}
+    const used = new Set(); for (const m of ((lastSaved || '') + ' ' + mapText).matchAll(MEDIA_REF)) { const p = m[1].trim().replace(/^\.\//, ''); if (!/^https?:/i.test(p) && !p.includes('..')) used.add(p); }
+    const missing = [...used].filter(p => !files.includes(p) && p !== 'map.json');
+    return {files, missing};
+  }
   async function publish() {
-    const {data, error} = await db.rpc('worldview_teacher_lesson_publish', {p_lesson: cur.id});
-    if (error) return toast('Couldn\'t publish it: ' + error.message);
-    cur.shared = true; await loadReleases(); toast('Published v' + data + '. Students now get this version.');
+    const latest = RELS[0], relock = latest && !latest.files_frozen && latest.html === lastSaved;
+    $('#publish').disabled = $('#publish2').disabled = true;
+    let version = relock ? latest.version : null;
+    try {
+      if (!relock) { const {data, error} = await db.rpc('worldview_teacher_lesson_publish', {p_lesson: cur.id}); if (error) throw error; version = data; cur.shared = true; }
+      const r = await lockInFiles(version);
+      await loadReleases(); showPublished(version, r);
+    } catch (e) {
+      await loadReleases(); toast((version ? 'v' + version + ' is published, but its files aren\'t locked in yet: ' : 'Couldn\'t publish it: ') + (e.message || e) + (version ? ' Press Lock in to try again.' : ''));
+    } finally { $('#publish').disabled = $('#publish2').disabled = false; }
+  }
+  function showPublished(version, r) {
+    const link = linkFor(cur.id);
+    $('#pubdlgtitle').textContent = 'v' + version + ' is live for students';
+    $('#pubdlglink').textContent = link; $('#pubdlgopen').href = link;
+    $('#pubdlgchecks').innerHTML = [
+      '<li>✓ <span>' + r.files.length + ' file' + (r.files.length === 1 ? '' : 's') + ' (videos, map, pictures) locked into v' + version + '. Recording or editing the draft won\'t change it.</span></li>',
+      r.missing.length ? '<li class="warn">⚠ <span>The lesson uses ' + r.missing.length + ' file' + (r.missing.length === 1 ? '' : 's') + ' that aren\'t on Worldview: ' + r.missing.slice(0, 6).map(esc).join(', ') + '. Open the editing window so they upload, then publish again.</span></li>' : '<li>✓ <span>Every file the lesson uses is on Worldview.</span></li>',
+      '<li>☐ <span>Open the link on your phone and go through it once as a student.</span></li>',
+      '<li>☐ <span>Send the link to your students. They keep v' + version + ' until you publish again.</span></li>',
+    ].join('');
+    $('#pubdlg').showModal();
   }
   function renderShare() {
     const latest = RELS[0], has = !!latest || cur.shared;
@@ -542,6 +611,7 @@ ${RULES}`;
     if (!e.target.closest('.morewrap')) moreMenu(false);
     if (!e.target.closest('#tilemenu') && !e.target.closest('[data-tilemenu]')) $('#tilemenu').hidden = true;
     const rb = e.target.closest('[data-results]'); if (rb) return showLesson(rb.dataset.results, true, 'pub');
+    const cl = e.target.closest('[data-copylink]'); if (cl) { const ok = await copy(linkFor(cl.dataset.copylink)); return toast(ok ? 'Student link copied.' : linkFor(cl.dataset.copylink)); }
     const tm = e.target.closest('[data-tilemenu]'); if (tm) return tileMenu(tm);
     const tile = e.target.closest('.tile[data-open]'); if (tile && !e.target.closest('button')) return showLesson(tile.dataset.open, true);
     const b = e.target.closest('button'); if (!b) return;
@@ -566,6 +636,8 @@ ${RULES}`;
       case 'fs': return setFs(!$('#stage').classList.contains('fs'));
       case 'more': return moreMenu();
       case 'publish': case 'publish2': return publish();
+      case 'tlink': { $('#tilemenu').hidden = true; const ok = await copy(linkFor(tileTarget)); return toast(ok ? 'Student link copied.' : linkFor(tileTarget)); }
+      case 'pubdlgcopy': { const ok = await copy(linkFor(cur.id)); return toast(ok ? 'Link copied.' : 'Copy the link from the box.'); }
       case 'tcopy': { $('#tilemenu').hidden = true; if (await copyLesson(tileTarget)) showGrid(); return; }
       case 'tdel': {
         if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Press again to delete'; return; }
@@ -601,7 +673,7 @@ ${RULES}`;
   addEventListener('popstate', () => { const l = new URLSearchParams(location.search).get('l'); if (l) showLesson(l); else showGrid(); });
   addEventListener('focus', poll);
   // A page keeps the code it loaded with. When Teacher Studio is updated, offer a reload (or just reload on the lessons page).
-  const STUDIO_VERSION = '3.1.43';
+  const STUDIO_VERSION = '3.1.44';
   async function checkStudioUpdate() {
     try {
       const t = await fetch('studio.html?check=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '');

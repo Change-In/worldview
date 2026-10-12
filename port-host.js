@@ -29,8 +29,9 @@
     "addEventListener('error',function(e){try{parent.postMessage({port:'worldview',v:1,type:'crash',message:String(e.message||'error').slice(0,200)},'*');}catch(x){}});";
 
   var FILES = 'https://eqppapoepynjvsfnoodj.supabase.co/storage/v1/object/public/lesson-files/';
-  function compose(body, lessonId) {
-    var base = lessonId && !/<base\s/i.test(body) ? '<base href="' + FILES + encodeURIComponent(lessonId) + '/">' : '';
+  function filesRoot(lessonId, prefix) { return FILES + encodeURIComponent(lessonId) + '/' + (/^_v\/\d{1,4}\/$/.test(prefix || '') ? prefix : ''); }
+  function compose(body, lessonId, prefix) {
+    var base = lessonId && !/<base\s/i.test(body) ? '<base href="' + filesRoot(lessonId, prefix) + '">' : '';
     var head = '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' + base + '<script>' + SDK + '<\/script>';
     if (/<head[^>]*>/i.test(body)) return body.replace(/<head[^>]*>/i, function (m) { return m + head; });
     if (/<html[^>]*>/i.test(body)) return body.replace(/<html[^>]*>/i, function (m) { return m + '<head>' + head + '</head>'; });
@@ -45,11 +46,13 @@
     this._listener = function (e) { if (e.source === self.o.frame.contentWindow) self._message(e.data); };
     addEventListener('message', this._listener);
   }
-  PortHost.prototype.run = function (html, lessonId) {
+  /* run(html, lessonId, filesPrefix): filesPrefix '_v/3/' plays a published version's locked-in files. */
+  PortHost.prototype.run = function (html, lessonId, filesPrefix) {
+    if (lessonId) this.o.lessonId = lessonId; if (filesPrefix !== undefined) this.o.filesPrefix = filesPrefix || '';
     this.q = []; this.preds = {}; this.record = []; this.connected = false; this.done = false; this.manifest = null; this.aiCount = 0; this.gen = (this.gen || 0) + 1;
     this.o.panel.innerHTML = ''; if (this.o.progress) this.o.progress.style.width = '0';
     this._closeVideo();
-    this.o.frame.srcdoc = compose(String(html || ''), lessonId || this.o.lessonId);
+    this.o.frame.srcdoc = compose(String(html || ''), this.o.lessonId, this.o.filesPrefix);
     var self = this; clearTimeout(this._t);
     this._t = setTimeout(function () { if (!self.connected) self._line('note', 'This lesson isn\'t connected to Worldview, so its questions won\'t appear here. You can still use it above.'); }, 3500);
   };
@@ -80,7 +83,7 @@
   PortHost.prototype._readFile = function (m) {
     var self = this, id = clip(m.id, 40), path = cleanPath(m.path), lid = this.o.lessonId;
     if (!path || !lid) return this._fileReply(id, null);
-    fetch(FILES_BASE + encodeURIComponent(lid) + '/' + path.split('/').map(encodeURIComponent).join('/') + '?t=' + Date.now(), {cache: 'no-store'})
+    fetch(filesRoot(lid, this.o.filesPrefix) + path.split('/').map(encodeURIComponent).join('/') + '?t=' + Date.now(), {cache: 'no-store'})
       .then(function (r) { return r.ok ? r.text() : null; }).catch(function () { return null; }).then(function (t) { self._fileReply(id, t); });
   };
   PortHost.prototype._record = function (m) {

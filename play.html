@@ -36,7 +36,7 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.43"></script>
+<script src="port-host.js?v=3.1.44"></script>
 <script>
 (() => {
   const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT';
@@ -75,7 +75,8 @@
     $('#intro').hidden = true; $('#lesson').hidden = false; $('#title').textContent = lesson.title;
     const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), ai: req => askAI(req, lesson.id, runId), transcribe: (b, l) => hearAI(b, l, lesson.id, runId),
       onChange: (record, done) => { latest = record; finished = done; clearTimeout(timer); timer = setTimeout(save, done ? 0 : 800); }});
-    host.run(lesson.html, lesson.id);
+    // a published version plays its own locked-in files; older versions use the lesson's files
+    host.run(lesson.html, lesson.id, lesson.version && lesson.files_frozen ? '_v/' + lesson.version + '/' : '');
     save();
   });
 })();
