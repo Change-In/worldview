@@ -146,8 +146,8 @@
       <div class="pubbar"><span id="pubmsg"></span><button type="button" class="btn small" id="publish">Publish</button></div>
       <div class="stage" id="stage">
         <div class="tools">
-          <div class="seg" role="group" aria-label="See it as"><button type="button" class="on" data-view="student">Student</button><button type="button" data-view="teacher">Teacher</button></div>
-          <div class="seg" role="group" aria-label="Preview size"><button type="button" class="on" data-dev="phone">Phone</button><button type="button" data-dev="laptop">Laptop</button></div>
+          <div class="seg" role="group" aria-label="See it as"><button type="button" data-view="student">Student</button><button type="button" class="on" data-view="teacher">Teacher</button></div>
+          <div class="seg" role="group" aria-label="Preview size"><button type="button" data-dev="phone">Phone</button><button type="button" class="on" data-dev="laptop">Laptop</button></div>
         </div>
         <div class="phone" id="phone"><div class="livebadge" id="livebadge" hidden></div>
           <div class="corner"><button type="button" class="cbtn" id="restart" aria-label="Refresh the preview"><span>↻</span><em>Refresh</em></button><button type="button" class="cbtn" id="fs" aria-label="Full screen"><span>⛶</span><em id="fslabel">Full screen</em></button></div>
@@ -231,9 +231,13 @@
     host.o.viewer = v === 'teacher' ? 'teacher' : 'student';
     document.querySelectorAll('[data-view]').forEach(x => x.classList.toggle('on', x.dataset.view === host.o.viewer));
     $('#viewnote').textContent = host.o.viewer === 'teacher' ? 'Your teacher view: only you see this, here in Teacher Studio.' : 'This is what students see.';
-    try { localStorage.setItem('wv-view', host.o.viewer); } catch (e) {}
+    try { localStorage.setItem('wv-preview-view', host.o.viewer); } catch (e) {}
   }
-  try { setView(localStorage.getItem('wv-view') || 'student'); } catch (e) { setView('student'); }
+  // Teacher Studio previews as Teacher on a Laptop unless the teacher switched (remembered on this device). Student links (/play) are always Student.
+  let saved = {}; try { saved = {view: localStorage.getItem('wv-preview-view'), dev: localStorage.getItem('wv-preview-dev')}; } catch (e) {}
+  setView(saved.view === 'student' ? 'student' : 'teacher');
+  function setDev(d) { d = d === 'phone' ? 'phone' : 'laptop'; document.querySelectorAll('[data-dev]').forEach(x => x.classList.toggle('on', x.dataset.dev === d)); const wide = d === 'laptop'; $('#phone').classList.toggle('laptop', wide); $('#stage').classList.toggle('wide', wide); $('#barw').style.maxWidth = wide ? '960px' : '400px'; try { localStorage.setItem('wv-preview-dev', d); } catch (e) {} }
+  setDev(saved.dev);
   const toast = m => { document.querySelectorAll('.toast').forEach(t => t.remove()); const t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3500); };
   const copy = async t => { try { await navigator.clipboard.writeText(t); return true; } catch (e) { return false; } };
   const ago = t => { const m = Math.round((Date.now() - new Date(t).getTime()) / 60000); return m < 1 ? 'edited just now' : m < 60 ? `edited ${m} min ago` : m < 1440 ? `edited ${Math.round(m / 60)} h ago` : 'edited ' + new Date(t).toLocaleDateString(); };
@@ -554,7 +558,7 @@ ${RULES}`;
     if (b.id === 'gnext') { if (G.i >= guideSteps().length - 1) return finishGuide(); G.i++; return guideRender(); }
     if (b.dataset.open) return showLesson(b.dataset.open, true);
     if (b.dataset.view) { setView(b.dataset.view); host.run(lastSaved || cur.html); return; }
-    if (b.dataset.dev) { document.querySelectorAll('[data-dev]').forEach(x => x.classList.toggle('on', x === b)); const wide = b.dataset.dev === 'laptop'; $('#phone').classList.toggle('laptop', wide); $('#stage').classList.toggle('wide', wide); $('#barw').style.maxWidth = wide ? '960px' : '400px'; return; }
+    if (b.dataset.dev) return setDev(b.dataset.dev);
     switch (b.id) {
       case 'new': $('#newtitle').value = ''; return $('#newdlg').showModal();
       case 'back': history.pushState({}, '', 'studio.html'); return showGrid();
