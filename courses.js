@@ -293,11 +293,34 @@
   const aiNext = () => { let i = 0; for (const c of AIRACE.chapters) { for (const l of c.lessons) { if (i === AI_DONE) return l.t; i++; } if (i === AI_DONE) return 'the chapter quiz'; i++; } return ''; };
   const aiItems = () => { const out = []; AIRACE.chapters.forEach(c => { c.lessons.forEach(() => out.push(false)); out.push(true); }); return out; };
 
+  /* ---------------- real lessons published in Teacher Studio (NAV-180) ----------------
+     Everything else on this page is a sample; these are the owner's real, published lessons. */
+  let PUB = null;
+  async function loadPublished() {
+    const db = read(() => backendClient); if (!db) { PUB = []; return; }
+    try {
+      const [{data: ls}, {data: rs}] = await Promise.all([
+        db.from('worldview_teacher_lessons').select('id,title,shared,updated_at').eq('shared', true).order('updated_at', {ascending: false}),
+        db.from('worldview_teacher_lesson_releases').select('lesson_id,version,published_at')]);
+      const V = {}; (rs || []).forEach(r => { if (!V[r.lesson_id] || r.version > V[r.lesson_id].version) V[r.lesson_id] = r; });
+      PUB = (ls || []).map(l => ({id: l.id, title: l.title, version: V[l.id] ? V[l.id].version : null, at: V[l.id] ? V[l.id].published_at : l.updated_at}));
+    } catch (e) { PUB = []; }
+    if (S.open && S.scr === 'home') render();
+  }
+  const playLink = id => new URL('play.html?l=' + id, location.href).href;
+  function publishedSection(label) {
+    if (PUB === null) return '<div class="cv-lab">' + label + '</div><p class="cv-muted" style="margin:0">Loading…</p>';
+    if (!PUB.length) return '<div class="cv-lab">' + label + '</div><a class="cv-find" href="studio.html" style="text-decoration:none"><span class="cv-find-i">+</span><span><b>Nothing published yet</b><span>Make a lesson in Teacher Studio and press Publish. It appears here.</span></span></a>';
+    return '<div class="cv-lab">' + label + '</div>' + PUB.map(p => `<div class="cv-course cv-real"><span class="t"><b>${esc(p.title)}</b>${chip(p.version ? 'Published v' + p.version : 'Shared', 'ok')}</span><span class="nx">${p.at ? 'Published ' + esc(new Date(p.at).toLocaleDateString([], {month: 'short', day: 'numeric'})) + ' · ' : ''}Students open it with a link, no account needed</span>
+      <div class="cv-row" style="flex-wrap:wrap"><a class="cv-pill" href="${playLink(p.id)}" target="_blank" rel="noopener" style="text-decoration:none">Open lesson</a><button type="button" class="cv-pill ghost" data-copylink="${p.id}">Copy link</button><a class="cv-pill ghost" href="studio.html?l=${p.id}&side=pub" style="text-decoration:none">Results</a><a class="cv-pill ghost" href="studio.html?l=${p.id}" style="text-decoration:none">Edit</a></div></div>`).join('');
+  }
+  const samplesNote = '<div class="cv-lab cv-samplelab">Samples <span>made-up courses that show how this page could look; not real yet</span></div>';
+
   /* ---------------- screens ---------------- */
   function scrHome() {
     const tabs = `<div class="cv-seg" role="tablist"><button type="button" role="tab" data-ctab="mine" class="${S.tab === 'mine' ? 'on' : ''}" aria-selected="${S.tab === 'mine'}">My courses</button><button type="button" role="tab" data-ctab="explore" class="${S.tab === 'explore' ? 'on' : ''}" aria-selected="${S.tab === 'explore'}">Explore</button></div>`;
     const head = `<div class="cv-head"><h1>Courses</h1><a class="cv-pill" href="studio.html" style="text-decoration:none">Teacher Studio</a></div><span class="cv-note"><i></i>Preview · only your account sees this</span>`;
-    return head + tabs + (S.tab === 'mine' ? mine() : explore());
+    return head + tabs + (S.tab === 'mine' ? publishedSection('Your published lessons') + samplesNote + '<div class="cv-samples">' + mine() + '</div>' : explore());
   }
   function courseRow(c) {
     const open = S.expanded === c.key;
@@ -361,7 +384,7 @@
     if (S.allCourses) return `<div class="cv-head"><button type="button" class="cv-back" data-allback="1" aria-label="Back">‹</button><h1 class="sm">All courses</h1></div>
       <div class="cv-row"><span class="cv-muted">${CATALOG.length} courses</span><span class="sp"></span>${sortSeg()}</div>
       <div class="cv-list">${CATALOG.slice().sort(sortFns[S.sort]).map(courseCard).join('')}</div>`;
-    return `${searchBox()}
+    return `${publishedSection('Published on Worldview')}${samplesNote}<div class="cv-samples">${searchBox()}
       <div id="cv-results-wrap"${S.query ? '' : ' hidden'}><div class="cv-row"><span class="cv-lab" style="margin:0">Results</span><span class="sp"></span>${sortSeg()}</div><div class="cv-list" id="cv-results">${S.query ? results(CATALOG) : ''}</div></div>
       <div id="cv-browse"${S.query ? ' hidden' : ''}>
         <span class="cv-lab" style="margin:0">Happening now</span>
@@ -371,8 +394,8 @@
         ${shelf('Worldview Essentials', ESSENTIALS.map(course))}
         ${shelf('Popular this week', CATALOG.slice().sort(sortFns.popular).slice(0, 8))}
         ${shelf('New', CATALOG.slice().sort(sortFns.new).slice(0, 8))}
-        <p class="cv-muted cv-center">Hover over a course, or tap it on a phone, for its description and reviews. Every course except The AI Race is a sample.</p>
-      </div>`;
+        <p class="cv-muted cv-center">Hover over a course, or tap it on a phone, for its description and reviews.</p>
+      </div></div>`;
   }
   function scrCategory() {
     const cat = CATS.find(c => c.id === S.cat) || CATS[0];
@@ -541,7 +564,7 @@
   function go(scr) { S.scr = scr; S.sheet = null; render(); view.scrollTop = 0; }
 
   /* ---------------- open / close and the bar ---------------- */
-  function openCourses() { S.open = true; view.hidden = false; document.body.classList.add('cv-open'); render(); }
+  function openCourses() { loadPublished(); S.open = true; view.hidden = false; document.body.classList.add('cv-open'); render(); }
   function closeCourses() { hidePeek(); document.body.classList.remove('cv-sheet-open'); S.open = false; S.sheet = null; view.hidden = true; document.body.classList.remove('cv-open'); syncBar(); }
   let forcedTab = '', forcedAt = 0;
   function syncBar() {
@@ -609,7 +632,9 @@
   });
 
   /* ---------------- events ---------------- */
-  view.addEventListener('click', e => {
+  view.addEventListener('click', async e => {
+    const cl = e.target.closest('[data-copylink]');
+    if (cl) { const link = playLink(cl.dataset.copylink); let ok = false; try { await navigator.clipboard.writeText(link); ok = true; } catch (x) {} toast(ok ? 'Student link copied.' : link); return; }
     if (peekTap(e)) return;
     const t = e.target.closest('[data-go],[data-ctab],[data-expand],[data-open-lesson],[data-ch],[data-lesson],[data-try],[data-start],[data-sheet],[data-close],[data-toast],[data-qstep],[data-qexample],[data-qpause],[data-msend],[data-mex],[data-mreset],[data-mall],[data-copyprompt],[data-cat],[data-sub],[data-sort],[data-add],[data-remove],[data-viewcourse],[data-viewclass],[data-school],[data-schoolback],[data-join],[data-leave],[data-branch],[data-rnav],[data-allcourses],[data-allback]');
     if (!t) return;

@@ -673,7 +673,7 @@ ${RULES}`;
   addEventListener('popstate', () => { const l = new URLSearchParams(location.search).get('l'); if (l) showLesson(l); else showGrid(); });
   addEventListener('focus', poll);
   // A page keeps the code it loaded with. When Teacher Studio is updated, offer a reload (or just reload on the lessons page).
-  const STUDIO_VERSION = '3.1.44';
+  const STUDIO_VERSION = '3.1.45';
   async function checkStudioUpdate() {
     try {
       const t = await fetch('studio.html?check=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '');
@@ -692,7 +692,7 @@ ${RULES}`;
     const {data} = await db.auth.getSession(); const s = data && data.session;
     if (!s || !s.user || s.user.is_anonymous) { $('#signedout').hidden = false; return; }
     $('#who').textContent = s.user.email || '';
-    const l = new URLSearchParams(location.search).get('l'); if (l) showLesson(l); else showGrid();
+    const q = new URLSearchParams(location.search), l = q.get('l'); if (l) showLesson(l, false, q.get('side') === 'pub' ? 'pub' : 'draft'); else showGrid();
   })();
 })();
 </script>
