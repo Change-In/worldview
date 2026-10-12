@@ -308,6 +308,8 @@
         break;
       }
       case 'crash': this._line('note', 'The lesson hit a problem: ' + clip(m.message, 160)); break;
+      // A request this player doesn't know (a newer lesson, an older page): answer it, so the lesson never waits forever.
+      default: if (m.id != null && ['evidence', 'remember', 'progress', 'done', 'say', 'event', 'result', 'hello'].indexOf(m.type) < 0) this._send('answer', {id: clip(m.id, 40), value: {ok: false, error: 'This Worldview page doesn\'t support ' + clip(m.type, 30) + ' yet. Reload the page.', type: 'unsupported'}});
     }
   };
 

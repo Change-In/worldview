@@ -205,7 +205,7 @@
 <dialog id="newdlg"><form id="newform"><h2>New lesson</h2><label class="small" for="newtitle">What's it called? You can change it later.</label><input type="text" id="newtitle" maxlength="120" placeholder="e.g. Why the Moon has phases"><div class="row"><button type="submit" class="btn">Create</button><button type="button" class="btn ghost" data-close>Cancel</button></div></form></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.41"></script>
+<script src="port-host.js?v=3.1.43"></script>
 <script>
 (() => {
   const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT', KIT = 'http://localhost:8195';
@@ -600,6 +600,21 @@ ${RULES}`;
   $('#shared').addEventListener('change', async e => { if (!(await save({shared: e.target.checked}, true))) e.target.checked = !e.target.checked; renderShare(); renderPubBar(); toast(e.target.checked ? 'Open: the link works again.' : 'Closed: the link stops working until you open it again.'); });
   addEventListener('popstate', () => { const l = new URLSearchParams(location.search).get('l'); if (l) showLesson(l); else showGrid(); });
   addEventListener('focus', poll);
+  // A page keeps the code it loaded with. When Teacher Studio is updated, offer a reload (or just reload on the lessons page).
+  const STUDIO_VERSION = '3.1.43';
+  async function checkStudioUpdate() {
+    try {
+      const t = await fetch('studio.html?check=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '');
+      const v = (t.match(/const STUDIO_VERSION = '([^']+)'/) || [])[1];
+      if (!v || v === STUDIO_VERSION) return;
+      if (!cur) return location.reload();
+      if (document.getElementById('updbar')) return;
+      const bar = document.createElement('div'); bar.id = 'updbar'; bar.className = 'toast'; bar.style.bottom = '18px';
+      bar.innerHTML = 'Teacher Studio was updated. <button type="button" class="btn small" style="margin-left:8px" onclick="location.reload()">Reload</button>';
+      document.body.appendChild(bar);
+    } catch (e) {}
+  }
+  setInterval(checkStudioUpdate, 5 * 60 * 1000); addEventListener('focus', checkStudioUpdate);
 
   (async () => {
     const {data} = await db.auth.getSession(); const s = data && data.session;
