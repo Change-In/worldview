@@ -36,7 +36,7 @@
   const ownershipResolved = () => !!read(() => typeof accountOwnershipResolved !== 'undefined' && accountOwnershipResolved);
   const entitlementKnown = () => !!read(() => typeof backendEntitlementRecord !== 'undefined' && backendEntitlementRecord);
   let ownerSeen = '';
-  function allowed() {
+  function ownerAllowed() {
     if (LOCAL_FLAG) return true;
     if (verifiedOwner()) { const id = accountId(); if (id) { store.set('owner', id); ownerSeen = id; } return true; }
     const cached = store.get('owner', '');
@@ -50,6 +50,12 @@
     if (same && ownerSeen === cached && (stillChecking || status === 'offline')) return true;
     return same && stillChecking && Date.now() - BOOT < 20000;
   }
+
+  // NAV-181 (2026-10-12): every signed-in account sees Courses; the owner keeps the extras (Teacher Studio, the preview note).
+  const signedIn = () => !!read(() => typeof permanentAccountVerified === 'function' && permanentAccountVerified());
+  let wasSignedIn = false;
+  function allowed() { const owner = ownerAllowed(); const yes = owner || signedIn() || (wasSignedIn && ['pending', 'checking', 'offline', ''].includes(identity())); if (yes && !owner) wasSignedIn = true; return yes; }
+  const isOwner = () => !!read(() => ownerAllowed());
 
   /* ---------------- the owner's course ---------------- */
   const clip = (title, meta, rule) => ({k:'clip', title, meta, rule});
@@ -295,9 +301,9 @@
 
   /* ---------------- real lessons published in Teacher Studio (NAV-180) ----------------
      Everything else on this page is a sample; these are the owner's real, published lessons. */
-  let PUB = null;
+  let PUB = null, CAT = null;
   async function loadPublished() {
-    const db = read(() => backendClient); if (!db) { PUB = []; return; }
+    const db = read(() => backendClient); if (!db) { PUB = []; CAT = []; return; }
     try {
       const [{data: ls}, {data: rs}] = await Promise.all([
         db.from('worldview_teacher_lessons').select('id,title,shared,updated_at').eq('shared', true).order('updated_at', {ascending: false}),
@@ -305,9 +311,16 @@
       const V = {}; (rs || []).forEach(r => { if (!V[r.lesson_id] || r.version > V[r.lesson_id].version) V[r.lesson_id] = r; });
       PUB = (ls || []).map(l => ({id: l.id, title: l.title, version: V[l.id] ? V[l.id].version : null, at: V[l.id] ? V[l.id].published_at : l.updated_at}));
     } catch (e) { PUB = []; }
+    try { const {data} = await db.rpc('worldview_teacher_lessons_catalog'); CAT = data || []; } catch (e) { CAT = []; }
     if (S.open && S.scr === 'home') render();
   }
   const playLink = id => new URL('play.html?l=' + id, location.href).href;
+  function catalogSection(label) {
+    if (CAT === null) return '<div class="cv-lab">' + label + '</div><p class="cv-muted" style="margin:0">Loading…</p>';
+    if (!CAT.length) return '<div class="cv-lab">' + label + '</div><p class="cv-muted" style="margin:0">No lessons yet. Lessons appear here when teachers publish them.</p>';
+    return '<div class="cv-lab">' + label + '</div>' + CAT.map(p => `<div class="cv-course cv-real"><span class="t"><b>${esc(p.title)}</b>${chip('Lesson', 'ok')}</span><span class="nx">${p.published_at ? 'Updated ' + esc(new Date(p.published_at).toLocaleDateString([], {month: 'short', day: 'numeric'})) + ' · ' : ''}Made by a teacher on Worldview</span>
+      <div class="cv-row" style="flex-wrap:wrap"><a class="cv-pill" href="${playLink(p.id)}" style="text-decoration:none">Start lesson</a><button type="button" class="cv-pill ghost" data-copylink="${p.id}">Copy link</button></div></div>`).join('');
+  }
   function publishedSection(label) {
     if (PUB === null) return '<div class="cv-lab">' + label + '</div><p class="cv-muted" style="margin:0">Loading…</p>';
     if (!PUB.length) return '<div class="cv-lab">' + label + '</div><a class="cv-find" href="studio.html" style="text-decoration:none"><span class="cv-find-i">+</span><span><b>Nothing published yet</b><span>Make a lesson in Teacher Studio and press Publish. It appears here.</span></span></a>';
@@ -319,8 +332,9 @@
   /* ---------------- screens ---------------- */
   function scrHome() {
     const tabs = `<div class="cv-seg" role="tablist"><button type="button" role="tab" data-ctab="mine" class="${S.tab === 'mine' ? 'on' : ''}" aria-selected="${S.tab === 'mine'}">My courses</button><button type="button" role="tab" data-ctab="explore" class="${S.tab === 'explore' ? 'on' : ''}" aria-selected="${S.tab === 'explore'}">Explore</button></div>`;
-    const head = `<div class="cv-head"><h1>Courses</h1><a class="cv-pill" href="studio.html" style="text-decoration:none">Teacher Studio</a></div><span class="cv-note"><i></i>Preview · only your account sees this</span>`;
-    return head + tabs + (S.tab === 'mine' ? publishedSection('Your published lessons') + samplesNote + '<div class="cv-samples">' + mine() + '</div>' : explore());
+    const head = isOwner() ? `<div class="cv-head"><h1>Courses</h1><a class="cv-pill" href="studio.html" style="text-decoration:none">Teacher Studio</a></div><span class="cv-note"><i></i>Preview · only your account sees this</span>` : `<div class="cv-head"><h1>Courses</h1></div>`;
+    const top = isOwner() ? publishedSection('Your published lessons') : catalogSection('Lessons on Worldview') + (PUB && PUB.length ? publishedSection('Your published lessons') : '');
+    return head + tabs + (S.tab === 'mine' ? top + samplesNote + '<div class="cv-samples">' + mine() + '</div>' : explore());
   }
   function courseRow(c) {
     const open = S.expanded === c.key;
@@ -332,7 +346,7 @@
   }
   function mine() {
     const rows = [];
-    rows.push(courseRow({key:'airace', title:'The AI Race', badge:chip('Yours', 'acc'), sub:'You made this · 3 chapters · 17 lessons', items:aiItems(), done:AI_DONE, next:'Next: ' + aiNext(),
+    rows.push(courseRow({key:'airace', title:'The AI Race', badge:isOwner() ? chip('Yours', 'acc') : '', sub:(isOwner() ? 'You made this' : 'by Cristian P.') + ' · 3 chapters · 17 lessons', items:aiItems(), done:AI_DONE, next:'Next: ' + aiNext(),
       rows:route(aiChapters(), {done:AI_DONE, attr:(ci, li) => `data-open-lesson="${ci}:${li}"`, quizAttr:ci => `data-go="quiz" data-quizch="${ci}"`}),
       actions:'<button type="button" class="cv-pill" data-go="course">Open course</button><button type="button" class="cv-pill ghost" data-try="0:1">Continue for real</button>'}));
     S.added.filter(id => id !== 'airace' && course(id)).forEach(id => {
@@ -384,7 +398,7 @@
     if (S.allCourses) return `<div class="cv-head"><button type="button" class="cv-back" data-allback="1" aria-label="Back">‹</button><h1 class="sm">All courses</h1></div>
       <div class="cv-row"><span class="cv-muted">${CATALOG.length} courses</span><span class="sp"></span>${sortSeg()}</div>
       <div class="cv-list">${CATALOG.slice().sort(sortFns[S.sort]).map(courseCard).join('')}</div>`;
-    return `${publishedSection('Published on Worldview')}${samplesNote}<div class="cv-samples">${searchBox()}
+    return `${catalogSection('Lessons on Worldview')}${samplesNote}<div class="cv-samples">${searchBox()}
       <div id="cv-results-wrap"${S.query ? '' : ' hidden'}><div class="cv-row"><span class="cv-lab" style="margin:0">Results</span><span class="sp"></span>${sortSeg()}</div><div class="cv-list" id="cv-results">${S.query ? results(CATALOG) : ''}</div></div>
       <div id="cv-browse"${S.query ? ' hidden' : ''}>
         <span class="cv-lab" style="margin:0">Happening now</span>
