@@ -338,3 +338,9 @@ body.cv-sheet-open #wv-tabbar { display:none; }
 .cv-route { scrollbar-width:thin; scrollbar-color:color-mix(in srgb,var(--ink-soft, #999) 45%,transparent) transparent; }
 .cv-route::-webkit-scrollbar { display:block; height:6px; }
 .cv-route::-webkit-scrollbar-thumb { background:color-mix(in srgb,var(--ink-soft, #999) 45%,transparent); border-radius:6px; }
+
+/* 2026-10-14: on a desktop, the account and menu buttons stay in the top-left corner on Home, Profile and Courses */
+@media (min-width: 900px) {
+  body.wv-tabs #home-header .home-header-left, body.cv-open #home-header .home-header-left { position:fixed; top:calc(env(safe-area-inset-top) + 14px); left:16px; z-index:207; }
+  body.cv-open #courses-view .cv-wrap { padding-top:8px; }
+}

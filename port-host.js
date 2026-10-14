@@ -11,17 +11,19 @@
    Worldview's transcript (NAV-176). wv.record (camera + mic, review, save) and
    wv.saveFile work only in Teacher Studio, for the lesson's owner: files go to the
    lesson's Worldview files (and the teacher's lesson folder); wv.readFile reads them
-   back for anyone (NAV-178). */
+   back for anyone (NAV-178). wv.audio streams on-device pitch and level readings
+   (the microphone is captured here, never sent anywhere); wv.state keeps a student's
+   place per run; welcome carries capabilities so lessons can check support (NAV-182). */
 (function () {
   'use strict';
-  var SDK = "(function(){window.WorldviewPort=function(manifest,handlers){handlers=handlers||{};var waiting={},aiN=0,inFrame=window.parent!==window;" +
+  var SDK = "(function(){window.WorldviewPort=function(manifest,handlers){handlers=handlers||{};var waiting={},aiN=0,audioCb=null,audioEnd=null,inFrame=window.parent!==window;" +
     "function send(type,body){try{parent.postMessage(Object.assign({port:'worldview',v:1,type:type},body||{}),'*');}catch(e){}}" +
     "addEventListener('message',function(e){var m=e.data;if(!m||m.port!=='worldview'||e.source!==parent)return;" +
-    "if(m.type==='welcome'){api.viewer=m.viewer==='teacher'?'teacher':'student';if(handlers.onWelcome)handlers.onWelcome(m);}if(m.type==='answer'&&waiting[m.id]){var d=waiting[m.id];delete waiting[m.id];d(m.value);}" +
+    "if(m.type==='audioframe'&&audioCb){try{audioCb(m.frame);}catch(x){}}if(m.type==='audioend'){var en=audioEnd;audioCb=null;audioEnd=null;if(en){try{en(m.info||{});}catch(x){}}}if(m.type==='welcome'){api.viewer=m.viewer==='teacher'?'teacher':'student';api.capabilities=m.capabilities||{};if(handlers.onWelcome)handlers.onWelcome(m);}if(m.type==='answer'&&waiting[m.id]){var d=waiting[m.id];delete waiting[m.id];d(m.value);}" +
     "if(m.type==='control'&&handlers.onControl)handlers.onControl(m.key,m.value);});" +
     "function wait(id,type,body){return new Promise(function(res){if(!inFrame)return res(null);waiting[id]=res;send(type,Object.assign({id:id},body));});}" +
     "send('hello',{manifest:manifest});" +
-    "var api={viewer:'student',say:function(t){send('say',{text:t});},event:function(n,d,s,o){send('event',{name:n,data:d||{},say:s||'',react:!!(o&&o.react)});}," +
+    "var api={viewer:'student',capabilities:{},can:function(n){return !!api.capabilities[n];},audio:{start:function(o,cb){if(typeof o==='function'){cb=o;o={};}o=o||{};audioCb=cb||o.onFrame||null;audioEnd=o.onEnd||null;return wait('a'+(++aiN),'audiostart',{opts:{pitch:o.pitch!==false,minHz:o.minHz||0,maxHz:o.maxHz||0,rate:o.rate||0,silenceDb:o.silenceDb==null?null:o.silenceDb,clarity:o.clarity||0,label:o.label||''}});},stop:function(){audioCb=null;send('audiostop',{});},cents:function(hz,t){return hz>0&&t>0?1200*Math.log(hz/t)/Math.LN2:null;}},state:{get:function(){return wait('s'+(++aiN),'stateget',{});},set:function(v){send('stateset',{value:v});}},videoClose:function(){send('videoclose',{});},say:function(t){send('say',{text:t});},event:function(n,d,s,o){send('event',{name:n,data:d||{},say:s||'',react:!!(o&&o.react)});}," +
     "predict:function(id,q,u,o){return wait(id,'predict',Object.assign({question:q,unit:u||''},o||{}));},result:function(id,a,s){send('result',{id:id,actual:a,say:s||''});}," +
     "ask:function(id,q,o){return wait(id,'ask',Object.assign({question:q},o||{}));},human:function(id,r){return wait(id,'human',Object.assign({to:'teacher',kind:'question'},r||{}));}," +
     "evidence:function(o,t,d){send('evidence',{outcome:o,text:t,data:d||{}});},remember:function(k,v){send('remember',{key:k,value:v});}," +
@@ -38,10 +40,50 @@
     return '<!doctype html><html><head>' + head + '</head><body>' + body + '</body></html>';
   }
   var clip = function (s, n) { return String(s == null ? '' : s).slice(0, n); };
+  var clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
+  var NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  /* One reading: loudness (RMS and dBFS) and, if asked, the pitch with a clarity score
+     (the normalised-autocorrelation peak, 0..1). state: 'silence' | 'unclear' | 'signal'. */
+  function analyse(x, sr, o) {
+    var n = x.length, sum = 0, i;
+    for (i = 0; i < n; i++) sum += x[i] * x[i];
+    var rms = Math.sqrt(sum / n), db = rms > 0 ? 20 * Math.log10(rms) : -120;
+    var f = {state: 'silence', level: Math.round(Math.min(1, rms * 4) * 1000) / 1000, db: Math.round(db * 10) / 10, hz: null, clarity: 0, note: null, noteCents: null};
+    if (db < o.silenceDb) return f;
+    if (!o.pitch) { f.state = 'signal'; return f; }
+    var W = Math.min(2048, n >> 1), minLag = Math.max(2, Math.floor(sr / o.maxHz)), maxLag = Math.min(n - W - 1, Math.ceil(sr / o.minHz));
+    var nsdf = new Float32Array(maxLag + 2);
+    for (var tau = 0; tau <= maxLag + 1 && tau + W < n; tau++) {
+      var acf = 0, m = 0;
+      for (var j = 0; j < W; j++) { var a = x[j], b = x[j + tau]; acf += a * b; m += a * a + b * b; }
+      nsdf[tau] = m > 0 ? 2 * acf / m : 0;
+    }
+    // key maxima: the highest point of each positive lobe after the first zero crossing
+    var peaks = [], t = 1;
+    while (t < maxLag && nsdf[t] > 0) t++;
+    while (t < maxLag) {
+      while (t < maxLag && nsdf[t] <= 0) t++;
+      var best = -1, bi = -1;
+      while (t < maxLag && nsdf[t] > 0) { if (nsdf[t] > best) { best = nsdf[t]; bi = t; } t++; }
+      if (bi > 0) peaks.push(bi);
+    }
+    var top = 0; peaks.forEach(function (p) { if (p >= minLag && nsdf[p] > top) top = nsdf[p]; });
+    var pick = -1; for (i = 0; i < peaks.length; i++) if (peaks[i] >= minLag && nsdf[peaks[i]] >= 0.9 * top) { pick = peaks[i]; break; }
+    if (pick < 0 || top <= 0) { f.state = 'unclear'; return f; }
+    var y0 = nsdf[pick - 1], y1 = nsdf[pick], y2 = nsdf[pick + 1], den = y0 - 2 * y1 + y2, shift = den ? 0.5 * (y0 - y2) / den : 0;
+    var hz = sr / (pick + clamp(shift, -1, 1)), clarity = Math.min(1, y1 - 0.25 * (y0 - y2) * shift);
+    f.clarity = Math.round(clarity * 1000) / 1000;
+    if (hz < o.minHz || hz > o.maxHz) { f.state = 'unclear'; return f; }
+    f.hz = Math.round(hz * 100) / 100;
+    var midi = 69 + 12 * Math.log(hz / 440) / Math.LN2, near = Math.round(midi);
+    f.note = NOTES[(near % 12 + 12) % 12] + (Math.floor(near / 12) - 1); f.noteCents = Math.round((midi - near) * 1000) / 10;
+    f.state = clarity >= o.clarityMin ? 'signal' : 'unclear';
+    return f;
+  }
 
   /* opts: {frame, panel, progress, onChange(record), onTitle(title)} */
   function PortHost(opts) {
-    this.o = opts; this.q = []; this.preds = {}; this.record = []; this.connected = false; this.done = false; this.manifest = null; this.aiCount = 0;
+    this.o = opts; this.q = []; this.preds = {}; this.record = []; this.connected = false; this.done = false; this.manifest = null; this.aiCount = 0; HOSTS.push(this);
     var self = this;
     this._listener = function (e) { if (e.source === self.o.frame.contentWindow) self._message(e.data); };
     addEventListener('message', this._listener);
@@ -49,7 +91,8 @@
   /* run(html, lessonId, filesPrefix): filesPrefix '_v/3/' plays a published version's locked-in files. */
   PortHost.prototype.run = function (html, lessonId, filesPrefix) {
     if (lessonId) this.o.lessonId = lessonId; if (filesPrefix !== undefined) this.o.filesPrefix = filesPrefix || '';
-    this.q = []; this.preds = {}; this.record = []; this.connected = false; this.done = false; this.manifest = null; this.aiCount = 0; this.gen = (this.gen || 0) + 1;
+    this._audioStop(null); this._closeDock(null); this._mem = null;
+    this.q = []; this.preds = {}; this.record = (this.o.initialRecord || []).slice(); this.o.initialRecord = null; this.connected = false; this.done = false; this.manifest = null; this.aiCount = 0; this.gen = (this.gen || 0) + 1;
     this.o.panel.innerHTML = ''; if (this.o.progress) this.o.progress.style.width = '0';
     this._closeVideo();
     this.o.frame.srcdoc = compose(String(html || ''), this.o.lessonId, this.o.filesPrefix);
@@ -194,12 +237,91 @@
     }).catch(function () { done({ok: false, error: 'Worldview needs the microphone. Allow it for this site and try again.', type: 'mic_denied'}); });
     cancel.onclick = function () { done({ok: false, error: 'Cancelled.', type: 'cancelled'}); };
   };
+  PortHost.prototype._audioUI = function (a, text, tap) {
+    var box = this.o.frame.parentNode; if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
+    if (!a.bar) {
+      a.bar = document.createElement('div'); a.bar.className = 'ph-audio'; a.bar.setAttribute('role', 'status');
+      a.bar.style.cssText = 'position:absolute;top:10px;left:10px;z-index:7;display:flex;gap:8px;align-items:center;background:rgba(20,16,12,.85);color:#fff;border-radius:999px;padding:5px 6px 5px 12px;font:600 13px system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.3)';
+      box.appendChild(a.bar);
+    }
+    var self = this; a.bar.innerHTML = '';
+    var sp = document.createElement('span'); sp.textContent = text; a.bar.appendChild(sp);
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'btn small'; b.style.cssText = 'padding:3px 10px;font-size:12px';
+    b.textContent = tap ? 'Tap to start' : 'Stop'; b.onclick = tap || function () { self._audioStop('stopped_by_user'); };
+    a.bar.appendChild(b);
+  };
+  PortHost.prototype._audioStop = function (reason, info) {
+    var a = this._audio; if (!a) return; this._audio = null;
+    clearInterval(a.timer); clearTimeout(a.wait);
+    if (a.stream) a.stream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+    if (a.ctx) { try { a.ctx.close(); } catch (e) {} }
+    if (a.bar) a.bar.remove();
+    if (reason && a.started && a.gen === this.gen) this._send('audioend', {info: Object.assign({reason: reason}, info || {})});
+  };
+  PortHost.prototype._audioStart = function (m) {
+    var self = this, id = clip(m.id, 40), o = m.opts || {};
+    this._audioStop('replaced');
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !AC) return this._send('answer', {id: id, value: {ok: false, error: 'This browser can\'t listen to the microphone. Try Chrome, Edge, Safari or Firefox.', type: 'unsupported'}});
+    var cfg = {pitch: o.pitch !== false, minHz: clamp(+o.minHz || 60, 30, 2000), maxHz: 0, silenceDb: o.silenceDb == null ? -55 : clamp(+o.silenceDb, -90, -10), clarityMin: clamp(+o.clarity || 0.8, 0.5, 0.99)};
+    cfg.maxHz = clamp(+o.maxHz || 1200, cfg.minHz + 10, 4000);
+    var rate = clamp(Math.round(+o.rate || 20), 5, 30), a = this._audio = {gen: this.gen, started: false};
+    this._audioUI(a, 'Asking for the microphone…');
+    navigator.mediaDevices.getUserMedia({audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: false}}).then(function (stream) {
+      if (self._audio !== a) { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
+      a.stream = stream;
+      var ctx = a.ctx = new AC(), src = ctx.createMediaStreamSource(stream), an = ctx.createAnalyser(); an.fftSize = 4096; src.connect(an);
+      var buf = new Float32Array(an.fftSize);
+      stream.getAudioTracks().forEach(function (t) { t.addEventListener('ended', function () { if (self._audio === a) self._audioStop('interrupted', {error: 'The microphone stopped (unplugged or taken by another app).'}); }); });
+      var begin = function () {
+        if (self._audio !== a || a.started) return; a.started = true; clearTimeout(a.wait);
+        var t0 = performance.now();
+        self._audioUI(a, '🎙 ' + (clip(o.label, 40) || (cfg.pitch ? 'Listening for pitch' : 'Listening')));
+        a.timer = setInterval(function () { an.getFloatTimeDomainData(buf); var f = analyse(buf, ctx.sampleRate, cfg); f.t = Math.round(performance.now() - t0); self._send('audioframe', {frame: f}); }, Math.round(1000 / rate));
+        self._send('answer', {id: id, value: {ok: true, sampleRate: ctx.sampleRate, rate: rate, windowMs: Math.round(an.fftSize / ctx.sampleRate * 1000), minHz: cfg.minHz, maxHz: cfg.maxHz}});
+      };
+      var needTap = function () { if (self._audio === a && !a.started) self._audioUI(a, '🎙 Ready', function () { ctx.resume().then(begin); }); };
+      if (ctx.state === 'running') begin();
+      else { ctx.resume().then(function () { if (ctx.state === 'running') begin(); }).catch(function () {}); a.wait = setTimeout(needTap, 600); }
+    }).catch(function (e) {
+      var denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError'), none = e && (e.name === 'NotFoundError' || e.name === 'OverconstrainedError');
+      if (self._audio === a) self._audioStop(null);
+      self._send('answer', {id: id, value: {ok: false, error: denied ? 'Worldview needs the microphone. Allow it for this site in the browser settings, then try again.' : none ? 'No microphone was found on this device.' : 'The microphone couldn\'t start. Close other apps using it and try again.', type: denied ? 'mic_denied' : none ? 'no_mic' : 'audio_failed'}});
+    });
+  };
+  // a page in the background, or leaving it, always releases the microphone
+  var HOSTS = [];
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') HOSTS.forEach(function (h) { if (h._audio) h._audioStop('interrupted', {error: 'Listening stopped because the page was in the background.'}); }); });
+  addEventListener('pagehide', function () { HOSTS.forEach(function (h) { h._audioStop(null); }); });
+  /* Docked video: a small player in the corner; the lesson stays usable (and listening). */
+  PortHost.prototype._closeDock = function (reason) { var d = this._dock; if (!d) return; this._dock = null; removeEventListener('message', d.onmsg); clearInterval(d.ping); d.el.remove(); if (reason && d.gen === this.gen) this._send('answer', {id: d.id, value: {ok: true, reason: reason}}); };
+  PortHost.prototype._videoDock = function (m, vid, q) {
+    var self = this; this._closeDock('replaced');
+    var box = this.o.frame.parentNode; if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
+    var el = document.createElement('div'); el.className = 'ph-dock';
+    el.style.cssText = 'position:absolute;top:10px;right:10px;z-index:6;width:min(46%,340px);background:#000;border-radius:12px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.4)';
+    var bar = document.createElement('div'); bar.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 6px 4px 10px;color:#fff;font:600 12px system-ui,sans-serif';
+    var tt = document.createElement('span'); tt.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'; tt.textContent = clip(m.title, 80) || 'Video';
+    var x = document.createElement('button'); x.type = 'button'; x.textContent = '✕'; x.setAttribute('aria-label', 'Close the video'); x.style.cssText = 'all:unset;cursor:pointer;padding:2px 6px;font-size:14px';
+    bar.appendChild(tt); bar.appendChild(x);
+    var v = document.createElement('iframe'); v.src = 'https://www.youtube-nocookie.com/embed/' + vid + q + '&enablejsapi=1&origin=' + encodeURIComponent(location.origin);
+    v.allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture'; v.allowFullscreen = true; v.referrerPolicy = 'strict-origin-when-cross-origin';
+    v.style.cssText = 'display:block;width:100%;height:auto;min-height:0;aspect-ratio:16/9;border:0;border-radius:0'; v.title = tt.textContent;
+    el.appendChild(bar); el.appendChild(v); box.appendChild(el);
+    var d = this._dock = {id: clip(m.id, 40), el: el, gen: this.gen};
+    // YouTube's player reports its state by message once asked to; state 0 means the segment ended
+    d.onmsg = function (e) { if (e.source !== v.contentWindow) return; var data; try { data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch (er) { return; } if (!data) return; clearInterval(d.ping); var st = data.event === 'onStateChange' ? data.info : data.info && data.info.playerState; if (st === 0) self._closeDock('ended'); };
+    addEventListener('message', d.onmsg);
+    d.ping = setInterval(function () { try { v.contentWindow.postMessage(JSON.stringify({event: 'listening', id: 'wv', channel: 'widget'}), '*'); } catch (er) {} }, 500);
+    x.onclick = function () { self._closeDock('closed'); };
+  };
   PortHost.prototype._video = function (m) {
     var self = this, id = clip(m.id, 40), vid = youtubeId(m.src);
-    if (!vid) { this._line('note', 'This video link isn\'t a YouTube video Worldview can play.'); this._send('answer', {id: id, value: false}); return; }
-    this._closeVideo();
+    if (!vid) { this._line('note', 'This video link isn\'t a YouTube video Worldview can play.'); this._send('answer', {id: id, value: m.dock ? {ok: false, error: 'Only YouTube links play here; play lesson files with a <video> in the lesson.', type: 'bad_link'} : false}); return; }
     var q = '?rel=0&playsinline=1', st = Math.max(0, Math.floor(+m.start || 0)), en = Math.max(0, Math.floor(+m.end || 0));
     if (st) q += '&start=' + st; if (en > st) q += '&end=' + en;
+    if (m.dock) return this._videoDock(m, vid, q + (m.autoplay ? '&autoplay=1' : ''));
+    this._closeVideo();
     var box = this.o.frame.parentNode; if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
     var sheet = document.createElement('div'); sheet.className = 'ph-video';
     sheet.style.cssText = 'position:absolute;inset:0;z-index:5;background:#000;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:10px;border-radius:inherit';
@@ -211,7 +333,12 @@
     b.addEventListener('click', function () { self._closeVideo(); self._send('answer', {id: id, value: true}); });
     sheet.appendChild(v); sheet.appendChild(b); box.appendChild(sheet); this._sheet = sheet;
   };
-  PortHost.prototype.destroy = function () { removeEventListener('message', this._listener); clearTimeout(this._t); };
+  PortHost.prototype.destroy = function () { this._audioStop(null); this._closeDock(null); removeEventListener('message', this._listener); clearTimeout(this._t); HOSTS = HOSTS.filter(function (h) { return h !== this; }, this); };
+  PortHost.prototype.capabilities = function () {
+    return {ask: true, predict: true, video: true, videoDock: true, ai: !!this.o.ai, listen: !!this.o.transcribe,
+      audio: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && (window.AudioContext || window.webkitAudioContext)),
+      record: !!this.o.saveFile, saveFile: !!this.o.saveFile, readFile: !!this.o.lessonId, state: true, persistentState: !!this.o.state, teacherTools: !!this.o.saveFile};
+  };
   PortHost.prototype._send = function (type, body) { try { this.o.frame.contentWindow.postMessage(Object.assign({port: 'worldview', v: 1, type: type}, body || {}), '*'); } catch (e) {} };
   PortHost.prototype._changed = function () { if (this.o.onChange) this.o.onChange(this.record.slice(), this.done); };
   PortHost.prototype._line = function (kind, text) {
@@ -258,7 +385,7 @@
         this.connected = true; clearTimeout(this._t);
         this.manifest = {title: clip(man.title, 120), by: clip(man.by, 80), outcomes: Array.isArray(man.outcomes) ? man.outcomes.slice(0, 6).map(function (o, i) { return {id: clip(o && o.id || 'o' + (i + 1), 20), text: clip(o && o.text || o, 200)}; }) : []};
         if (this.o.onTitle && this.manifest.title) this.o.onTitle(this.manifest.title);
-        this._send('welcome', {memory: [], viewer: this.o.viewer === 'teacher' ? 'teacher' : 'student'});
+        this._send('welcome', {memory: [], viewer: this.o.viewer === 'teacher' ? 'teacher' : 'student', capabilities: this.capabilities()});
         break;
       }
       case 'say': this._line('tutor', clip(m.text, 500)); break;
@@ -285,6 +412,11 @@
       case 'progress': if (this.o.progress) this.o.progress.style.width = Math.round(Math.max(0, Math.min(1, +m.value || 0)) * 100) + '%'; break;
       case 'done': this.done = true; if (m.summary && typeof m.summary === 'object' && m.summary.levels && typeof m.summary.levels === 'object') { var L = {}; Object.keys(m.summary.levels).slice(0, 8).forEach(function (k) { L[clip(k, 20)] = Math.max(0, Math.min(3, Math.round(+m.summary.levels[k]) || 0)); }); this.record.push({kind: 'understanding', question: '', answer: '', outcome: '', levels: L}); } if (this.o.progress) this.o.progress.style.width = '100%'; this._line('done', 'Finished. Nice work.'); this._changed(); break;
       case 'video': this._video(m); break;
+      case 'videoclose': this._closeDock('closed'); break;
+      case 'audiostart': this._audioStart(m); break;
+      case 'audiostop': this._audioStop('stopped'); break;
+      case 'stateget': { var sv = null; try { sv = this.o.state ? this.o.state.load() : this._mem; } catch (e) {} this._send('answer', {id: clip(m.id, 40), value: sv == null ? null : sv}); break; }
+      case 'stateset': { var js = ''; try { js = JSON.stringify(m.value); } catch (e) {} if (!js || js.length > 65536) { this._line('note', 'The lesson tried to save more than 64 KB of progress; it wasn\'t saved.'); break; } var val = JSON.parse(js); if (this.o.state) { try { this.o.state.save(val); } catch (e) {} } else this._mem = val; break; }
       case 'listen': this._listen(m); break;
       case 'record': this._record(m); break;
       case 'savefile': this._saveFile(m); break;
@@ -312,7 +444,7 @@
       }
       case 'crash': this._line('note', 'The lesson hit a problem: ' + clip(m.message, 160)); break;
       // A request this player doesn't know (a newer lesson, an older page): answer it, so the lesson never waits forever.
-      default: if (m.id != null && ['evidence', 'remember', 'progress', 'done', 'say', 'event', 'result', 'hello'].indexOf(m.type) < 0) this._send('answer', {id: clip(m.id, 40), value: {ok: false, error: 'This Worldview page doesn\'t support ' + clip(m.type, 30) + ' yet. Reload the page.', type: 'unsupported'}});
+      default: if (m.id != null && ['evidence', 'remember', 'progress', 'done', 'say', 'event', 'result', 'hello', 'audiostop', 'stateset', 'videoclose'].indexOf(m.type) < 0) this._send('answer', {id: clip(m.id, 40), value: {ok: false, error: 'This Worldview page doesn\'t support ' + clip(m.type, 30) + ' yet. Reload the page.', type: 'unsupported'}});
     }
   };
 

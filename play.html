@@ -23,7 +23,8 @@
       <p class="muted small">A lesson made by a teacher on Worldview. Your answers are saved and shared with that teacher.</p>
       <label class="small" for="name">Your first name (optional, so your teacher knows it's you)</label>
       <input type="text" id="name" maxlength="60" autocomplete="given-name">
-      <div class="row"><button type="button" class="btn" id="start">Start the lesson</button></div>
+      <div class="row"><button type="button" class="btn" id="resume" hidden>Continue where you left off</button><button type="button" class="btn" id="start">Start the lesson</button></div>
+      <p class="muted small" id="resumenote" hidden></p>
     </div>
     <div id="missing" hidden style="display:grid;gap:12px"><p style="margin:0">This lesson isn't shared, or the link is wrong. Ask your teacher for a new link.</p><div class="row"><a class="btn" href="./">Go to Worldview</a></div></div>
   </div>
@@ -37,14 +38,19 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.44"></script>
+<script src="port-host.js?v=3.1.48"></script>
 <script>
 (() => {
   const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT';
   const $ = s => document.querySelector(s);
   const id = new URLSearchParams(location.search).get('l') || '';
   const db = window.supabase.createClient(URL_, KEY, {auth: {persistSession: false, autoRefreshToken: false, detectSessionInUrl: false}});
-  const runId = (crypto.randomUUID && crypto.randomUUID()) || ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+  const newId = () => (crypto.randomUUID && crypto.randomUUID()) || ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+  let runId = newId();
+  /* NAV-182: a student's place in a lesson stays on their own device, per lesson and run.
+     Same published version: they can continue the same run (answers kept); otherwise they start fresh. */
+  const ls = {get: k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }, del: k => { try { localStorage.removeItem(k); } catch (e) {} }};
+  const runKey = () => 'wv-run-' + id;
   // Worldview's AI and transcription for lessons (lesson-ai): plain requests, results always {ok, text, json, error, type, …}.
   const norm = async r => { const j = await r.json().catch(() => ({})); if (r.ok && j.ok !== false) return Object.assign({}, j, {ok: true}); const e = j.error; return Object.assign({}, j, {ok: false, error: (e && e.message) || (typeof e === 'string' && e) || 'The AI couldn\'t answer just now.', type: (e && e.type) || j.type || 'http_' + r.status}); };
   const authHeaders = async () => { let token = KEY; try { const s = (await db.auth.getSession()).data.session; if (s) token = s.access_token; } catch (e) {} return {apikey: KEY, authorization: 'Bearer ' + token}; };
@@ -71,6 +77,8 @@
     lesson = !error && Array.isArray(data) && data[0];
     if (!lesson) { $('#missing').hidden = false; return; }
     $('#ltitle').textContent = lesson.title; document.title = lesson.title + ' · Worldview'; $('#ready').hidden = false;
+    const prev = ls.get(runKey());
+    if (prev && prev.runId && (prev.version || null) === (lesson.version || null)) { $('#resume').hidden = false; $('#start').textContent = 'Start over'; $('#start').classList.add('ghost'); if (prev.name) $('#name').value = prev.name; $('#resumenote').hidden = false; $('#resumenote').textContent = 'You started this lesson on this device' + (prev.at ? ' on ' + new Date(prev.at).toLocaleDateString([], {month: 'short', day: 'numeric'}) : '') + '.'; }
   })();
   // Leaving: answers are already saved; go back where the student came from, or to Worldview.
   async function leave() {
@@ -80,15 +88,22 @@
   }
   $('#leave').addEventListener('click', leave);
   $('#finishedback').addEventListener('click', leave);
-  $('#start').addEventListener('click', () => {
+  function begin(resume) {
+    const prev = ls.get(runKey());
+    if (resume && prev && prev.runId) runId = prev.runId; else { if (prev && prev.runId) { ls.del('wv-state-' + prev.runId); ls.del('wv-record-' + prev.runId); } runId = newId(); }
+    ls.set(runKey(), {runId, version: lesson.version || null, name: $('#name').value.trim(), at: Date.now()});
     $('#leave').hidden = false;
     $('#intro').hidden = true; $('#lesson').hidden = false; $('#title').textContent = lesson.title;
     const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), ai: req => askAI(req, lesson.id, runId), transcribe: (b, l) => hearAI(b, l, lesson.id, runId),
-      onChange: (record, done) => { latest = record; finished = done; if (done) $('#finished').hidden = false; clearTimeout(timer); timer = setTimeout(save, done ? 0 : 800); }});
+      state: {load: () => ls.get('wv-state-' + runId), save: v => ls.set('wv-state-' + runId, v)},
+      initialRecord: resume ? (ls.get('wv-record-' + runId) || []) : [],
+      onChange: (record, done) => { latest = record; finished = done; ls.set('wv-record-' + runId, record.slice(-200)); if (done) $('#finished').hidden = false; clearTimeout(timer); timer = setTimeout(save, done ? 0 : 800); }});
     // a published version plays its own locked-in files; older versions use the lesson's files
     host.run(lesson.html, lesson.id, lesson.version && lesson.files_frozen ? '_v/' + lesson.version + '/' : '');
-    save();
-  });
+    latest = host.record.slice(); save();
+  }
+  $('#start').addEventListener('click', () => begin(false));
+  $('#resume').addEventListener('click', () => begin(true));
 })();
 </script>
 </body>

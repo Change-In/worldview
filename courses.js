@@ -340,7 +340,7 @@
   /* ---------------- screens ---------------- */
   function scrHome() {
     const tabs = `<div class="cv-seg" role="tablist"><button type="button" role="tab" data-ctab="mine" class="${S.tab === 'mine' ? 'on' : ''}" aria-selected="${S.tab === 'mine'}">My courses</button><button type="button" role="tab" data-ctab="explore" class="${S.tab === 'explore' ? 'on' : ''}" aria-selected="${S.tab === 'explore'}">Explore</button></div>`;
-    const head = isOwner() ? `<div class="cv-head"><h1>Courses</h1><a class="cv-pill" href="studio.html" style="text-decoration:none">Teacher Studio</a></div><span class="cv-note"><i></i>Preview · only your account sees this</span>` : `<div class="cv-head"><h1>Courses</h1></div>`;
+    const head = `<div class="cv-head"><h1>Courses</h1><a class="cv-pill" href="studio.html" style="text-decoration:none">Teacher Studio</a></div>` + (isOwner() ? `<span class="cv-note"><i></i>Preview · only your account sees this</span>` : '');
     return head + tabs + '<div class="cv-samples">' + (S.tab === 'mine' ? mine() : explore()) + '</div>' + footnote;
   }
   function courseRow(c) {

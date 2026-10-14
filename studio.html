@@ -217,7 +217,7 @@
 <dialog id="newdlg"><form id="newform"><h2>New lesson</h2><label class="small" for="newtitle">What's it called? You can change it later.</label><input type="text" id="newtitle" maxlength="120" placeholder="e.g. Why the Moon has phases"><div class="row"><button type="submit" class="btn">Create</button><button type="button" class="btn ghost" data-close>Cancel</button></div></form></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.44"></script>
+<script src="port-host.js?v=3.1.48"></script>
 <script>
 (() => {
   const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT', KIT = 'http://localhost:8195';
@@ -245,11 +245,10 @@
     $('#viewnote').textContent = host.o.viewer === 'teacher' ? 'Your teacher view: only you see this, here in Teacher Studio.' : 'This is what students see.';
     try { localStorage.setItem('wv-preview-view', host.o.viewer); } catch (e) {}
   }
-  // Teacher Studio previews as Teacher on a Laptop unless the teacher switched (remembered on this device). Student links (/play) are always Student.
-  let saved = {}; try { saved = {view: localStorage.getItem('wv-preview-view'), dev: localStorage.getItem('wv-preview-dev')}; } catch (e) {}
-  setView(saved.view === 'student' ? 'student' : 'teacher');
+  // Teacher Studio previews as Teacher on a Laptop every time it opens (switching lasts until the page is left). Student links (/play) are always Student.
+  setView('teacher');
   function setDev(d) { d = d === 'phone' ? 'phone' : 'laptop'; document.querySelectorAll('[data-dev]').forEach(x => x.classList.toggle('on', x.dataset.dev === d)); const wide = d === 'laptop'; $('#phone').classList.toggle('laptop', wide); $('#stage').classList.toggle('wide', wide); $('#barw').style.maxWidth = wide ? '960px' : '400px'; try { localStorage.setItem('wv-preview-dev', d); } catch (e) {} }
-  setDev(saved.dev);
+  setDev('laptop');
   const toast = m => { document.querySelectorAll('.toast').forEach(t => t.remove()); const t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3500); };
   const copy = async t => { try { await navigator.clipboard.writeText(t); return true; } catch (e) { return false; } };
   const ago = t => { const m = Math.round((Date.now() - new Date(t).getTime()) / 60000); return m < 1 ? 'edited just now' : m < 60 ? `edited ${m} min ago` : m < 1440 ? `edited ${Math.round(m / 60)} h ago` : 'edited ' + new Date(t).toLocaleDateString(); };
@@ -675,7 +674,7 @@ ${RULES}`;
   addEventListener('popstate', () => { const l = new URLSearchParams(location.search).get('l'); if (l) showLesson(l); else showGrid(); });
   addEventListener('focus', poll);
   // A page keeps the code it loaded with. When Teacher Studio is updated, offer a reload (or just reload on the lessons page).
-  const STUDIO_VERSION = '3.1.46';
+  const STUDIO_VERSION = '3.1.48';
   async function checkStudioUpdate() {
     try {
       const t = await fetch('studio.html?check=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '');
