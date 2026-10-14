@@ -843,11 +843,19 @@
     drag = {r, x:e.clientX, left:r.scrollLeft, moved:false};
   });
   window.addEventListener('pointermove', e => {
-    if (!drag) return; const dx = e.clientX - drag.x;
+    if (!drag) return;
+    if (!e.buttons) { endDrag(); return; } // the button was let go somewhere we did not see
+    const dx = e.clientX - drag.x;
     if (!drag.moved && Math.abs(dx) > 6) { drag.moved = true; drag.r.classList.add('dragging'); }
     if (drag.moved) drag.r.scrollLeft = drag.left - dx;
   });
-  window.addEventListener('pointerup', () => { if (!drag) return; const d = drag; drag = null; d.r.classList.remove('dragging'); if (d.moved) { const stop = ev => { ev.stopPropagation(); ev.preventDefault(); }; window.addEventListener('click', stop, {capture:true, once:true}); setTimeout(() => window.removeEventListener('click', stop, {capture:true}), 50); } });
+  function endDrag() { if (!drag) return; const d = drag; drag = null; d.r.classList.remove('dragging'); if (d.moved) { const stop = ev => { ev.stopPropagation(); ev.preventDefault(); }; window.addEventListener('click', stop, {capture:true, once:true}); setTimeout(() => window.removeEventListener('click', stop, {capture:true}), 50); } }
+  window.addEventListener('pointerup', endDrag);
+  window.addEventListener('pointercancel', endDrag);
+  /* A lesson tile is a link, and the browser lets you pick a link up and drag it
+     away. That cancels the pointer, so dragging from a real lesson never moved the
+     shelf. Inside a shelf, a drag is only ever a scroll. */
+  view.addEventListener('dragstart', e => { const t = e.target.nodeType === 1 ? e.target : e.target.parentElement; if (t && t.closest('.cv-route, .cv-hscroll')) e.preventDefault(); });
   view.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'cv-code') view.querySelector('[data-join]')?.click(); });
   document.addEventListener('keydown', e => { if (e.key !== 'Escape' || !S.open) return; if (S.sheet) { S.sheet = null; render(); } else if (S.scr !== 'home') go('home'); });
 

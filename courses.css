@@ -385,3 +385,13 @@ body.cv-sheet-open #wv-tabbar { display:none; }
 .uv-week.past { opacity:.5; } .uv-week.now { color:var(--accent); font-weight:800; border-top-color:var(--accent); }
 .uv-tutor { display:grid; gap:8px; margin-top:6px; }
 .cv-chip-s.on { background:var(--accent); color:var(--on-accent, #fff); border-color:var(--accent); }
+
+/* 2026-10-14: sideways shelves (BUG: could not scroll the lesson carousel in Explore) */
+/* a lesson tile is a link; never let the browser pick it up instead of moving the shelf */
+.cv-hscroll a, .cv-route a, .cv-hscroll img { -webkit-user-drag:none; user-drag:none; }
+/* with a mouse or trackpad there is no swipe cue, so show a thin scrollbar on every shelf */
+@media (hover:hover) and (pointer:fine) {
+  .cv-hscroll.cv-hscroll { scrollbar-width:thin; scrollbar-color:color-mix(in srgb,var(--ink-soft, #999) 45%,transparent) transparent; }
+  .cv-hscroll.cv-hscroll::-webkit-scrollbar { display:block; height:6px; }
+  .cv-hscroll.cv-hscroll::-webkit-scrollbar-thumb { background:color-mix(in srgb,var(--ink-soft, #999) 45%,transparent); border-radius:6px; }
+}
