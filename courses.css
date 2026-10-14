@@ -326,5 +326,15 @@ body.cv-sheet-open #wv-tabbar { display:none; }
 .cv-real { cursor:default; background:var(--card); border-color:color-mix(in srgb,var(--ok, #3d7650) 45%,var(--line)); }
 .cv-samplelab { display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; margin-top:18px; }
 .cv-samplelab span { font-weight:500; text-transform:none; letter-spacing:0; opacity:.8; }
-.cv-samples { opacity:.42; filter:saturate(.4); transition:opacity .2s, filter .2s; display:grid; gap:inherit; }
-.cv-samples:hover, .cv-samples:focus-within { opacity:.75; filter:saturate(.7); }
+
+/* 2026-10-14: fade each sample, not the real lessons beside them */
+.cv-samples { display:grid; gap:inherit; }
+.cv-samples :is(.cv-course, .cv-alert, .cv-tile, .cv-ex, .cv-find, .cv-chip-s, .cv-search):not(.cv-real) { opacity:.42; filter:saturate(.4); transition:opacity .2s, filter .2s; }
+.cv-samples :is(.cv-course, .cv-alert, .cv-tile, .cv-ex, .cv-find, .cv-chip-s, .cv-search):not(.cv-real):is(:hover, :focus-within) { opacity:.8; filter:saturate(.8); }
+.cv-alert.cv-real, .cv-tile.cv-real { border-color:color-mix(in srgb,var(--ok, #3d7650) 50%,var(--line)); }
+.cv-foot { margin-top:18px; font-size:12.5px; }
+/* lines of lessons scroll sideways (wheel, drag, swipe); the ‹ › buttons are gone */
+.cv-chnav { display:none !important; }
+.cv-route { scrollbar-width:thin; scrollbar-color:color-mix(in srgb,var(--ink-soft, #999) 45%,transparent) transparent; }
+.cv-route::-webkit-scrollbar { display:block; height:6px; }
+.cv-route::-webkit-scrollbar-thumb { background:color-mix(in srgb,var(--ink-soft, #999) 45%,transparent); border-radius:6px; }

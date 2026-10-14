@@ -252,10 +252,10 @@ function renderPasswordAccount() {
   $("account-dialog-copy").textContent = welcome ? "Worldview is a tutor you talk with. Bring a question and it builds a researched lesson around it, then works through it with you."
     : checking ? "Restoring your secure session."
     : upgrade ? "Connect an email to this device's existing account. Verify it first, then choose a password. Your lessons stay with the same account."
-    : update ? "Choose a password of at least 12 characters. A memorable phrase works well."
-    : verify ? (verifyPassword ? "Confirm your email, then enter your password here to open your library on this device." : "Open the confirmation email, then return here to continue.")
+    : update ? "Choose a new password. The rules are below the boxes."
+    : verify ? (verifyPassword ? "Check your email and open the link we sent. Then enter your password here to open your library on this device." : "Check your email and open the link we sent, then come back here to continue.")
     : reset ? "If an account uses this email, we'll send a password-reset link."
-    : signup ? "Email and password only. Confirm your email before starting."
+    : signup ? "Just an email and a password. We will send you an email with a link to open before you start."
     : manage ? "Your space in Worldview."
     : cloudAccount?.is_anonymous
       ? "Your lessons, wherever you return. Earlier device work stays safely separate."
@@ -264,6 +264,9 @@ function renderPasswordAccount() {
   $("password-account-email").hidden = update || verify || manage || checking;
   $("password-account-secret-group").hidden = !needsPassword;
   $("password-account-confirm-group").hidden = !(signup || update);
+  $("password-account-intro").hidden = !signup;
+  $("password-account-rules").hidden = !(signup || update);
+  passwordRulesCheck();
   $("password-account-secret").autocomplete = (mode === "signin" || verifyPassword) ? "current-password" : "new-password";
   $("password-account-secret").minLength = (mode === "signin" || verifyPassword) ? 1 : 12;
   $("account-switch-confirm-label").hidden = true;
@@ -562,13 +565,13 @@ async function submitPasswordAccount() {
       if (result.data?.user?.id !== original.id) throw new Error("The original account could not be preserved. Please contact support before continuing.");
       setAccountPending({email,mode:"email_change",originalUserId:original.id,sentAt:Date.now()});
       passwordAccountMode = "verify";
-      passwordAccountNotice("Confirmation sent. This device's library remains attached to its original account.");
+      passwordAccountNotice("Check your email: open the link we sent. This device's library stays attached to its original account.");
     } else if (mode === "signup") {
       const result = await accountAuthCommand(() => backendClient.auth.signUp({email,password,options:{emailRedirectTo:accountEmailRedirect()}}));
       if (result.error) throw result.error;
       setAccountPending({email,mode:"signup",originalUserId:"",sentAt:Date.now()});
       passwordAccountMode = "verify";
-      passwordAccountNotice("Check your email to confirm. If you already have an account, use Sign in or Forgot password.");
+      passwordAccountNotice("Check your email: open the link we sent to finish. If you already have an account, use Sign in or Forgot password.");
     } else if (mode === "update") {
       const verified = await cloudUser();
       if (!permanentAccountVerified(verified) || verified.id !== original?.id) throw new Error("That link is no longer valid. Request a new reset link.");
@@ -582,7 +585,7 @@ async function submitPasswordAccount() {
     } else {
       const result = await accountAuthCommand(() => backendClient.auth.signInWithPassword({email,password}));
       if (result.error) throw result.error;
-      if (!permanentAccountVerified(result.data?.user)) throw new Error("Confirm your email before signing in.");
+      if (!permanentAccountVerified(result.data?.user)) throw new Error("Check your email and open the link we sent before signing in.");
       deviceAccountAddingFrom = "";
       localStorage.removeItem(ACCOUNT_SIGNOUT_KEY);
       markPasswordRecovery("");
@@ -602,7 +605,7 @@ async function submitPasswordAccount() {
       ? "This device could not preserve its earlier account. Free some browser storage and try again. Your earlier work has not been removed."
       : mode === "signin" && ["invalid_credentials","user_not_found"].includes(code)
       ? "Email or password is incorrect."
-      : code === "email_not_confirmed" ? "Confirm your email before signing in. You can resend the confirmation."
+      : code === "email_not_confirmed" ? "Check your email and open the link we sent before signing in. You can send it again below."
       : status === 429 || /rate|too many/i.test(error?.message || "") ? "Too many attempts. Wait a little before trying again."
       : mode === "upgrade" && /already|registered|exists|email_exists/i.test(code+" "+(error?.message || ""))
         ? "That email could not be linked. If it belongs to an existing account, ask for a library migration before switching. Your current library has not been moved or merged."
@@ -1085,3 +1088,15 @@ $("settings-save").onclick = () => {
   setSettingsInteractive(false);
   toast("Saved");
 };
+
+/* The password rules show before any mistake and tick off while typing (2026-10-14). */
+function passwordRulesCheck() {
+  const box = document.getElementById("password-account-rules"); if (!box || box.hidden) return;
+  const pw = document.getElementById("password-account-secret").value, again = document.getElementById("password-account-confirm").value;
+  const len = pw.length >= 12, match = !!pw && pw === again;
+  box.querySelector('[data-rule="len"]').classList.toggle("ok", len);
+  box.querySelector('[data-rule="match"]').classList.toggle("ok", match);
+  box.querySelector('[data-rule="len"]').dataset.count = pw.length && !len ? pw.length + " of 12" : "";
+}
+document.getElementById("password-account-secret")?.addEventListener("input", passwordRulesCheck);
+document.getElementById("password-account-confirm")?.addEventListener("input", passwordRulesCheck);

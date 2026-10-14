@@ -327,14 +327,21 @@
     return '<div class="cv-lab">' + label + '</div>' + PUB.map(p => `<div class="cv-course cv-real"><span class="t"><b>${esc(p.title)}</b>${chip(p.version ? 'Published v' + p.version : 'Shared', 'ok')}</span><span class="nx">${p.at ? 'Published ' + esc(new Date(p.at).toLocaleDateString([], {month: 'short', day: 'numeric'})) + ' · ' : ''}Students open it with a link, no account needed</span>
       <div class="cv-row" style="flex-wrap:wrap"><a class="cv-pill" href="${playLink(p.id)}" target="_blank" rel="noopener" style="text-decoration:none">Open lesson</a><button type="button" class="cv-pill ghost" data-copylink="${p.id}">Copy link</button><a class="cv-pill ghost" href="studio.html?l=${p.id}&side=pub" style="text-decoration:none">Results</a><a class="cv-pill ghost" href="studio.html?l=${p.id}" style="text-decoration:none">Edit</a></div></div>`).join('');
   }
-  const samplesNote = '<div class="cv-lab cv-samplelab">Samples <span>made-up courses that show how this page could look; not real yet</span></div>';
+  // 2026-10-14: real lessons take The AI Race's places (My courses row, Happening now, Essentials); everything else is a faded sample.
+  const REAL = () => { const own = PUB || [], cat = (CAT || []).filter(c => !own.some(o => o.id === c.id)); return isOwner() ? own : [...cat, ...own]; };
+  const hasReal = () => REAL().length > 0;
+  const realMeta = p => (p.version ? 'Published v' + p.version : 'Published') + (p.at || p.published_at ? ' · ' + new Date(p.at || p.published_at).toLocaleDateString([], {month: 'short', day: 'numeric'}) : '');
+  const realActions = p => `<a class="cv-pill" href="${playLink(p.id)}" style="text-decoration:none">${isOwner() ? 'Open lesson' : 'Start lesson'}</a><button type="button" class="cv-pill ghost" data-copylink="${p.id}">Copy link</button>` + (isOwner() && (PUB || []).some(o => o.id === p.id) ? `<a class="cv-pill ghost" href="studio.html?l=${p.id}&side=pub" style="text-decoration:none">Results</a><a class="cv-pill ghost" href="studio.html?l=${p.id}" style="text-decoration:none">Edit</a>` : '');
+  const realRow = p => `<div class="cv-course cv-real"><span class="t"><b>${esc(p.title)}</b>${chip(isOwner() ? 'Yours' : 'Lesson', 'ok')}</span><span class="nx">${esc(realMeta(p))} · students open it with a link, no account needed</span><div class="cv-row" style="flex-wrap:wrap">${realActions(p)}</div></div>`;
+  const realAlert = p => `<a class="cv-alert cv-real" href="${playLink(p.id)}" style="text-decoration:none"><span class="k"><i></i>New lesson</span><b>${esc(p.title)}</b><span>Made by a teacher on Worldview</span><span class="by">${esc(realMeta(p))}</span></a>`;
+  const realTile = p => `<a class="cv-tile cv-real" href="${playLink(p.id)}" style="text-decoration:none"><span class="art" aria-hidden="true"></span><b>${esc(p.title)}</b><span>${esc(realMeta(p))}</span></a>`;
+  const footnote = '<p class="cv-muted cv-center cv-foot">Faded courses are samples of how this page could look. They aren\'t real yet.</p>';
 
   /* ---------------- screens ---------------- */
   function scrHome() {
     const tabs = `<div class="cv-seg" role="tablist"><button type="button" role="tab" data-ctab="mine" class="${S.tab === 'mine' ? 'on' : ''}" aria-selected="${S.tab === 'mine'}">My courses</button><button type="button" role="tab" data-ctab="explore" class="${S.tab === 'explore' ? 'on' : ''}" aria-selected="${S.tab === 'explore'}">Explore</button></div>`;
     const head = isOwner() ? `<div class="cv-head"><h1>Courses</h1><a class="cv-pill" href="studio.html" style="text-decoration:none">Teacher Studio</a></div><span class="cv-note"><i></i>Preview · only your account sees this</span>` : `<div class="cv-head"><h1>Courses</h1></div>`;
-    const top = isOwner() ? publishedSection('Your published lessons') : catalogSection('Lessons on Worldview') + (PUB && PUB.length ? publishedSection('Your published lessons') : '');
-    return head + tabs + (S.tab === 'mine' ? top + samplesNote + '<div class="cv-samples">' + mine() + '</div>' : explore());
+    return head + tabs + '<div class="cv-samples">' + (S.tab === 'mine' ? mine() : explore()) + '</div>' + footnote;
   }
   function courseRow(c) {
     const open = S.expanded === c.key;
@@ -346,9 +353,13 @@
   }
   function mine() {
     const rows = [];
-    rows.push(courseRow({key:'airace', title:'The AI Race', badge:isOwner() ? chip('Yours', 'acc') : '', sub:(isOwner() ? 'You made this' : 'by Cristian P.') + ' · 3 chapters · 17 lessons', items:aiItems(), done:AI_DONE, next:'Next: ' + aiNext(),
-      rows:route(aiChapters(), {done:AI_DONE, attr:(ci, li) => `data-open-lesson="${ci}:${li}"`, quizAttr:ci => `data-go="quiz" data-quizch="${ci}"`}),
-      actions:'<button type="button" class="cv-pill" data-go="course">Open course</button><button type="button" class="cv-pill ghost" data-try="0:1">Continue for real</button>'}));
+    if (hasReal()) REAL().forEach(p => rows.push(realRow(p)));
+    else if (PUB === null || CAT === null) rows.push('<div class="cv-course cv-real"><span class="nx">Loading your lessons…</span></div>');
+    else {
+      rows.push(courseRow({key:'airace', title:'The AI Race', badge:isOwner() ? chip('Yours', 'acc') : '', sub:(isOwner() ? 'You made this' : 'by Cristian P.') + ' · 3 chapters · 17 lessons', items:aiItems(), done:AI_DONE, next:'Next: ' + aiNext(),
+        rows:route(aiChapters(), {done:AI_DONE, attr:(ci, li) => `data-open-lesson="${ci}:${li}"`, quizAttr:ci => `data-go="quiz" data-quizch="${ci}"`}),
+        actions:'<button type="button" class="cv-pill" data-go="course">Open course</button><button type="button" class="cv-pill ghost" data-try="0:1">Continue for real</button>'}));
+    }
     S.added.filter(id => id !== 'airace' && course(id)).forEach(id => {
       const c = course(id), items = []; c.chapters.forEach(ch => { ch.forEach(() => items.push(false)); items.push(true); });
       const done = PROGRESS[id] || 0;
@@ -391,25 +402,26 @@
   const HOT = ['tech', 'money'];
   const ESSENTIALS = ['airace', 'inflation', 'rome', 'internet', 'sleep'];
   const tile = c => `<button type="button" class="cv-tile" data-viewcourse="${c.id}"><span class="art" aria-hidden="true"></span><b>${esc(c.title)}</b><span>${esc(c.by)} · ★ ${c.rating}</span></button>`;
-  const shelf = (label, list) => `<div class="cv-row" style="margin-top:2px"><span class="cv-lab" style="margin:0">${label}</span><span class="sp"></span><button type="button" class="cv-linkbtn" data-allcourses="1">See all</button></div><div class="cv-shelf cv-hscroll">${list.filter(Boolean).map(tile).join('')}</div>`;
+  const shelf = (label, list, pre) => `<div class="cv-row" style="margin-top:2px"><span class="cv-lab" style="margin:0">${label}</span><span class="sp"></span><button type="button" class="cv-linkbtn" data-allcourses="1">See all</button></div><div class="cv-shelf cv-hscroll">${pre || ''}${list.filter(Boolean).map(tile).join('')}</div>`;
+  const shown = () => hasReal() ? CATALOG.filter(c => c.id !== 'airace') : CATALOG;
   /* NAV-166: compact Explore. Subjects are one row of chips and courses sit on
      sideways shelves, so more subjects never push the courses down. */
   function explore() {
     if (S.allCourses) return `<div class="cv-head"><button type="button" class="cv-back" data-allback="1" aria-label="Back">‹</button><h1 class="sm">All courses</h1></div>
-      <div class="cv-row"><span class="cv-muted">${CATALOG.length} courses</span><span class="sp"></span>${sortSeg()}</div>
-      <div class="cv-list">${CATALOG.slice().sort(sortFns[S.sort]).map(courseCard).join('')}</div>`;
-    return `${catalogSection('Lessons on Worldview')}${samplesNote}<div class="cv-samples">${searchBox()}
-      <div id="cv-results-wrap"${S.query ? '' : ' hidden'}><div class="cv-row"><span class="cv-lab" style="margin:0">Results</span><span class="sp"></span>${sortSeg()}</div><div class="cv-list" id="cv-results">${S.query ? results(CATALOG) : ''}</div></div>
+      <div class="cv-row"><span class="cv-muted">${shown().length} courses</span><span class="sp"></span>${sortSeg()}</div>
+      <div class="cv-list">${shown().slice().sort(sortFns[S.sort]).map(courseCard).join('')}</div>`;
+    return `${searchBox()}
+      <div id="cv-results-wrap"${S.query ? '' : ' hidden'}><div class="cv-row"><span class="cv-lab" style="margin:0">Results</span><span class="sp"></span>${sortSeg()}</div><div class="cv-list" id="cv-results">${S.query ? results(shown()) : ''}</div></div>
       <div id="cv-browse"${S.query ? ' hidden' : ''}>
         <span class="cv-lab" style="margin:0">Happening now</span>
-        <div class="cv-alerts cv-hscroll">${ALERTS.map(x => { const c = course(x.id); return c ? `<button type="button" class="cv-alert" data-viewcourse="${c.id}"><span class="k"><i></i>${esc(x.kind)}</span><b>${esc(c.title)}</b><span>${esc(x.line)}</span><em>${esc(x.by)}</em></button>` : ''; }).join('')}</div>
+        <div class="cv-alerts cv-hscroll">${REAL().map(realAlert).join('')}${ALERTS.filter(x => !(hasReal() && x.id === 'airace')).map(x => { const c = course(x.id); return c ? `<button type="button" class="cv-alert" data-viewcourse="${c.id}"><span class="k"><i></i>${esc(x.kind)}</span><b>${esc(c.title)}</b><span>${esc(x.line)}</span><em>${esc(x.by)}</em></button>` : ''; }).join('')}</div>
         <div class="cv-row" style="margin-top:2px"><span class="cv-lab" style="margin:0">Subjects</span><span class="sp"></span><span class="cv-muted" style="font-size:12px">${CATS.length} · scroll →</span></div>
         <div class="cv-chips cv-hscroll">${CATS.map(c => `<button type="button" class="cv-chip-s" data-cat="${c.id}"><span class="i" aria-hidden="true">${c.icon}</span>${esc(c.name)}${HOT.includes(c.id) ? '<em title="Something is happening here"></em>' : ''}</button>`).join('')}</div>
-        ${shelf('Worldview Essentials', ESSENTIALS.map(course))}
-        ${shelf('Popular this week', CATALOG.slice().sort(sortFns.popular).slice(0, 8))}
-        ${shelf('New', CATALOG.slice().sort(sortFns.new).slice(0, 8))}
+        ${shelf('Worldview Essentials', ESSENTIALS.filter(id => !(hasReal() && id === 'airace')).map(course), REAL().map(realTile).join(''))}
+        ${shelf('Popular this week', shown().slice().sort(sortFns.popular).slice(0, 8))}
+        ${shelf('New', shown().slice().sort(sortFns.new).slice(0, 8))}
         <p class="cv-muted cv-center">Hover over a course, or tap it on a phone, for its description and reviews.</p>
-      </div></div>`;
+      </div>`;
   }
   function scrCategory() {
     const cat = CATS.find(c => c.id === S.cat) || CATS[0];
