@@ -1,0 +1,11 @@
+# The lesson address (NAV-187): https://worldview-lessons.cristianjperezb.workers.dev
+# Deploy from this folder with: npx wrangler@4 deploy
+name = "worldview-lessons"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = false

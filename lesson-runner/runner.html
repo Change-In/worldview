@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Worldview lesson</title>
+<style>html,body{margin:0;height:100%;background:#fbf8f2;font:15px system-ui,sans-serif;color:#6b6258}p{margin:0;padding:24px;text-align:center}</style>
+</head>
+<body>
+<p id="s">Opening the lesson…</p>
+<script>
+/* Worldview lesson runner (NAV-187). A Worldview page shows lessons in a frame
+   that loads this page from its own address. Browsers keep each address's
+   sign-ins and storage apart, so a lesson here can use the microphone, camera and
+   other browser features directly (with the browser's usual permission prompts)
+   and still can never read a Worldview sign-in. This page only accepts a lesson
+   from a Worldview page that frames it, then becomes that lesson. */
+(function () {
+  'use strict';
+  var APP = /^(https:\/\/worldview\.cristianjperezb\.workers\.dev|http:\/\/(localhost|127\.0\.0\.1)(:\d{1,5})?)$/;
+  var SELF = /^(https:\/\/worldview-lessons\.cristianjperezb\.workers\.dev|http:\/\/(localhost|127\.0\.0\.1)(:\d{1,5})?)$/;
+  var s = document.getElementById('s');
+  if (window.parent === window || !SELF.test(location.origin)) { s.textContent = 'Worldview lessons open inside Worldview.'; return; }
+  addEventListener('message', function (e) {
+    var m = e.data;
+    if (e.source !== window.parent || !m || m.port !== 'worldview-runner' || m.type !== 'load' || typeof m.html !== 'string') return;
+    // never run a lesson on the same address as the Worldview page (that would put its sign-ins in reach)
+    if (!APP.test(e.origin) || e.origin === location.origin) { window.parent.postMessage({port: 'worldview-runner', type: 'refused'}, '*'); return; }
+    window.parent.postMessage({port: 'worldview-runner', type: 'accepted'}, e.origin);
+    document.open(); document.write(m.html); document.close();
+  });
+  window.parent.postMessage({port: 'worldview-runner', type: 'ready'}, '*');
+})();
+</script>
+</body>
+</html>

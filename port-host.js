@@ -13,7 +13,12 @@
    lesson's Worldview files (and the teacher's lesson folder); wv.readFile reads them
    back for anyone (NAV-178). wv.audio streams on-device pitch and level readings
    (the microphone is captured here, never sent anywhere); wv.state keeps a student's
-   place per run; welcome carries capabilities so lessons can check support (NAV-182). */
+   place per run; welcome carries capabilities so lessons can check support (NAV-182).
+   NAV-187: where a lesson address is set up, the lesson is loaded from that second
+   address (the lesson runner) instead of a sealed frame. Browsers keep addresses
+   apart, so the lesson can use the microphone, camera and other browser features
+   directly, with the browser's own permission prompts, and still can't read a
+   Worldview sign-in. If the runner doesn't answer, the sealed frame is used. */
 (function () {
   'use strict';
   var SDK = "(function(){window.WorldviewPort=function(manifest,handlers){handlers=handlers||{};var waiting={},aiN=0,audioCb=null,audioEnd=null,inFrame=window.parent!==window;" +
@@ -31,6 +36,18 @@
     "addEventListener('error',function(e){try{parent.postMessage({port:'worldview',v:1,type:'crash',message:String(e.message||'error').slice(0,200)},'*');}catch(x){}});";
 
   var FILES = 'https://eqppapoepynjvsfnoodj.supabase.co/storage/v1/object/public/lesson-files/';
+  /* The lesson address for each Worldview address. '' keeps the sealed frame. On a computer,
+     localhost and 127.0.0.1 are two different addresses, so each serves the other's runner. */
+  var RUNNERS = {'https://worldview.cristianjperezb.workers.dev': ''};
+  function runnerUrl() {
+    try { if (/[?&]runner=off/.test(location.search)) return ''; } catch (e) {}
+    var h = location.hostname, p = location.port ? ':' + location.port : '';
+    if (h === 'localhost') return 'http://127.0.0.1' + p + '/lesson-runner/runner.html';
+    if (h === '127.0.0.1') return 'http://localhost' + p + '/lesson-runner/runner.html';
+    return RUNNERS[location.origin] || '';
+  }
+  var OPEN_SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-pointer-lock allow-presentation allow-orientation-lock';
+  var OPEN_ALLOW = 'microphone; camera; geolocation; midi; fullscreen; autoplay; clipboard-write; accelerometer; gyroscope; magnetometer; screen-wake-lock; picture-in-picture; encrypted-media; web-share; bluetooth; usb; serial; hid; xr-spatial-tracking; display-capture';
   function filesRoot(lessonId, prefix) { return FILES + encodeURIComponent(lessonId) + '/' + (/^_v\/\d{1,4}\/$/.test(prefix || '') ? prefix : ''); }
   function compose(body, lessonId, prefix) {
     var base = lessonId && !/<base\s/i.test(body) ? '<base href="' + filesRoot(lessonId, prefix) + '">' : '';
@@ -84,8 +101,24 @@
   /* opts: {frame, panel, progress, onChange(record), onTitle(title)} */
   function PortHost(opts) {
     this.o = opts; this.q = []; this.preds = {}; this.record = []; this.connected = false; this.done = false; this.manifest = null; this.aiCount = 0; HOSTS.push(this);
-    var self = this;
-    this._listener = function (e) { if (e.source === self.o.frame.contentWindow) self._message(e.data); };
+    var self = this, f = this.o.frame;
+    this._sealedSandbox = f.getAttribute('sandbox') || 'allow-scripts allow-forms';
+    this._runner = opts.runner !== undefined ? opts.runner : runnerUrl();
+    try { this._runnerOrigin = this._runner ? new URL(this._runner, location.href).origin : ''; } catch (e) { this._runner = ''; }
+    this._listener = function (e) {
+      if (e.source !== self.o.frame.contentWindow) return;
+      if (self._open) {
+        if (e.origin !== self._runnerOrigin) return;
+        var d = e.data;
+        if (d && d.port === 'worldview-runner') {
+          if (d.type === 'ready' && self._pending) { try { e.source.postMessage({port: 'worldview-runner', type: 'load', html: self._pending}, self._runnerOrigin); } catch (er) {} }
+          if (d.type === 'accepted') { self._pending = null; clearTimeout(self._rt); }
+          if (d.type === 'refused' && self._pending) { var doc = self._pending; self._runnerDown = true; self._load(doc); }
+          return;
+        }
+      } else if (e.origin !== 'null') return;
+      self._message(e.data);
+    };
     addEventListener('message', this._listener);
   }
   /* run(html, lessonId, filesPrefix): filesPrefix '_v/3/' plays a published version's locked-in files. */
@@ -95,9 +128,23 @@
     this.q = []; this.preds = {}; this.record = (this.o.initialRecord || []).slice(); this.o.initialRecord = null; this.connected = false; this.done = false; this.manifest = null; this.aiCount = 0; this.gen = (this.gen || 0) + 1;
     this.o.panel.innerHTML = ''; if (this.o.progress) this.o.progress.style.width = '0';
     this._closeVideo();
-    this.o.frame.srcdoc = compose(String(html || ''), this.o.lessonId, this.o.filesPrefix);
-    var self = this; clearTimeout(this._t);
-    this._t = setTimeout(function () { if (!self.connected) self._line('note', 'This lesson isn\'t connected to Worldview, so its questions won\'t appear here. You can still use it above.'); }, 3500);
+    var doc = compose(String(html || ''), this.o.lessonId, this.o.filesPrefix), self = this;
+    this._load(doc); clearTimeout(this._t);
+    this._t = setTimeout(function () { if (!self.connected) self._line('note', 'This lesson isn\'t connected to Worldview, so its questions won\'t appear here. You can still use it above.'); }, this._open ? 8500 : 3500);
+  };
+  /* Show the lesson: from the lesson address when there is one, otherwise in the sealed frame. */
+  PortHost.prototype._load = function (doc) {
+    var f = this.o.frame, self = this; clearTimeout(this._rt); this._pending = null;
+    if (this._runner && !this._runnerDown) {
+      this._open = true; this._pending = doc;
+      f.removeAttribute('srcdoc'); f.setAttribute('sandbox', OPEN_SANDBOX); f.setAttribute('allow', OPEN_ALLOW);
+      f.src = this._runner;
+      // the runner didn't answer (offline, blocked, not set up yet): fall back to the sealed frame
+      this._rt = setTimeout(function () { if (self._pending === doc) { self._runnerDown = true; self._load(doc); } }, 5000);
+      return;
+    }
+    this._open = false;
+    f.removeAttribute('allow'); f.setAttribute('sandbox', this._sealedSandbox); f.removeAttribute('src'); f.srcdoc = doc;
   };
   function youtubeId(src) {
     var s = String(src || '').trim(), m = s.match(/(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/|\/live\/)([A-Za-z0-9_-]{11})/);
@@ -333,13 +380,13 @@
     b.addEventListener('click', function () { self._closeVideo(); self._send('answer', {id: id, value: true}); });
     sheet.appendChild(v); sheet.appendChild(b); box.appendChild(sheet); this._sheet = sheet;
   };
-  PortHost.prototype.destroy = function () { this._audioStop(null); this._closeDock(null); removeEventListener('message', this._listener); clearTimeout(this._t); HOSTS = HOSTS.filter(function (h) { return h !== this; }, this); };
+  PortHost.prototype.destroy = function () { clearTimeout(this._rt); this._audioStop(null); this._closeDock(null); removeEventListener('message', this._listener); clearTimeout(this._t); HOSTS = HOSTS.filter(function (h) { return h !== this; }, this); };
   PortHost.prototype.capabilities = function () {
     return {ask: true, predict: true, video: true, videoDock: true, ai: !!this.o.ai, listen: !!this.o.transcribe,
       audio: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && (window.AudioContext || window.webkitAudioContext)),
-      record: !!this.o.saveFile, saveFile: !!this.o.saveFile, readFile: !!this.o.lessonId, state: true, persistentState: !!this.o.state, teacherTools: !!this.o.saveFile};
+      record: !!this.o.saveFile, saveFile: !!this.o.saveFile, readFile: !!this.o.lessonId, state: true, persistentState: !!this.o.state, teacherTools: !!this.o.saveFile, direct: !!this._open};
   };
-  PortHost.prototype._send = function (type, body) { try { this.o.frame.contentWindow.postMessage(Object.assign({port: 'worldview', v: 1, type: type}, body || {}), '*'); } catch (e) {} };
+  PortHost.prototype._send = function (type, body) { try { this.o.frame.contentWindow.postMessage(Object.assign({port: 'worldview', v: 1, type: type}, body || {}), this._open ? this._runnerOrigin : '*'); } catch (e) {} };
   PortHost.prototype._changed = function () { if (this.o.onChange) this.o.onChange(this.record.slice(), this.done); };
   PortHost.prototype._line = function (kind, text) {
     var d = document.createElement('div'); d.className = 'ph-line ph-' + kind; d.textContent = text;

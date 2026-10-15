@@ -10,6 +10,7 @@
   .wrap { max-width:560px; }
   .intro { display:grid; gap:12px; }
   .intro h1 { font-size:30px; }
+  .linkbtn { all:unset; cursor:pointer; text-decoration:underline; color:inherit; }
 </style>
 </head>
 <body>
@@ -21,8 +22,9 @@
     <div id="ready" hidden>
       <h1 id="ltitle"></h1>
       <p class="muted small">A lesson made by a teacher on Worldview. Your answers are saved and shared with that teacher.</p>
-      <label class="small" for="name">Your first name (optional, so your teacher knows it's you)</label>
-      <input type="text" id="name" maxlength="60" autocomplete="given-name">
+      <p class="small" id="asname" hidden>Your teacher will see your answers as <b id="asnameb"></b>. <button type="button" class="linkbtn" id="changename">Change</button></p>
+      <div id="namebox" style="display:grid;gap:6px"><label class="small" for="name">Your first name (optional, so your teacher knows it's you)</label>
+      <input type="text" id="name" maxlength="60" autocomplete="given-name"></div>
       <div class="row"><button type="button" class="btn" id="resume" hidden>Continue where you left off</button><button type="button" class="btn" id="start">Start the lesson</button></div>
       <p class="muted small" id="resumenote" hidden></p>
     </div>
@@ -38,7 +40,7 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.48"></script>
+<script src="port-host.js?v=3.1.52"></script>
 <script>
 (() => {
   const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT';
@@ -51,6 +53,9 @@
      Same published version: they can continue the same run (answers kept); otherwise they start fresh. */
   const ls = {get: k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }, del: k => { try { localStorage.removeItem(k); } catch (e) {} }};
   const runKey = () => 'wv-run-' + id;
+  const NAME_KEY = 'wv-learner-name';
+  // the signed-in Worldview account on this device, if it has a name (read only; this page never signs in)
+  const accountName = () => { try { const u = (JSON.parse(localStorage.getItem('worldview-alpha-auth')) || {}).user || {}, m = u.user_metadata || {}; return String(m.worldview_name || m.full_name || m.name || '').trim().split(/\s+/)[0].slice(0, 60); } catch (e) { return ''; } };
   // Worldview's AI and transcription for lessons (lesson-ai): plain requests, results always {ok, text, json, error, type, …}.
   const norm = async r => { const j = await r.json().catch(() => ({})); if (r.ok && j.ok !== false) return Object.assign({}, j, {ok: true}); const e = j.error; return Object.assign({}, j, {ok: false, error: (e && e.message) || (typeof e === 'string' && e) || 'The AI couldn\'t answer just now.', type: (e && e.type) || j.type || 'http_' + r.status}); };
   const authHeaders = async () => { let token = KEY; try { const s = (await db.auth.getSession()).data.session; if (s) token = s.access_token; } catch (e) {} return {apikey: KEY, authorization: 'Bearer ' + token}; };
@@ -78,6 +83,9 @@
     if (!lesson) { $('#missing').hidden = false; return; }
     $('#ltitle').textContent = lesson.title; document.title = lesson.title + ' · Worldview'; $('#ready').hidden = false;
     const prev = ls.get(runKey());
+    // A name given once (or the signed-in account's name) is used for every lesson on this device.
+    const known = (prev && prev.name) || ls.get(NAME_KEY) || accountName();
+    if (known) { $('#name').value = known; $('#asnameb').textContent = known; $('#asname').hidden = false; $('#namebox').hidden = true; }
     if (prev && prev.runId && (prev.version || null) === (lesson.version || null)) { $('#resume').hidden = false; $('#start').textContent = 'Start over'; $('#start').classList.add('ghost'); if (prev.name) $('#name').value = prev.name; $('#resumenote').hidden = false; $('#resumenote').textContent = 'You started this lesson on this device' + (prev.at ? ' on ' + new Date(prev.at).toLocaleDateString([], {month: 'short', day: 'numeric'}) : '') + '.'; }
   })();
   // Leaving: answers are already saved; go back where the student came from, or to Worldview.
@@ -92,6 +100,7 @@
     const prev = ls.get(runKey());
     if (resume && prev && prev.runId) runId = prev.runId; else { if (prev && prev.runId) { ls.del('wv-state-' + prev.runId); ls.del('wv-record-' + prev.runId); } runId = newId(); }
     ls.set(runKey(), {runId, version: lesson.version || null, name: $('#name').value.trim(), at: Date.now()});
+    if ($('#name').value.trim()) ls.set(NAME_KEY, $('#name').value.trim());
     $('#leave').hidden = false;
     $('#intro').hidden = true; $('#lesson').hidden = false; $('#title').textContent = lesson.title;
     const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), ai: req => askAI(req, lesson.id, runId), transcribe: (b, l) => hearAI(b, l, lesson.id, runId),
@@ -102,6 +111,7 @@
     host.run(lesson.html, lesson.id, lesson.version && lesson.files_frozen ? '_v/' + lesson.version + '/' : '');
     latest = host.record.slice(); save();
   }
+  $('#changename').addEventListener('click', () => { $('#asname').hidden = true; $('#namebox').hidden = false; $('#name').focus(); $('#name').select(); });
   $('#start').addEventListener('click', () => begin(false));
   $('#resume').addEventListener('click', () => begin(true));
 })();
