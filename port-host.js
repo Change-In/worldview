@@ -36,9 +36,9 @@
     "addEventListener('error',function(e){try{parent.postMessage({port:'worldview',v:1,type:'crash',message:String(e.message||'error').slice(0,200)},'*');}catch(x){}});";
 
   var FILES = 'https://eqppapoepynjvsfnoodj.supabase.co/storage/v1/object/public/lesson-files/';
-  /* The lesson address for each Worldview address. '' keeps the sealed frame. On a computer,
+  /* The lesson address for each Worldview address (app/lesson-runner, Worker worldview-lessons). '' keeps the sealed frame. On a computer,
      localhost and 127.0.0.1 are two different addresses, so each serves the other's runner. */
-  var RUNNERS = {'https://worldview.cristianjperezb.workers.dev': ''};
+  var RUNNERS = {'https://worldview.cristianjperezb.workers.dev': 'https://worldview-lessons.cristianjperezb.workers.dev/'};
   function runnerUrl() {
     try { if (/[?&]runner=off/.test(location.search)) return ''; } catch (e) {}
     var h = location.hostname, p = location.port ? ':' + location.port : '';

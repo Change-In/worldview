@@ -2221,7 +2221,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.52 · Oct 14";
+const BUILD = "v3.1.53 · Oct 14";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2229,6 +2229,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.53",date:"Oct 14",changes:["Lessons now load from Worldview's own lesson address, in the same place on the same page. Lessons can use the microphone, camera and other browser features directly; your browser asks first, as on any website. A lesson still can't see your Worldview sign-in."]},
   {tag:"v3.1.52",date:"Oct 14",changes:["Lesson links remember your name: after you give it once (on this device), you see who your answers go to and a Change button instead of the name box every time.","Groundwork for lessons that use the microphone, camera and other browser features directly: lessons can load from their own Worldview lesson address. It switches on once that address is set up; until then lessons work as before."]},
   {tag:"v3.1.51",date:"Oct 14",changes:["Courses > Explore: swipe left and right with two fingers on the trackpad to move through the rows of lessons. Home's card ring had been catching those swipes underneath. The mouse-wheel stepping and click-and-drag on rows are gone."]},
   {tag:"v3.1.50",date:"Oct 14",changes:["Courses > Explore: the sideways rows of lessons now scroll when you drag them with a mouse, even if you start on a real lesson (a link no longer gets picked up instead). On a computer each row shows a thin scrollbar."]},
