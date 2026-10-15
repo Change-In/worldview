@@ -17,7 +17,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <link rel="stylesheet" href="lesson-entry-popup.css?v=2.1.38">
 <script src="lesson-entry-popup.js?v=2.1.71"></script>
 <link rel="stylesheet" href="lesson-folders.css?v=2.1.77">
-<link rel="stylesheet" href="courses.css?v=3.1.50">
+<link rel="stylesheet" href="courses.css?v=3.1.51">
 <link rel="stylesheet" href="boot-splash.css?v=3.1.22">
 <link rel="stylesheet" href="map-tools.css?v=3.1.21">
 <script src="lesson-folders.js?v=3.1.13"></script>
@@ -2221,7 +2221,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.50 · Oct 14";
+const BUILD = "v3.1.51 · Oct 14";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2229,6 +2229,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.51",date:"Oct 14",changes:["Courses > Explore: swipe left and right with two fingers on the trackpad to move through the rows of lessons. Home's card ring had been catching those swipes underneath. The mouse-wheel stepping and click-and-drag on rows are gone."]},
   {tag:"v3.1.50",date:"Oct 14",changes:["Courses > Explore: the sideways rows of lessons now scroll when you drag them with a mouse, even if you start on a real lesson (a link no longer gets picked up instead). On a computer each row shows a thin scrollbar."]},
   {tag:"v3.1.49",date:"Oct 14",changes:["Courses has a University tab (a demo with Clarkson University): pick a subject by tapping two letters (M then A for Mathematics), open a class, and see where the term is now, the units and exams on a timeline, and the lessons students are using most this week. Any lesson can start a real voice lesson on its topic."]},
   {tag:"v3.1.48",date:"Oct 14",changes:["Lessons can listen to live pitch and loudness on your device (for tuners, singing, rhythm). Nothing is recorded or sent anywhere, and a Listening badge with Stop shows while it runs.","Videos can dock in the corner so the lesson keeps working. Students can continue a lesson where they left off.","Every signed-in account can open Teacher Studio from Courses. On a computer, your account button stays in the top-left corner."]},
@@ -7321,6 +7322,9 @@ function pathControlAtPoint(x, y) {
     // Vertical movement stays with the page and never changes the layer.
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) return;
     if (area.offsetParent === null) return;
+    // Courses sits on top of Home, which stays laid out underneath. Leave the
+    // swipe to the rows on that page instead of spinning Home's ring (BUG-519).
+    if (document.body.classList.contains("cv-open")) return;
     const box = area.getBoundingClientRect();
     if (e.clientX < box.left || e.clientX > box.right || e.clientY < box.top || e.clientY > box.bottom) return;
     e.preventDefault();
@@ -16538,7 +16542,7 @@ window.addEventListener("blur", () => {
 });
 </script>
 <!-- NAV-152/154: owner-only Courses preview (bottom tabs Home · Courses · Profile). -->
-<script src="courses.js?v=3.1.50"></script>
+<script src="courses.js?v=3.1.51"></script>
 <!-- NAV-157: lesson map tools; NAV-156: lift the loading screen when Home is ready. -->
 <script src="map-tools.js?v=3.1.21"></script>
 <script src="boot-splash.js?v=3.1.22"></script>

@@ -287,8 +287,6 @@ body.cv-sheet-open #wv-tabbar { display:none; }
 @media (min-width:900px) { .cv-cats.cv-hscroll { grid-auto-columns:176px; } }
 .cv-cats.cv-hscroll::-webkit-scrollbar { display:none; }
 .cv-cats.cv-hscroll .cv-cat { scroll-snap-align:start; }
-.cv-route.dragging, .cv-hscroll.dragging { cursor:grabbing; scroll-snap-type:none; user-select:none; }
-.cv-route.dragging *, .cv-hscroll.dragging * { cursor:grabbing; }
 /* grid children must not stretch to fit a sideways shelf */
 .cv-wrap > * { min-width:0; }
 
@@ -333,7 +331,7 @@ body.cv-sheet-open #wv-tabbar { display:none; }
 .cv-samples :is(.cv-course, .cv-alert, .cv-tile, .cv-ex, .cv-find, .cv-chip-s, .cv-search):not(.cv-real):is(:hover, :focus-within) { opacity:.8; filter:saturate(.8); }
 .cv-alert.cv-real, .cv-tile.cv-real { border-color:color-mix(in srgb,var(--ok, #3d7650) 50%,var(--line)); }
 .cv-foot { margin-top:18px; font-size:12.5px; }
-/* lines of lessons scroll sideways (wheel, drag, swipe); the ‹ › buttons are gone */
+/* lines of lessons scroll sideways (two-finger swipe, touch, scrollbar); the ‹ › buttons are gone */
 .cv-chnav { display:none !important; }
 .cv-route { scrollbar-width:thin; scrollbar-color:color-mix(in srgb,var(--ink-soft, #999) 45%,transparent) transparent; }
 .cv-route::-webkit-scrollbar { display:block; height:6px; }
@@ -385,13 +383,3 @@ body.cv-sheet-open #wv-tabbar { display:none; }
 .uv-week.past { opacity:.5; } .uv-week.now { color:var(--accent); font-weight:800; border-top-color:var(--accent); }
 .uv-tutor { display:grid; gap:8px; margin-top:6px; }
 .cv-chip-s.on { background:var(--accent); color:var(--on-accent, #fff); border-color:var(--accent); }
-
-/* 2026-10-14: sideways shelves (BUG: could not scroll the lesson carousel in Explore) */
-/* a lesson tile is a link; never let the browser pick it up instead of moving the shelf */
-.cv-hscroll a, .cv-route a, .cv-hscroll img { -webkit-user-drag:none; user-drag:none; }
-/* with a mouse or trackpad there is no swipe cue, so show a thin scrollbar on every shelf */
-@media (hover:hover) and (pointer:fine) {
-  .cv-hscroll.cv-hscroll { scrollbar-width:thin; scrollbar-color:color-mix(in srgb,var(--ink-soft, #999) 45%,transparent) transparent; }
-  .cv-hscroll.cv-hscroll::-webkit-scrollbar { display:block; height:6px; }
-  .cv-hscroll.cv-hscroll::-webkit-scrollbar-thumb { background:color-mix(in srgb,var(--ink-soft, #999) 45%,transparent); border-radius:6px; }
-}

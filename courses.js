@@ -821,41 +821,7 @@
     }
     if (id === 'cv-school-q') { S.schoolQuery = e.target.value; const q = S.schoolQuery.trim().toLowerCase(); const out = view.querySelector('#cv-school-list'); if (out) out.innerHTML = schoolList(SCHOOLS.filter(s => !q || s.name.toLowerCase().includes(q))); }
   });
-  /* Sideways lines (a course's stops, the subjects) also move with a mouse
-     wheel, one stop at a time, and with click-and-drag. At either end the
-     wheel scrolls the page as usual. Trackpads and touch scroll natively. */
-  let wheelAcc = 0, wheelAt = 0;
-  view.addEventListener('wheel', e => {
-    const r = e.target.closest('.cv-route, .cv-hscroll'); if (!r) return;
-    if (Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
-    if (e.deltaMode === 0 && Math.abs(e.deltaY) < 40) return; // a trackpad's small up/down steps scroll the page
-    const max = r.scrollWidth - r.clientWidth; if (max <= 1) return;
-    if ((e.deltaY < 0 && r.scrollLeft <= 1) || (e.deltaY > 0 && r.scrollLeft >= max - 1)) return;
-    e.preventDefault();
-    wheelAcc += e.deltaY; if (Date.now() - wheelAt < 180 || Math.abs(wheelAcc) < 1) return;
-    const step = r.querySelector('.cv-stop, .cv-cat, .cv-tile, .cv-alert, .cv-chip-s')?.offsetWidth || 120;
-    r.scrollBy({left: Math.sign(wheelAcc) * step, behavior:'smooth'}); wheelAcc = 0; wheelAt = Date.now();
-  }, {passive:false});
-  let drag = null;
-  view.addEventListener('pointerdown', e => {
-    if (e.pointerType !== 'mouse' || e.button !== 0) return;
-    const r = e.target.closest('.cv-route, .cv-hscroll'); if (!r) return;
-    drag = {r, x:e.clientX, left:r.scrollLeft, moved:false};
-  });
-  window.addEventListener('pointermove', e => {
-    if (!drag) return;
-    if (!e.buttons) { endDrag(); return; } // the button was let go somewhere we did not see
-    const dx = e.clientX - drag.x;
-    if (!drag.moved && Math.abs(dx) > 6) { drag.moved = true; drag.r.classList.add('dragging'); }
-    if (drag.moved) drag.r.scrollLeft = drag.left - dx;
-  });
-  function endDrag() { if (!drag) return; const d = drag; drag = null; d.r.classList.remove('dragging'); if (d.moved) { const stop = ev => { ev.stopPropagation(); ev.preventDefault(); }; window.addEventListener('click', stop, {capture:true, once:true}); setTimeout(() => window.removeEventListener('click', stop, {capture:true}), 50); } }
-  window.addEventListener('pointerup', endDrag);
-  window.addEventListener('pointercancel', endDrag);
-  /* A lesson tile is a link, and the browser lets you pick a link up and drag it
-     away. That cancels the pointer, so dragging from a real lesson never moved the
-     shelf. Inside a shelf, a drag is only ever a scroll. */
-  view.addEventListener('dragstart', e => { const t = e.target.nodeType === 1 ? e.target : e.target.parentElement; if (t && t.closest('.cv-route, .cv-hscroll')) e.preventDefault(); });
+  /* Sideways rows (a course's stops, subjects, shelves) scroll with the browser's own two-finger swipe, touch and scrollbar. No wheel or click-and-drag handling: it got in the way (BUG-519). */
   view.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'cv-code') view.querySelector('[data-join]')?.click(); });
   document.addEventListener('keydown', e => { if (e.key !== 'Escape' || !S.open) return; if (S.sheet) { S.sheet = null; render(); } else if (S.scr !== 'home') go('home'); });
 
