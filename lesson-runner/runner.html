@@ -28,9 +28,18 @@
     // never run a lesson on the same address as the Worldview page (that would put its sign-ins in reach)
     if (!APP.test(e.origin) || e.origin === location.origin) { window.parent.postMessage({port: 'worldview-runner', type: 'refused'}, '*'); return; }
     window.parent.postMessage({port: 'worldview-runner', type: 'accepted'}, e.origin);
-    document.open(); document.write(m.html); document.close();
+    // Open the lesson as a fresh page on this address. Rewriting this page in place
+    // (document.write) left lessons with a 0x0 window and animation frames that never
+    // ran, so games stayed blank until a full reload. replace() adds no history entry.
+    location.replace(URL.createObjectURL(new Blob([m.html], {type: 'text/html'})));
   });
-  window.parent.postMessage({port: 'worldview-runner', type: 'ready'}, '*');
+  // Ask for the lesson once this frame has its real size (up to 3 s), so a lesson
+  // that measures the screen when it starts never sees 0x0.
+  var t0 = Date.now();
+  (function ready() {
+    if (innerWidth > 0 || Date.now() - t0 > 3000) window.parent.postMessage({port: 'worldview-runner', type: 'ready'}, '*');
+    else setTimeout(ready, 50);
+  })();
 })();
 </script>
 </body>

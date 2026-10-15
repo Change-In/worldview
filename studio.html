@@ -141,13 +141,14 @@
         <div class="menu" id="moremenu" role="menu" hidden>
           <button type="button" role="menuitem" id="download">Download the file</button>
           <button type="button" role="menuitem" id="dup">Make a copy</button>
+          <button type="button" role="menuitem" id="unpub2" hidden>Unpublish</button>
           <div class="sep"></div>
           <button type="button" role="menuitem" class="danger" id="del">Delete lesson</button>
         </div></div>
     </div>
 
     <div id="draftside">
-      <div class="pubbar"><span id="pubmsg"></span><button type="button" class="btn small" id="publish">Publish</button></div>
+      <div class="pubbar"><span id="pubmsg"></span><button type="button" class="btn small" id="publish">Publish</button><button type="button" class="btn ghost small" id="unpublish" hidden>Unpublish</button></div>
       <div class="stage" id="stage">
         <div class="tools">
           <div class="seg" role="group" aria-label="See it as"><button type="button" data-view="student">Student</button><button type="button" class="on" data-view="teacher">Teacher</button></div>
@@ -396,8 +397,10 @@ ${RULES}`;
   }
   function renderPubBar() {
     const latest = RELS[0];
-    $('#pubtab').textContent = latest ? 'Published v' + latest.version : 'Published';
-    if (!latest) { $('#pubmsg').textContent = cur.shared ? 'Students get this draft as it changes.' : 'Only you can see this draft.'; $('#publish').textContent = 'Publish to students'; $('#publish').hidden = false; }
+    $('#pubtab').textContent = latest ? (cur.shared ? 'Published v' : 'Unpublished v') + latest.version : 'Published';
+    $('#unpublish').hidden = $('#unpub2').hidden = !cur.shared; resetUnpublish();
+    if (latest && !cur.shared) { $('#pubmsg').textContent = 'Unpublished: students can\x27t open this lesson.'; $('#publish').textContent = latest.html === lastSaved ? 'Publish v' + latest.version + ' again' : 'Publish v' + (latest.version + 1); $('#publish').hidden = false; }
+    else if (!latest) { $('#pubmsg').textContent = cur.shared ? 'Students get this draft as it changes.' : 'Only you can see this draft.'; $('#publish').textContent = 'Publish to students'; $('#publish').hidden = false; }
     else if (!latest.files_frozen && latest.html === lastSaved) { $('#pubmsg').textContent = 'Students have v' + latest.version + ', but its videos and map aren\'t locked in yet.'; $('#publish').textContent = 'Lock in v' + latest.version; $('#publish').hidden = false; }
     else if (latest.html !== lastSaved) { $('#pubmsg').textContent = 'Students have v' + latest.version + '. This draft has changes since.'; $('#publish').textContent = 'Publish v' + (latest.version + 1); $('#publish').hidden = false; }
     else { $('#pubmsg').textContent = 'Students have this version (v' + latest.version + ').'; $('#publish').hidden = true; }
@@ -442,6 +445,11 @@ ${RULES}`;
   }
   async function publish() {
     const latest = RELS[0], relock = latest && !latest.files_frozen && latest.html === lastSaved;
+    // unpublished and the draft hasn't changed: open the same version again
+    if (latest && !cur.shared && latest.html === lastSaved) {
+      if (!(await save({shared: true}, true))) return;
+      renderPubBar(); renderShare(); if (!relock) return toast('v' + latest.version + ' is published again. The same link works.');
+    }
     $('#publish').disabled = $('#publish2').disabled = true;
     let version = relock ? latest.version : null;
     try {
@@ -451,6 +459,14 @@ ${RULES}`;
     } catch (e) {
       await loadReleases(); toast((version ? 'v' + version + ' is published, but its files aren\'t locked in yet: ' : 'Couldn\'t publish it: ') + (e.message || e) + (version ? ' Press Lock in to try again.' : ''));
     } finally { $('#publish').disabled = $('#publish2').disabled = false; }
+  }
+  /* Unpublish: the student link and the Courses listing stop working until it's published again.
+     Students' results and the published versions are kept. Press twice, like Delete. */
+  function resetUnpublish() { clearTimeout(resetUnpublish.t); ['#unpublish', '#unpub2'].forEach(s => { $(s).dataset.sure = ''; $(s).textContent = 'Unpublish'; }); }
+  async function unpublish(b) {
+    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Press again: students lose access'; clearTimeout(resetUnpublish.t); resetUnpublish.t = setTimeout(resetUnpublish, 4000); return; }
+    moreMenu(false); if (!(await save({shared: false}, true))) return;
+    renderPubBar(); renderShare(); toast('Unpublished. Students can\x27t open it now; their results are kept. Publish again any time.');
   }
   function showPublished(version, r) {
     const link = linkFor(cur.id);
@@ -636,6 +652,7 @@ ${RULES}`;
       case 'fs': return setFs(!$('#stage').classList.contains('fs'));
       case 'more': return moreMenu();
       case 'publish': case 'publish2': return publish();
+      case 'unpublish': case 'unpub2': return unpublish(b);
       case 'tlink': { $('#tilemenu').hidden = true; const ok = await copy(linkFor(tileTarget)); return toast(ok ? 'Student link copied.' : linkFor(tileTarget)); }
       case 'pubdlgcopy': { const ok = await copy(linkFor(cur.id)); return toast(ok ? 'Link copied.' : 'Copy the link from the box.'); }
       case 'tcopy': { $('#tilemenu').hidden = true; if (await copyLesson(tileTarget)) showGrid(); return; }
@@ -674,7 +691,7 @@ ${RULES}`;
   addEventListener('popstate', () => { const l = new URLSearchParams(location.search).get('l'); if (l) showLesson(l); else showGrid(); });
   addEventListener('focus', poll);
   // A page keeps the code it loaded with. When Teacher Studio is updated, offer a reload (or just reload on the lessons page).
-  const STUDIO_VERSION = '3.1.53';
+  const STUDIO_VERSION = '3.1.54';
   async function checkStudioUpdate() {
     try {
       const t = await fetch('studio.html?check=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '');
