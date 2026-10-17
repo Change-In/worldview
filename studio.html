@@ -218,7 +218,7 @@
 <dialog id="newdlg"><form id="newform"><h2>New lesson</h2><label class="small" for="newtitle">What's it called? You can change it later.</label><input type="text" id="newtitle" maxlength="120" placeholder="e.g. Why the Moon has phases"><div class="row"><button type="submit" class="btn">Create</button><button type="button" class="btn ghost" data-close>Cancel</button></div></form></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.53"></script>
+<script src="port-host.js?v=3.1.55"></script>
 <script>
 (() => {
   const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT', KIT = 'http://localhost:8195';
@@ -377,6 +377,9 @@ ${RULES}`;
   /* ---------- one lesson: the draft you edit, and what students get ---------- */
   let RELS = [], RUNS = [], side = 'draft';
   async function showLesson(id, push, want) {
+    // BUG-520: open a lesson with a real page load, the same thing Ctrl+R does. Switching to a lesson
+    // inside the already-open page sometimes left its preview undrawn (the lesson ran but never painted).
+    if (push === true) { location.assign('?l=' + encodeURIComponent(id) + (want === 'pub' ? '&side=pub' : '')); return; }
     const {data, error} = await db.from(T).select('*').eq('id', id).single();
     if (error || !data) { toast('Couldn\'t open that lesson.'); return showGrid(); }
     if (push) history.pushState({l: id}, '', '?l=' + id);
@@ -680,7 +683,7 @@ ${RULES}`;
     e.preventDefault(); const t = ($('#newtitle').value.trim() || 'New lesson').replace(/[<>`'"\\]/g, '').slice(0, 120);
     const {data, error} = await db.from(T).insert({title: t, html: STARTER(t)}).select('id').single();
     $('#newdlg').close(); if (error) return toast(/lesson_limit/.test(error.message) ? 'You have 50 lessons; delete one first.' : 'Couldn\'t create it: ' + error.message);
-    await showLesson(data.id, true); editOnComputer();
+    await showLesson(data.id, 'stay'); editOnComputer();
   });
   document.addEventListener('keydown', e => { const t = e.target.closest && e.target.closest('.tile[data-open]'); if (t && (e.key === 'Enter' || e.key === ' ') && e.target === t) { e.preventDefault(); showLesson(t.dataset.open, true); } });
   document.addEventListener('change', async e => { if (e.target.id !== 'upnew') return; const name = (e.target.files && e.target.files[0] && e.target.files[0].name || 'Uploaded lesson').replace(/\.html?$/i, ''); const h = await readFileHtml(e.target); if (!h) return; const t = (titleFromHtml(h) || name).slice(0, 120); const {data, error} = await db.from(T).insert({title: t, html: h}).select('id').single(); if (error) return toast('Couldn\'t upload it: ' + error.message); showLesson(data.id, true); });
@@ -688,10 +691,10 @@ ${RULES}`;
   $('#title').addEventListener('change', () => { const t = $('#title').value.trim(); if (t && cur && t !== cur.title) save({title: t.slice(0, 120)}); });
   $('#listed').addEventListener('change', async e => { if (!(await save({listed: e.target.checked}, true))) e.target.checked = !e.target.checked; else toast(e.target.checked ? 'Listed: it shows on the Courses page for everyone signed in.' : 'Not listed: only people with the link can open it.'); });
   $('#shared').addEventListener('change', async e => { if (!(await save({shared: e.target.checked}, true))) e.target.checked = !e.target.checked; renderShare(); renderPubBar(); toast(e.target.checked ? 'Open: the link works again.' : 'Closed: the link stops working until you open it again.'); });
-  addEventListener('popstate', () => { const l = new URLSearchParams(location.search).get('l'); if (l) showLesson(l); else showGrid(); });
+  addEventListener('popstate', () => { const l = new URLSearchParams(location.search).get('l'); if (l) location.reload(); else showGrid(); });
   addEventListener('focus', poll);
   // A page keeps the code it loaded with. When Teacher Studio is updated, offer a reload (or just reload on the lessons page).
-  const STUDIO_VERSION = '3.1.54';
+  const STUDIO_VERSION = '3.1.55';
   async function checkStudioUpdate() {
     try {
       const t = await fetch('studio.html?check=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '');

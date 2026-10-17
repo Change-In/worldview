@@ -134,17 +134,22 @@
   };
   /* Show the lesson: from the lesson address when there is one, otherwise in the sealed frame. */
   PortHost.prototype._load = function (doc) {
-    var f = this.o.frame, self = this; clearTimeout(this._rt); this._pending = null;
+    var self = this; clearTimeout(this._rt); this._pending = null;
+    // BUG-520: every load gets a brand-new frame. Re-navigating the same frame (with its sandbox and
+    // permissions changed) sometimes left a lesson that ran but never drew until the page was reloaded.
+    var old = this.o.frame, f = document.createElement('iframe');
+    ['id', 'class', 'style', 'title', 'referrerpolicy'].forEach(function (a) { if (old.hasAttribute(a)) f.setAttribute(a, old.getAttribute(a)); });
+    this.o.frame = f;
     if (this._runner && !this._runnerDown) {
       this._open = true; this._pending = doc;
-      f.removeAttribute('srcdoc'); f.setAttribute('sandbox', OPEN_SANDBOX); f.setAttribute('allow', OPEN_ALLOW);
-      f.src = this._runner;
+      f.setAttribute('sandbox', OPEN_SANDBOX); f.setAttribute('allow', OPEN_ALLOW);
+      f.src = this._runner; old.replaceWith(f);
       // the runner didn't answer (offline, blocked, not set up yet): fall back to the sealed frame
       this._rt = setTimeout(function () { if (self._pending === doc) { self._runnerDown = true; self._load(doc); } }, 5000);
       return;
     }
     this._open = false;
-    f.removeAttribute('allow'); f.setAttribute('sandbox', this._sealedSandbox); f.removeAttribute('src'); f.srcdoc = doc;
+    f.setAttribute('sandbox', this._sealedSandbox); f.srcdoc = doc; old.replaceWith(f);
   };
   function youtubeId(src) {
     var s = String(src || '').trim(), m = s.match(/(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/|\/live\/)([A-Za-z0-9_-]{11})/);
