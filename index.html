@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>/* The old GitHub Pages address sends everyone to Worldview's real address (Cloudflare), keeping the page and its ?l= etc. */if(location.hostname==="change-in.github.io")location.replace("https://worldview.cristianjperezb.workers.dev"+location.pathname.replace(/^\/worldview/,"")+location.search+location.hash);</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
 <title>Worldview</title>
@@ -2221,7 +2222,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.55 · Oct 17";
+const BUILD = "v3.1.56 · Oct 17";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2229,6 +2230,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.56",date:"Oct 17",changes:["The old GitHub address (change-in.github.io/worldview) now sends you to Worldview's real address, worldview.cristianjperezb.workers.dev, on the same page (lesson links included). Sign in once there; your account and lessons are the same."]},
   {tag:"v3.1.55",date:"Oct 17",changes:["Teacher Studio: opening a lesson now loads the page fresh, just like Ctrl+R, so the preview shows the lesson the first time. v3.1.54 had not fixed this.","Lesson previews (Studio and student links) use a brand-new frame every time they load, so Refresh, Student/Teacher and live saves draw the lesson too."]},
   {tag:"v3.1.54",date:"Oct 15",changes:["Teacher Studio: opening a lesson shows it straight away. Lessons (like games that measure the screen or animate) could stay blank until you reloaded the page.","Teacher Studio: Unpublish. Press Unpublish next to Publish (or in the ⋯ menu), then press again to confirm. The student link and the Courses listing stop working; students' results are kept. Publish again any time, with the same link."]},
   {tag:"v3.1.53",date:"Oct 14",changes:["Lessons now load from Worldview's own lesson address, in the same place on the same page. Lessons can use the microphone, camera and other browser features directly; your browser asks first, as on any website. A lesson still can't see your Worldview sign-in."]},

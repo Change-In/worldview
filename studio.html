@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
+<script>/* The old GitHub Pages address sends everyone to Worldview's real address (Cloudflare), keeping the page and its ?l= etc. */if(location.hostname==="change-in.github.io")location.replace("https://worldview.cristianjperezb.workers.dev"+location.pathname.replace(/^\/worldview/,"")+location.search+location.hash);</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Teacher Studio · Worldview</title>
@@ -694,7 +695,7 @@ ${RULES}`;
   addEventListener('popstate', () => { const l = new URLSearchParams(location.search).get('l'); if (l) location.reload(); else showGrid(); });
   addEventListener('focus', poll);
   // A page keeps the code it loaded with. When Teacher Studio is updated, offer a reload (or just reload on the lessons page).
-  const STUDIO_VERSION = '3.1.55';
+  const STUDIO_VERSION = '3.1.56';
   async function checkStudioUpdate() {
     try {
       const t = await fetch('studio.html?check=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '');
