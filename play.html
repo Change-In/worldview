@@ -64,6 +64,11 @@
     try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai', {method: 'POST', headers: Object.assign({'content-type': 'application/json'}, await authHeaders()), body: JSON.stringify(Object.assign({lesson: lessonId, run: runId || null}, req))})); }
     catch (e) { return {ok: false, error: 'The AI couldn\'t answer just now. Check the internet connection.', type: 'network'}; }
   };
+  // NAV-194: start or end a live GPT conversation (lesson-ai?mode=live). keepalive lets an ending still reach Worldview as the page closes.
+  const liveAI = async (req, lessonId, runId) => {
+    try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai?mode=live', {method: 'POST', keepalive: req.action === 'close', headers: Object.assign({'content-type': 'application/json'}, await authHeaders()), body: JSON.stringify(Object.assign({lesson: lessonId, run: runId || null}, req))})); }
+    catch (e) { return {ok: false, error: 'Worldview couldn\'t reach the live conversation. Check the internet connection.', type: 'network'}; }
+  };
   const hearAI = async (blob, lang, lessonId, runId) => {
     try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai?mode=transcribe&lesson=' + lessonId + (runId ? '&run=' + runId : '') + (lang ? '&lang=' + lang : ''), {method: 'POST', headers: Object.assign({'content-type': blob.type || 'audio/webm'}, await authHeaders()), body: blob})); }
     catch (e) { return {ok: false, error: 'Worldview couldn\'t turn that recording into text. Check the internet connection.', type: 'network'}; }
@@ -105,6 +110,7 @@
     $('#leave').hidden = false;
     $('#intro').hidden = true; $('#lesson').hidden = false; $('#title').textContent = lesson.title;
     const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), ai: req => askAI(req, lesson.id, runId), transcribe: (b, l) => hearAI(b, l, lesson.id, runId),
+      live: {create: req => liveAI(Object.assign({action: 'create'}, req), lesson.id, runId), close: callId => liveAI({action: 'close', callId}, lesson.id, runId)},
       state: {load: () => ls.get('wv-state-' + runId), save: v => ls.set('wv-state-' + runId, v)},
       initialRecord: resume ? (ls.get('wv-record-' + runId) || []) : [],
       onChange: (record, done) => { latest = record; finished = done; ls.set('wv-record-' + runId, record.slice(-200)); if (done) $('#finished').hidden = false; clearTimeout(timer); timer = setTimeout(save, done ? 0 : 800); }});

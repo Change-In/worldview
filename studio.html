@@ -234,11 +234,17 @@
     try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai', {method: 'POST', headers: Object.assign({'content-type': 'application/json'}, await authHeaders()), body: JSON.stringify(Object.assign({lesson: lessonId, run: runId || null}, req))})); }
     catch (e) { return {ok: false, error: 'The AI couldn\'t answer just now. Check the internet connection.', type: 'network'}; }
   };
+  // NAV-194: start or end a live GPT conversation (lesson-ai?mode=live). keepalive lets an ending still reach Worldview as the page closes.
+  const liveAI = async (req, lessonId, runId) => {
+    try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai?mode=live', {method: 'POST', keepalive: req.action === 'close', headers: Object.assign({'content-type': 'application/json'}, await authHeaders()), body: JSON.stringify(Object.assign({lesson: lessonId, run: runId || null}, req))})); }
+    catch (e) { return {ok: false, error: 'Worldview couldn\'t reach the live conversation. Check the internet connection.', type: 'network'}; }
+  };
   const hearAI = async (blob, lang, lessonId, runId) => {
     try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai?mode=transcribe&lesson=' + lessonId + (runId ? '&run=' + runId : '') + (lang ? '&lang=' + lang : ''), {method: 'POST', headers: Object.assign({'content-type': blob.type || 'audio/webm'}, await authHeaders()), body: blob})); }
     catch (e) { return {ok: false, error: 'Worldview couldn\'t turn that recording into text. Check the internet connection.', type: 'network'}; }
   };
-  const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), showTiming: true, ai: req => { const r = askAI(req, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }, transcribe: (b, l) => { const r = hearAI(b, l, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }, saveFile: (p, b) => saveLessonFile(p, b)});
+  const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), showTiming: true, ai: req => { const r = askAI(req, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }, transcribe: (b, l) => { const r = hearAI(b, l, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }, saveFile: (p, b) => saveLessonFile(p, b),
+    live: {create: req => liveAI(Object.assign({action: 'create'}, req), cur.id, null), close: callId => { const r = liveAI({action: 'close', callId}, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }}});
   let cur = null, lastSaved = '';
   // Student or Teacher: the lesson gets wv.viewer and can show the teacher extra things (NAV-173).
   function setView(v) {
@@ -596,7 +602,7 @@ ${RULES}`;
 
   /* ---------- Worldview AI cost (counts only; no words are kept) ---------- */
   const RATES = {'gemini-3.8-flash': [0.75, 3.75], 'claude-haiku-4-5': [1, 5]};
-  const PER_AUDIO_SECOND = {'deepgram-nova-3': 0.0043 / 60};
+  const PER_AUDIO_SECOND = {'deepgram-nova-3': 0.0043 / 60, 'gpt-live-1': 0.05 / 60};
   const money = n => '$' + (n === 0 ? '0' : n < 0.01 ? n.toFixed(4) : n.toFixed(2));
   async function loadAiUse() {
     if (!cur) return;

@@ -2222,7 +2222,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.56 · Oct 17";
+const BUILD = "v3.1.57 · Oct 18";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2230,6 +2230,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.57",date:"Oct 18",changes:["Teachers' lessons can hold a live voice conversation with GPT (wv.live): the student talks, pauses and interrupts naturally, and the AI answers out loud. Worldview holds the microphone and the connection, shows a Live bar with Mute and End, and ends the conversation after its time limit, a quiet spell, or when the page is left.","Each live conversation counts against the lesson's AI caps and the teacher's budget (about $0.05 a minute, the whole time reserved up front; at most 3 per student pass). Teacher Studio's AI cost includes it.","Privacy page: how live conversations handle your voice."]},
   {tag:"v3.1.56",date:"Oct 17",changes:["The old GitHub address (change-in.github.io/worldview) now sends you to Worldview's real address, worldview.cristianjperezb.workers.dev, on the same page (lesson links included). Sign in once there; your account and lessons are the same."]},
   {tag:"v3.1.55",date:"Oct 17",changes:["Teacher Studio: opening a lesson now loads the page fresh, just like Ctrl+R, so the preview shows the lesson the first time. v3.1.54 had not fixed this.","Lesson previews (Studio and student links) use a brand-new frame every time they load, so Refresh, Student/Teacher and live saves draw the lesson too."]},
   {tag:"v3.1.54",date:"Oct 15",changes:["Teacher Studio: opening a lesson shows it straight away. Lessons (like games that measure the screen or animate) could stay blank until you reloaded the page.","Teacher Studio: Unpublish. Press Unpublish next to Publish (or in the ⋯ menu), then press again to confirm. The student link and the Courses listing stop working; students' results are kept. Publish again any time, with the same link."]},

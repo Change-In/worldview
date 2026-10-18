@@ -14,6 +14,8 @@
    back for anyone (NAV-178). wv.audio streams on-device pitch and level readings
    (the microphone is captured here, never sent anywhere); wv.state keeps a student's
    place per run; welcome carries capabilities so lessons can check support (NAV-182).
+   wv.live holds a continuous GPT voice conversation; the microphone and the AI's voice
+   stay on this page and Worldview's server opens and closes each session (NAV-194).
    NAV-187: where a lesson address is set up, the lesson is loaded from that second
    address (the lesson runner) instead of a sealed frame. Browsers keep addresses
    apart, so the lesson can use the microphone, camera and other browser features
@@ -21,14 +23,14 @@
    Worldview sign-in. If the runner doesn't answer, the sealed frame is used. */
 (function () {
   'use strict';
-  var SDK = "(function(){window.WorldviewPort=function(manifest,handlers){handlers=handlers||{};var waiting={},aiN=0,audioCb=null,audioEnd=null,inFrame=window.parent!==window;" +
+  var SDK = "(function(){window.WorldviewPort=function(manifest,handlers){handlers=handlers||{};var waiting={},aiN=0,audioCb=null,audioEnd=null,liveCb=null,inFrame=window.parent!==window;" +
     "function send(type,body){try{parent.postMessage(Object.assign({port:'worldview',v:1,type:type},body||{}),'*');}catch(e){}}" +
     "addEventListener('message',function(e){var m=e.data;if(!m||m.port!=='worldview'||e.source!==parent)return;" +
-    "if(m.type==='audioframe'&&audioCb){try{audioCb(m.frame);}catch(x){}}if(m.type==='audioend'){var en=audioEnd;audioCb=null;audioEnd=null;if(en){try{en(m.info||{});}catch(x){}}}if(m.type==='welcome'){api.viewer=m.viewer==='teacher'?'teacher':'student';api.capabilities=m.capabilities||{};if(handlers.onWelcome)handlers.onWelcome(m);}if(m.type==='answer'&&waiting[m.id]){var d=waiting[m.id];delete waiting[m.id];d(m.value);}" +
+    "if(m.type==='audioframe'&&audioCb){try{audioCb(m.frame);}catch(x){}}if(m.type==='liveevent'&&liveCb){try{liveCb(m.event);}catch(x){}}if(m.type==='audioend'){var en=audioEnd;audioCb=null;audioEnd=null;if(en){try{en(m.info||{});}catch(x){}}}if(m.type==='welcome'){api.viewer=m.viewer==='teacher'?'teacher':'student';api.capabilities=m.capabilities||{};if(handlers.onWelcome)handlers.onWelcome(m);}if(m.type==='answer'&&waiting[m.id]){var d=waiting[m.id];delete waiting[m.id];d(m.value);}" +
     "if(m.type==='control'&&handlers.onControl)handlers.onControl(m.key,m.value);});" +
     "function wait(id,type,body){return new Promise(function(res){if(!inFrame)return res(null);waiting[id]=res;send(type,Object.assign({id:id},body));});}" +
     "send('hello',{manifest:manifest});" +
-    "var api={viewer:'student',capabilities:{},can:function(n){return !!api.capabilities[n];},audio:{start:function(o,cb){if(typeof o==='function'){cb=o;o={};}o=o||{};audioCb=cb||o.onFrame||null;audioEnd=o.onEnd||null;return wait('a'+(++aiN),'audiostart',{opts:{pitch:o.pitch!==false,minHz:o.minHz||0,maxHz:o.maxHz||0,rate:o.rate||0,silenceDb:o.silenceDb==null?null:o.silenceDb,clarity:o.clarity||0,label:o.label||''}});},stop:function(){audioCb=null;send('audiostop',{});},cents:function(hz,t){return hz>0&&t>0?1200*Math.log(hz/t)/Math.LN2:null;}},state:{get:function(){return wait('s'+(++aiN),'stateget',{});},set:function(v){send('stateset',{value:v});}},videoClose:function(){send('videoclose',{});},say:function(t){send('say',{text:t});},event:function(n,d,s,o){send('event',{name:n,data:d||{},say:s||'',react:!!(o&&o.react)});}," +
+    "var api={viewer:'student',capabilities:{},can:function(n){return !!api.capabilities[n];},audio:{start:function(o,cb){if(typeof o==='function'){cb=o;o={};}o=o||{};audioCb=cb||o.onFrame||null;audioEnd=o.onEnd||null;return wait('a'+(++aiN),'audiostart',{opts:{pitch:o.pitch!==false,minHz:o.minHz||0,maxHz:o.maxHz||0,rate:o.rate||0,silenceDb:o.silenceDb==null?null:o.silenceDb,clarity:o.clarity||0,label:o.label||''}});},stop:function(){audioCb=null;send('audiostop',{});},cents:function(hz,t){return hz>0&&t>0?1200*Math.log(hz/t)/Math.LN2:null;}},live:{start:function(o,cb){if(typeof o==='function'){cb=o;o={};}o=o||{};liveCb=cb||o.onEvent||null;var h=Array.isArray(o.history)?o.history.slice(-12).map(function(x){return {role:x&&x.role==='assistant'?'assistant':'user',content:String(x&&x.content||'').slice(0,2000)};}):[];return wait('lv'+(++aiN),'livestart',{opts:{instructions:String(o.instructions||'').slice(0,8000),voice:String(o.voice||''),maxMinutes:+o.maxMinutes||0,idleSeconds:+o.idleSeconds||0,label:String(o.label||'').slice(0,40),history:h}});},stop:function(){send('livestop',{});},mute:function(on){send('livemute',{on:on!==false});},context:function(t){send('livecontext',{text:String(t||'').slice(0,1500)});}},state:{get:function(){return wait('s'+(++aiN),'stateget',{});},set:function(v){send('stateset',{value:v});}},videoClose:function(){send('videoclose',{});},say:function(t){send('say',{text:t});},event:function(n,d,s,o){send('event',{name:n,data:d||{},say:s||'',react:!!(o&&o.react)});}," +
     "predict:function(id,q,u,o){return wait(id,'predict',Object.assign({question:q,unit:u||''},o||{}));},result:function(id,a,s){send('result',{id:id,actual:a,say:s||''});}," +
     "ask:function(id,q,o){return wait(id,'ask',Object.assign({question:q},o||{}));},human:function(id,r){return wait(id,'human',Object.assign({to:'teacher',kind:'question'},r||{}));}," +
     "evidence:function(o,t,d){send('evidence',{outcome:o,text:t,data:d||{}});},remember:function(k,v){send('remember',{key:k,value:v});}," +
@@ -124,7 +126,7 @@
   /* run(html, lessonId, filesPrefix): filesPrefix '_v/3/' plays a published version's locked-in files. */
   PortHost.prototype.run = function (html, lessonId, filesPrefix) {
     if (lessonId) this.o.lessonId = lessonId; if (filesPrefix !== undefined) this.o.filesPrefix = filesPrefix || '';
-    this._audioStop(null); this._closeDock(null); this._mem = null;
+    this._audioStop(null); this._liveStop('replaced'); this._closeDock(null); this._mem = null;
     this.q = []; this.preds = {}; this.record = (this.o.initialRecord || []).slice(); this.o.initialRecord = null; this.connected = false; this.done = false; this.manifest = null; this.aiCount = 0; this.gen = (this.gen || 0) + 1;
     this.o.panel.innerHTML = ''; if (this.o.progress) this.o.progress.style.width = '0';
     this._closeVideo();
@@ -341,10 +343,169 @@
       self._send('answer', {id: id, value: {ok: false, error: denied ? 'Worldview needs the microphone. Allow it for this site in the browser settings, then try again.' : none ? 'No microphone was found on this device.' : 'The microphone couldn\'t start. Close other apps using it and try again.', type: denied ? 'mic_denied' : none ? 'no_mic' : 'audio_failed'}});
     });
   };
-  // a page in the background, or leaving it, always releases the microphone
+  /* NAV-194: wv.live, a continuous GPT voice conversation. The microphone, the connection and the
+     AI's voice all live here, on the Worldview page, so a lesson never holds a key or opens a paid
+     session itself. Worldview's server starts each session against the lesson's caps (o.live.create)
+     and ends it (o.live.close). The lesson gets events: state, transcript, speaking, level, usage, muted, error, end. */
+  PortHost.prototype._liveEmit = function (L, ev) { if (L.gen === this.gen) this._send('liveevent', {event: ev}); };
+  PortHost.prototype._liveUI = function (L) {
+    var box = this.o.frame.parentNode; if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
+    if (!L.bar) {
+      L.bar = document.createElement('div'); L.bar.className = 'ph-audio ph-live'; L.bar.setAttribute('role', 'status');
+      L.bar.style.cssText = 'position:absolute;top:10px;left:10px;z-index:7;display:flex;gap:6px;align-items:center;background:rgba(20,16,12,.88);color:#fff;border-radius:999px;padding:5px 6px 5px 12px;font:600 13px system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.3)';
+      box.appendChild(L.bar);
+    }
+    var self = this, sec = L.startedAt ? Math.round((Date.now() - L.startedAt) / 1000) : 0, clock = function (n) { return Math.floor(n / 60) + ':' + ('0' + n % 60).slice(-2); };
+    var text = L.ended ? 'Ending…' : !L.live ? 'Connecting the live conversation…' : (L.muted ? '🔇 Muted' : '🎙 ' + (L.label || 'Live with GPT')) + ' · ' + clock(sec) + ' / ' + clock(L.maxSeconds);
+    L.bar.innerHTML = '';
+    var sp = document.createElement('span'); sp.textContent = text; L.bar.appendChild(sp);
+    var btn = function (t, f) { var b = document.createElement('button'); b.type = 'button'; b.className = 'btn small'; b.style.cssText = 'padding:3px 10px;font-size:12px'; b.textContent = t; b.onclick = f; L.bar.appendChild(b); };
+    if (L.needTap) btn('Tap to hear', function () { L.audio.play().then(function () { L.needTap = false; self._liveUI(L); }).catch(function () {}); });
+    if (L.live && !L.ended) btn(L.muted ? 'Unmute' : 'Mute', function () { self._liveMute(!L.muted); });
+    if (!L.ended) btn('End', function () { self._liveStop('stopped_by_user'); });
+  };
+  PortHost.prototype._liveMute = function (on) {
+    var L = this._live; if (!L || !L.mic) return;
+    L.muted = !!on; L.mic.getAudioTracks().forEach(function (t) { t.enabled = !L.muted; });
+    this._liveEmit(L, {type: 'muted', on: L.muted}); this._liveUI(L);
+  };
+  PortHost.prototype._liveContext = function (text) {
+    var L = this._live, t = clip(text, 1500).trim();
+    if (L && L.live && t && L.channel && L.channel.readyState === 'open') { try { L.channel.send(JSON.stringify({type: 'session.thinking.append', delegation_id: null, content: t})); } catch (e) {} }
+  };
+  // Finish a spoken turn: learner turns go into the teacher's record, with the question they answered.
+  PortHost.prototype._liveTurn = function (L) {
+    var t = L.turn; L.turn = null; if (!t || !t.text.trim()) return;
+    if (t.who === 'ai') { L.lastAi = t.text.trim(); return; }
+    if (L.saved < 60) { L.saved++; this.record.push({kind: 'voice', question: clip(L.lastAi, 300), answer: clip(t.text.trim(), 500), outcome: ''}); this._changed(); }
+  };
+  PortHost.prototype._liveStop = function (reason, error) {
+    var L = this._live, self = this; if (!L || L.ended) return; L.ended = true; L.reason = reason; L.error = error;
+    clearTimeout(L.startup); clearInterval(L.tick);
+    if (L.mic) L.mic.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+    if (L.channel && L.channel.readyState === 'open' && L.live) { try { L.channel.send(JSON.stringify({type: 'session.close'})); } catch (e) {} }
+    if (L.callId) Promise.resolve(this.o.live.close(L.callId)).catch(function () {});
+    if (L.bar) this._liveUI(L);
+    // wait briefly for OpenAI's own goodbye (final usage), then let go of everything
+    L.closeWait = setTimeout(function () { self._liveTeardown(L); }, L.live ? 4000 : 0);
+  };
+  PortHost.prototype._liveTeardown = function (L, reason, error) {
+    if (L.gone) return; L.gone = true; reason = reason || L.reason; error = error || L.error; clearTimeout(L.closeWait); clearTimeout(L.startup); clearInterval(L.tick);
+    this._liveTurn(L);
+    try { if (L.channel) L.channel.close(); } catch (e) {} try { if (L.peer) L.peer.close(); } catch (e) {}
+    if (L.mic) L.mic.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+    if (L.ctx) { try { L.ctx.close(); } catch (e) {} }
+    if (L.audio) { L.audio.srcObject = null; L.audio.remove(); }
+    if (L.bar) L.bar.remove();
+    if (this._live === L) this._live = null;
+    var sec = L.usage || (L.startedAt ? Math.round((Date.now() - L.startedAt) / 1000) : 0);
+    if (!L.answered) { L.answered = true; if (L.gen === this.gen) this._send('answer', {id: L.id, value: {ok: false, error: error || 'The live conversation ended before it started.', type: reason || 'live_failed'}}); }
+    else this._liveEmit(L, {type: 'end', reason: reason || 'ended', seconds: sec, error: error || ''});
+  };
+  PortHost.prototype._liveStart = function (m) {
+    var self = this, id = clip(m.id, 40), o = m.opts || {};
+    this._liveStop('replaced');
+    var no = function (error, type) { self._send('answer', {id: id, value: {ok: false, error: error, type: type}}); };
+    if (!this.o.live) return no('Live conversation isn\'t available on this page.', 'unsupported');
+    if (!window.RTCPeerConnection || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return no('This browser can\'t hold a live conversation. Try Chrome, Edge, Safari or Firefox.', 'unsupported');
+    this._audioStop('replaced'); this._closeVideo();
+    var maxMin = clamp(Math.round(+o.maxMinutes || 10), 1, 15);
+    var L = this._live = {id: id, gen: this.gen, label: clip(o.label, 40), maxSeconds: maxMin * 60, idle: clamp(Math.round(+o.idleSeconds || 120), 30, 600) * 1000, saved: 0, lastAi: '', last: Date.now(), speaking: {learner: false, ai: false}};
+    var fail = function (error, type) { if (self._live === L) self._liveStop(type, error); };
+    this._liveUI(L); this._liveEmit(L, {type: 'state', state: 'connecting'});
+    L.startup = setTimeout(function () { fail('The live conversation took too long to connect. Try again.', 'timeout'); }, 45000);
+    navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true}}).then(function (mic) {
+      if (self._live !== L || L.ended) { mic.getTracks().forEach(function (t) { t.stop(); }); return; }
+      L.mic = mic;
+      var peer = L.peer = new RTCPeerConnection();
+      mic.getAudioTracks().forEach(function (t) { peer.addTrack(t, mic); t.addEventListener('ended', function () { fail('The microphone stopped (unplugged or taken by another app).', 'interrupted'); }); });
+      var audio = L.audio = document.createElement('audio'); audio.autoplay = true; audio.setAttribute('playsinline', ''); audio.hidden = true; document.body.appendChild(audio);
+      peer.addEventListener('track', function (e) {
+        if (self._live !== L) return;
+        var remote = new MediaStream([e.track]); audio.srcObject = remote;
+        audio.play().catch(function () { L.needTap = true; self._liveUI(L); });
+        self._liveMeter(L, mic, remote);
+      });
+      peer.addEventListener('connectionstatechange', function () { if (['failed', 'closed'].indexOf(peer.connectionState) >= 0) fail('The live connection dropped. Check the internet and start again.', 'connection_lost'); });
+      var ch = L.channel = peer.createDataChannel('oai-events');
+      ch.addEventListener('message', function (e) { var ev; try { ev = JSON.parse(e.data); } catch (er) { return; } if (self._live === L) self._liveEvent(L, ev); });
+      ch.addEventListener('close', function () { if (self._live === L && !L.ended) fail('The live connection closed.', 'connection_lost'); else if (L.ended) self._liveTeardown(L); });
+      return peer.createOffer().then(function (offer) { return peer.setLocalDescription(offer); }).then(function () {
+        if (peer.iceGatheringState === 'complete') return;
+        return new Promise(function (res) { var t = setTimeout(res, 3000); peer.addEventListener('icegatheringstatechange', function () { if (peer.iceGatheringState === 'complete') { clearTimeout(t); res(); } }); });
+      }).then(function () {
+        if (self._live !== L || L.ended) return;
+        return Promise.resolve(self.o.live.create({sdp: peer.localDescription.sdp, instructions: clip(o.instructions, 8000), voice: clip(o.voice, 20), maxMinutes: maxMin, history: Array.isArray(o.history) ? o.history.slice(-12) : []})).catch(function () { return null; }).then(function (r) {
+          if (!r || !r.ok || !r.sdp) return fail((r && r.error) || 'Worldview couldn\'t start the live conversation. Check the internet and try again.', (r && r.type) || 'network');
+          L.callId = r.callId; L.maxSeconds = Math.min(L.maxSeconds, +r.maxSeconds || L.maxSeconds);
+          if (self._live !== L || L.ended) { Promise.resolve(self.o.live.close(r.callId)).catch(function () {}); return; }
+          return peer.setRemoteDescription({type: 'answer', sdp: r.sdp});
+        });
+      });
+    }).catch(function (e) {
+      var denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError'), none = e && (e.name === 'NotFoundError' || e.name === 'OverconstrainedError');
+      fail(denied ? 'Worldview needs the microphone for a live conversation. Allow it for this site, then try again.' : none ? 'No microphone was found on this device.' : 'The live conversation couldn\'t start.', denied ? 'mic_denied' : none ? 'no_mic' : 'live_failed');
+    });
+  };
+  PortHost.prototype._liveEvent = function (L, ev) {
+    var self = this, t = String(ev && ev.type || '');
+    if (t === 'session.started') {
+      clearTimeout(L.startup); L.live = true; L.startedAt = Date.now(); L.last = Date.now();
+      if (!L.answered) { L.answered = true; if (L.gen === this.gen) this._send('answer', {id: L.id, value: {ok: true, maxSeconds: L.maxSeconds, model: 'gpt-live-1'}}); }
+      this._liveEmit(L, {type: 'state', state: 'live', maxSeconds: L.maxSeconds});
+      L.tick = setInterval(function () {
+        if (self._live !== L) return;
+        var sec = (Date.now() - L.startedAt) / 1000;
+        if (sec >= L.maxSeconds) return self._liveStop('time_limit');
+        if (Date.now() - L.last > L.idle) return self._liveStop('idle');
+        self._liveUI(L);
+      }, 1000);
+      this._liveUI(L);
+    } else if (t === 'session.input_transcript.delta' || t === 'session.output_transcript.delta') {
+      var who = t === 'session.input_transcript.delta' ? 'learner' : 'ai', d = typeof ev.delta === 'string' ? ev.delta : '';
+      if (!d) return; L.last = Date.now();
+      if (L.turn && L.turn.who !== who) this._liveTurn(L);
+      if (!L.turn) L.turn = {who: who, text: ''};
+      L.turn.text = (L.turn.text + d).slice(-4000);
+      this._liveEmit(L, {type: 'transcript', who: who, delta: d});
+    } else if (t === 'session.usage.updated') {
+      var s = ev.usage && ev.usage.seconds; if (typeof s === 'number' && isFinite(s)) { L.usage = Math.max(L.usage || 0, Math.round(s)); this._liveEmit(L, {type: 'usage', seconds: L.usage}); }
+    } else if (t === 'session.delegation.created') {
+      // lessons have nothing to hand work to: say so, and keep talking
+      var did = ev.delegation && ev.delegation.id;
+      if (typeof did === 'string' && L.channel.readyState === 'open') { try { L.channel.send(JSON.stringify({type: 'session.commentary.append', delegation_id: did, content: 'Nothing outside this conversation can be done from here. Carry on the conversation.'})); } catch (e) {} }
+    } else if (t === 'session.closed') {
+      var u = ev.usage && ev.usage.seconds; if (typeof u === 'number' && isFinite(u)) L.usage = Math.round(u);
+      if (!L.ended) { L.ended = true; if (L.callId) Promise.resolve(this.o.live.close(L.callId)).catch(function () {}); }
+      this._liveTeardown(L, ev.reason === 'expired' ? 'time_limit' : (L.reason || 'ended'));
+    } else if (t === 'error') {
+      this._liveEmit(L, {type: 'error', message: clip(ev.error && ev.error.message || 'GPT reported a problem.', 200)});
+      if (!L.live) this._liveStop('live_failed', 'The live conversation couldn\'t start.');
+    }
+  };
+  // Loudness of both sides (0..1) about ten times a second, and who is speaking.
+  PortHost.prototype._liveMeter = function (L, mic, remote) {
+    var AC = window.AudioContext || window.webkitAudioContext, self = this; if (!AC || L.ctx) return;
+    try {
+      var ctx = L.ctx = new AC(), meter = function (stream) { var a = ctx.createAnalyser(); a.fftSize = 1024; ctx.createMediaStreamSource(stream).connect(a); return a; };
+      var a1 = meter(mic), a2 = meter(remote), buf = new Float32Array(1024);
+      var lvl = function (a) { a.getFloatTimeDomainData(buf); var sum = 0; for (var i = 0; i < buf.length; i++) sum += buf[i] * buf[i]; return Math.min(1, Math.sqrt(sum / buf.length) * 5); };
+      if (ctx.state !== 'running') ctx.resume().catch(function () {});
+      var timer = setInterval(function () {
+        if (self._live !== L || L.gone) return clearInterval(timer);
+        var you = L.muted ? 0 : lvl(a1), ai = lvl(a2);
+        self._liveEmit(L, {type: 'level', learner: Math.round(you * 100) / 100, ai: Math.round(ai * 100) / 100});
+        [['learner', you], ['ai', ai]].forEach(function (p) {
+          var on = L.speaking[p[0]] ? p[1] > 0.03 : p[1] > 0.08;
+          if (on !== L.speaking[p[0]]) { L.speaking[p[0]] = on; self._liveEmit(L, {type: 'speaking', who: p[0], on: on}); }
+        });
+      }, 100);
+    } catch (e) {}
+  };
+  // a page in the background, or leaving it, always releases the microphone (and ends a live conversation)
   var HOSTS = [];
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') HOSTS.forEach(function (h) { if (h._audio) h._audioStop('interrupted', {error: 'Listening stopped because the page was in the background.'}); }); });
-  addEventListener('pagehide', function () { HOSTS.forEach(function (h) { h._audioStop(null); }); });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') HOSTS.forEach(function (h) { if (h._audio) h._audioStop('interrupted', {error: 'Listening stopped because the page was in the background.'}); if (h._live) h._liveStop('background', 'The live conversation ended because the page was in the background.'); }); });
+  addEventListener('pagehide', function () { HOSTS.forEach(function (h) { h._audioStop(null); h._liveStop('page_closed'); }); });
   /* Docked video: a small player in the corner; the lesson stays usable (and listening). */
   PortHost.prototype._closeDock = function (reason) { var d = this._dock; if (!d) return; this._dock = null; removeEventListener('message', d.onmsg); clearInterval(d.ping); d.el.remove(); if (reason && d.gen === this.gen) this._send('answer', {id: d.id, value: {ok: true, reason: reason}}); };
   PortHost.prototype._videoDock = function (m, vid, q) {
@@ -385,9 +546,9 @@
     b.addEventListener('click', function () { self._closeVideo(); self._send('answer', {id: id, value: true}); });
     sheet.appendChild(v); sheet.appendChild(b); box.appendChild(sheet); this._sheet = sheet;
   };
-  PortHost.prototype.destroy = function () { clearTimeout(this._rt); this._audioStop(null); this._closeDock(null); removeEventListener('message', this._listener); clearTimeout(this._t); HOSTS = HOSTS.filter(function (h) { return h !== this; }, this); };
+  PortHost.prototype.destroy = function () { clearTimeout(this._rt); this._audioStop(null); this._liveStop('page_closed'); this._closeDock(null); removeEventListener('message', this._listener); clearTimeout(this._t); HOSTS = HOSTS.filter(function (h) { return h !== this; }, this); };
   PortHost.prototype.capabilities = function () {
-    return {ask: true, predict: true, video: true, videoDock: true, ai: !!this.o.ai, listen: !!this.o.transcribe,
+    return {ask: true, predict: true, video: true, videoDock: true, ai: !!this.o.ai, listen: !!this.o.transcribe, live: !!(this.o.live && window.RTCPeerConnection && navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
       audio: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && (window.AudioContext || window.webkitAudioContext)),
       record: !!this.o.saveFile, saveFile: !!this.o.saveFile, readFile: !!this.o.lessonId, state: true, persistentState: !!this.o.state, teacherTools: !!this.o.saveFile, direct: !!this._open};
   };
@@ -467,6 +628,10 @@
       case 'videoclose': this._closeDock('closed'); break;
       case 'audiostart': this._audioStart(m); break;
       case 'audiostop': this._audioStop('stopped'); break;
+      case 'livestart': this._liveStart(m); break;
+      case 'livestop': this._liveStop('stopped'); break;
+      case 'livemute': this._liveMute(!!m.on); break;
+      case 'livecontext': this._liveContext(m.text); break;
       case 'stateget': { var sv = null; try { sv = this.o.state ? this.o.state.load() : this._mem; } catch (e) {} this._send('answer', {id: clip(m.id, 40), value: sv == null ? null : sv}); break; }
       case 'stateset': { var js = ''; try { js = JSON.stringify(m.value); } catch (e) {} if (!js || js.length > 65536) { this._line('note', 'The lesson tried to save more than 64 KB of progress; it wasn\'t saved.'); break; } var val = JSON.parse(js); if (this.o.state) { try { this.o.state.save(val); } catch (e) {} } else this._mem = val; break; }
       case 'listen': this._listen(m); break;
@@ -496,7 +661,7 @@
       }
       case 'crash': this._line('note', 'The lesson hit a problem: ' + clip(m.message, 160)); break;
       // A request this player doesn't know (a newer lesson, an older page): answer it, so the lesson never waits forever.
-      default: if (m.id != null && ['evidence', 'remember', 'progress', 'done', 'say', 'event', 'result', 'hello', 'audiostop', 'stateset', 'videoclose'].indexOf(m.type) < 0) this._send('answer', {id: clip(m.id, 40), value: {ok: false, error: 'This Worldview page doesn\'t support ' + clip(m.type, 30) + ' yet. Reload the page.', type: 'unsupported'}});
+      default: if (m.id != null && ['evidence', 'remember', 'progress', 'done', 'say', 'event', 'result', 'hello', 'audiostop', 'stateset', 'videoclose', 'livestop', 'livemute', 'livecontext'].indexOf(m.type) < 0) this._send('answer', {id: clip(m.id, 40), value: {ok: false, error: 'This Worldview page doesn\'t support ' + clip(m.type, 30) + ' yet. Reload the page.', type: 'unsupported'}});
     }
   };
 
