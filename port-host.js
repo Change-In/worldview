@@ -35,7 +35,19 @@
     "ask:function(id,q,o){return wait(id,'ask',Object.assign({question:q},o||{}));},human:function(id,r){return wait(id,'human',Object.assign({to:'teacher',kind:'question'},r||{}));}," +
     "evidence:function(o,t,d){send('evidence',{outcome:o,text:t,data:d||{}});},remember:function(k,v){send('remember',{key:k,value:v});}," +
     "progress:function(v,n){send('progress',{value:v,note:n||''});},video:function(src,o){return wait('v'+(++aiN),'video',Object.assign({src:String(src||'')},o||{}));},ai:function(x,o){o=o||{};return wait('ai'+(++aiN),'ai',{messages:typeof x==='string'?[{role:'user',content:x}]:(x||[]),system:o.system||'',maxTokens:o.maxTokens||0,json:!!o.json,full:!!o.full});},record:function(o){o=o||{};return wait('r'+(++aiN),'record',{kind:o.kind||'video',maxSeconds:o.maxSeconds||0,title:o.title||'',folder:o.folder||'',name:o.name||''});},saveFile:function(p,c){return wait('f'+(++aiN),'savefile',{path:String(p||''),content:c});},readFile:function(p){return wait('g'+(++aiN),'readfile',{path:String(p||'')});},listen:function(o){o=o||{};return wait('l'+(++aiN),'listen',{prompt:o.prompt||'',maxSeconds:o.maxSeconds||0,lang:o.lang||'',full:!!o.full});},done:function(s){send('done',{summary:s||{}});}};return api;};})();" +
-    "addEventListener('error',function(e){try{parent.postMessage({port:'worldview',v:1,type:'crash',message:String(e.message||'error').slice(0,200)},'*');}catch(x){}});";
+    "addEventListener('error',function(e){try{parent.postMessage({port:'worldview',v:1,type:'crash',message:String(e.message||'error').slice(0,200)},'*');}catch(x){}});" +
+    // NAV-197 Point: only when Teacher Studio asks, the teacher taps a part of the page; a short description goes back for the helper chat.
+    "(function(){var on=false,box=null,cur=null;function post(t,b){try{parent.postMessage(Object.assign({port:'worldview',v:1,type:t},b||{}),'*');}catch(x){}}" +
+    "function pick(t){while(t&&t.nodeType===1&&t!==document.body&&t!==document.documentElement){var r=t.getBoundingClientRect();if(r.width>=24&&r.height>=14)return t;t=t.parentElement;}return null;}" +
+    "function show(t){if(!box){box=document.createElement('div');box.style.cssText='position:fixed;z-index:2147483647;pointer-events:none;border:2px solid #bd5a30;border-radius:8px;background:rgba(189,90,48,.10);display:none';document.documentElement.appendChild(box);}if(!t){box.style.display='none';return;}var r=t.getBoundingClientRect();box.style.display='block';box.style.left=(r.left-3)+'px';box.style.top=(r.top-3)+'px';box.style.width=(r.width+6)+'px';box.style.height=(r.height+6)+'px';}" +
+    "function where(t){var p=[];while(t&&t.nodeType===1&&t!==document.body&&p.length<5){var s=t.tagName.toLowerCase();if(t.id){p.unshift(s+'#'+t.id);break;}var i=1,x=t;while((x=x.previousElementSibling))if(x.tagName===t.tagName)i++;p.unshift(s+':nth-of-type('+i+')');t=t.parentElement;}return p.join(' > ');}" +
+    "function move(e){cur=pick(e.target);show(cur);}function down(e){e.preventDefault();cur=pick(e.target);show(cur);}" +
+    "function click(e){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();var t=cur||pick(e.target);stop();if(!t)return post('pointcancel');var txt=(t.innerText||t.textContent||'').replace(/\\s+/g,' ').trim();" +
+    "post('pointed',{label:(txt||t.tagName.toLowerCase()).slice(0,60),text:txt.slice(0,200),html:t.outerHTML.replace(/\\s+/g,' ').slice(0,400),path:where(t)});}" +
+    "function key(e){if(e.key==='Escape'){stop();post('pointcancel');}}function scroll(){show(null);}" +
+    "function start(){if(on)return;on=true;document.addEventListener('mousemove',move,true);document.addEventListener('pointerdown',down,true);document.addEventListener('click',click,true);document.addEventListener('keydown',key,true);addEventListener('scroll',scroll,true);document.documentElement.style.cursor='crosshair';}" +
+    "function stop(){on=false;cur=null;show(null);document.removeEventListener('mousemove',move,true);document.removeEventListener('pointerdown',down,true);document.removeEventListener('click',click,true);document.removeEventListener('keydown',key,true);removeEventListener('scroll',scroll,true);document.documentElement.style.cursor='';}" +
+    "addEventListener('message',function(e){var m=e.data;if(!m||m.port!=='worldview'||e.source!==parent||m.type!=='point')return;if(m.on)start();else stop();});})();";
 
   var FILES = 'https://eqppapoepynjvsfnoodj.supabase.co/storage/v1/object/public/lesson-files/';
   /* The lesson address for each Worldview address (app/lesson-runner, Worker worldview-lessons). '' keeps the sealed frame. On a computer,
@@ -552,6 +564,7 @@
       audio: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && (window.AudioContext || window.webkitAudioContext)),
       record: !!this.o.saveFile, saveFile: !!this.o.saveFile, readFile: !!this.o.lessonId, state: true, persistentState: !!this.o.state, teacherTools: !!this.o.saveFile, direct: !!this._open};
   };
+  PortHost.prototype.point = function (on) { this._send('point', {on: !!on}); };
   PortHost.prototype._send = function (type, body) { try { this.o.frame.contentWindow.postMessage(Object.assign({port: 'worldview', v: 1, type: type}, body || {}), this._open ? this._runnerOrigin : '*'); } catch (e) {} };
   PortHost.prototype._changed = function () { if (this.o.onChange) this.o.onChange(this.record.slice(), this.done); };
   PortHost.prototype._line = function (kind, text) {
@@ -660,6 +673,9 @@
         break;
       }
       case 'crash': this._line('note', 'The lesson hit a problem: ' + clip(m.message, 160)); break;
+      // NAV-197 Point: the part of the page the teacher tapped, for Teacher Studio's helper chat
+      case 'pointed': if (this.o.onPoint) this.o.onPoint({label: clip(m.label, 60), text: clip(m.text, 200), html: clip(m.html, 400), path: clip(m.path, 200)}); break;
+      case 'pointcancel': if (this.o.onPoint) this.o.onPoint(null); break;
       // A request this player doesn't know (a newer lesson, an older page): answer it, so the lesson never waits forever.
       default: if (m.id != null && ['evidence', 'remember', 'progress', 'done', 'say', 'event', 'result', 'hello', 'audiostop', 'stateset', 'videoclose', 'livestop', 'livemute', 'livecontext'].indexOf(m.type) < 0) this._send('answer', {id: clip(m.id, 40), value: {ok: false, error: 'This Worldview page doesn\'t support ' + clip(m.type, 30) + ' yet. Reload the page.', type: 'unsupported'}});
     }

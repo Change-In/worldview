@@ -111,6 +111,54 @@
   .tilelink:hover { background:var(--accent); color:var(--on-accent); }
   .checks { list-style:none; margin:0; padding:0; display:grid; gap:6px; font-size:14px; }
   .checks li { display:flex; gap:8px; } .checks .warn { color:var(--warn); }
+  /* v3.1.58 helper chat (NAV-197): Spotlight. The side you touch gets the bigger share; the line sets how big. */
+  .helperon .wrap { max-width:none; }
+  .hsplit.on { display:grid; grid-template-columns:minmax(0, calc(var(--c, .56) * 100% - 7px)) 14px minmax(0, 1fr); align-items:start; transition:grid-template-columns .45s cubic-bezier(.2,.8,.2,1); }
+  .hsplit.dragging { transition:none; user-select:none; }
+  .hmain { min-width:0; }
+  .hchat { position:sticky; top:12px; height:calc(100vh - 120px); min-height:440px; display:flex; flex-direction:column; background:var(--card); border:1px solid var(--line); border-radius:18px; overflow:hidden; }
+  .hline { position:sticky; top:12px; height:calc(100vh - 120px); min-height:440px; display:flex; align-items:center; justify-content:center; cursor:col-resize; touch-action:none; border-radius:8px; }
+  .hline i { width:4px; height:48px; border-radius:2px; background:var(--line); transition:background .2s; }
+  .hline:hover i, .hsplit.dragging .hline i, .hline:focus-visible i { background:var(--accent); }
+  .hc-head { display:flex; align-items:center; gap:8px; padding:10px 12px 10px 16px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .hc-title { font:400 19px Georgia,serif; }
+  .hc-who { font-size:12.5px; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  .hc-set { display:grid; gap:8px; padding:12px 16px; border-bottom:1px solid var(--line); background:var(--soft); font-size:14px; }
+  .hc-set select { width:100%; background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:7px 9px; }
+  .hc-set .seg { justify-self:start; }
+  .hc-log { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px; min-height:0; overscroll-behavior:contain; }
+  .hc-m { max-width:90%; padding:9px 13px; border-radius:18px; font-size:14.5px; line-height:1.45; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .hc-me { align-self:flex-end; background:var(--accent); color:var(--on-accent); border-bottom-right-radius:6px; }
+  .hc-ai { align-self:flex-start; background:var(--soft); font:15.5px/1.45 Georgia,serif; border-bottom-left-radius:6px; }
+  .hc-interim { opacity:.85; }
+  .hc-pt { display:block; font-size:12px; font-weight:700; opacity:.85; margin-bottom:2px; }
+  .hc-note { align-self:stretch; border:1px dashed var(--line); border-radius:12px; padding:8px 12px; font-size:13.5px; color:var(--ink-soft); }
+  .hc-err { border-style:solid; border-color:var(--warn); color:var(--warn); background:var(--warn-100); }
+  .hc-acts { margin-top:6px; } .hc-acts button { appearance:none; border:0; background:none; padding:0; color:var(--accent-700); font:700 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
+  .hc-steps { align-self:flex-start; font-size:12.5px; color:var(--ink-soft); }
+  .hc-steps summary { cursor:pointer; font-weight:600; }
+  .hc-steps div { margin-top:4px; padding:6px 10px; border-radius:10px; background:var(--soft); font:12px/1.6 ui-monospace,Consolas,monospace; }
+  .hc-work { align-self:flex-start; display:flex; gap:8px; align-items:center; font-size:13px; color:var(--ink-soft); }
+  .hc-spin { width:13px; height:13px; border-radius:50%; border:2px solid var(--line); border-top-color:var(--accent); animation:hcspin .8s linear infinite; flex:none; }
+  @keyframes hcspin { to { transform:rotate(360deg); } }
+  .hc-card { display:grid; gap:8px; padding:14px 16px; border-radius:16px; border:1px solid var(--line); background:var(--paper); font-size:14px; }
+  .hc-card b { font:400 17px Georgia,serif; } .hc-card p { margin:0; } .hc-card ul { margin:0; padding-left:18px; display:grid; gap:4px; } .hc-card ul b { font:inherit; font-weight:700; }
+  .hc-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+  .hc-chip { appearance:none; border:1px solid var(--line); background:var(--card); border-radius:999px; padding:6px 12px; font-size:13px; cursor:pointer; color:var(--ink); }
+  .hc-chip:hover { border-color:var(--accent); }
+  .hc-comp { display:grid; gap:6px; padding:10px 12px 12px; border-top:1px solid var(--line); }
+  .hc-row { display:flex; gap:8px; align-items:flex-end; }
+  .hc-row textarea { flex:1; min-width:0; resize:none; border:1px solid var(--line); background:var(--paper); border-radius:20px; padding:9px 14px; font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; max-height:160px; }
+  .hc-row textarea:disabled { opacity:.55; }
+  .hc-send { appearance:none; flex:none; width:40px; height:40px; border-radius:50%; border:0; background:var(--accent); color:var(--on-accent); font-size:18px; font-weight:800; cursor:pointer; }
+  .hc-send.stop { background:var(--ink); color:var(--paper); font-size:13px; }
+  .hc-send:disabled { opacity:.4; cursor:default; }
+  .hc-pchip { display:inline-flex; align-items:center; gap:6px; justify-self:start; background:var(--accent-100); color:var(--accent-700); border-radius:999px; padding:3px 4px 3px 11px; font-size:12.5px; font-weight:700; }
+  .hc-pchip button { appearance:none; border:0; background:none; color:inherit; cursor:pointer; width:22px; height:22px; border-radius:50%; font-size:15px; line-height:1; }
+  #pointbtn.on { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+  .pointhint { justify-self:center; background:var(--ink); color:var(--paper); border-radius:999px; padding:6px 14px; font-size:13px; font-weight:650; }
+  .fshelper { display:none; }
+  .stage.fs .fshelper:not([hidden]) { display:inline-flex; position:fixed; left:16px; bottom:calc(env(safe-area-inset-bottom,0px) + 16px); z-index:61; appearance:none; border:0; border-radius:999px; padding:10px 16px; background:var(--accent); color:var(--on-accent); font-weight:700; cursor:pointer; box-shadow:0 10px 30px rgba(0,0,0,.3); }
 </style>
 </head>
 <body>
@@ -143,18 +191,27 @@
           <button type="button" role="menuitem" id="download">Download the file</button>
           <button type="button" role="menuitem" id="dup">Make a copy</button>
           <button type="button" role="menuitem" id="unpub2" hidden>Unpublish</button>
+          <button type="button" role="menuitem" id="helpertoggle">Helper chat (try it)</button>
           <div class="sep"></div>
           <button type="button" role="menuitem" class="danger" id="del">Delete lesson</button>
         </div></div>
     </div>
 
     <div id="draftside">
+      <p class="small muted" id="helpernote" hidden>The helper chat works on a computer. Here you can try the lesson and publish it.</p>
+      <div class="hsplit" id="hsplit">
+      <aside class="hchat" id="hchat" aria-label="Your lesson helper" hidden></aside>
+      <div class="hline" id="hline" role="separator" aria-orientation="vertical" aria-label="Drag to change the sizes. Double-click for the usual sizes." tabindex="0" hidden><i></i></div>
+      <div class="hmain" id="hmain">
       <div class="pubbar"><span id="pubmsg"></span><button type="button" class="btn small" id="publish">Publish</button><button type="button" class="btn ghost small" id="unpublish" hidden>Unpublish</button></div>
       <div class="stage" id="stage">
         <div class="tools">
           <div class="seg" role="group" aria-label="See it as"><button type="button" data-view="student">Student</button><button type="button" class="on" data-view="teacher">Teacher</button></div>
           <div class="seg" role="group" aria-label="Preview size"><button type="button" data-dev="phone">Phone</button><button type="button" class="on" data-dev="laptop">Laptop</button></div>
+          <button type="button" class="iconbtn" id="pointbtn" aria-pressed="false" title="Tap a part of the lesson to tell your helper exactly what you mean" hidden>◎ Point</button>
         </div>
+        <div class="pointhint" id="pointhint" hidden>Tap the part of the lesson you mean · Esc to cancel</div>
+        <button type="button" class="fshelper" id="fshelper" hidden>Helper</button>
         <div class="phone" id="phone"><div class="livebadge" id="livebadge" hidden></div>
           <div class="corner"><button type="button" class="cbtn" id="restart" aria-label="Refresh the preview"><span>↻</span><em>Refresh</em></button><button type="button" class="cbtn" id="fs" aria-label="Full screen"><span>⛶</span><em id="fslabel">Full screen</em></button></div>
           <iframe id="frame" sandbox="allow-scripts allow-forms allow-popups" title="The lesson preview" referrerpolicy="no-referrer"></iframe></div>
@@ -172,6 +229,8 @@
           </div>
           <p class="small muted" id="draftcost"></p>
         </div>
+      </div>
+      </div>
       </div>
     </div>
 
@@ -219,7 +278,8 @@
 <dialog id="newdlg"><form id="newform"><h2>New lesson</h2><label class="small" for="newtitle">What's it called? You can change it later.</label><input type="text" id="newtitle" maxlength="120" placeholder="e.g. Why the Moon has phases"><div class="row"><button type="submit" class="btn">Create</button><button type="button" class="btn ghost" data-close>Cancel</button></div></form></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.55"></script>
+<script src="port-host.js?v=3.1.58"></script>
+<script src="studio-chat.js?v=3.1.58"></script>
 <script>
 (() => {
   const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT', KIT = 'http://localhost:8195';
@@ -243,7 +303,8 @@
     try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai?mode=transcribe&lesson=' + lessonId + (runId ? '&run=' + runId : '') + (lang ? '&lang=' + lang : ''), {method: 'POST', headers: Object.assign({'content-type': blob.type || 'audio/webm'}, await authHeaders()), body: blob})); }
     catch (e) { return {ok: false, error: 'Worldview couldn\'t turn that recording into text. Check the internet connection.', type: 'network'}; }
   };
-  const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), showTiming: true, ai: req => { const r = askAI(req, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }, transcribe: (b, l) => { const r = hearAI(b, l, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }, saveFile: (p, b) => saveLessonFile(p, b),
+  let helper = null;
+  const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), showTiming: true, onPoint: d => helper && helper.pointed(d), ai: req => { const r = askAI(req, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }, transcribe: (b, l) => { const r = hearAI(b, l, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }, saveFile: (p, b) => saveLessonFile(p, b),
     live: {create: req => liveAI(Object.assign({action: 'create'}, req), cur.id, null), close: callId => { const r = liveAI({action: 'close', callId}, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }}});
   let cur = null, lastSaved = '';
   // Student or Teacher: the lesson gets wv.viewer and can show the teacher extra things (NAV-173).
@@ -258,6 +319,9 @@
   function setDev(d) { d = d === 'phone' ? 'phone' : 'laptop'; document.querySelectorAll('[data-dev]').forEach(x => x.classList.toggle('on', x.dataset.dev === d)); const wide = d === 'laptop'; $('#phone').classList.toggle('laptop', wide); $('#stage').classList.toggle('wide', wide); $('#barw').style.maxWidth = wide ? '960px' : '400px'; try { localStorage.setItem('wv-preview-dev', d); } catch (e) {} }
   setDev('laptop');
   const toast = m => { document.querySelectorAll('.toast').forEach(t => t.remove()); const t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3500); };
+  // NAV-197: the helper chat next to the preview (off until turned on in the ⋯ menu or with ?helper=on)
+  helper = window.WorldviewStudioChat({lesson: () => cur, host, toast, openKit: () => openEditor(true), exitFs: () => setFs(false)});
+  $('#helpertoggle').addEventListener('click', () => { moreMenu(false); helper.toggle(); });
   const copy = async t => { try { await navigator.clipboard.writeText(t); return true; } catch (e) { return false; } };
   const ago = t => { const m = Math.round((Date.now() - new Date(t).getTime()) / 60000); return m < 1 ? 'edited just now' : m < 60 ? `edited ${m} min ago` : m < 1440 ? `edited ${Math.round(m / 60)} h ago` : 'edited ' + new Date(t).toLocaleDateString(); };
   const linkFor = id => new URL('play.html?l=' + id, location.href).href;
@@ -393,7 +457,7 @@ ${RULES}`;
     cur = data; lastSaved = data.html; RELS = []; RUNS = []; $('#gridview').hidden = true; $('#workview').hidden = false; document.title = data.title + ' · Teacher Studio';
     $('#title').value = data.title; $('#html').value = ''; host.o.lessonId = data.id; host.run(data.html);
     showSide(want === 'pub' ? 'pub' : 'draft'); renderShare(); loadReleases(); loadRuns(); loadAiUse();
-    joinLive(data.id);
+    joinLive(data.id); if (helper) helper.lessonChanged();
   }
   function showSide(v) {
     side = v; document.querySelectorAll('[data-side]').forEach(x => x.classList.toggle('on', x.dataset.side === v));
@@ -532,7 +596,7 @@ ${RULES}`;
   async function poll(force) {
     if (!cur || (!force && document.visibilityState !== 'visible')) return;
     const {data} = await db.from(T).select('html,updated_at,title').eq('id', cur.id).single();
-    if (data && data.html !== lastSaved) { lastSaved = data.html; cur.html = data.html; host.run(data.html); renderPubBar(); lastSaveAt = lastSaveAt || Date.now(); renderLive(); }
+    if (data && data.html !== lastSaved) { lastSaved = data.html; cur.html = data.html; host.run(data.html); renderPubBar(); lastSaveAt = lastSaveAt || Date.now(); renderLive(); if (helper) helper.previewChanged(); }
   }
   setInterval(poll, 3000);
   /* ---------- which AI edits: chosen from the Edit button's menu ---------- */
@@ -583,9 +647,11 @@ ${RULES}`;
     if (!tool) { toolMenu(true); return; }
     openEditor();
   }
-  function openEditor() {
-    const left = Math.max(0, (screen.availWidth || 1200) - 500), win = window.open(KIT + '/edit?w=' + cur.id + '&tool=' + encodeURIComponent(tool), 'wvedit-' + cur.id, 'popup=yes,width=480,height=680,left=' + left + ',top=60');
-    clearTimeout(kitWait); $('#kithelp').hidden = true; kitWait = setTimeout(() => { if (!liveInfo) $('#kithelp').hidden = false; }, 20000);
+  function openEditor(forChat) {
+    if (!cur) return;
+    // forChat (NAV-197): the small window only connects the helper chat here, so no text window opens
+    const left = Math.max(0, (screen.availWidth || 1200) - 500), win = window.open(KIT + '/edit?w=' + cur.id + (forChat ? '&chat=1' : '&tool=' + encodeURIComponent(tool)), 'wvedit-' + cur.id, 'popup=yes,width=480,height=680,left=' + left + ',top=60');
+    clearTimeout(kitWait); $('#kithelp').hidden = true; if (!forChat) kitWait = setTimeout(() => { if (!liveInfo) $('#kithelp').hidden = false; }, 20000);
     if (!win) toast('Your browser blocked the window. Allow pop-ups for this site, then press Edit again.');
   }
 
