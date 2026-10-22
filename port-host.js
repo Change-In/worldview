@@ -33,7 +33,7 @@
     "var api={viewer:'student',capabilities:{},can:function(n){return !!api.capabilities[n];},audio:{start:function(o,cb){if(typeof o==='function'){cb=o;o={};}o=o||{};audioCb=cb||o.onFrame||null;audioEnd=o.onEnd||null;return wait('a'+(++aiN),'audiostart',{opts:{pitch:o.pitch!==false,minHz:o.minHz||0,maxHz:o.maxHz||0,rate:o.rate||0,silenceDb:o.silenceDb==null?null:o.silenceDb,clarity:o.clarity||0,label:o.label||''}});},stop:function(){audioCb=null;send('audiostop',{});},cents:function(hz,t){return hz>0&&t>0?1200*Math.log(hz/t)/Math.LN2:null;}},live:{start:function(o,cb){if(typeof o==='function'){cb=o;o={};}o=o||{};liveCb=cb||o.onEvent||null;var h=Array.isArray(o.history)?o.history.slice(-12).map(function(x){return {role:x&&x.role==='assistant'?'assistant':'user',content:String(x&&x.content||'').slice(0,2000)};}):[];return wait('lv'+(++aiN),'livestart',{opts:{instructions:String(o.instructions||'').slice(0,8000),voice:String(o.voice||''),maxMinutes:+o.maxMinutes||0,idleSeconds:+o.idleSeconds||0,label:String(o.label||'').slice(0,40),history:h}});},stop:function(){send('livestop',{});},mute:function(on){send('livemute',{on:on!==false});},context:function(t){send('livecontext',{text:String(t||'').slice(0,1500)});}},state:{get:function(){return wait('s'+(++aiN),'stateget',{});},set:function(v){send('stateset',{value:v});}},videoClose:function(){send('videoclose',{});},say:function(t){send('say',{text:t});},event:function(n,d,s,o){send('event',{name:n,data:d||{},say:s||'',react:!!(o&&o.react)});}," +
     "predict:function(id,q,u,o){return wait(id,'predict',Object.assign({question:q,unit:u||''},o||{}));},result:function(id,a,s){send('result',{id:id,actual:a,say:s||''});}," +
     "ask:function(id,q,o){return wait(id,'ask',Object.assign({question:q},o||{}));},human:function(id,r){return wait(id,'human',Object.assign({to:'teacher',kind:'question'},r||{}));}," +
-    "evidence:function(o,t,d){send('evidence',{outcome:o,text:t,data:d||{}});},remember:function(k,v){send('remember',{key:k,value:v});}," +
+    "evidence:function(o,t,d){send('evidence',{outcome:o,text:t,data:d||{}});},remember:function(k,v){send('remember',{key:k,value:v});},recall:function(){return wait('m'+(++aiN),'recall',{});},days:function(){return wait('d'+(++aiN),'days',{});}," +
     "progress:function(v,n){send('progress',{value:v,note:n||''});},video:function(src,o){return wait('v'+(++aiN),'video',Object.assign({src:String(src||'')},o||{}));},ai:function(x,o){o=o||{};return wait('ai'+(++aiN),'ai',{messages:typeof x==='string'?[{role:'user',content:x}]:(x||[]),system:o.system||'',maxTokens:o.maxTokens||0,json:!!o.json,full:!!o.full});},record:function(o){o=o||{};return wait('r'+(++aiN),'record',{kind:o.kind||'video',maxSeconds:o.maxSeconds||0,title:o.title||'',folder:o.folder||'',name:o.name||''});},saveFile:function(p,c){return wait('f'+(++aiN),'savefile',{path:String(p||''),content:c});},readFile:function(p){return wait('g'+(++aiN),'readfile',{path:String(p||'')});},listen:function(o){o=o||{};return wait('l'+(++aiN),'listen',{prompt:o.prompt||'',maxSeconds:o.maxSeconds||0,lang:o.lang||'',full:!!o.full});},done:function(s){send('done',{summary:s||{}});}};return api;};})();" +
     "addEventListener('error',function(e){try{parent.postMessage({port:'worldview',v:1,type:'crash',message:String(e.message||'error').slice(0,200)},'*');}catch(x){}});" +
     // NAV-197 Point: only when Teacher Studio asks, the teacher taps a part of the page; a short description goes back for the helper chat.
@@ -62,9 +62,11 @@
   }
   var OPEN_SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-pointer-lock allow-presentation allow-orientation-lock';
   var OPEN_ALLOW = 'microphone; camera; geolocation; midi; fullscreen; autoplay; clipboard-write; accelerometer; gyroscope; magnetometer; screen-wake-lock; picture-in-picture; encrypted-media; web-share; bluetooth; usb; serial; hid; xr-spatial-tracking; display-capture';
-  function filesRoot(lessonId, prefix) { return FILES + encodeURIComponent(lessonId) + '/' + (/^_v\/\d{1,4}\/$/.test(prefix || '') ? prefix : ''); }
-  function compose(body, lessonId, prefix) {
-    var base = lessonId && !/<base\s/i.test(body) ? '<base href="' + filesRoot(lessonId, prefix) + '">' : '';
+  /* NAV-198: Day 2 onward lives in its own folder (day-2/ …); inside a day, every file path is relative to that folder. */
+  function dayFolder(f) { return /^day-\d{1,2}$/.test(f || '') ? f + '/' : ''; }
+  function filesRoot(lessonId, prefix, folder) { return FILES + encodeURIComponent(lessonId) + '/' + (/^_v\/\d{1,4}\/$/.test(prefix || '') ? prefix : '') + dayFolder(folder); }
+  function compose(body, lessonId, prefix, folder) {
+    var base = lessonId && !/<base\s/i.test(body) ? '<base href="' + filesRoot(lessonId, prefix, folder) + '">' : '';
     var head = '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' + base + '<script>' + SDK + '<\/script>';
     if (/<head[^>]*>/i.test(body)) return body.replace(/<head[^>]*>/i, function (m) { return m + head; });
     if (/<html[^>]*>/i.test(body)) return body.replace(/<html[^>]*>/i, function (m) { return m + '<head>' + head + '</head>'; });
@@ -135,14 +137,16 @@
     };
     addEventListener('message', this._listener);
   }
-  /* run(html, lessonId, filesPrefix): filesPrefix '_v/3/' plays a published version's locked-in files. */
-  PortHost.prototype.run = function (html, lessonId, filesPrefix) {
+  /* run(html, lessonId, filesPrefix, folder): filesPrefix '_v/3/' plays a published version's locked-in files;
+     folder 'day-2' plays Day 2 of a lesson over several days (NAV-198). */
+  PortHost.prototype.run = function (html, lessonId, filesPrefix, folder) {
     if (lessonId) this.o.lessonId = lessonId; if (filesPrefix !== undefined) this.o.filesPrefix = filesPrefix || '';
-    this._audioStop(null); this._liveStop('replaced'); this._closeDock(null); this._mem = null;
+    this.o.folder = folder || '';
+    this._audioStop(null); this._liveStop('replaced'); this._closeDock(null); this._mem = null; this._notes = null;
     this.q = []; this.preds = {}; this.record = (this.o.initialRecord || []).slice(); this.o.initialRecord = null; this.connected = false; this.done = false; this.manifest = null; this.aiCount = 0; this.gen = (this.gen || 0) + 1;
     this.o.panel.innerHTML = ''; if (this.o.progress) this.o.progress.style.width = '0';
     this._closeVideo();
-    var doc = compose(String(html || ''), this.o.lessonId, this.o.filesPrefix), self = this;
+    var doc = compose(String(html || ''), this.o.lessonId, this.o.filesPrefix, this.o.folder), self = this;
     this._load(doc); clearTimeout(this._t);
     this._t = setTimeout(function () { if (!self.connected) self._line('note', 'This lesson isn\'t connected to Worldview, so its questions won\'t appear here. You can still use it above.'); }, this._open ? 8500 : 3500);
   };
@@ -187,12 +191,12 @@
     var blob = c instanceof Blob ? c : new Blob([typeof c === 'string' ? c : JSON.stringify(c)], {type: /\.json$/i.test(path) ? 'application/json' : 'text/plain'});
     if (DATA.test(path) && blob.size > 1024 * 1024) return this._fileReply(id, {ok: false, error: 'Text files can be at most 1 MB.', type: 'too_large'});
     if (blob.size >= 50 * 1024 * 1024) return this._fileReply(id, {ok: false, error: 'Files must be under 50 MB.', type: 'too_large'});
-    Promise.resolve(this.o.saveFile(path, blob)).catch(function () { return null; }).then(function (r) { self._fileReply(id, r || {ok: false, error: 'Saving failed.', type: 'save_failed'}); });
+    Promise.resolve(this.o.saveFile(dayFolder(this.o.folder) + path, blob)).catch(function () { return null; }).then(function (r) { self._fileReply(id, r || {ok: false, error: 'Saving failed.', type: 'save_failed'}); });
   };
   PortHost.prototype._readFile = function (m) {
     var self = this, id = clip(m.id, 40), path = cleanPath(m.path), lid = this.o.lessonId;
     if (!path || !lid) return this._fileReply(id, null);
-    fetch(filesRoot(lid, this.o.filesPrefix) + path.split('/').map(encodeURIComponent).join('/') + '?t=' + Date.now(), {cache: 'no-store'})
+    fetch(filesRoot(lid, this.o.filesPrefix, this.o.folder) + path.split('/').map(encodeURIComponent).join('/') + '?t=' + Date.now(), {cache: 'no-store'})
       .then(function (r) { return r.ok ? r.text() : null; }).catch(function () { return null; }).then(function (t) { self._fileReply(id, t); });
   };
   PortHost.prototype._record = function (m) {
@@ -255,7 +259,7 @@
       var ext = /mp4/.test(blob.type) ? '.mp4' : '.webm', base = String(m.name || m.title || 'clip').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'clip';
       var path = folder + '/' + base + '-' + new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14) + ext;
       bSave.disabled = bRetake.disabled = bCancel.disabled = true; st.textContent = 'Saving to the lesson…';
-      Promise.resolve(self.o.saveFile(path, blob)).catch(function () { return null; }).then(function (r) {
+      Promise.resolve(self.o.saveFile(dayFolder(self.o.folder) + path, blob)).catch(function () { return null; }).then(function (r) {
         if (r && r.ok) return done(Object.assign({}, r, {seconds: Math.round(v.duration) || null, mime: blob.type}));
         bSave.disabled = bRetake.disabled = bCancel.disabled = false;
         st.textContent = (r && r.error) || 'Saving failed.'; st.textContent += ' Try Save again, or Cancel.';
@@ -562,7 +566,7 @@
   PortHost.prototype.capabilities = function () {
     return {ask: true, predict: true, video: true, videoDock: true, ai: !!this.o.ai, listen: !!this.o.transcribe, live: !!(this.o.live && window.RTCPeerConnection && navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
       audio: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && (window.AudioContext || window.webkitAudioContext)),
-      record: !!this.o.saveFile, saveFile: !!this.o.saveFile, readFile: !!this.o.lessonId, state: true, persistentState: !!this.o.state, teacherTools: !!this.o.saveFile, direct: !!this._open};
+      record: !!this.o.saveFile, saveFile: !!this.o.saveFile, readFile: !!this.o.lessonId, state: true, persistentState: !!this.o.state, days: !!this.o.days, teacherTools: !!this.o.saveFile, direct: !!this._open};
   };
   PortHost.prototype.point = function (on) { this._send('point', {on: !!on}); };
   PortHost.prototype._send = function (type, body) { try { this.o.frame.contentWindow.postMessage(Object.assign({port: 'worldview', v: 1, type: type}, body || {}), this._open ? this._runnerOrigin : '*'); } catch (e) {} };
@@ -647,6 +651,17 @@
       case 'livecontext': this._liveContext(m.text); break;
       case 'stateget': { var sv = null; try { sv = this.o.state ? this.o.state.load() : this._mem; } catch (e) {} this._send('answer', {id: clip(m.id, 40), value: sv == null ? null : sv}); break; }
       case 'stateset': { var js = ''; try { js = JSON.stringify(m.value); } catch (e) {} if (!js || js.length > 65536) { this._line('note', 'The lesson tried to save more than 64 KB of progress; it wasn\'t saved.'); break; } var val = JSON.parse(js); if (this.o.state) { try { this.o.state.save(val); } catch (e) {} } else this._mem = val; break; }
+      /* NAV-198 lessons over several days: wv.days() says which day this is and how the earlier ones went;
+         wv.remember(key, value) keeps something for later days (the student's notebook); wv.recall() returns
+         everything remembered so far. Without a days page (an ordinary lesson) they work for this pass only. */
+      case 'days': { var di = null; try { di = this.o.days ? this.o.days.info() : null; } catch (e) {} Promise.resolve(di).catch(function () { return null; }).then(function (v) { self._send('answer', {id: clip(m.id, 40), value: v || {enabled: false, day: 1, of: 1, title: '', attempt: 1, earlier: []}}); }); break; }
+      case 'recall': { var rv = null; try { rv = this.o.days ? this.o.days.recall() : Object.assign({}, this._notes || {}); } catch (e) {} Promise.resolve(rv).catch(function () { return null; }).then(function (v) { self._send('answer', {id: clip(m.id, 40), value: v || {}}); }); break; }
+      case 'remember': {
+        var rk = clip(m.key, 80).trim(), rj = ''; try { rj = JSON.stringify(m.value === undefined ? null : m.value); } catch (e) {}
+        if (!rk || !rj || rj.length > 16384) { this._line('note', 'The lesson tried to remember something too big (over 16 KB); it wasn\'t kept.'); break; }
+        if (this.o.days) { try { this.o.days.remember(rk, JSON.parse(rj)); } catch (e) {} } else { this._notes = this._notes || {}; this._notes[rk] = JSON.parse(rj); }
+        break;
+      }
       case 'listen': this._listen(m); break;
       case 'record': this._record(m); break;
       case 'savefile': this._saveFile(m); break;

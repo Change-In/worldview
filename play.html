@@ -12,6 +12,17 @@
   .intro { display:grid; gap:12px; }
   .intro h1 { font-size:30px; }
   .linkbtn { all:unset; cursor:pointer; text-decoration:underline; color:inherit; }
+  /* NAV-198: lessons over several days */
+  .days { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
+  .days li { display:flex; gap:10px; align-items:center; padding:9px 12px; border-radius:12px; background:var(--soft); }
+  .days li b { flex:1; min-width:0; }
+  .days li.now { background:var(--accent-100); }
+  .days .n { flex:none; width:26px; height:26px; border-radius:50%; display:grid; place-items:center; font-weight:700; font-size:13px; background:var(--card); }
+  .days li.done .n { background:var(--ok-100); color:var(--ok); }
+  .chip.late { background:var(--warn-100); color:var(--warn); }
+  .signin { display:grid; gap:8px; padding:12px; border-radius:14px; border:1.5px solid var(--line); }
+  .signin input { width:100%; background:var(--paper); border:1px solid var(--line); border-radius:12px; padding:9px 11px; color:inherit; font:inherit; }
+  details.small summary { cursor:pointer; font-weight:650; }
 </style>
 </head>
 <body>
@@ -20,14 +31,36 @@
 
   <div class="card intro" id="intro">
     <p class="muted" id="loading">Opening the lesson…</p>
-    <div id="ready" hidden>
+    <div id="ready" hidden style="display:grid;gap:12px">
       <h1 id="ltitle"></h1>
-      <p class="muted small">A lesson made by a teacher on Worldview. Your answers are saved and shared with that teacher.</p>
-      <p class="small" id="asname" hidden>Your teacher will see your answers as <b id="asnameb"></b>. <button type="button" class="linkbtn" id="changename">Change</button></p>
-      <div id="namebox" style="display:grid;gap:6px"><label class="small" for="name">Your first name (optional, so your teacher knows it's you)</label>
-      <input type="text" id="name" maxlength="60" autocomplete="given-name"></div>
-      <div class="row"><button type="button" class="btn" id="resume" hidden>Continue where you left off</button><button type="button" class="btn" id="start">Start the lesson</button></div>
-      <p class="muted small" id="resumenote" hidden></p>
+      <p class="muted small" id="madeby">A lesson made by a teacher on Worldview. Your answers are saved and shared with that teacher.</p>
+      <div id="single" style="display:grid;gap:12px">
+        <p class="small" id="asname" hidden>Your teacher will see your answers as <b id="asnameb"></b>. <button type="button" class="linkbtn" id="changename">Change</button></p>
+        <div id="namebox" style="display:grid;gap:6px"><label class="small" for="name">Your first name (optional, so your teacher knows it's you)</label>
+        <input type="text" id="name" maxlength="60" autocomplete="given-name"></div>
+        <div class="row"><button type="button" class="btn" id="resume" hidden>Continue where you left off</button><button type="button" class="btn" id="start">Start the lesson</button></div>
+        <p class="muted small" id="resumenote" hidden></p>
+      </div>
+      <!-- NAV-198: a lesson over several days -->
+      <div id="course" hidden style="display:grid;gap:12px">
+        <ol class="days" id="daylist"></ol>
+        <div class="signin" id="signin" hidden>
+          <p class="small" style="margin:0"><b>Sign in to keep your days together.</b> Each day builds on the one before, on any phone or computer.</p>
+          <input type="email" id="email" placeholder="Email" autocomplete="email" aria-label="Email">
+          <input type="password" id="password" placeholder="Password" autocomplete="current-password" aria-label="Password">
+          <div class="row"><button type="button" class="btn" id="signinbtn">Sign in</button><button type="button" class="btn ghost" id="signupbtn">Create an account</button></div>
+          <p class="small" id="signinmsg" style="margin:0"></p>
+        </div>
+        <p class="small" id="who" hidden style="margin:0"></p>
+        <div class="row" id="dayact"></div>
+        <p class="small" id="daynote" style="margin:0"></p>
+        <details class="small"><summary>What Worldview saves</summary>
+          <p>For each day: your answers, what you said in the lesson, what the lesson keeps for later days, and the date and time you started and finished. Worldview uses this so the next day can build on it, and your teacher can see it. While you talk or type, Worldview's AI provider handles your words to reply. Nothing is used for advertising.</p>
+          <p>You can keep your own copy (the notebook buttons below) and change it however you like; Worldview keeps its own record separately. Deleting your Worldview account deletes these days too.</p>
+        </details>
+        <div class="row" id="nbrow" hidden><button type="button" class="btn ghost small" id="nbdl">Download my notebook</button><button type="button" class="btn ghost small" id="nbfolder" hidden>Save to a folder on this computer</button></div>
+        <p class="muted small" id="nbmsg" style="margin:0"></p>
+      </div>
     </div>
     <div id="missing" hidden style="display:grid;gap:12px"><p style="margin:0">This lesson isn't shared, or the link is wrong. Ask your teacher for a new link.</p><div class="row"><a class="btn" href="./">Go to Worldview</a></div></div>
   </div>
@@ -37,17 +70,20 @@
     <div class="bar"><i id="prog"></i></div>
     <div class="ph-panel" id="panel" aria-live="polite"></div>
     <p class="status" id="saved"></p>
-    <div class="row" id="finished" hidden><b class="grow">You finished the lesson.</b><button type="button" class="btn" id="finishedback">Back to Worldview</button></div>
+    <div class="row" id="finished" hidden><b class="grow" id="finishedtext">You finished the lesson.</b><button type="button" class="btn" id="finishedback">Back to Worldview</button></div>
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.55"></script>
+<script src="port-host.js?v=3.1.59"></script>
+<script src="lesson-days.js?v=3.1.59"></script>
 <script>
 (() => {
   const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT';
+  const FILES = URL_ + '/storage/v1/object/public/lesson-files/';
   const $ = s => document.querySelector(s);
   const id = new URLSearchParams(location.search).get('l') || '';
-  const db = window.supabase.createClient(URL_, KEY, {auth: {persistSession: false, autoRefreshToken: false, detectSessionInUrl: false}});
+  // The same sign-in as the rest of Worldview (NAV-198: lessons over several days need it; one-day lessons don't).
+  const db = window.supabase.createClient(URL_, KEY, {auth: {persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'worldview-alpha-auth'}});
   const newId = () => (crypto.randomUUID && crypto.randomUUID()) || ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
   let runId = newId();
   /* NAV-182: a student's place in a lesson stays on their own device, per lesson and run.
@@ -55,8 +91,9 @@
   const ls = {get: k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }, del: k => { try { localStorage.removeItem(k); } catch (e) {} }};
   const runKey = () => 'wv-run-' + id;
   const NAME_KEY = 'wv-learner-name';
-  // the signed-in Worldview account on this device, if it has a name (read only; this page never signs in)
-  const accountName = () => { try { const u = (JSON.parse(localStorage.getItem('worldview-alpha-auth')) || {}).user || {}, m = u.user_metadata || {}; return String(m.worldview_name || m.full_name || m.name || '').trim().split(/\s+/)[0].slice(0, 60); } catch (e) { return ''; } };
+  // the signed-in Worldview account on this device, if it has a name
+  const nameOf = u => { const m = (u && u.user_metadata) || {}; return String(m.worldview_name || m.full_name || m.name || '').trim().split(/\s+/)[0].slice(0, 60); };
+  const accountName = () => { try { return nameOf((JSON.parse(localStorage.getItem('worldview-alpha-auth')) || {}).user); } catch (e) { return ''; } };
   // Worldview's AI and transcription for lessons (lesson-ai): plain requests, results always {ok, text, json, error, type, …}.
   const norm = async r => { const j = await r.json().catch(() => ({})); if (r.ok && j.ok !== false) return Object.assign({}, j, {ok: true}); const e = j.error; return Object.assign({}, j, {ok: false, error: (e && e.message) || (typeof e === 'string' && e) || 'The AI couldn\'t answer just now.', type: (e && e.type) || j.type || 'http_' + r.status}); };
   const authHeaders = async () => { let token = KEY; try { const s = (await db.auth.getSession()).data.session; if (s) token = s.access_token; } catch (e) {} return {apikey: KEY, authorization: 'Bearer ' + token}; };
@@ -73,50 +110,188 @@
     try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai?mode=transcribe&lesson=' + lessonId + (runId ? '&run=' + runId : '') + (lang ? '&lang=' + lang : ''), {method: 'POST', headers: Object.assign({'content-type': blob.type || 'audio/webm'}, await authHeaders()), body: blob})); }
     catch (e) { return {ok: false, error: 'Worldview couldn\'t turn that recording into text. Check the internet connection.', type: 'network'}; }
   };
-  let lesson = null, latest = [], finished = false, timer = 0, saving = false, again = false;
+  let lesson = null, latest = [], finished = false, timer = 0, saving = false, again = false, host = null;
+  // a lesson over several days: its days.json, the signed-in student, and the server's record of this attempt
+  let course = null, user = null, server = null, clockSkew = 0, today = null;
+  const serverNow = () => Date.now() + clockSkew;
+  const filesPrefix = () => lesson.version && lesson.files_frozen ? '_v/' + lesson.version + '/' : '';
   async function save() {
     if (saving) { again = true; return; }
     saving = true; $('#saved').textContent = 'Saving your answers…';
-    const {error} = await db.rpc('worldview_teacher_lesson_run_save', {p_run: runId, p_lesson: lesson.id, p_name: $('#name').value.trim(), p_answers: latest, p_finished: finished, p_version: lesson.version || null});
-    $('#saved').textContent = error ? 'Your answers couldn\'t be saved just now. Keep going; they\'ll save with your next answer.' : (finished ? 'Saved. Your teacher can see your answers.' : 'Your answers are saved as you go.');
+    let error = null;
+    if (today) {
+      const r = await db.rpc('worldview_teacher_lesson_day_save', {p_run: runId, p_lesson: lesson.id, p_day: today.n, p_name: today.name, p_answers: latest, p_notes: today.notes, p_state: today.state == null ? null : today.state, p_finished: finished, p_version: lesson.version || null});
+      error = r.error;
+      if (!error && r.data && r.data.finished_at) today.finishedAt = r.data.finished_at;
+    } else {
+      error = (await db.rpc('worldview_teacher_lesson_run_save', {p_run: runId, p_lesson: lesson.id, p_name: $('#name').value.trim(), p_answers: latest, p_finished: finished, p_version: lesson.version || null})).error;
+    }
+    $('#saved').textContent = error ? (/sign_in_required|JWT/i.test(error.message || '') ? 'You\'re signed out, so this day can\'t be saved. Leave the lesson and sign in again.' : 'Your answers couldn\'t be saved just now. Keep going; they\'ll save with your next answer.') : (finished ? 'Saved. Your teacher can see your answers.' : 'Your answers are saved as you go.');
     saving = false; if (again) { again = false; save(); }
   }
   (async () => {
     if (!/^[0-9a-f-]{36}$/i.test(id)) { $('#loading').hidden = true; $('#missing').hidden = false; return; }
     const {data, error} = await db.rpc('worldview_teacher_lesson_get', {p_lesson: id});
-    $('#loading').hidden = true;
     lesson = !error && Array.isArray(data) && data[0];
-    if (!lesson) { $('#missing').hidden = false; return; }
+    if (!lesson) { $('#loading').hidden = true; $('#missing').hidden = false; return; }
+    course = window.WorldviewDays ? await WorldviewDays.load(FILES + encodeURIComponent(lesson.id) + '/' + filesPrefix()) : null;    $('#loading').hidden = true;
     $('#ltitle').textContent = lesson.title; document.title = lesson.title + ' · Worldview'; $('#ready').hidden = false;
+    if (course) return showCourse();
     const prev = ls.get(runKey());
     // A name given once (or the signed-in account's name) is used for every lesson on this device.
     const known = (prev && prev.name) || ls.get(NAME_KEY) || accountName();
     if (known) { $('#name').value = known; $('#asnameb').textContent = known; $('#asname').hidden = false; $('#namebox').hidden = true; }
     if (prev && prev.runId && (prev.version || null) === (lesson.version || null)) { $('#resume').hidden = false; $('#start').textContent = 'Start over'; $('#start').classList.add('ghost'); if (prev.name) $('#name').value = prev.name; $('#resumenote').hidden = false; $('#resumenote').textContent = 'You started this lesson on this device' + (prev.at ? ' on ' + new Date(prev.at).toLocaleDateString([], {month: 'short', day: 'numeric'}) : '') + '.'; }
   })();
+
+  /* ---------- NAV-198: a lesson over several days ---------- */
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+  async function showCourse() {
+    $('#single').hidden = true; $('#course').hidden = false;
+    $('#madeby').textContent = 'A lesson made by a teacher on Worldview, over ' + course.days.length + ' day' + (course.days.length === 1 ? '' : 's') + '. Your answers are saved and shared with that teacher.';
+    try { user = (await db.auth.getUser()).data.user || null; } catch (e) { user = null; }
+    if (!user) { server = null; renderDays(); $('#signin').hidden = false; $('#who').hidden = true; $('#dayact').innerHTML = ''; $('#daynote').textContent = ''; $('#nbrow').hidden = true; return; }
+    $('#signin').hidden = true;
+    const who = nameOf(user) || String(user.email || '').split('@')[0];
+    $('#who').hidden = false; $('#who').innerHTML = 'Signed in as <b>' + esc(who) + '</b>' + (user.email ? ' (' + esc(user.email) + ')' : '') + '. <button type="button" class="linkbtn" id="signout">Not you?</button>';
+    $('#signout').onclick = async () => { try { await db.auth.signOut(); } catch (e) {} showCourse(); };
+    $('#daynote').textContent = 'Checking your days…'; $('#dayact').innerHTML = '';
+    const r = await db.rpc('worldview_teacher_lesson_days_get', {p_lesson: lesson.id});
+    if (r.error) { $('#daynote').textContent = 'Worldview couldn\'t load your days just now (' + r.error.message + '). Check the internet connection and reload.'; return; }
+    server = r.data; clockSkew = Date.parse(server.now) - Date.now();
+    renderDays();
+  }
+  function renderDays() {
+    const st = WorldviewDays.status(course, server ? server.days : [], serverNow()), W = WorldviewDays.when;
+    $('#daylist').innerHTML = st.rows.map(d => {
+      const now = d.n === st.next, tag = d.state === 'done' ? '<span class="chip ok">Done ' + esc(new Date(d.finishedAt).toLocaleDateString([], {month: 'short', day: 'numeric'})) + '</span>'
+        : now && st.late && d.state !== 'missed' ? '<span class="chip late">Late</span>' : now && d.state === 'continue' ? '<span class="chip">Started</span>' : now ? '<span class="chip">' + (d.state === 'waiting' ? 'Opens ' + esc(W(st.openAt)) : d.state === 'missed' ? 'Missed' : 'Today') + '</span>' : '';
+      return '<li class="' + (d.state === 'done' ? 'done' : now ? 'now' : '') + '"><span class="n">' + (d.state === 'done' ? '✓' : d.n) + '</span><b>' + esc(d.title) + '</b>' + tag + '</li>';
+    }).join('');
+    if (!user || !server) return;
+    const act = $('#dayact'), note = $('#daynote'), cur = st.next ? st.rows[st.next - 1] : null, t = course.timing;
+    act.innerHTML = ''; note.textContent = '';
+    const button = (label, fn, ghost) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn' + (ghost ? ' ghost' : ''); b.textContent = label; b.onclick = fn; act.appendChild(b); return b; };
+    if (st.allDone) note.textContent = 'You\'ve done every day so far. If your teacher adds more, they\'ll appear here.';
+    else if (cur.state === 'waiting') note.textContent = 'Day ' + cur.n + ' opens ' + W(st.openAt) + (st.dueAt ? ' and is due by ' + W(st.dueAt) : '') + '. Come back then.';
+    else if (cur.state === 'missed') {
+      note.textContent = 'Day ' + cur.n + ' was due by ' + W(st.dueAt) + (t.graceDays ? ' (with ' + t.graceDays + ' extra day' + (t.graceDays === 1 ? '' : 's') + ')' : '') + '. Your teacher asks you to start again from Day 1. Your earlier days stay saved for your teacher.';
+      button('Start again from Day 1', restart);
+    } else {
+      button((cur.state === 'continue' ? 'Continue Day ' : 'Start Day ') + cur.n, () => beginDay(cur));
+      if (st.late) note.textContent = 'This day was due by ' + W(st.dueAt) + '. You can still do it' + (st.graceEnd && t.missed === 'restart' ? ' until ' + W(st.graceEnd) : '') + '; your teacher will see it was late.';
+      else if (st.dueAt) note.textContent = 'Due by ' + W(st.dueAt) + '.';
+    }
+    const any = (server.days || []).length > 0;
+    $('#nbrow').hidden = !any; $('#nbfolder').hidden = !WorldviewDays.canFolder;
+  }
+  async function restart() {
+    $('#daynote').textContent = 'Starting again…';
+    const r = await db.rpc('worldview_teacher_lesson_days_restart', {p_lesson: lesson.id});
+    if (r.error) { $('#daynote').textContent = 'That didn\'t work just now (' + r.error.message + '). Try again.'; return; }
+    showCourse();
+  }
+  async function signIn(create) {
+    const email = $('#email').value.trim(), password = $('#password').value, msg = $('#signinmsg');
+    if (!email || !password) { msg.textContent = 'Type your email and a password.'; return; }
+    $('#signinbtn').disabled = $('#signupbtn').disabled = true; msg.textContent = create ? 'Creating your account…' : 'Signing in…';
+    try {
+      if (create) {
+        const {data, error} = await db.auth.signUp({email, password, options: {emailRedirectTo: location.origin + '/'}});
+        if (error) msg.textContent = error.message;
+        else if (data.session) { msg.textContent = ''; await showCourse(); }
+        else msg.textContent = 'Check your email and tap the link to confirm your account. Then open this lesson link again; you\'ll be signed in.';
+      } else {
+        const {error} = await db.auth.signInWithPassword({email, password});
+        if (error) msg.textContent = /confirm/i.test(error.message) ? 'Confirm your email first: tap the link Worldview sent you, then sign in here.' : error.message;
+        else { msg.textContent = ''; $('#password').value = ''; await showCourse(); }
+      }
+    } catch (e) { msg.textContent = 'Couldn\'t reach Worldview. Check the internet connection.'; }
+    $('#signinbtn').disabled = $('#signupbtn').disabled = false;
+  }
+  $('#signinbtn').addEventListener('click', () => signIn(false));
+  $('#signupbtn').addEventListener('click', () => signIn(true));
+  $('#password').addEventListener('keydown', e => { if (e.key === 'Enter') signIn(false); });
+
+  async function dayHtml(d) {
+    if (d.n === 1) return lesson.html;
+    const r = await fetch(FILES + encodeURIComponent(lesson.id) + '/' + filesPrefix() + d.folder + '/index.html?t=' + Date.now(), {cache: 'no-store'}).catch(() => null);
+    return r && r.ok ? r.text() : null;
+  }
+  async function beginDay(d) {
+    $('#daynote').textContent = 'Opening Day ' + d.n + '…';
+    const html = await dayHtml(d);
+    if (!html) { $('#daynote').textContent = 'Day ' + d.n + ' isn\'t on Worldview yet. Ask your teacher.'; return; }
+    const saved = d.saved, earlier = (server.days || []).filter(r => r.day < d.n);
+    runId = saved ? saved.run : newId();
+    today = {n: d.n, title: d.title, name: nameOf(user) || String(user.email || '').split('@')[0], notes: Object.assign({}, saved && saved.notes || {}), state: saved && saved.state != null ? saved.state : (ls.get('wv-day-state-' + runId) || null), finishedAt: null};
+    finished = !!(saved && saved.finished); latest = (saved && saved.answers) || [];
+    const later = () => { clearTimeout(timer); timer = setTimeout(save, 800); };
+    const st = WorldviewDays.status(course, server.days, serverNow());
+    openLesson(html, d.folder, {
+      state: {load: () => today.state, save: v => { today.state = v; ls.set('wv-day-state-' + runId, v); later(); }},
+      initialRecord: latest,
+      days: {
+        info: () => ({enabled: true, day: d.n, of: course.days.length, title: d.title, attempt: server.attempt, late: st.late, startedAt: saved ? saved.started_at : new Date(serverNow()).toISOString(),
+          days: course.days.map(x => ({day: x.n, title: x.title})),
+          earlier: earlier.map(r => ({day: r.day, title: (course.days[r.day - 1] || {}).title || 'Day ' + r.day, startedAt: r.started_at, finishedAt: r.finished_at, answers: r.answers || [], kept: r.notes || {}}))}),
+        recall: () => WorldviewDays.recall(earlier, today.notes),
+        remember: (k, v) => { today.notes[k] = v; later(); }
+      },
+      onDone: () => { $('#finishedtext').textContent = 'Day ' + d.n + ' is done.'; $('#finishedback').textContent = 'Back to your days'; }
+    });
+  }
+
+  // the student's own copy: a download anywhere, or a folder on a computer (Chrome, Edge)
+  const nb = () => WorldviewDays.notebook(lesson.title, course, server ? server.days : [], serverNow());
+  $('#nbdl').addEventListener('click', () => { const n = nb(); WorldviewDays.download(WorldviewDays.safeName(lesson.title) + ' notebook.md', n.markdown); $('#nbmsg').textContent = 'Downloaded. It\'s yours to change: add notes, make flash cards, anything.'; });
+  $('#nbfolder').addEventListener('click', async () => {
+    const r = await WorldviewDays.saveToFolder(lesson.id, lesson.title, nb(), true);
+    $('#nbmsg').textContent = r.ok ? 'Saved in ' + r.folder + '. After each day, Worldview updates it here (your browser may ask first).' : r.type === 'cancelled' ? '' : 'Couldn\'t save to that folder' + (r.error ? ' (' + r.error + ')' : '') + '.';
+  });
+  // after a day: refresh the record, then update the student's folder if they picked one
+  async function afterDay() {
+    await showCourse();
+    if (server && await WorldviewDays.hasFolder(lesson.id)) {
+      const r = await WorldviewDays.saveToFolder(lesson.id, lesson.title, nb(), false);
+      $('#nbmsg').textContent = r.ok ? 'Your folder ' + r.folder + ' is up to date.' : r.type === 'needs_ok' ? 'Press "Save to a folder" to update your notebook folder.' : '';
+    }
+  }
+
   // Leaving: answers are already saved; go back where the student came from, or to Worldview.
   async function leave() {
     clearTimeout(timer); try { if (lesson) await save(); } catch (e) {}
+    if (today) { closeLesson(); today = null; return afterDay(); }
     let sameSite = false; try { sameSite = !!document.referrer && new URL(document.referrer).origin === location.origin && !/play(\.html)?$/.test(new URL(document.referrer).pathname); } catch (e) {}
     if (sameSite && history.length > 1) history.back(); else location.href = './';
   }
   $('#leave').addEventListener('click', leave);
   $('#finishedback').addEventListener('click', leave);
+  function openLesson(html, folder, o) {
+    $('#leave').hidden = false; $('#finished').hidden = true;
+    $('#intro').hidden = true; $('#lesson').hidden = false; $('#title').textContent = lesson.title;
+    if (host) host.destroy();
+    host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), ai: req => askAI(req, lesson.id, runId), transcribe: (b, l) => hearAI(b, l, lesson.id, runId),
+      live: {create: req => liveAI(Object.assign({action: 'create'}, req), lesson.id, runId), close: callId => liveAI({action: 'close', callId}, lesson.id, runId)},
+      state: o.state, days: o.days, initialRecord: o.initialRecord,
+      onChange: (record, done) => { latest = record; finished = finished || done; if (o.onRecord) o.onRecord(record); if (done) { if (o.onDone) o.onDone(); $('#finished').hidden = false; } clearTimeout(timer); timer = setTimeout(save, done ? 0 : 800); }});
+    // a published version plays its own locked-in files; older versions use the lesson's files
+    host.run(html, lesson.id, filesPrefix(), folder);
+    latest = host.record.slice(); save();
+  }
+  function closeLesson() {
+    if (host) { host.destroy(); host = null; }
+    $('#lesson').hidden = true; $('#intro').hidden = false; $('#leave').hidden = true; $('#title').textContent = 'Worldview';
+    $('#panel').innerHTML = ''; $('#saved').textContent = '';
+  }
   function begin(resume) {
     const prev = ls.get(runKey());
     if (resume && prev && prev.runId) runId = prev.runId; else { if (prev && prev.runId) { ls.del('wv-state-' + prev.runId); ls.del('wv-record-' + prev.runId); } runId = newId(); }
     ls.set(runKey(), {runId, version: lesson.version || null, name: $('#name').value.trim(), at: Date.now()});
     if ($('#name').value.trim()) ls.set(NAME_KEY, $('#name').value.trim());
-    $('#leave').hidden = false;
-    $('#intro').hidden = true; $('#lesson').hidden = false; $('#title').textContent = lesson.title;
-    const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), ai: req => askAI(req, lesson.id, runId), transcribe: (b, l) => hearAI(b, l, lesson.id, runId),
-      live: {create: req => liveAI(Object.assign({action: 'create'}, req), lesson.id, runId), close: callId => liveAI({action: 'close', callId}, lesson.id, runId)},
-      state: {load: () => ls.get('wv-state-' + runId), save: v => ls.set('wv-state-' + runId, v)},
+    openLesson(lesson.html, '', {state: {load: () => ls.get('wv-state-' + runId), save: v => ls.set('wv-state-' + runId, v)},
       initialRecord: resume ? (ls.get('wv-record-' + runId) || []) : [],
-      onChange: (record, done) => { latest = record; finished = done; ls.set('wv-record-' + runId, record.slice(-200)); if (done) $('#finished').hidden = false; clearTimeout(timer); timer = setTimeout(save, done ? 0 : 800); }});
-    // a published version plays its own locked-in files; older versions use the lesson's files
-    host.run(lesson.html, lesson.id, lesson.version && lesson.files_frozen ? '_v/' + lesson.version + '/' : '');
-    latest = host.record.slice(); save();
+      onRecord: record => ls.set('wv-record-' + runId, record.slice(-200))});
   }
   $('#changename').addEventListener('click', () => { $('#asname').hidden = true; $('#namebox').hidden = false; $('#name').focus(); $('#name').select(); });
   $('#start').addEventListener('click', () => begin(false));

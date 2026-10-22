@@ -278,8 +278,10 @@
 <dialog id="newdlg"><form id="newform"><h2>New lesson</h2><label class="small" for="newtitle">What's it called? You can change it later.</label><input type="text" id="newtitle" maxlength="120" placeholder="e.g. Why the Moon has phases"><div class="row"><button type="submit" class="btn">Create</button><button type="button" class="btn ghost" data-close>Cancel</button></div></form></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.58"></script>
+<script src="port-host.js?v=3.1.59"></script>
 <script src="studio-chat.js?v=3.1.58"></script>
+<script src="lesson-days.js?v=3.1.59"></script>
+<script src="studio-days.js?v=3.1.59"></script>
 <script>
 (() => {
   const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT', KIT = 'http://localhost:8195';
@@ -306,6 +308,7 @@
   let helper = null;
   const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), showTiming: true, onPoint: d => helper && helper.pointed(d), ai: req => { const r = askAI(req, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }, transcribe: (b, l) => { const r = hearAI(b, l, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }, saveFile: (p, b) => saveLessonFile(p, b),
     live: {create: req => liveAI(Object.assign({action: 'create'}, req), cur.id, null), close: callId => { const r = liveAI({action: 'close', callId}, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }}});
+  if (window.WorldviewStudioDays && window.WorldviewDays) WorldviewStudioDays.attach(host); // NAV-198: a Day picker when the lesson runs over several days
   let cur = null, lastSaved = '';
   // Student or Teacher: the lesson gets wv.viewer and can show the teacher extra things (NAV-173).
   function setView(v) {
@@ -683,11 +686,11 @@ ${RULES}`;
   /* ---------- students' results (published side) ---------- */
   async function loadRuns() {
     if (!cur) return;
-    const {data, error} = await db.from('worldview_teacher_lesson_runs').select('id,learner_name,answers,finished,updated_at,version').eq('lesson_id', cur.id).order('updated_at', {ascending: false}).limit(200);
+    const {data, error} = await db.from('worldview_teacher_lesson_runs').select('id,learner_name,answers,finished,updated_at,version,day,attempt,created_at,finished_at').eq('lesson_id', cur.id).order('updated_at', {ascending: false}).limit(200);
     if (error) { $('#runs').innerHTML = `<p class="small">Couldn't load results (${esc(error.message)}).</p>`; return; }
     RUNS = data || [];
     $('#st-students').textContent = String(RUNS.length); $('#st-finished').textContent = String(RUNS.filter(r => r.finished).length);
-    $('#runs').innerHTML = RUNS.length ? RUNS.map(r => `<div class="run"><div class="row"><b class="grow">${esc(r.learner_name || 'A student')}</b>${r.version ? '<span class="chip">v' + r.version + '</span>' : ''}${r.finished ? '<span class="chip ok">Finished</span>' : '<span class="chip">Not finished</span>'}</div><span class="muted small">${esc(new Date(r.updated_at).toLocaleString())}</span><dl>${(Array.isArray(r.answers) ? r.answers : []).map(a => a.kind === 'understanding' ? `<div><dt>Understanding</dt><dd>${Object.entries(a.levels || {}).map(([k, v]) => `<span class="chip${v >= 2 ? ' ok' : ''}">${esc(k)}: ${['not yet', 'partly', 'can explain', 'can apply'][v] || v}</span>`).join(' ')}</dd></div>` : a.kind === 'ai' ? `<div><dt>Student to the AI: ${esc(a.question)}</dt><dd>AI: ${esc(a.answer)}</dd></div>` : `<div><dt>${esc(a.kind)}${a.question ? ': ' + esc(a.question) : ''}${a.level != null ? ' · level ' + a.level + ' of 3' : ''}</dt><dd>${esc(a.answer || '—')}</dd></div>`).join('') || '<dd class="muted small">No answers yet.</dd>'}</dl></div>`).join('') : '<p class="muted small">No students yet. Copy the link above and send it to them.</p>';
+    $('#runs').innerHTML = RUNS.length ? RUNS.map(r => `<div class="run"><div class="row"><b class="grow">${esc(r.learner_name || 'A student')}</b>${r.day ? '<span class="chip">Day ' + r.day + '</span>' : ''}${r.attempt > 1 ? '<span class="chip">Try ' + r.attempt + '</span>' : ''}${r.version ? '<span class="chip">v' + r.version + '</span>' : ''}${r.finished ? '<span class="chip ok">Finished</span>' : '<span class="chip">Not finished</span>'}</div><span class="muted small">${r.day ? 'Started ' + esc(new Date(r.created_at).toLocaleString()) + (r.finished_at ? ' · finished ' + esc(new Date(r.finished_at).toLocaleString()) : '') : esc(new Date(r.updated_at).toLocaleString())}</span><dl>${(Array.isArray(r.answers) ? r.answers : []).map(a => a.kind === 'understanding' ? `<div><dt>Understanding</dt><dd>${Object.entries(a.levels || {}).map(([k, v]) => `<span class="chip${v >= 2 ? ' ok' : ''}">${esc(k)}: ${['not yet', 'partly', 'can explain', 'can apply'][v] || v}</span>`).join(' ')}</dd></div>` : a.kind === 'ai' ? `<div><dt>Student to the AI: ${esc(a.question)}</dt><dd>AI: ${esc(a.answer)}</dd></div>` : `<div><dt>${esc(a.kind)}${a.question ? ': ' + esc(a.question) : ''}${a.level != null ? ' · level ' + a.level + ' of 3' : ''}</dt><dd>${esc(a.answer || '—')}</dd></div>`).join('') || '<dd class="muted small">No answers yet.</dd>'}</dl></div>`).join('') : '<p class="muted small">No students yet. Copy the link above and send it to them.</p>';
     renderShare();
   }
 
