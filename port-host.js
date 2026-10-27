@@ -16,6 +16,8 @@
    place per run; welcome carries capabilities so lessons can check support (NAV-182).
    wv.live holds a continuous GPT voice conversation; the microphone and the AI's voice
    stay on this page and Worldview's server opens and closes each session (NAV-194).
+   wv.speak reads text aloud here: with Worldview's AI voice when one is on (o.speak,
+   LES-332), otherwise with the device's own voice.
    NAV-187: where a lesson address is set up, the lesson is loaded from that second
    address (the lesson runner) instead of a sealed frame. Browsers keep addresses
    apart, so the lesson can use the microphone, camera and other browser features
@@ -34,7 +36,7 @@
     "predict:function(id,q,u,o){return wait(id,'predict',Object.assign({question:q,unit:u||''},o||{}));},result:function(id,a,s){send('result',{id:id,actual:a,say:s||''});}," +
     "ask:function(id,q,o){return wait(id,'ask',Object.assign({question:q},o||{}));},human:function(id,r){return wait(id,'human',Object.assign({to:'teacher',kind:'question'},r||{}));}," +
     "evidence:function(o,t,d){send('evidence',{outcome:o,text:t,data:d||{}});},remember:function(k,v){send('remember',{key:k,value:v});},recall:function(){return wait('m'+(++aiN),'recall',{});},days:function(){return wait('d'+(++aiN),'days',{});}," +
-    "progress:function(v,n){send('progress',{value:v,note:n||''});},video:function(src,o){return wait('v'+(++aiN),'video',Object.assign({src:String(src||'')},o||{}));},ai:function(x,o){o=o||{};return wait('ai'+(++aiN),'ai',{messages:typeof x==='string'?[{role:'user',content:x}]:(x||[]),system:o.system||'',maxTokens:o.maxTokens||0,json:!!o.json,full:!!o.full});},record:function(o){o=o||{};return wait('r'+(++aiN),'record',{kind:o.kind||'video',maxSeconds:o.maxSeconds||0,title:o.title||'',folder:o.folder||'',name:o.name||''});},saveFile:function(p,c){return wait('f'+(++aiN),'savefile',{path:String(p||''),content:c});},readFile:function(p){return wait('g'+(++aiN),'readfile',{path:String(p||'')});},listen:function(o){o=o||{};return wait('l'+(++aiN),'listen',{prompt:o.prompt||'',maxSeconds:o.maxSeconds||0,lang:o.lang||'',full:!!o.full});},done:function(s){send('done',{summary:s||{}});}};return api;};})();" +
+    "progress:function(v,n){send('progress',{value:v,note:n||''});},video:function(src,o){return wait('v'+(++aiN),'video',Object.assign({src:String(src||'')},o||{}));},ai:function(x,o){o=o||{};return wait('ai'+(++aiN),'ai',{messages:typeof x==='string'?[{role:'user',content:x}]:(x||[]),system:o.system||'',maxTokens:o.maxTokens||0,json:!!o.json,full:!!o.full});},record:function(o){o=o||{};return wait('r'+(++aiN),'record',{kind:o.kind||'video',maxSeconds:o.maxSeconds||0,title:o.title||'',folder:o.folder||'',name:o.name||''});},saveFile:function(p,c){return wait('f'+(++aiN),'savefile',{path:String(p||''),content:c});},readFile:function(p){return wait('g'+(++aiN),'readfile',{path:String(p||'')});},listen:function(o){o=o||{};return wait('l'+(++aiN),'listen',{prompt:o.prompt||'',maxSeconds:o.maxSeconds||0,lang:o.lang||'',full:!!o.full});},speak:function(t,o){o=o||{};return wait('sp'+(++aiN),'speak',{text:String(t==null?'':t).slice(0,4000),voice:String(o.voice||''),speed:+o.speed||0,play:o.play!==false,fallback:o.fallback!==false});},speakStop:function(){send('speakstop',{});},done:function(s){send('done',{summary:s||{}});}};return api;};})();" +
     "addEventListener('error',function(e){try{parent.postMessage({port:'worldview',v:1,type:'crash',message:String(e.message||'error').slice(0,200)},'*');}catch(x){}});" +
     // NAV-197 Point: only when Teacher Studio asks, the teacher taps a part of the page; a short description goes back for the helper chat.
     "(function(){var on=false,box=null,cur=null;function post(t,b){try{parent.postMessage(Object.assign({port:'worldview',v:1,type:t},b||{}),'*');}catch(x){}}" +
@@ -142,7 +144,7 @@
   PortHost.prototype.run = function (html, lessonId, filesPrefix, folder) {
     if (lessonId) this.o.lessonId = lessonId; if (filesPrefix !== undefined) this.o.filesPrefix = filesPrefix || '';
     this.o.folder = folder || '';
-    this._audioStop(null); this._liveStop('replaced'); this._closeDock(null); this._mem = null; this._notes = null;
+    this._audioStop(null); this._liveStop('replaced'); this._speakStop(); this._closeDock(null); this._mem = null; this._notes = null;
     this.q = []; this.preds = {}; this.record = (this.o.initialRecord || []).slice(); this.o.initialRecord = null; this.connected = false; this.done = false; this.manifest = null; this.aiCount = 0; this.gen = (this.gen || 0) + 1;
     this.o.panel.innerHTML = ''; if (this.o.progress) this.o.progress.style.width = '0';
     this._closeVideo();
@@ -562,10 +564,46 @@
     b.addEventListener('click', function () { self._closeVideo(); self._send('answer', {id: id, value: true}); });
     sheet.appendChild(v); sheet.appendChild(b); box.appendChild(sheet); this._sheet = sheet;
   };
-  PortHost.prototype.destroy = function () { clearTimeout(this._rt); this._audioStop(null); this._liveStop('page_closed'); this._closeDock(null); removeEventListener('message', this._listener); clearTimeout(this._t); HOSTS = HOSTS.filter(function (h) { return h !== this; }, this); };
+  PortHost.prototype.destroy = function () { clearTimeout(this._rt); this._audioStop(null); this._liveStop('page_closed'); this._speakStop(); this._closeDock(null); removeEventListener('message', this._listener); clearTimeout(this._t); HOSTS = HOSTS.filter(function (h) { return h !== this; }, this); };
+  /* LES-332: wv.speak. Worldview's AI voice (o.speak returns {ok, audio}) plays here and the call answers when it
+     ends; play: false hands the audio to the lesson instead. When the AI voice is off or fails, the device's own
+     voice reads it (fallback: false turns that off). A new wv.speak, wv.speakStop or a new lesson stops the last one. */
+  PortHost.prototype._speak = function (m) {
+    var self = this, id = clip(m.id, 40), gen = this.gen, text = clip(m.text, 4000).trim(), speed = +m.speed || 0;
+    this._speakStop();
+    var token = this._speakToken = {};
+    var done = function (v) { if (self._speakToken === token) self._speakToken = null; self._speaking = null; if (gen === self.gen) self._send('answer', {id: id, value: v}); };
+    if (!text) return done({ok: false, error: 'There was nothing to read aloud.', type: 'empty'});
+    var device = function (why) {
+      var S = window.speechSynthesis, U = window.SpeechSynthesisUtterance;
+      if (m.fallback === false || !S || !U) return done(why || {ok: false, error: 'This browser can\'t read aloud.', type: 'unsupported'});
+      var u = new U(text), t0 = Date.now(), ended = false;
+      if (speed) u.rate = speed;
+      var end = function (v) { if (!ended) { ended = true; done(v); } };
+      u.onend = function () { end({ok: true, voice: 'device', seconds: Math.round((Date.now() - t0) / 100) / 10, aiVoice: why ? why.type : 'off'}); };
+      u.onerror = function (e) { end({ok: false, voice: 'device', error: 'The voice stopped.', type: (e && e.error) || 'device_error'}); };
+      self._speaking = {stop: function () { try { S.cancel(); } catch (e) {} end({ok: false, voice: 'device', error: 'Stopped.', type: 'stopped'}); }};
+      try { S.cancel(); S.speak(u); } catch (e) { end({ok: false, error: 'This browser can\'t read aloud.', type: 'unsupported'}); }
+    };
+    if (!this.o.speak || this.o.aiVoice === false) return device(null);
+    this._speaking = {stop: function () { done({ok: false, error: 'Stopped.', type: 'stopped'}); }};
+    Promise.resolve(this.o.speak({text: text, voice: clip(m.voice, 100), speed: speed})).catch(function () { return null; }).then(function (r) {
+      if (self._speakToken !== token || gen !== self.gen) return;
+      if (!r || !r.ok || !r.audio) return device(r && r.type ? r : {ok: false, error: 'Worldview\'s AI voice couldn\'t be reached.', type: 'network'});
+      if (m.play === false) return done({ok: true, voice: 'ai', audio: r.audio});
+      var url = URL.createObjectURL(r.audio), a = new Audio(url), t0 = Date.now(), ended = false;
+      var end = function (v) { if (ended) return; ended = true; try { a.pause(); } catch (e) {} URL.revokeObjectURL(url); done(v); };
+      self._speaking = {stop: function () { end({ok: false, voice: 'ai', error: 'Stopped.', type: 'stopped'}); }};
+      a.onended = function () { end({ok: true, voice: 'ai', seconds: Math.round((Date.now() - t0) / 100) / 10}); };
+      a.onerror = function () { if (!ended) { ended = true; URL.revokeObjectURL(url); self._speaking = null; device({ok: false, error: 'The AI voice couldn\'t play.', type: 'play_failed'}); } };
+      var p = a.play(); if (p && p.catch) p.catch(function () { if (!ended) { ended = true; URL.revokeObjectURL(url); self._speaking = null; device({ok: false, error: 'The browser held the sound back until a button is pressed.', type: 'blocked'}); } });
+    });
+  };
+  PortHost.prototype._speakStop = function () { var s = this._speaking; this._speaking = null; if (s) s.stop(); };
   PortHost.prototype.capabilities = function () {
     return {ask: true, predict: true, video: true, videoDock: true, ai: !!this.o.ai, listen: !!this.o.transcribe, live: !!(this.o.live && window.RTCPeerConnection && navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
       audio: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && (window.AudioContext || window.webkitAudioContext)),
+      speak: !!(this.o.speak || window.speechSynthesis), aiVoice: !!(this.o.speak && this.o.aiVoice),
       record: !!this.o.saveFile, saveFile: !!this.o.saveFile, readFile: !!this.o.lessonId, state: true, persistentState: !!this.o.state, days: !!this.o.days, teacherTools: !!this.o.saveFile, direct: !!this._open};
   };
   PortHost.prototype.point = function (on) { this._send('point', {on: !!on}); };
@@ -663,6 +701,8 @@
         break;
       }
       case 'listen': this._listen(m); break;
+      case 'speak': this._speak(m); break;
+      case 'speakstop': this._speakStop(); break;
       case 'record': this._record(m); break;
       case 'savefile': this._saveFile(m); break;
       case 'readfile': this._readFile(m); break;

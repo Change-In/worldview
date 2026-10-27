@@ -173,7 +173,7 @@
 
   <!-- ALL LESSONS -->
   <div id="gridview" hidden>
-    <div class="row" style="margin-bottom:14px"><h1 class="grow" style="font-size:30px">Your lessons</h1><button type="button" class="btn ghost" data-guide="1">New to AI?</button></div>
+    <div class="row" style="margin-bottom:14px"><h1 class="grow" style="font-size:30px">Your lessons</h1><a class="btn ghost" id="reqlink" href="requests" hidden>AI requests</a><button type="button" class="btn ghost" data-guide="1">New to AI?</button></div>
     <div class="grid" id="grid"><p class="muted">Loading…</p></div>
   </div>
 
@@ -278,7 +278,7 @@
 <dialog id="newdlg"><form id="newform"><h2>New lesson</h2><label class="small" for="newtitle">What's it called? You can change it later.</label><input type="text" id="newtitle" maxlength="120" placeholder="e.g. Why the Moon has phases"><div class="row"><button type="submit" class="btn">Create</button><button type="button" class="btn ghost" data-close>Cancel</button></div></form></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.59"></script>
+<script src="port-host.js?v=3.1.60"></script>
 <script src="studio-chat.js?v=3.1.58"></script>
 <script src="lesson-days.js?v=3.1.59"></script>
 <script src="studio-days.js?v=3.1.59"></script>
@@ -301,13 +301,24 @@
     try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai?mode=live', {method: 'POST', keepalive: req.action === 'close', headers: Object.assign({'content-type': 'application/json'}, await authHeaders()), body: JSON.stringify(Object.assign({lesson: lessonId, run: runId || null}, req))})); }
     catch (e) { return {ok: false, error: 'Worldview couldn\'t reach the live conversation. Check the internet connection.', type: 'network'}; }
   };
+  // LES-332: wv.speak with Worldview's AI voice, when one is on (the lesson falls back to the device voice otherwise).
+  const speakAI = async (req, lessonId, runId) => {
+    try {
+      const r = await fetch(URL_ + '/functions/v1/lesson-ai?mode=speak', {method: 'POST', headers: Object.assign({'content-type': 'application/json'}, await authHeaders()), body: JSON.stringify(Object.assign({lesson: lessonId, run: runId || null}, req))});
+      if (r.ok && /^audio\//.test(r.headers.get('content-type') || '')) return {ok: true, audio: await r.blob()};
+      return await norm(r);
+    } catch (e) { return {ok: false, error: 'Worldview\'s AI voice couldn\'t be reached.', type: 'network'}; }
+  };
+  // Is the AI voice on? (NAV-199: turned on by approving a request in the owner's inbox)
+  const aiVoiceOn = fetch(URL_ + '/functions/v1/lesson-ai?mode=services', {method: 'POST', headers: {'content-type': 'application/json', apikey: KEY}, body: '{"action":"catalog"}'}).then(r => r.json()).then(j => !!(j.on || []).some(x => x.service === 'speak')).catch(() => null);
   const hearAI = async (blob, lang, lessonId, runId) => {
     try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai?mode=transcribe&lesson=' + lessonId + (runId ? '&run=' + runId : '') + (lang ? '&lang=' + lang : ''), {method: 'POST', headers: Object.assign({'content-type': blob.type || 'audio/webm'}, await authHeaders()), body: blob})); }
     catch (e) { return {ok: false, error: 'Worldview couldn\'t turn that recording into text. Check the internet connection.', type: 'network'}; }
   };
   let helper = null;
-  const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), showTiming: true, onPoint: d => helper && helper.pointed(d), ai: req => { const r = askAI(req, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }, transcribe: (b, l) => { const r = hearAI(b, l, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }, saveFile: (p, b) => saveLessonFile(p, b),
+  const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), showTiming: true, onPoint: d => helper && helper.pointed(d), ai: req => { const r = askAI(req, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }, transcribe: (b, l) => { const r = hearAI(b, l, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }, speak: req => speakAI(req, cur.id, null), saveFile: (p, b) => saveLessonFile(p, b),
     live: {create: req => liveAI(Object.assign({action: 'create'}, req), cur.id, null), close: callId => { const r = liveAI({action: 'close', callId}, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }}});
+  aiVoiceOn.then(on => { if (on !== null) host.o.aiVoice = on; });
   if (window.WorldviewStudioDays && window.WorldviewDays) WorldviewStudioDays.attach(host); // NAV-198: a Day picker when the lesson runs over several days
   let cur = null, lastSaved = '';
   // Student or Teacher: the lesson gets wv.viewer and can show the teacher extra things (NAV-173).
@@ -785,10 +796,24 @@ ${RULES}`;
   }
   setInterval(checkStudioUpdate, 5 * 60 * 1000); addEventListener('focus', checkStudioUpdate);
 
+  // NAV-199: Worldview's owner gets a link to the AI requests inbox, with how many wait for an answer.
+  async function showRequests(userId) {
+    const {data: acc} = await db.from('user_access').select('active,access_tier').eq('user_id', userId).maybeSingle();
+    if (!acc || !acc.active || acc.access_tier !== 'admin') return;
+    const a = $('#reqlink'); a.hidden = false;
+    try {
+      const j = await fetch(URL_ + '/functions/v1/lesson-ai?mode=services', {method: 'POST', headers: Object.assign({'content-type': 'application/json'}, await authHeaders()), body: '{"action":"inbox"}'}).then(r => r.json());
+      const n = (j.requests || []).filter(r => r.status === 'waiting' || r.status === 'needs_key').length;
+      a.textContent = n ? 'AI requests · ' + n : 'AI requests';
+      a.classList.toggle('pulse', n > 0);
+    } catch (e) {}
+  }
+
   (async () => {
     const {data} = await db.auth.getSession(); const s = data && data.session;
     if (!s || !s.user || s.user.is_anonymous) { $('#signedout').hidden = false; return; }
     $('#who').textContent = s.user.email || '';
+    showRequests(s.user.id);
     const q = new URLSearchParams(location.search), l = q.get('l'); if (l) showLesson(l, false, q.get('side') === 'pub' ? 'pub' : 'draft'); else showGrid();
   })();
 })();

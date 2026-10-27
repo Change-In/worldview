@@ -2222,7 +2222,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.59 · Oct 21";
+const BUILD = "v3.1.60 · Oct 27";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2230,6 +2230,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.60",date:"Oct 27",changes:["Lesson AIs can now ask Worldview for AI it doesn't have yet (a better voice, pictures, another model). They pick the company, work out the cost per student and send a request. It waits in AI requests (Teacher Studio → AI requests) until you approve it on your phone.","Approving a company Worldview already has a key for turns it on at once. A new company opens a short Connect step: open its keys page, paste the key, and Worldview tests it and keeps it locked away.","Lessons can read text aloud (wv.speak). They use the AI voice you approve, otherwise the device's own voice, and switch over by themselves when you turn a voice on."]},
   {tag:"v3.1.59",date:"Oct 21",changes:["Lessons over several days: a teacher's lesson can have Day 1, Day 2, Day 3… (ask the lesson helper to \"make Day 2\"). Students sign in, see their days, and each day can use what they said before.","The teacher sets the timing: when the next day opens, when it's due, a grace day, and whether a missed day means starting again from Day 1. Dates come from Worldview, not the phone.","Students can download their notebook (every day's answers and notes), or save it to a folder on a computer, and change it however they like. Worldview keeps the official copy.","Teacher Studio: a Day picker above the preview to try each day, and Day and Try labels on results."]},
   {tag:"v3.1.58",date:"Oct 21",changes:["Teacher Studio: try the helper chat (⋯ menu → Helper chat). Talk to your own Codex next to the preview: whatever you touch gets bigger, drag the line to set the sizes, and the text window is one tap away.","Point (above the preview): tap a part of the lesson to tell your helper exactly what you mean. Every change has Undo, and ⚙ sets Fast mode, thinking and the model."]},
   {tag:"v3.1.57",date:"Oct 18",changes:["Teachers' lessons can hold a live voice conversation with GPT (wv.live): the student talks, pauses and interrupts naturally, and the AI answers out loud. Worldview holds the microphone and the connection, shows a Live bar with Mute and End, and ends the conversation after its time limit, a quiet spell, or when the page is left.","Each live conversation counts against the lesson's AI caps and the teacher's budget (about $0.05 a minute, the whole time reserved up front; at most 3 per student pass). Teacher Studio's AI cost includes it.","Privacy page: how live conversations handle your voice."]},

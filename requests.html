@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<script>/* The old GitHub Pages address sends everyone to Worldview's real address (Cloudflare). */if(location.hostname==="change-in.github.io")location.replace("https://worldview.cristianjperezb.workers.dev"+location.pathname.replace(/^\/worldview/,"")+location.search+location.hash);</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI requests · Worldview</title>
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="teacher.css?v=3.1.39">
+<style>
+  .wrap { max-width:720px; }
+  .list { display:grid; gap:12px; }
+  .req h2 { font-size:22px; }
+  .facts { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; margin:0; font-size:14px; }
+  .facts dt { color:var(--ink-soft); } .facts dd { margin:0; min-width:0; overflow-wrap:anywhere; }
+  .why { margin:0; font-size:14.5px; }
+  .hint { margin:0; font-size:13.5px; padding:8px 10px; border-radius:12px; background:var(--soft); }
+  .hint.warn { background:var(--accent-100); color:var(--accent-700); }
+  .chip.wait { background:var(--accent-100); color:var(--accent-700); }
+  .chip.no { background:var(--soft); color:var(--ink-soft); }
+  .connect { display:grid; gap:8px; padding:12px; border-radius:14px; border:1.5px solid var(--accent); }
+  .connect ol { margin:0; padding-left:20px; display:grid; gap:6px; font-size:14.5px; }
+  .connect input { width:100%; background:var(--paper); border:1px solid var(--line); border-radius:12px; padding:10px 12px; font:14px ui-monospace,Consolas,monospace; }
+  .svc { display:grid; grid-template-columns:1fr auto; gap:4px 12px; align-items:center; }
+  .svc b { font-size:16px; }
+  .switch { display:flex; gap:8px; align-items:center; font-size:14px; font-weight:650; cursor:pointer; }
+  .switch input { width:20px; height:20px; accent-color:var(--ok); }
+  .done { display:grid; gap:6px; font-size:14px; }
+  .done div { display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; }
+  .empty { color:var(--ink-soft); font-size:14.5px; margin:0; }
+  section { display:grid; gap:12px; margin-top:22px; }
+  section > h2 { font-size:20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a class="mark" href="./" aria-label="Back to Worldview">W</a><b class="grow">AI requests</b><a class="btn ghost small" href="studio">Teacher Studio</a></div>
+
+  <div class="card" id="signedout" hidden>
+    <h2>Sign in first</h2>
+    <p>This page uses your Worldview account. Sign in on Worldview, then come back.</p>
+    <div class="row"><a class="btn" href="./">Go to Worldview</a></div>
+  </div>
+  <div class="card" id="notowner" hidden>
+    <h2>Only Worldview's owner answers these</h2>
+    <p>When a lesson's AI asks Worldview for something new, Worldview's owner reviews it here. Your lesson's AI tells you when it's on.</p>
+  </div>
+
+  <div id="inbox" hidden>
+    <p class="muted" style="margin:0">Lesson AIs ask here for AI that Worldview doesn't offer yet. They pick the company and work out the cost. You approve, and the lesson switches over by itself.</p>
+    <section><h2>Waiting for you</h2><div class="list" id="open"></div></section>
+    <section><h2>On now</h2><div class="list" id="services"></div></section>
+    <section><details><summary>Answered</summary><div class="done" id="done" style="margin-top:10px"></div></details></section>
+  </div>
+  <p class="status" id="msg"></p>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+(() => {
+  // NAV-199 / BUS-094: the owner's inbox. Everything goes through lesson-ai?mode=services, which checks that this
+  // account is Worldview's owner. Keys pasted here go straight to Worldview's locked store (Vault) and are never shown.
+  const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT';
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const db = window.supabase.createClient(URL_, KEY, {auth: {persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'worldview-alpha-auth'}});
+  const toast = m => { document.querySelectorAll('.toast').forEach(t => t.remove()); const t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 4000); };
+  const authHeaders = async () => { let token = KEY; try { const s = (await db.auth.getSession()).data.session; if (s) token = s.access_token; } catch (e) {} return {apikey: KEY, authorization: 'Bearer ' + token}; };
+  const call = async body => fetch(URL_ + '/functions/v1/lesson-ai?mode=services', {method: 'POST', headers: Object.assign({'content-type': 'application/json'}, await authHeaders()), body: JSON.stringify(body)});
+  const ask = async body => {
+    try { const r = await call(body); const j = await r.json().catch(() => ({})); return r.ok ? j : {ok: false, error: (j.error && j.error.message) || 'Worldview couldn\'t do that.', type: j.error && j.error.type}; }
+    catch (e) { return {ok: false, error: 'Worldview couldn\'t be reached. Check the internet connection.'}; }
+  };
+  const UNITS = {'1k_chars': 'per 1,000 characters', '1m_chars': 'per million characters', minute: 'per minute', '1k_tokens': 'per 1,000 tokens', '1m_tokens': 'per million tokens', image: 'per image', call: 'per use', second: 'per second'};
+  const price = (p, u) => p == null ? '' : '$' + Number(p).toLocaleString('en-US', {maximumFractionDigits: 4}) + ' ' + (UNITS[u] || (u ? 'per ' + u : ''));
+  const WORDS = {waiting: ['Waiting', 'wait'], needs_key: ['Approved · connect it', 'wait'], needs_connector: ['Approved · needs building', 'no'], live: ['On', 'ok'], declined: ['Not now', 'no']};
+  const when = t => new Date(t).toLocaleDateString([], {month: 'short', day: 'numeric'});
+  let state = null;
+
+  function card(r) {
+    const C = state.companies[r.provider], label = (C && C.label) || r.provider_label || r.provider;
+    const runs = !!(C && C.services.includes(r.service)), current = state.services.find(s => s.service === r.service && s.enabled);
+    const [word, cls] = WORDS[r.status] || [r.status, 'no'];
+    const links = Object.entries(r.links || {}).filter(([k]) => k !== 'keys').map(([k, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(k === 'docs' ? 'Docs' : k === 'pricing' ? 'Pricing' : 'More')} ↗</a>`).join(' · ');
+    let act = '';
+    if (r.status === 'waiting') {
+      const hint = !runs ? `<p class="hint warn">Worldview can't talk to ${esc(label)} yet. Approving puts it on the build list; a coding session connects it.</p>`
+        : C.keyHeld ? `<p class="hint">Worldview already has a ${esc(label)} key, so this turns on right away.</p>`
+        : `<p class="hint">Next you paste a ${esc(label)} key (about a minute).</p>`;
+      const swap = current && current.provider !== r.provider ? `<p class="hint warn">This replaces ${esc((state.companies[current.provider] || {}).label || current.provider)} for every lesson.</p>` : '';
+      act = hint + swap + `<div class="row"><button type="button" class="btn" data-approve="${r.id}">Approve</button><button type="button" class="btn ghost" data-decline="${r.id}">Not now</button></div>`;
+    } else if (r.status === 'needs_key' && C) {
+      const page = (r.links && r.links.keys) || C.keyPage;
+      act = `<div class="connect"><b>Connect ${esc(label)}</b><ol><li><a href="${esc(page)}" target="_blank" rel="noopener">Open ${esc(label)}'s keys page ↗</a> and sign in.</li><li>Create a key and name it "Worldview".</li><li>Copy it, paste it here, and press Connect.</li></ol>
+        <input type="password" id="key-${r.id}" autocomplete="off" spellcheck="false" placeholder="Paste the key" aria-label="${esc(label)} key">
+        <div class="row"><button type="button" class="btn" data-connect="${esc(r.provider)}" data-for="${r.id}">Connect</button><span class="status" id="cmsg-${r.id}"></span></div>
+        <p class="small muted" style="margin:0">Worldview tries the key once, then keeps it in its locked store. Nobody sees it again: not lessons, not AIs, not this page.</p></div>`;
+    } else if (r.status === 'needs_connector') {
+      act = `<p class="hint">Worldview needs a connection to ${esc(label)} before this can turn on.</p><div class="row"><button type="button" class="btn ghost" data-brief="${r.id}">Copy the build brief</button><span class="small muted">Paste it into Claude Code or Codex in the Worldview folder.</span></div>`;
+    }
+    return `<div class="card req"><div class="row"><span class="chip ${cls}">${esc(word)}</span><span class="small muted">${esc(r.lesson_title || 'A lesson')} · ${when(r.created_at)}</span></div>
+      <h2>${esc(r.title)}</h2>
+      <dl class="facts"><dt>Company</dt><dd>${esc(label)}${r.model ? ' · ' + esc(r.model) : ''}${r.voice ? ' · voice ' + esc(r.voice) : ''}</dd>${r.usd_per_unit != null ? `<dt>Price</dt><dd>${esc(price(r.usd_per_unit, r.unit))}</dd>` : ''}${r.cost_note ? `<dt>Per student</dt><dd>${esc(r.cost_note)}</dd>` : ''}${r.service ? `<dt>For lessons</dt><dd>${esc(r.service === 'speak' ? 'wv.speak (reading aloud)' : r.service)}</dd>` : ''}</dl>
+      ${r.why ? `<p class="why">${esc(r.why)}</p>` : ''}${links ? `<div class="small">${links}</div>` : ''}${act}</div>`;
+  }
+  function render() {
+    const open = state.requests.filter(r => ['waiting', 'needs_key', 'needs_connector'].includes(r.status));
+    $('#open').innerHTML = open.length ? open.map(card).join('') : '<p class="empty">Nothing waiting. When a lesson\'s AI asks for something new, it shows up here.</p>';
+    $('#services').innerHTML = state.services.length ? state.services.map(s => { const C = state.companies[s.provider] || {}; return `<div class="card svc"><div><b>${esc(s.label)}</b><div class="small muted">${esc(C.label || s.provider)} · ${esc(s.model || '')}${s.usd_per_unit != null ? ' · ' + esc(price(s.usd_per_unit, s.unit)) : ''}</div></div>
+      <label class="switch"><input type="checkbox" data-switch="${esc(s.service)}" ${s.enabled ? 'checked' : ''}> ${s.enabled ? 'On' : 'Off'}</label>${s.service === 'speak' && s.enabled ? '<div class="row" style="grid-column:1/-1"><button type="button" class="btn ghost small" data-sample="1">▶ Play a sample</button></div>' : ''}</div>`; }).join('')
+      : '<p class="empty">Nothing yet. Approving a request turns its service on here, with an off switch.</p>';
+    const done = state.requests.filter(r => r.status === 'live' || r.status === 'declined');
+    $('#done').innerHTML = done.length ? done.map(r => `<div><span class="chip ${r.status === 'live' ? 'ok' : 'no'}">${r.status === 'live' ? 'On' : 'Not now'}</span><b>${esc(r.title)}</b><span class="small muted">${esc(r.lesson_title || '')} · ${when(r.created_at)}</span></div>`).join('') : '<p class="empty">None yet.</p>';
+  }
+  async function load(quiet) {
+    const j = await ask({action: 'inbox'});
+    if (!j.ok) { if (j.type === 'owner_only') { $('#inbox').hidden = true; $('#notowner').hidden = false; } else if (!quiet) $('#msg').textContent = j.error; return; }
+    state = j; $('#msg').textContent = ''; $('#inbox').hidden = false; render();
+  }
+  function brief(r) {
+    return `In C:\\codex_projects\\WorldView\\Fable (Worldview), connect ${r.provider_label || r.provider} for the lesson service "${r.service}" (NAV-199 / BUS-094).
+A lesson's AI asked for it; I approved it in the AI requests inbox.
+- What: ${r.title}
+- Company and model: ${r.provider_label || r.provider} ${r.model || ''} ${r.voice ? '(voice ' + r.voice + ')' : ''}
+- Why: ${r.why || ''}
+- Price: ${price(r.usd_per_unit, r.unit)}${r.cost_note ? ' (' + r.cost_note + ')' : ''}
+- Links: ${Object.values(r.links || {}).join(' ')}
+Add the connector in supabase/functions/lesson-ai/connectors.ts (and a lesson call in app/port-host.js if "${r.service}" is a new service), release the backend, then turn the request on from the inbox. Never put the key in code: I paste it in the inbox.`;
+  }
+  document.addEventListener('click', async e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.approve) {
+      b.disabled = true; b.textContent = 'Approving…';
+      const j = await ask({action: 'decide', id: b.dataset.approve, decision: 'approve'});
+      toast(!j.ok ? j.error : j.status === 'live' ? 'On. Lessons can use it now.' : j.status === 'needs_key' ? 'Approved. Now connect the company.' : 'Approved. It needs a coding session first.');
+      return load();
+    }
+    if (b.dataset.decline) { b.disabled = true; const j = await ask({action: 'decide', id: b.dataset.decline, decision: 'decline'}); toast(j.ok ? 'Answered: not now.' : j.error); return load(); }
+    if (b.dataset.connect) {
+      const id = b.dataset.for, input = $('#key-' + id), m = $('#cmsg-' + id), key = input.value.trim();
+      if (!key) { m.textContent = 'Paste the key first.'; input.focus(); return; }
+      b.disabled = true; m.textContent = 'Trying the key…';
+      const j = await ask({action: 'connect', provider: b.dataset.connect, key});
+      input.value = ''; b.disabled = false;
+      if (!j.ok) { m.textContent = j.error; return; }
+      toast(j.label + ' is connected.' + (j.turnedOn ? ' It\'s on for lessons now.' : ''));
+      return load();
+    }
+    if (b.dataset.brief) {
+      const r = state.requests.find(x => x.id === b.dataset.brief), t = brief(r);
+      try { await navigator.clipboard.writeText(t); toast('Copied. Paste it into Claude Code or Codex.'); } catch (x) { window.prompt('Copy this:', t); }
+      return;
+    }
+    if (b.dataset.sample) {
+      b.disabled = true; b.textContent = 'Loading…';
+      try {
+        const r = await call({action: 'sample'});
+        if (!r.ok) { const j = await r.json().catch(() => ({})); toast((j.error && j.error.message) || 'The sample didn\'t play.'); }
+        else { const a = new Audio(URL.createObjectURL(await r.blob())); await a.play(); }
+      } catch (x) { toast('The sample didn\'t play.'); }
+      b.disabled = false; b.textContent = '▶ Play a sample';
+    }
+  });
+  document.addEventListener('change', async e => {
+    const s = e.target.closest('[data-switch]'); if (!s) return;
+    const j = await ask({action: 'switch', service: s.dataset.switch, enabled: s.checked});
+    toast(j.ok ? (s.checked ? 'On for lessons.' : 'Off. Lessons use their fallback.') : j.error); load(true);
+  });
+  (async () => {
+    const {data} = await db.auth.getSession(); const s = data && data.session;
+    if (!s || !s.user || s.user.is_anonymous) { $('#signedout').hidden = false; return; }
+    await load();
+    setInterval(() => { if (!document.hidden && !document.querySelector('.connect input:focus')) load(true); }, 30000);
+  })();
+})();
+</script>
+</body>
+</html>

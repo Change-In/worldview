@@ -74,7 +74,7 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.59"></script>
+<script src="port-host.js?v=3.1.60"></script>
 <script src="lesson-days.js?v=3.1.59"></script>
 <script>
 (() => {
@@ -106,6 +106,16 @@
     try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai?mode=live', {method: 'POST', keepalive: req.action === 'close', headers: Object.assign({'content-type': 'application/json'}, await authHeaders()), body: JSON.stringify(Object.assign({lesson: lessonId, run: runId || null}, req))})); }
     catch (e) { return {ok: false, error: 'Worldview couldn\'t reach the live conversation. Check the internet connection.', type: 'network'}; }
   };
+  // LES-332: wv.speak with Worldview's AI voice, when one is on (the lesson falls back to the device voice otherwise).
+  const speakAI = async (req, lessonId, runId) => {
+    try {
+      const r = await fetch(URL_ + '/functions/v1/lesson-ai?mode=speak', {method: 'POST', headers: Object.assign({'content-type': 'application/json'}, await authHeaders()), body: JSON.stringify(Object.assign({lesson: lessonId, run: runId || null}, req))});
+      if (r.ok && /^audio\//.test(r.headers.get('content-type') || '')) return {ok: true, audio: await r.blob()};
+      return await norm(r);
+    } catch (e) { return {ok: false, error: 'Worldview\'s AI voice couldn\'t be reached.', type: 'network'}; }
+  };
+  // Is the AI voice on? (NAV-199: turned on by approving a request in the owner's inbox)
+  const aiVoiceOn = fetch(URL_ + '/functions/v1/lesson-ai?mode=services', {method: 'POST', headers: {'content-type': 'application/json', apikey: KEY}, body: '{"action":"catalog"}'}).then(r => r.json()).then(j => !!(j.on || []).some(x => x.service === 'speak')).catch(() => null);
   const hearAI = async (blob, lang, lessonId, runId) => {
     try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai?mode=transcribe&lesson=' + lessonId + (runId ? '&run=' + runId : '') + (lang ? '&lang=' + lang : ''), {method: 'POST', headers: Object.assign({'content-type': blob.type || 'audio/webm'}, await authHeaders()), body: blob})); }
     catch (e) { return {ok: false, error: 'Worldview couldn\'t turn that recording into text. Check the internet connection.', type: 'network'}; }
@@ -271,10 +281,11 @@
     $('#leave').hidden = false; $('#finished').hidden = true;
     $('#intro').hidden = true; $('#lesson').hidden = false; $('#title').textContent = lesson.title;
     if (host) host.destroy();
-    host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), ai: req => askAI(req, lesson.id, runId), transcribe: (b, l) => hearAI(b, l, lesson.id, runId),
+    host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), ai: req => askAI(req, lesson.id, runId), transcribe: (b, l) => hearAI(b, l, lesson.id, runId), speak: req => speakAI(req, lesson.id, runId),
       live: {create: req => liveAI(Object.assign({action: 'create'}, req), lesson.id, runId), close: callId => liveAI({action: 'close', callId}, lesson.id, runId)},
       state: o.state, days: o.days, initialRecord: o.initialRecord,
       onChange: (record, done) => { latest = record; finished = finished || done; if (o.onRecord) o.onRecord(record); if (done) { if (o.onDone) o.onDone(); $('#finished').hidden = false; } clearTimeout(timer); timer = setTimeout(save, done ? 0 : 800); }});
+    const h = host; aiVoiceOn.then(on => { if (on !== null) h.o.aiVoice = on; });
     // a published version plays its own locked-in files; older versions use the lesson's files
     host.run(html, lesson.id, filesPrefix(), folder);
     latest = host.record.slice(); save();
