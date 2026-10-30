@@ -159,6 +159,19 @@
   .pointhint { justify-self:center; background:var(--ink); color:var(--paper); border-radius:999px; padding:6px 14px; font-size:13px; font-weight:650; }
   .fshelper { display:none; }
   .stage.fs .fshelper:not([hidden]) { display:inline-flex; position:fixed; left:16px; bottom:calc(env(safe-area-inset-bottom,0px) + 16px); z-index:61; appearance:none; border:0; border-radius:999px; padding:10px 16px; background:var(--accent); color:var(--on-accent); font-weight:700; cursor:pointer; box-shadow:0 10px 30px rgba(0,0,0,.3); }
+  /* v3.1.61 experiments (NAV-200): their own shelf under the lessons, and a note under the preview */
+  .shelf { display:grid; gap:12px; }
+  .shelf + .shelf { margin-top:34px; padding-top:22px; border-top:1px solid var(--line); }
+  .shelfhead { display:flex; flex-wrap:wrap; gap:4px 12px; align-items:baseline; }
+  .shelfhead h2 { font-size:24px; }
+  .result { display:inline-flex; align-items:center; gap:6px; }
+  .result i { width:8px; height:8px; border-radius:50%; background:var(--line); flex:none; }
+  .result.worked i { background:var(--ok); } .result.unsure i { background:var(--warn); } .result.didnt i { background:var(--accent); }
+  .notecard .nhead { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .notecard label { display:grid; gap:4px; font-size:13px; font-weight:650; color:var(--ink-soft); }
+  .notecard textarea { resize:vertical; min-height:60px; font-size:14.5px; color:var(--ink); }
+  .notecard input[type=text] { font-size:14.5px; color:var(--ink); }
+  .resultseg button.on[data-result="worked"] { color:var(--ok); } .resultseg button.on[data-result="unsure"] { color:var(--warn); } .resultseg button.on[data-result="didnt"] { color:var(--accent-700); }
 </style>
 </head>
 <body>
@@ -174,7 +187,7 @@
   <!-- ALL LESSONS -->
   <div id="gridview" hidden>
     <div class="row" style="margin-bottom:14px"><h1 class="grow" style="font-size:30px">Your lessons</h1><a class="btn ghost" id="reqlink" href="requests" hidden>AI requests</a><button type="button" class="btn ghost" data-guide="1">New to AI?</button></div>
-    <div class="grid" id="grid"><p class="muted">Loading…</p></div>
+    <div id="grid"><p class="muted">Loading…</p></div>
   </div>
 
   <!-- ONE LESSON -->
@@ -190,6 +203,7 @@
         <div class="menu" id="moremenu" role="menu" hidden>
           <button type="button" role="menuitem" id="download">Download the file</button>
           <button type="button" role="menuitem" id="dup">Make a copy</button>
+          <button type="button" role="menuitem" id="kind">Move to experiments</button>
           <button type="button" role="menuitem" id="unpub2" hidden>Unpublish</button>
           <button type="button" role="menuitem" id="helpertoggle">Helper chat (try it)</button>
           <div class="sep"></div>
@@ -226,6 +240,14 @@
               <li>The first time, that window asks you to sign in to Worldview once.</li>
               <li>No window at all? Allow pop-ups for this site.</li>
             </ol>
+          </div>
+          <div class="card notecard" id="notecard" hidden>
+            <div class="nhead"><span class="chip">Experiment</span><span class="grow"></span><span class="small muted">Did it work?</span>
+              <div class="seg resultseg" role="group" aria-label="Did it work?"><button type="button" data-result="worked">Worked</button><button type="button" data-result="unsure">Not sure</button><button type="button" data-result="didnt">Didn't work</button></div></div>
+            <label for="n-idea">The idea<textarea id="n-idea" rows="2" maxlength="1200" placeholder="e.g. The lecture stops after each point. You say okay, ask about a term, or guess first."></textarea></label>
+            <label for="n-tried">Tried on<input type="text" id="n-tried" maxlength="300" placeholder="e.g. Corporate finance lecture, slides 1 to 3"></label>
+            <label for="n-learned">What you learned (one per line)<textarea id="n-learned" rows="3" maxlength="4000"></textarea></label>
+            <p class="small muted" id="n-state">Your helper fills this in as you work. Change anything here: it saves by itself.</p>
           </div>
           <p class="small muted" id="draftcost"></p>
         </div>
@@ -271,11 +293,12 @@
 <div class="menu" id="tilemenu" role="menu" hidden style="position:fixed;right:auto">
   <button type="button" role="menuitem" id="tlink">Copy student link</button>
   <button type="button" role="menuitem" id="tcopy">Make a copy</button>
+  <button type="button" role="menuitem" id="tkind">Move to experiments</button>
   <button type="button" role="menuitem" class="danger" id="tdel">Delete lesson</button>
 </div>
 
 <dialog id="guide" style="width:min(560px,calc(100vw - 32px))"><div style="display:grid;gap:12px"><div class="row"><span class="small muted grow" id="gstep"></span><button type="button" class="btn ghost small" data-close>Close</button></div><div id="gbody" style="display:grid;gap:10px"></div><div class="row"><button type="button" class="btn ghost" id="gback">Back</button><span class="grow"></span><button type="button" class="btn" id="gnext">Next</button></div></div></dialog>
-<dialog id="newdlg"><form id="newform"><h2>New lesson</h2><label class="small" for="newtitle">What's it called? You can change it later.</label><input type="text" id="newtitle" maxlength="120" placeholder="e.g. Why the Moon has phases"><div class="row"><button type="submit" class="btn">Create</button><button type="button" class="btn ghost" data-close>Cancel</button></div></form></dialog>
+<dialog id="newdlg"><form id="newform"><h2 id="newhead">New lesson</h2><label class="small" for="newtitle" id="newlabel">What's it called? You can change it later.</label><input type="text" id="newtitle" maxlength="120" placeholder="e.g. Why the Moon has phases"><div class="row"><button type="submit" class="btn">Create</button><button type="button" class="btn ghost" data-close>Cancel</button></div></form></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="port-host.js?v=3.1.60"></script>
@@ -339,7 +362,7 @@
   const copy = async t => { try { await navigator.clipboard.writeText(t); return true; } catch (e) { return false; } };
   const ago = t => { const m = Math.round((Date.now() - new Date(t).getTime()) / 60000); return m < 1 ? 'edited just now' : m < 60 ? `edited ${m} min ago` : m < 1440 ? `edited ${Math.round(m / 60)} h ago` : 'edited ' + new Date(t).toLocaleDateString(); };
   const linkFor = id => new URL('play.html?l=' + id, location.href).href;
-  const STARTER = t => `<\!-- WORLDVIEW-STARTER: replace this whole page with the lesson. -->
+  const STARTER = (t, exp) => `<\!-- WORLDVIEW-STARTER: replace this whole page with the lesson. -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -356,7 +379,7 @@
 <body>
 <main>
   <h1>${t}</h1>
-  <p>This is your new lesson. Press Edit with your AI and tell it what you want to teach. This page will change as it works.</p>
+  <p>${exp ? 'This is your new experiment. Press Edit with your AI and tell it the way of teaching you want to try.' : 'This is your new lesson. Press Edit with your AI and tell it what you want to teach.'} This page will change as it works.</p>
   <button id="go">Try a question</button>
 </main>
 <\script>
@@ -438,24 +461,68 @@ ${RULES}`;
   async function readFileHtml(input) { const file = input.files && input.files[0]; input.value = ''; if (!file) return null; if (file.size > 400000) { toast('That file is over 400 KB.'); return null; } return file.text(); }
   async function showGrid() {
     cur = null; if (live) { db.removeChannel(live); live = null; liveInfo = null; } $('#workview').hidden = true; $('#gridview').hidden = false; document.title = 'Teacher Studio · Worldview';
-    const [{data, error}, rels] = await Promise.all([db.from(T).select('id,title,shared,updated_at,html').order('updated_at', {ascending: false}), db.from('worldview_teacher_lesson_releases').select('lesson_id,version')]);
+    const [{data, error}, rels] = await Promise.all([db.from(T).select('id,title,shared,updated_at,html,kind,note').order('updated_at', {ascending: false}), db.from('worldview_teacher_lesson_releases').select('lesson_id,version')]);
     if (error) { $('#grid').innerHTML = `<p class="small">Couldn't load your lessons (${esc(error.message)}).</p>`; return; }
     const V = {}; ((rels && rels.data) || []).forEach(r => { V[r.lesson_id] = Math.max(V[r.lesson_id] || 0, r.version); });
     const list = (data || []).map(l => Object.assign(l, {pub: l.shared ? (V[l.id] || -1) : 0})).sort((a, b) => (b.pub !== 0) - (a.pub !== 0));
-    $('#grid').innerHTML = '<div style="display:grid;gap:10px"><button type="button" class="new" id="new" style="min-height:180px">+ New lesson</button><label class="new" for="upnew" style="min-height:46px;font-size:15px;cursor:pointer">Upload a lesson file</label><input type="file" id="upnew" accept=".html,.htm,text/html" hidden></div>'
-      + list.map(l => `<div class="tile" role="button" tabindex="0" data-open="${l.id}"><div class="thumb"><iframe sandbox="" scrolling="no" tabindex="-1" title="" data-thumb="${l.id}"></iframe></div>${l.pub ? `<span class="ribbon" data-results="${l.id}" title="See students' results"><span class="a">Published${l.pub > 0 ? ' v' + l.pub : ''}</span><span class="b">See results →</span></span><button type="button" class="tilelink" data-copylink="${l.id}">Copy link</button>` : ''}<div class="info"><b>${esc(l.title)}</b><span class="small muted">${ago(l.updated_at)}</span></div><button type="button" class="tilemore" data-tilemenu="${l.id}" aria-label="More">⋯</button></div>`).join('');
+    const lessons = list.filter(l => l.kind !== 'experiment'), exps = list.filter(l => l.kind === 'experiment').sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+    const tile = l => `<div class="tile" role="button" tabindex="0" data-open="${l.id}" data-kind="${l.kind === 'experiment' ? 'experiment' : 'lesson'}"><div class="thumb"><iframe sandbox="" scrolling="no" tabindex="-1" title="" data-thumb="${l.id}"></iframe></div>${l.pub ? `<span class="ribbon" data-results="${l.id}" title="See students' results"><span class="a">Published${l.pub > 0 ? ' v' + l.pub : ''}</span><span class="b">See results →</span></span><button type="button" class="tilelink" data-copylink="${l.id}">Copy link</button>` : ''}<div class="info"><b>${esc(l.title)}</b><span class="small muted">${l.kind === 'experiment' ? resultLine(l.note) + ' · ' : ''}${ago(l.updated_at)}</span></div><button type="button" class="tilemore" data-tilemenu="${l.id}" aria-label="More">⋯</button></div>`;
+    $('#grid').innerHTML = '<section class="shelf"><div class="grid"><div style="display:grid;gap:10px"><button type="button" class="new" id="new" style="min-height:180px">+ New lesson</button><label class="new" for="upnew" style="min-height:46px;font-size:15px;cursor:pointer">Upload a lesson file</label><input type="file" id="upnew" accept=".html,.htm,text/html" hidden></div>' + lessons.map(tile).join('') + '</div></section>'
+      + '<section class="shelf" aria-labelledby="exphead"><div class="shelfhead"><h2 id="exphead">Experiments</h2><span class="small muted">Tries at new ways to teach, kept apart from your lessons. Only you see them.</span></div><div class="grid"><button type="button" class="new" id="newexp" style="min-height:236px">+ New experiment</button>' + exps.map(tile).join('') + '</div></section>';
     THUMBS = {}; list.forEach(l => { THUMBS[l.id] = l.html; const f = document.querySelector(`[data-thumb="${l.id}"]`); if (f) f.srcdoc = WorldviewPortHost.compose(l.html, l.id); });
   }
+  /* ---------- experiments (NAV-200): a lesson file plus a short note the helper keeps ---------- */
+  const RESULTS = {worked: 'Worked', unsure: 'Not sure', didnt: 'Didn\'t work'};
+  const resultLine = n => { const r = n && RESULTS[n.result] ? n.result : ''; return `<span class="result ${r}"><i></i>${r ? RESULTS[r] : 'Not marked yet'}</span>`; };
+  async function setKind(id, kind) {
+    const {data, error} = await db.from(T).update(kind === 'experiment' ? {kind, listed: false} : {kind}).eq('id', id).select('id,kind,shared,note').single();
+    if (error || !data) { toast('Couldn\'t move it' + (error ? ': ' + error.message : '.')); return null; }
+    if (cur && cur.id === id) { cur.kind = data.kind; cur.listed = kind === 'experiment' ? false : cur.listed; renderNote(); renderShare(); sendNote(); }
+    toast(kind === 'experiment' ? 'Moved to Experiments.' + (data.shared ? ' Its student link still works, and it\'s off the Courses page.' : '') : 'Moved to your lessons.');
+    return data;
+  }
+  // The note under the preview. Typing saves it (and the helper's folder gets the change); the helper's edits arrive through poll().
+  let noteTimer = 0, noteDirty = false;
+  const noteFocused = () => !!document.activeElement && !!document.activeElement.closest && !!document.activeElement.closest('#notecard');
+  function renderNote() {
+    const exp = !!cur && cur.kind === 'experiment'; $('#notecard').hidden = !exp;
+    $('#kind').textContent = exp ? 'Turn into a lesson' : 'Move to experiments';
+    if (!exp) return;
+    const n = cur.note || {};
+    document.querySelectorAll('[data-result]').forEach(b => b.classList.toggle('on', b.dataset.result === n.result));
+    if (noteFocused() || noteDirty) return;
+    $('#n-idea').value = typeof n.idea === 'string' ? n.idea : '';
+    $('#n-tried').value = typeof n.triedOn === 'string' ? n.triedOn : '';
+    $('#n-learned').value = Array.isArray(n.learned) ? n.learned.filter(x => typeof x === 'string').join('\n') : '';
+  }
+  function noteFromFields(result) {
+    const n = Object.assign({}, cur.note || {});
+    n.idea = $('#n-idea').value.trim(); n.triedOn = $('#n-tried').value.trim();
+    n.learned = $('#n-learned').value.split('\n').map(s => s.trim()).filter(Boolean);
+    if (result !== undefined) n.result = result;
+    n.updated = new Date().toISOString(); return n;
+  }
+  function sendNote() { if (live && cur) live.send({type: 'broadcast', event: 'note', payload: {kind: cur.kind, note: cur.note || {}}}).catch(() => {}); }
+  async function saveNote(result) {
+    clearTimeout(noteTimer); if (!cur || cur.kind !== 'experiment') return;
+    const note = noteFromFields(result);
+    $('#n-state').textContent = 'Saving…';
+    if (!(await save({note}, true))) { $('#n-state').textContent = 'Not saved. Check the internet connection and change it again.'; return; }
+    noteDirty = false; sendNote(); renderNote();
+    $('#n-state').textContent = 'Saved at ' + new Date().toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) + '. Your helper sees your changes.';
+  }
+  ['#n-idea', '#n-tried', '#n-learned'].forEach(s => $(s).addEventListener('input', () => { noteDirty = true; clearTimeout(noteTimer); noteTimer = setTimeout(() => saveNote(), 900); }));
   let tileTarget = null;
   function tileMenu(btn) {
     const m = $('#tilemenu'), r = btn.getBoundingClientRect();
     if (!m.hidden && tileTarget === btn.dataset.tilemenu) { m.hidden = true; return; }
     tileTarget = btn.dataset.tilemenu; $('#tdel').dataset.sure = ''; $('#tdel').textContent = 'Delete lesson'; $('#tlink').hidden = !btn.closest('.tile').querySelector('.ribbon');
+    $('#tkind').textContent = btn.closest('.tile').dataset.kind === 'experiment' ? 'Turn into a lesson' : 'Move to experiments';
     m.hidden = false; m.style.top = (r.bottom + 6) + 'px'; m.style.left = Math.max(8, r.right - m.offsetWidth) + 'px';
   }
   async function copyLesson(id) {
-    const {data: l} = await db.from(T).select('title,html').eq('id', id).single(); if (!l) return toast('Couldn\'t copy it.');
-    const {data, error} = await db.from(T).insert({title: (l.title + ' (copy)').slice(0, 120), html: l.html}).select('id').single();
+    const {data: l} = await db.from(T).select('title,html,kind,note').eq('id', id).single(); if (!l) return toast('Couldn\'t copy it.');
+    const {data, error} = await db.from(T).insert({title: (l.title + ' (copy)').slice(0, 120), html: l.html, kind: l.kind, note: l.note || {}}).select('id').single();
     if (error) return toast(/lesson_limit/.test(error.message) ? 'You have 50 lessons; delete one first.' : 'Couldn\'t copy it: ' + error.message);
     toast('Copied. The copy is a new draft.'); return data.id;
   }
@@ -469,7 +536,7 @@ ${RULES}`;
     if (error || !data) { toast('Couldn\'t open that lesson.'); return showGrid(); }
     if (push) history.pushState({l: id}, '', '?l=' + id);
     cur = data; lastSaved = data.html; RELS = []; RUNS = []; $('#gridview').hidden = true; $('#workview').hidden = false; document.title = data.title + ' · Teacher Studio';
-    $('#title').value = data.title; $('#html').value = ''; host.o.lessonId = data.id; host.run(data.html);
+    $('#title').value = data.title; $('#html').value = ''; host.o.lessonId = data.id; host.run(data.html); noteDirty = false; renderNote();
     showSide(want === 'pub' ? 'pub' : 'draft'); renderShare(); loadReleases(); loadRuns(); loadAiUse();
     joinLive(data.id); if (helper) helper.lessonChanged();
   }
@@ -572,6 +639,7 @@ ${RULES}`;
     const latest = RELS[0], has = !!latest || cur.shared;
     $('#pubempty').hidden = has; $('#pubfull').hidden = !has;
     $('#shared').checked = !!cur.shared; $('#linkbox').hidden = !cur.shared; $('#listed').checked = !!cur.listed; $('#listed').disabled = !cur.shared;
+    $('#listed').closest('label').hidden = cur.kind === 'experiment'; // experiments never go on the Courses page (NAV-200)
     $('#livever').textContent = latest ? (cur.shared ? 'v' + latest.version + ' is live' : 'v' + latest.version + ' (closed)') : (cur.shared ? 'Live draft' : '');
     $('#livever').hidden = !$('#livever').textContent;
     if (cur.shared) { $('#link').textContent = linkFor(cur.id); $('#openlink').href = linkFor(cur.id); }
@@ -609,8 +677,10 @@ ${RULES}`;
   setInterval(() => { if (liveInfo) renderLive(); }, 1000);
   async function poll(force) {
     if (!cur || (!force && document.visibilityState !== 'visible')) return;
-    const {data} = await db.from(T).select('html,updated_at,title').eq('id', cur.id).single();
+    const {data} = await db.from(T).select('html,updated_at,title,kind,note').eq('id', cur.id).single();
     if (data && data.html !== lastSaved) { lastSaved = data.html; cur.html = data.html; host.run(data.html); renderPubBar(); lastSaveAt = lastSaveAt || Date.now(); renderLive(); if (helper) helper.previewChanged(); }
+    if (data && (data.kind !== cur.kind || JSON.stringify(data.note) !== JSON.stringify(cur.note)) && !noteFocused() && !noteDirty) { cur.kind = data.kind; cur.note = data.note; renderNote(); }
+    if (data && data.title !== cur.title && document.activeElement !== $('#title')) { cur.title = data.title; $('#title').value = data.title; document.title = data.title + ' · Teacher Studio'; }
   }
   setInterval(poll, 3000);
   /* ---------- which AI edits: chosen from the Edit button's menu ---------- */
@@ -735,8 +805,17 @@ ${RULES}`;
     if (b.dataset.open) return showLesson(b.dataset.open, true);
     if (b.dataset.view) { setView(b.dataset.view); host.run(lastSaved || cur.html); return; }
     if (b.dataset.dev) return setDev(b.dataset.dev);
+    if (b.dataset.result) { if (cur && cur.kind === 'experiment') saveNote((cur.note || {}).result === b.dataset.result ? '' : b.dataset.result); return; }
     switch (b.id) {
-      case 'new': $('#newtitle').value = ''; return $('#newdlg').showModal();
+      case 'new': case 'newexp': {
+        const exp = b.id === 'newexp'; $('#newform').dataset.kind = exp ? 'experiment' : 'lesson';
+        $('#newhead').textContent = exp ? 'New experiment' : 'New lesson';
+        $('#newlabel').textContent = exp ? 'Name it by the idea you want to try. You can change it later.' : 'What\'s it called? You can change it later.';
+        $('#newtitle').placeholder = exp ? 'e.g. Pause the lecture after each point' : 'e.g. Why the Moon has phases';
+        $('#newtitle').value = ''; return $('#newdlg').showModal();
+      }
+      case 'tkind': { $('#tilemenu').hidden = true; const t = document.querySelector(`.tile[data-open="${tileTarget}"]`); if (await setKind(tileTarget, t && t.dataset.kind === 'experiment' ? 'lesson' : 'experiment')) showGrid(); return; }
+      case 'kind': { moreMenu(false); if (cur) await setKind(cur.id, cur.kind === 'experiment' ? 'lesson' : 'experiment'); return; }
       case 'back': history.pushState({}, '', 'studio.html'); return showGrid();
       case 'restart': return host.run(lastSaved || cur.html);
       case 'fs': return setFs(!$('#stage').classList.contains('fs'));
@@ -767,11 +846,12 @@ ${RULES}`;
     }
   });
   $('#newform').addEventListener('submit', async e => {
-    e.preventDefault(); const t = ($('#newtitle').value.trim() || 'New lesson').replace(/[<>`'"\\]/g, '').slice(0, 120);
-    const {data, error} = await db.from(T).insert({title: t, html: STARTER(t)}).select('id').single();
+    e.preventDefault(); const exp = $('#newform').dataset.kind === 'experiment', t = ($('#newtitle').value.trim() || (exp ? 'New experiment' : 'New lesson')).replace(/[<>`'"\\]/g, '').slice(0, 120);
+    const {data, error} = await db.from(T).insert(exp ? {title: t, html: STARTER(t, true), kind: 'experiment', note: {idea: '', triedOn: '', learned: [], result: ''}} : {title: t, html: STARTER(t)}).select('id').single();
     $('#newdlg').close(); if (error) return toast(/lesson_limit/.test(error.message) ? 'You have 50 lessons; delete one first.' : 'Couldn\'t create it: ' + error.message);
     await showLesson(data.id, 'stay'); editOnComputer();
   });
+  $('#newdlg').addEventListener('close', () => { $('#newform').dataset.kind = 'lesson'; $('#newhead').textContent = 'New lesson'; $('#newlabel').textContent = 'What\'s it called? You can change it later.'; $('#newtitle').placeholder = 'e.g. Why the Moon has phases'; });
   document.addEventListener('keydown', e => { const t = e.target.closest && e.target.closest('.tile[data-open]'); if (t && (e.key === 'Enter' || e.key === ' ') && e.target === t) { e.preventDefault(); showLesson(t.dataset.open, true); } });
   document.addEventListener('change', async e => { if (e.target.id !== 'upnew') return; const name = (e.target.files && e.target.files[0] && e.target.files[0].name || 'Uploaded lesson').replace(/\.html?$/i, ''); const h = await readFileHtml(e.target); if (!h) return; const t = (titleFromHtml(h) || name).slice(0, 120); const {data, error} = await db.from(T).insert({title: t, html: h}).select('id').single(); if (error) return toast('Couldn\'t upload it: ' + error.message); showLesson(data.id, true); });
   const titleFromHtml = h => { const m = String(h).match(/\btitle\s*:\s*(['"`])((?:\\.|(?!\1).){2,120}?)\1/) || String(h).match(/<title>([^<]{2,120})<\/title>/i); return m ? (m[2] || m[1]).trim() : ''; };
@@ -781,7 +861,7 @@ ${RULES}`;
   addEventListener('popstate', () => { const l = new URLSearchParams(location.search).get('l'); if (l) location.reload(); else showGrid(); });
   addEventListener('focus', poll);
   // A page keeps the code it loaded with. When Teacher Studio is updated, offer a reload (or just reload on the lessons page).
-  const STUDIO_VERSION = '3.1.56';
+  const STUDIO_VERSION = '3.1.61';
   async function checkStudioUpdate() {
     try {
       const t = await fetch('studio.html?check=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '');
