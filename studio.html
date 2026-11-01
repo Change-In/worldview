@@ -342,16 +342,23 @@
       return await norm(r);
     } catch (e) { return {ok: false, error: 'Worldview\'s AI voice couldn\'t be reached.', type: 'network'}; }
   };
-  // Is the AI voice on? (NAV-199: turned on by approving a request in the owner's inbox)
-  const aiVoiceOn = fetch(URL_ + '/functions/v1/lesson-ai?mode=services', {method: 'POST', headers: {'content-type': 'application/json', apikey: KEY}, body: '{"action":"catalog"}'}).then(r => r.json()).then(j => !!(j.on || []).some(x => x.service === 'speak')).catch(() => null);
+  // NAV-199: open or end a continuous-listening session (lesson-ai?mode=stream, wv.listen.start). keepalive lets an ending still reach Worldview as the page closes.
+  const streamAI = async (req, lessonId, runId) => {
+    try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai?mode=stream', {method: 'POST', keepalive: req.action === 'close', headers: Object.assign({'content-type': 'application/json'}, await authHeaders()), body: JSON.stringify(Object.assign({lesson: lessonId, run: runId || null}, req))})); }
+    catch (e) { return {ok: false, error: 'Worldview couldn\'t start listening. Check the internet connection.', type: 'network'}; }
+  };
+  // Which lesson services are on: the AI voice (speak) and continuous listening (continuouslisten). NAV-199: turned on by approving a request in the owner's inbox.
+  const servicesOn = fetch(URL_ + '/functions/v1/lesson-ai?mode=services', {method: 'POST', headers: {'content-type': 'application/json', apikey: KEY}, body: '{"action":"catalog"}'}).then(r => r.json()).then(j => new Set((j.on || []).map(x => x.service))).catch(() => null);
+  const useServices = h => servicesOn.then(on => { if (on) { h.o.aiVoice = on.has('speak'); h.o.listenOn = on.has('continuouslisten'); h.refreshCapabilities(); } });
   const hearAI = async (blob, lang, lessonId, runId) => {
     try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai?mode=transcribe&lesson=' + lessonId + (runId ? '&run=' + runId : '') + (lang ? '&lang=' + lang : ''), {method: 'POST', headers: Object.assign({'content-type': blob.type || 'audio/webm'}, await authHeaders()), body: blob})); }
     catch (e) { return {ok: false, error: 'Worldview couldn\'t turn that recording into text. Check the internet connection.', type: 'network'}; }
   };
   let helper = null;
   const host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), showTiming: true, onPoint: d => helper && helper.pointed(d), ai: req => { const r = askAI(req, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }, transcribe: (b, l) => { const r = hearAI(b, l, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }, speak: req => speakAI(req, cur.id, null), saveFile: (p, b) => saveLessonFile(p, b),
-    live: {create: req => liveAI(Object.assign({action: 'create'}, req), cur.id, null), close: callId => { const r = liveAI({action: 'close', callId}, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }}});
-  aiVoiceOn.then(on => { if (on !== null) host.o.aiVoice = on; });
+    live: {create: req => liveAI(Object.assign({action: 'create'}, req), cur.id, null), close: callId => { const r = liveAI({action: 'close', callId}, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }},
+    stream: {create: req => streamAI(Object.assign({action: 'create'}, req), cur.id, null), close: callId => { const r = streamAI({action: 'close', callId}, cur.id, null); r.then(() => setTimeout(loadAiUse, 600)); return r; }}});
+  useServices(host);
   if (window.WorldviewStudioDays && window.WorldviewDays) WorldviewStudioDays.attach(host); // NAV-198: a Day picker when the lesson runs over several days
   let cur = null, lastSaved = '';
   // Student or Teacher: the lesson gets wv.viewer and can show the teacher extra things (NAV-173).
@@ -783,9 +790,9 @@ ${RULES}`;
   const money = n => '$' + (n === 0 ? '0' : n < 0.01 ? n.toFixed(4) : n.toFixed(2));
   async function loadAiUse() {
     if (!cur) return;
-    const {data, error} = await db.from('worldview_teacher_lesson_ai_calls').select('state,by_owner,model,input_tokens,output_tokens,audio_seconds').eq('lesson_id', cur.id).eq('state', 'ok').limit(5000);
+    const {data, error} = await db.from('worldview_teacher_lesson_ai_calls').select('state,by_owner,model,input_tokens,output_tokens,audio_seconds,cost_usd').eq('lesson_id', cur.id).eq('state', 'ok').limit(5000);
     if (error) return;
-    const cost = rows => rows.reduce((t, r) => { if (PER_AUDIO_SECOND[r.model]) return t + (+r.audio_seconds || 0) * PER_AUDIO_SECOND[r.model]; const k = RATES[r.model] || [1, 5]; return t + ((r.input_tokens || 0) * k[0] + (r.output_tokens || 0) * k[1]) / 1e6; }, 0);
+    const cost = rows => rows.reduce((t, r) => { if (r.cost_usd != null) return t + (+r.cost_usd || 0); if (PER_AUDIO_SECOND[r.model]) return t + (+r.audio_seconds || 0) * PER_AUDIO_SECOND[r.model]; const k = RATES[r.model] || [1, 5]; return t + ((r.input_tokens || 0) * k[0] + (r.output_tokens || 0) * k[1]) / 1e6; }, 0);
     const mine = (data || []).filter(r => r.by_owner), theirs = (data || []).filter(r => !r.by_owner);
     $('#draftcost').textContent = mine.length ? 'AI cost while testing: ' + money(cost(mine)) : '';
     $('#st-cost').textContent = money(cost(theirs));

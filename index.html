@@ -2222,7 +2222,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.62 · Nov 1";
+const BUILD = "v3.1.63 · Nov 1";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2230,6 +2230,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.63",date:"Nov 1",changes:["Lessons can listen all the time (wv.listen.start): the student just talks, and the lesson sees the words as they come, knows the moment they start speaking, and gets each finished sentence. There is no AI voice of its own, so the lesson decides what to say back.","When the student talks over the lesson's voice, Worldview stops the voice. Its own voice heard back through the speaker is ignored.","It uses Deepgram (about $0.008 a minute, counted in the lesson's AI cost). A small Listening bar shows Mute and Stop. Turn it on in AI requests: the FINA 3010 request now has a Turn on button."]},
   {tag:"v3.1.62",date:"Nov 1",changes:["An experiment can become a lesson: press Make it a lesson (under its note, or in its ⋯ menu).","Copy it into a new lesson keeps the experiment on your shelf as a record; the new lesson is an exact copy, files included, and shows which experiment it started from. Or move it: the experiment itself becomes the lesson.","Make a copy now brings a lesson's files along too (videos, pictures, scripts), so the copy works on its own."]},
   {tag:"v3.1.61",date:"Oct 30",changes:["Teacher Studio has an Experiments shelf under your lessons: tries at new ways to teach, kept apart from real lessons. Only you see them, and they never go on the Courses page.","+ New experiment starts one. Any lesson can move there, or back, from its ⋯ menu (Move to experiments / Turn into a lesson).","Each experiment has a short note under the preview: the idea, what you tried it on, what you learned, and Worked / Not sure / Didn't work. Your helper fills it in as you work; you can change anything.","Your finance slides are ready as their own experiment, \"Pause the lecture after each point\". Press + New experiment and the small Worldview Lessons window offers it."]},
   {tag:"v3.1.60",date:"Oct 27",changes:["Lesson AIs can now ask Worldview for AI it doesn't have yet (a better voice, pictures, another model). They pick the company, work out the cost per student and send a request. It waits in AI requests (Teacher Studio → AI requests) until you approve it on your phone.","Approving a company Worldview already has a key for turns it on at once. A new company opens a short Connect step: open its keys page, paste the key, and Worldview tests it and keeps it locked away.","Lessons can read text aloud (wv.speak). They use the AI voice you approve, otherwise the device's own voice, and switch over by themselves when you turn a voice on."]},

@@ -17,7 +17,9 @@
    wv.live holds a continuous GPT voice conversation; the microphone and the AI's voice
    stay on this page and Worldview's server opens and closes each session (NAV-194).
    wv.speak reads text aloud here: with Worldview's AI voice when one is on (o.speak,
-   LES-332), otherwise with the device's own voice.
+   LES-332), otherwise with the device's own voice. wv.listen.start listens continuously
+   (o.stream, NAV-199): live text, speech-start and end-of-sentence events, and it stops
+   wv.speak when the learner talks over it.
    NAV-187: where a lesson address is set up, the lesson is loaded from that second
    address (the lesson runner) instead of a sealed frame. Browsers keep addresses
    apart, so the lesson can use the microphone, camera and other browser features
@@ -25,10 +27,10 @@
    Worldview sign-in. If the runner doesn't answer, the sealed frame is used. */
 (function () {
   'use strict';
-  var SDK = "(function(){window.WorldviewPort=function(manifest,handlers){handlers=handlers||{};var waiting={},aiN=0,audioCb=null,audioEnd=null,liveCb=null,inFrame=window.parent!==window;" +
+  var SDK = "(function(){window.WorldviewPort=function(manifest,handlers){handlers=handlers||{};var waiting={},aiN=0,audioCb=null,audioEnd=null,liveCb=null,hearCb=null,inFrame=window.parent!==window;" +
     "function send(type,body){try{parent.postMessage(Object.assign({port:'worldview',v:1,type:type},body||{}),'*');}catch(e){}}" +
     "addEventListener('message',function(e){var m=e.data;if(!m||m.port!=='worldview'||e.source!==parent)return;" +
-    "if(m.type==='audioframe'&&audioCb){try{audioCb(m.frame);}catch(x){}}if(m.type==='liveevent'&&liveCb){try{liveCb(m.event);}catch(x){}}if(m.type==='audioend'){var en=audioEnd;audioCb=null;audioEnd=null;if(en){try{en(m.info||{});}catch(x){}}}if(m.type==='welcome'){api.viewer=m.viewer==='teacher'?'teacher':'student';api.capabilities=m.capabilities||{};if(handlers.onWelcome)handlers.onWelcome(m);}if(m.type==='answer'&&waiting[m.id]){var d=waiting[m.id];delete waiting[m.id];d(m.value);}" +
+    "if(m.type==='audioframe'&&audioCb){try{audioCb(m.frame);}catch(x){}}if(m.type==='liveevent'&&liveCb){try{liveCb(m.event);}catch(x){}}if(m.type==='hearevent'&&hearCb){try{hearCb(m.event);}catch(x){}}if(m.type==='capabilities'){api.capabilities=m.capabilities||{};if(handlers.onCapabilities)handlers.onCapabilities(api.capabilities);}if(m.type==='audioend'){var en=audioEnd;audioCb=null;audioEnd=null;if(en){try{en(m.info||{});}catch(x){}}}if(m.type==='welcome'){api.viewer=m.viewer==='teacher'?'teacher':'student';api.capabilities=m.capabilities||{};if(handlers.onWelcome)handlers.onWelcome(m);}if(m.type==='answer'&&waiting[m.id]){var d=waiting[m.id];delete waiting[m.id];d(m.value);}" +
     "if(m.type==='control'&&handlers.onControl)handlers.onControl(m.key,m.value);});" +
     "function wait(id,type,body){return new Promise(function(res){if(!inFrame)return res(null);waiting[id]=res;send(type,Object.assign({id:id},body));});}" +
     "send('hello',{manifest:manifest});" +
@@ -36,7 +38,10 @@
     "predict:function(id,q,u,o){return wait(id,'predict',Object.assign({question:q,unit:u||''},o||{}));},result:function(id,a,s){send('result',{id:id,actual:a,say:s||''});}," +
     "ask:function(id,q,o){return wait(id,'ask',Object.assign({question:q},o||{}));},human:function(id,r){return wait(id,'human',Object.assign({to:'teacher',kind:'question'},r||{}));}," +
     "evidence:function(o,t,d){send('evidence',{outcome:o,text:t,data:d||{}});},remember:function(k,v){send('remember',{key:k,value:v});},recall:function(){return wait('m'+(++aiN),'recall',{});},days:function(){return wait('d'+(++aiN),'days',{});}," +
-    "progress:function(v,n){send('progress',{value:v,note:n||''});},video:function(src,o){return wait('v'+(++aiN),'video',Object.assign({src:String(src||'')},o||{}));},ai:function(x,o){o=o||{};return wait('ai'+(++aiN),'ai',{messages:typeof x==='string'?[{role:'user',content:x}]:(x||[]),system:o.system||'',maxTokens:o.maxTokens||0,json:!!o.json,full:!!o.full});},record:function(o){o=o||{};return wait('r'+(++aiN),'record',{kind:o.kind||'video',maxSeconds:o.maxSeconds||0,title:o.title||'',folder:o.folder||'',name:o.name||''});},saveFile:function(p,c){return wait('f'+(++aiN),'savefile',{path:String(p||''),content:c});},readFile:function(p){return wait('g'+(++aiN),'readfile',{path:String(p||'')});},listen:function(o){o=o||{};return wait('l'+(++aiN),'listen',{prompt:o.prompt||'',maxSeconds:o.maxSeconds||0,lang:o.lang||'',full:!!o.full});},speak:function(t,o){o=o||{};return wait('sp'+(++aiN),'speak',{text:String(t==null?'':t).slice(0,4000),voice:String(o.voice||''),speed:+o.speed||0,play:o.play!==false,fallback:o.fallback!==false});},speakStop:function(){send('speakstop',{});},done:function(s){send('done',{summary:s||{}});}};return api;};})();" +
+    "progress:function(v,n){send('progress',{value:v,note:n||''});},video:function(src,o){return wait('v'+(++aiN),'video',Object.assign({src:String(src||'')},o||{}));},ai:function(x,o){o=o||{};return wait('ai'+(++aiN),'ai',{messages:typeof x==='string'?[{role:'user',content:x}]:(x||[]),system:o.system||'',maxTokens:o.maxTokens||0,json:!!o.json,full:!!o.full});},record:function(o){o=o||{};return wait('r'+(++aiN),'record',{kind:o.kind||'video',maxSeconds:o.maxSeconds||0,title:o.title||'',folder:o.folder||'',name:o.name||''});},saveFile:function(p,c){return wait('f'+(++aiN),'savefile',{path:String(p||''),content:c});},readFile:function(p){return wait('g'+(++aiN),'readfile',{path:String(p||'')});},listen:function(o){o=o||{};return wait('l'+(++aiN),'listen',{prompt:o.prompt||'',maxSeconds:o.maxSeconds||0,lang:o.lang||'',full:!!o.full});},speak:function(t,o){o=o||{};return wait('sp'+(++aiN),'speak',{text:String(t==null?'':t).slice(0,4000),voice:String(o.voice||''),speed:+o.speed||0,play:o.play!==false,fallback:o.fallback!==false});},speakStop:function(){send('speakstop',{});},done:function(s){send('done',{summary:s||{}});}};" +
+    // NAV-199: wv.listen.start, continuous listening (wv.listen(...) still records one answer)
+    "api.listen.start=function(o,cb){if(typeof o==='function'){cb=o;o={};}o=o||{};hearCb=cb||o.onEvent||null;return wait('h'+(++aiN),'hearstart',{opts:{lang:String(o.lang||''),maxMinutes:+o.maxMinutes||0,idleSeconds:+o.idleSeconds||0,keyterms:Array.isArray(o.keyterms)?o.keyterms.slice(0,50).map(function(t){return String(t).slice(0,60);}):[],stopSpeak:o.stopSpeak==='sound'?'sound':o.stopSpeak!==false,label:String(o.label||'').slice(0,40)}});};" +
+    "api.listen.stop=function(){send('hearstop',{});};api.listen.mute=function(on){send('hearmute',{on:on!==false});};return api;};})();" +
     "addEventListener('error',function(e){try{parent.postMessage({port:'worldview',v:1,type:'crash',message:String(e.message||'error').slice(0,200)},'*');}catch(x){}});" +
     // NAV-197 Point: only when Teacher Studio asks, the teacher taps a part of the page; a short description goes back for the helper chat.
     "(function(){var on=false,box=null,cur=null;function post(t,b){try{parent.postMessage(Object.assign({port:'worldview',v:1,type:t},b||{}),'*');}catch(x){}}" +
@@ -144,7 +149,7 @@
   PortHost.prototype.run = function (html, lessonId, filesPrefix, folder) {
     if (lessonId) this.o.lessonId = lessonId; if (filesPrefix !== undefined) this.o.filesPrefix = filesPrefix || '';
     this.o.folder = folder || '';
-    this._audioStop(null); this._liveStop('replaced'); this._speakStop(); this._closeDock(null); this._mem = null; this._notes = null;
+    this._audioStop(null); this._liveStop('replaced'); this._hearStop('replaced'); this._speakStop(); this._closeDock(null); this._mem = null; this._notes = null;
     this.q = []; this.preds = {}; this.record = (this.o.initialRecord || []).slice(); this.o.initialRecord = null; this.connected = false; this.done = false; this.manifest = null; this.aiCount = 0; this.gen = (this.gen || 0) + 1;
     this.o.panel.innerHTML = ''; if (this.o.progress) this.o.progress.style.width = '0';
     this._closeVideo();
@@ -277,7 +282,7 @@
       self._send('answer', {id: id, value: full ? r : (r && r.ok ? r.text : null)});
     };
     if (!this.o.transcribe || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) return done({ok: false, error: 'Voice isn\'t available in this browser.', type: 'unsupported'});
-    this._closeVideo();
+    this._closeVideo(); this._hearStop('replaced');
     var box = this.o.frame.parentNode; if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
     var sheet = document.createElement('div'); sheet.className = 'ph-video ph-listen';
     sheet.style.cssText = 'position:absolute;left:0;right:0;bottom:0;z-index:5;background:rgba(20,16,12,.94);color:#fff;display:grid;gap:10px;padding:16px;border-radius:0 0 22px 22px;text-align:center';
@@ -332,7 +337,7 @@
   };
   PortHost.prototype._audioStart = function (m) {
     var self = this, id = clip(m.id, 40), o = m.opts || {};
-    this._audioStop('replaced');
+    this._audioStop('replaced'); this._hearStop('replaced');
     var AC = window.AudioContext || window.webkitAudioContext;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !AC) return this._send('answer', {id: id, value: {ok: false, error: 'This browser can\'t listen to the microphone. Try Chrome, Edge, Safari or Firefox.', type: 'unsupported'}});
     var cfg = {pitch: o.pitch !== false, minHz: clamp(+o.minHz || 60, 30, 2000), maxHz: 0, silenceDb: o.silenceDb == null ? -55 : clamp(+o.silenceDb, -90, -10), clarityMin: clamp(+o.clarity || 0.8, 0.5, 0.99)};
@@ -426,7 +431,7 @@
     var no = function (error, type) { self._send('answer', {id: id, value: {ok: false, error: error, type: type}}); };
     if (!this.o.live) return no('Live conversation isn\'t available on this page.', 'unsupported');
     if (!window.RTCPeerConnection || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return no('This browser can\'t hold a live conversation. Try Chrome, Edge, Safari or Firefox.', 'unsupported');
-    this._audioStop('replaced'); this._closeVideo();
+    this._audioStop('replaced'); this._hearStop('replaced'); this._closeVideo();
     var maxMin = clamp(Math.round(+o.maxMinutes || 10), 1, 15);
     var L = this._live = {id: id, gen: this.gen, label: clip(o.label, 40), maxSeconds: maxMin * 60, idle: clamp(Math.round(+o.idleSeconds || 120), 30, 600) * 1000, saved: 0, lastAi: '', last: Date.now(), speaking: {learner: false, ai: false}};
     var fail = function (error, type) { if (self._live === L) self._liveStop(type, error); };
@@ -520,10 +525,153 @@
       }, 100);
     } catch (e) {}
   };
+  /* NAV-199: wv.listen.start, continuous listening (the "continuouslisten" service; Deepgram Nova-3 first). The
+     microphone stays on this page, with the browser's echo cancellation, and its sound goes as 16 kHz PCM straight
+     to the company over a socket opened with a 30-second pass from Worldview's server (o.stream.create; o.stream.close
+     records the session's length), so the lesson never holds a key. Nothing is stored except the learner's finished
+     sentences in the teacher's record. The lesson gets events: state, speechstart, transcript (interim and final),
+     utterance (the learner finished speaking), interrupted (Worldview stopped wv.speak because the learner spoke),
+     muted, error, end. */
+  function words(t) { return String(t || '').toLowerCase().replace(/[^\p{L}\p{N}']+/gu, ' ').trim().split(/\s+/).filter(Boolean); }
+  // Is what the microphone heard only Worldview's own voice coming back from the speaker? (most of its words are in what the voice is saying)
+  function isEcho(heard, said) { var h = words(heard), s = {}; if (!h.length || !said) return false; words(said).forEach(function (w) { s[w] = 1; }); return h.filter(function (w) { return s[w]; }).length / h.length >= 0.7; }
+  // Mono samples at the page's rate → 16-bit PCM at 16 kHz (each output sample averages its step, which also smooths what 16 kHz can't hold).
+  function pcm16(x, from) {
+    var step = Math.max(1, from / 16000), n = Math.floor(x.length / step), out = new Int16Array(n);
+    for (var i = 0; i < n; i++) {
+      var a = Math.floor(i * step), b = Math.min(x.length, Math.floor((i + 1) * step)), sum = 0;
+      for (var j = a; j < b; j++) sum += x[j];
+      var v = b > a ? sum / (b - a) : 0; v = v > 1 ? 1 : v < -1 ? -1 : v;
+      out[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
+    }
+    return out.buffer;
+  }
+  PortHost.prototype._hearEmit = function (H, ev) { if (H.gen === this.gen) this._send('hearevent', {event: ev}); };
+  PortHost.prototype._hearUI = function (H) {
+    var box = this.o.frame.parentNode; if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
+    if (!H.bar) {
+      H.bar = document.createElement('div'); H.bar.className = 'ph-audio ph-hear'; H.bar.setAttribute('role', 'status');
+      H.bar.style.cssText = 'position:absolute;top:10px;left:10px;z-index:7;display:flex;gap:6px;align-items:center;background:rgba(20,16,12,.88);color:#fff;border-radius:999px;padding:5px 6px 5px 12px;font:600 13px system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.3)';
+      box.appendChild(H.bar);
+    }
+    var self = this, sec = H.startedAt ? Math.round((Date.now() - H.startedAt) / 1000) : 0, clock = function (n) { return Math.floor(n / 60) + ':' + ('0' + n % 60).slice(-2); };
+    var text = H.ended ? 'Stopping…' : H.needTap ? '🎙 Ready to listen' : !H.live ? 'Starting to listen…' : (H.muted ? '🔇 Muted' : '🎙 ' + (H.label || 'Listening')) + ' · ' + clock(sec) + ' / ' + clock(H.maxSeconds);
+    H.bar.innerHTML = '';
+    var sp = document.createElement('span'); sp.textContent = text; H.bar.appendChild(sp);
+    var btn = function (t, f) { var b = document.createElement('button'); b.type = 'button'; b.className = 'btn small'; b.style.cssText = 'padding:3px 10px;font-size:12px'; b.textContent = t; b.onclick = f; H.bar.appendChild(b); };
+    if (H.needTap) btn('Tap to start', H.tap);
+    if (H.live && !H.ended) btn(H.muted ? 'Unmute' : 'Mute', function () { self._hearMute(!H.muted); });
+    if (!H.ended) btn('Stop', function () { self._hearStop('stopped_by_user'); });
+  };
+  PortHost.prototype._hearMute = function (on) {
+    var H = this._hear; if (!H || !H.mic) return;
+    H.muted = !!on; H.mic.getAudioTracks().forEach(function (t) { t.enabled = !H.muted; });
+    this._hearEmit(H, {type: 'muted', on: H.muted}); this._hearUI(H);
+  };
+  // The learner finished speaking: one utterance for the lesson, saved for the teacher with what Worldview's voice said last.
+  PortHost.prototype._hearFlush = function (H) {
+    var text = H.parts.join(' ').replace(/\s+/g, ' ').trim(); H.parts = [];
+    if (!text) return;
+    if (H.saved < 60) { H.saved++; this.record.push({kind: 'voice', question: clip(this._lastVoice, 300), answer: clip(text, 500), outcome: ''}); this._changed(); }
+    this._hearEmit(H, {type: 'utterance', text: text});
+  };
+  PortHost.prototype._hearStop = function (reason, error) {
+    var H = this._hear; if (!H || H.ended) return; H.ended = true; this._hear = null;
+    clearTimeout(H.wait); clearTimeout(H.startup); clearInterval(H.tick); clearInterval(H.keep);
+    if (H.answered) this._hearFlush(H);
+    if (H.ws) { var ws = H.ws; try { if (ws.readyState === 1) ws.send(JSON.stringify({type: 'CloseStream'})); } catch (e) {} setTimeout(function () { try { ws.close(); } catch (e) {} }, 1000); }
+    if (H.proc) { H.proc.onaudioprocess = null; try { H.proc.disconnect(); } catch (e) {} }
+    if (H.mic) H.mic.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+    if (H.ctx) { try { H.ctx.close(); } catch (e) {} }
+    if (H.bar) H.bar.remove();
+    if (H.callId) Promise.resolve(this.o.stream.close(H.callId)).catch(function () {});
+    var sec = H.startedAt ? Math.round((Date.now() - H.startedAt) / 1000) : 0;
+    if (!H.answered) { H.answered = true; if (H.gen === this.gen) this._send('answer', {id: H.id, value: {ok: false, error: error || 'Listening stopped before it started.', type: reason || 'stream_failed'}}); }
+    else this._hearEmit(H, {type: 'end', reason: reason || 'ended', seconds: sec, error: error || ''});
+  };
+  PortHost.prototype._hearStart = function (m) {
+    var self = this, id = clip(m.id, 40), o = m.opts || {}, AC = window.AudioContext || window.webkitAudioContext;
+    this._hearStop('replaced');
+    var no = function (error, type) { self._send('answer', {id: id, value: {ok: false, error: error, type: type}}); };
+    if (!this.o.stream) return no('Continuous listening isn\'t available on this page.', 'unsupported');
+    if (this.o.listenOn === false) return no('Continuous listening isn\'t on in Worldview yet.', 'listen_off');
+    if (!window.WebSocket || !AC || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return no('This browser can\'t listen continuously. Try Chrome, Edge, Safari or Firefox.', 'unsupported');
+    this._audioStop('replaced'); this._liveStop('replaced'); this._closeVideo();
+    var maxMin = clamp(Math.round(+o.maxMinutes || 15), 1, 60), lang = /^[a-z]{2}(-[A-Z]{2})?$/.test(o.lang || '') ? o.lang : 'en';
+    var terms = (Array.isArray(o.keyterms) ? o.keyterms : []).slice(0, 50).map(function (t) { return clip(t, 60); });
+    var H = this._hear = {id: id, gen: this.gen, label: clip(o.label, 40), maxSeconds: maxMin * 60, idle: clamp(Math.round(+o.idleSeconds || 300), 30, 3600) * 1000, stopSpeak: o.stopSpeak === 'sound' ? 'sound' : o.stopSpeak !== false, parts: [], saved: 0, last: Date.now()};
+    var fail = function (error, type) { if (self._hear === H) self._hearStop(type, error); };
+    this._hearUI(H); this._hearEmit(H, {type: 'state', state: 'connecting'});
+    // Ask Worldview for the session, then open the connection with its pass. Audio flows once the connection is open.
+    function connect() {
+      if (self._hear !== H || H.connecting) return; H.connecting = true; H.needTap = false; clearTimeout(H.wait); self._hearUI(H);
+      H.startup = setTimeout(function () { fail('Listening took too long to start. Try again.', 'timeout'); }, 30000);
+      Promise.resolve(self.o.stream.create({maxMinutes: maxMin, lang: lang, keyterms: terms})).catch(function () { return null; }).then(function (r) {
+        if (r && r.ok && r.callId && self._hear !== H) { Promise.resolve(self.o.stream.close(r.callId)).catch(function () {}); return; }
+        if (!r || !r.ok || !r.url || !r.token) return fail((r && r.error) || 'Worldview couldn\'t start listening. Check the internet and try again.', (r && r.type) || 'network');
+        H.callId = r.callId; H.maxSeconds = Math.min(H.maxSeconds, +r.maxSeconds || H.maxSeconds);
+        var ws; try { ws = H.ws = new WebSocket(r.url, [r.protocol || 'bearer', r.token]); } catch (e) { return fail('Listening couldn\'t connect.', 'stream_failed'); }
+        ws.binaryType = 'arraybuffer';
+        ws.onopen = function () {
+          if (self._hear !== H) return;
+          clearTimeout(H.startup); H.live = true; H.startedAt = H.last = Date.now(); H.answered = true;
+          if (H.gen === self.gen) self._send('answer', {id: H.id, value: {ok: true, maxSeconds: H.maxSeconds, model: r.model || ''}});
+          self._hearEmit(H, {type: 'state', state: 'listening', maxSeconds: H.maxSeconds});
+          H.tick = setInterval(function () {
+            if (self._hear !== H) return;
+            if (H.muted) H.last = Date.now();
+            if ((Date.now() - H.startedAt) / 1000 >= H.maxSeconds) return self._hearStop('time_limit');
+            if (Date.now() - H.last > H.idle) return self._hearStop('idle');
+            self._hearUI(H);
+          }, 1000);
+          // while muted no sound is sent, so tell the company the connection is still wanted
+          H.keep = setInterval(function () { if (H.muted && ws.readyState === 1) { try { ws.send('{"type":"KeepAlive"}'); } catch (e) {} } }, 5000);
+          self._hearUI(H);
+        };
+        ws.onmessage = function (e) { if (self._hear !== H || typeof e.data !== 'string') return; var d; try { d = JSON.parse(e.data); } catch (er) { return; } self._hearEvent(H, d); };
+        ws.onclose = function () { if (self._hear === H && !H.ended) fail(H.live ? 'The listening connection dropped. Check the internet and start listening again.' : 'Listening couldn\'t connect.', H.live ? 'connection_lost' : 'stream_failed'); };
+      });
+    }
+    navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1}}).then(function (mic) {
+      if (self._hear !== H) { mic.getTracks().forEach(function (t) { t.stop(); }); return; }
+      H.mic = mic;
+      mic.getAudioTracks().forEach(function (t) { t.addEventListener('ended', function () { fail('The microphone stopped (unplugged or taken by another app).', 'interrupted'); }); });
+      var ctx = H.ctx = new AC(), src = ctx.createMediaStreamSource(mic), proc = H.proc = ctx.createScriptProcessor(4096, 1, 1), sink = ctx.createGain();
+      sink.gain.value = 0; src.connect(proc); proc.connect(sink); sink.connect(ctx.destination);
+      proc.onaudioprocess = function (e) { if (H.ws && H.ws.readyState === 1 && !H.muted) { try { H.ws.send(pcm16(e.inputBuffer.getChannelData(0), ctx.sampleRate)); } catch (er) {} } };
+      // Starts by itself when the browser allows sound; otherwise (an iPhone before any tap) the bar offers Tap to start.
+      H.tap = function () { ctx.resume().then(connect).catch(function () {}); };
+      if (ctx.state === 'running') connect();
+      else { ctx.resume().then(function () { if (ctx.state === 'running') connect(); }).catch(function () {}); H.wait = setTimeout(function () { if (self._hear === H && !H.connecting) { H.needTap = true; self._hearUI(H); } }, 600); }
+    }).catch(function (e) {
+      var denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError'), none = e && (e.name === 'NotFoundError' || e.name === 'OverconstrainedError');
+      fail(denied ? 'Worldview needs the microphone to listen. Allow it for this site, then try again.' : none ? 'No microphone was found on this device.' : 'The microphone couldn\'t start. Close other apps using it and try again.', denied ? 'mic_denied' : none ? 'no_mic' : 'audio_failed');
+    });
+  };
+  PortHost.prototype._hearEvent = function (H, d) {
+    var self = this, t = String(d && d.type || '');
+    // the learner talked over Worldview's voice: stop it (its wv.speak answers with type 'interrupted')
+    var bargeIn = function () { if (!self._speaking) return; self._speakStop('interrupted'); self._hearEmit(H, {type: 'interrupted'}); };
+    if (t === 'SpeechStarted') {
+      H.last = Date.now();
+      this._hearEmit(H, {type: 'speechstart', aiSpeaking: !!this._voiceText()});
+      if (H.stopSpeak === 'sound') bargeIn();
+    } else if (t === 'Results') {
+      var alt = d.channel && d.channel.alternatives && d.channel.alternatives[0], text = String(alt && alt.transcript || '').trim();
+      if (text) {
+        var echo = isEcho(text, this._voiceText()); H.last = Date.now();
+        if (!echo && H.stopSpeak) bargeIn();
+        if (d.is_final && !echo) H.parts.push(text);
+        this._hearEmit(H, {type: 'transcript', text: text, final: !!d.is_final, echo: echo, soFar: H.parts.concat(d.is_final || echo ? [] : [text]).join(' ')});
+      }
+      if (d.speech_final) this._hearFlush(H);
+    } else if (t === 'UtteranceEnd') this._hearFlush(H);
+    else if (t === 'Error') this._hearEmit(H, {type: 'error', message: clip(d.description || d.message || 'The listening service reported a problem.', 200)});
+  };
   // a page in the background, or leaving it, always releases the microphone (and ends a live conversation)
   var HOSTS = [];
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') HOSTS.forEach(function (h) { if (h._audio) h._audioStop('interrupted', {error: 'Listening stopped because the page was in the background.'}); if (h._live) h._liveStop('background', 'The live conversation ended because the page was in the background.'); }); });
-  addEventListener('pagehide', function () { HOSTS.forEach(function (h) { h._audioStop(null); h._liveStop('page_closed'); }); });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') HOSTS.forEach(function (h) { if (h._audio) h._audioStop('interrupted', {error: 'Listening stopped because the page was in the background.'}); if (h._live) h._liveStop('background', 'The live conversation ended because the page was in the background.'); if (h._hear) h._hearStop('background', 'Listening stopped because the page was in the background.'); }); });
+  addEventListener('pagehide', function () { HOSTS.forEach(function (h) { h._audioStop(null); h._liveStop('page_closed'); h._hearStop('page_closed'); }); });
   /* Docked video: a small player in the corner; the lesson stays usable (and listening). */
   PortHost.prototype._closeDock = function (reason) { var d = this._dock; if (!d) return; this._dock = null; removeEventListener('message', d.onmsg); clearInterval(d.ping); d.el.remove(); if (reason && d.gen === this.gen) this._send('answer', {id: d.id, value: {ok: true, reason: reason}}); };
   PortHost.prototype._videoDock = function (m, vid, q) {
@@ -564,7 +712,7 @@
     b.addEventListener('click', function () { self._closeVideo(); self._send('answer', {id: id, value: true}); });
     sheet.appendChild(v); sheet.appendChild(b); box.appendChild(sheet); this._sheet = sheet;
   };
-  PortHost.prototype.destroy = function () { clearTimeout(this._rt); this._audioStop(null); this._liveStop('page_closed'); this._speakStop(); this._closeDock(null); removeEventListener('message', this._listener); clearTimeout(this._t); HOSTS = HOSTS.filter(function (h) { return h !== this; }, this); };
+  PortHost.prototype.destroy = function () { clearTimeout(this._rt); this._audioStop(null); this._liveStop('page_closed'); this._hearStop('page_closed'); this._speakStop(); this._closeDock(null); removeEventListener('message', this._listener); clearTimeout(this._t); HOSTS = HOSTS.filter(function (h) { return h !== this; }, this); };
   /* LES-332: wv.speak. Worldview's AI voice (o.speak returns {ok, audio}) plays here and the call answers when it
      ends; play: false hands the audio to the lesson instead. When the AI voice is off or fails, the device's own
      voice reads it (fallback: false turns that off). A new wv.speak, wv.speakStop or a new lesson stops the last one. */
@@ -572,7 +720,11 @@
     var self = this, id = clip(m.id, 40), gen = this.gen, text = clip(m.text, 4000).trim(), speed = +m.speed || 0;
     this._speakStop();
     var token = this._speakToken = {};
-    var done = function (v) { if (self._speakToken === token) self._speakToken = null; self._speaking = null; if (gen === self.gen) self._send('answer', {id: id, value: v}); };
+    // NAV-199: while a voice reads (and briefly after), continuous listening knows what it is saying, to tell its echo from the learner
+    var playing = function () { self._voice = {text: text, until: Infinity}; self._lastVoice = text; };
+    var done = function (v) { if (self._speakToken === token) self._speakToken = null; self._speaking = null; if (self._voice && self._voice.text === text && self._voice.until === Infinity) self._voice.until = Date.now() + 1500; if (gen === self.gen) self._send('answer', {id: id, value: v}); };
+    // why 'interrupted': continuous listening stopped it because the learner started speaking
+    var stopped = function (voice, why) { var r = {ok: false, error: why === 'interrupted' ? 'Stopped: the learner started speaking.' : 'Stopped.', type: why === 'interrupted' ? 'interrupted' : 'stopped'}; if (voice) r.voice = voice; return r; };
     if (!text) return done({ok: false, error: 'There was nothing to read aloud.', type: 'empty'});
     var device = function (why) {
       var S = window.speechSynthesis, U = window.SpeechSynthesisUtterance;
@@ -582,30 +734,36 @@
       var end = function (v) { if (!ended) { ended = true; done(v); } };
       u.onend = function () { end({ok: true, voice: 'device', seconds: Math.round((Date.now() - t0) / 100) / 10, aiVoice: why ? why.type : 'off'}); };
       u.onerror = function (e) { end({ok: false, voice: 'device', error: 'The voice stopped.', type: (e && e.error) || 'device_error'}); };
-      self._speaking = {stop: function () { try { S.cancel(); } catch (e) {} end({ok: false, voice: 'device', error: 'Stopped.', type: 'stopped'}); }};
-      try { S.cancel(); S.speak(u); } catch (e) { end({ok: false, error: 'This browser can\'t read aloud.', type: 'unsupported'}); }
+      self._speaking = {stop: function (w) { try { S.cancel(); } catch (e) {} end(stopped('device', w)); }};
+      try { S.cancel(); playing(); S.speak(u); } catch (e) { end({ok: false, error: 'This browser can\'t read aloud.', type: 'unsupported'}); }
     };
     if (!this.o.speak || this.o.aiVoice === false) return device(null);
-    this._speaking = {stop: function () { done({ok: false, error: 'Stopped.', type: 'stopped'}); }};
+    this._speaking = {stop: function (w) { done(stopped('', w)); }};
     Promise.resolve(this.o.speak({text: text, voice: clip(m.voice, 100), speed: speed})).catch(function () { return null; }).then(function (r) {
       if (self._speakToken !== token || gen !== self.gen) return;
       if (!r || !r.ok || !r.audio) return device(r && r.type ? r : {ok: false, error: 'Worldview\'s AI voice couldn\'t be reached.', type: 'network'});
       if (m.play === false) return done({ok: true, voice: 'ai', audio: r.audio});
       var url = URL.createObjectURL(r.audio), a = new Audio(url), t0 = Date.now(), ended = false;
       var end = function (v) { if (ended) return; ended = true; try { a.pause(); } catch (e) {} URL.revokeObjectURL(url); done(v); };
-      self._speaking = {stop: function () { end({ok: false, voice: 'ai', error: 'Stopped.', type: 'stopped'}); }};
+      self._speaking = {stop: function (w) { end(stopped('ai', w)); }};
       a.onended = function () { end({ok: true, voice: 'ai', seconds: Math.round((Date.now() - t0) / 100) / 10}); };
       a.onerror = function () { if (!ended) { ended = true; URL.revokeObjectURL(url); self._speaking = null; device({ok: false, error: 'The AI voice couldn\'t play.', type: 'play_failed'}); } };
+      playing();
       var p = a.play(); if (p && p.catch) p.catch(function () { if (!ended) { ended = true; URL.revokeObjectURL(url); self._speaking = null; device({ok: false, error: 'The browser held the sound back until a button is pressed.', type: 'blocked'}); } });
     });
   };
-  PortHost.prototype._speakStop = function () { var s = this._speaking; this._speaking = null; if (s) s.stop(); };
+  PortHost.prototype._speakStop = function (why) { var s = this._speaking; this._speaking = null; if (s) s.stop(why); };
+  // What Worldview's voice is saying now (or said in the last 1.5 seconds), or ''.
+  PortHost.prototype._voiceText = function () { var v = this._voice; return v && Date.now() < v.until ? v.text : ''; };
   PortHost.prototype.capabilities = function () {
     return {ask: true, predict: true, video: true, videoDock: true, ai: !!this.o.ai, listen: !!this.o.transcribe, live: !!(this.o.live && window.RTCPeerConnection && navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
       audio: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && (window.AudioContext || window.webkitAudioContext)),
       speak: !!(this.o.speak || window.speechSynthesis), aiVoice: !!(this.o.speak && this.o.aiVoice),
-      record: !!this.o.saveFile, saveFile: !!this.o.saveFile, readFile: !!this.o.lessonId, state: true, persistentState: !!this.o.state, days: !!this.o.days, teacherTools: !!this.o.saveFile, direct: !!this._open};
+      record: !!this.o.saveFile, saveFile: !!this.o.saveFile, readFile: !!this.o.lessonId, state: true, persistentState: !!this.o.state, days: !!this.o.days, teacherTools: !!this.o.saveFile, direct: !!this._open,
+      continuousListen: !!(this.o.stream && this.o.listenOn !== false && window.WebSocket && navigator.mediaDevices && navigator.mediaDevices.getUserMedia && (window.AudioContext || window.webkitAudioContext))};
   };
+  // The page learned something after the lesson said hello (an AI voice or continuous listening turned on): tell the lesson.
+  PortHost.prototype.refreshCapabilities = function () { if (this.connected) this._send('capabilities', {capabilities: this.capabilities()}); };
   PortHost.prototype.point = function (on) { this._send('point', {on: !!on}); };
   PortHost.prototype._send = function (type, body) { try { this.o.frame.contentWindow.postMessage(Object.assign({port: 'worldview', v: 1, type: type}, body || {}), this._open ? this._runnerOrigin : '*'); } catch (e) {} };
   PortHost.prototype._changed = function () { if (this.o.onChange) this.o.onChange(this.record.slice(), this.done); };
@@ -687,6 +845,9 @@
       case 'livestop': this._liveStop('stopped'); break;
       case 'livemute': this._liveMute(!!m.on); break;
       case 'livecontext': this._liveContext(m.text); break;
+      case 'hearstart': this._hearStart(m); break;
+      case 'hearstop': this._hearStop('stopped'); break;
+      case 'hearmute': this._hearMute(!!m.on); break;
       case 'stateget': { var sv = null; try { sv = this.o.state ? this.o.state.load() : this._mem; } catch (e) {} this._send('answer', {id: clip(m.id, 40), value: sv == null ? null : sv}); break; }
       case 'stateset': { var js = ''; try { js = JSON.stringify(m.value); } catch (e) {} if (!js || js.length > 65536) { this._line('note', 'The lesson tried to save more than 64 KB of progress; it wasn\'t saved.'); break; } var val = JSON.parse(js); if (this.o.state) { try { this.o.state.save(val); } catch (e) {} } else this._mem = val; break; }
       /* NAV-198 lessons over several days: wv.days() says which day this is and how the earlier ones went;
@@ -732,7 +893,7 @@
       case 'pointed': if (this.o.onPoint) this.o.onPoint({label: clip(m.label, 60), text: clip(m.text, 200), html: clip(m.html, 400), path: clip(m.path, 200)}); break;
       case 'pointcancel': if (this.o.onPoint) this.o.onPoint(null); break;
       // A request this player doesn't know (a newer lesson, an older page): answer it, so the lesson never waits forever.
-      default: if (m.id != null && ['evidence', 'remember', 'progress', 'done', 'say', 'event', 'result', 'hello', 'audiostop', 'stateset', 'videoclose', 'livestop', 'livemute', 'livecontext'].indexOf(m.type) < 0) this._send('answer', {id: clip(m.id, 40), value: {ok: false, error: 'This Worldview page doesn\'t support ' + clip(m.type, 30) + ' yet. Reload the page.', type: 'unsupported'}});
+      default: if (m.id != null && ['evidence', 'remember', 'progress', 'done', 'say', 'event', 'result', 'hello', 'audiostop', 'stateset', 'videoclose', 'livestop', 'livemute', 'livecontext', 'hearstop', 'hearmute'].indexOf(m.type) < 0) this._send('answer', {id: clip(m.id, 40), value: {ok: false, error: 'This Worldview page doesn\'t support ' + clip(m.type, 30) + ' yet. Reload the page.', type: 'unsupported'}});
     }
   };
 

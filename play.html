@@ -114,8 +114,14 @@
       return await norm(r);
     } catch (e) { return {ok: false, error: 'Worldview\'s AI voice couldn\'t be reached.', type: 'network'}; }
   };
-  // Is the AI voice on? (NAV-199: turned on by approving a request in the owner's inbox)
-  const aiVoiceOn = fetch(URL_ + '/functions/v1/lesson-ai?mode=services', {method: 'POST', headers: {'content-type': 'application/json', apikey: KEY}, body: '{"action":"catalog"}'}).then(r => r.json()).then(j => !!(j.on || []).some(x => x.service === 'speak')).catch(() => null);
+  // NAV-199: open or end a continuous-listening session (lesson-ai?mode=stream, wv.listen.start). keepalive lets an ending still reach Worldview as the page closes.
+  const streamAI = async (req, lessonId, runId) => {
+    try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai?mode=stream', {method: 'POST', keepalive: req.action === 'close', headers: Object.assign({'content-type': 'application/json'}, await authHeaders()), body: JSON.stringify(Object.assign({lesson: lessonId, run: runId || null}, req))})); }
+    catch (e) { return {ok: false, error: 'Worldview couldn\'t start listening. Check the internet connection.', type: 'network'}; }
+  };
+  // Which lesson services are on: the AI voice (speak) and continuous listening (continuouslisten). NAV-199: turned on by approving a request in the owner's inbox.
+  const servicesOn = fetch(URL_ + '/functions/v1/lesson-ai?mode=services', {method: 'POST', headers: {'content-type': 'application/json', apikey: KEY}, body: '{"action":"catalog"}'}).then(r => r.json()).then(j => new Set((j.on || []).map(x => x.service))).catch(() => null);
+  const useServices = h => servicesOn.then(on => { if (on) { h.o.aiVoice = on.has('speak'); h.o.listenOn = on.has('continuouslisten'); h.refreshCapabilities(); } });
   const hearAI = async (blob, lang, lessonId, runId) => {
     try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai?mode=transcribe&lesson=' + lessonId + (runId ? '&run=' + runId : '') + (lang ? '&lang=' + lang : ''), {method: 'POST', headers: Object.assign({'content-type': blob.type || 'audio/webm'}, await authHeaders()), body: blob})); }
     catch (e) { return {ok: false, error: 'Worldview couldn\'t turn that recording into text. Check the internet connection.', type: 'network'}; }
@@ -283,9 +289,10 @@
     if (host) host.destroy();
     host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), ai: req => askAI(req, lesson.id, runId), transcribe: (b, l) => hearAI(b, l, lesson.id, runId), speak: req => speakAI(req, lesson.id, runId),
       live: {create: req => liveAI(Object.assign({action: 'create'}, req), lesson.id, runId), close: callId => liveAI({action: 'close', callId}, lesson.id, runId)},
+      stream: {create: req => streamAI(Object.assign({action: 'create'}, req), lesson.id, runId), close: callId => streamAI({action: 'close', callId}, lesson.id, runId)},
       state: o.state, days: o.days, initialRecord: o.initialRecord,
       onChange: (record, done) => { latest = record; finished = finished || done; if (o.onRecord) o.onRecord(record); if (done) { if (o.onDone) o.onDone(); $('#finished').hidden = false; } clearTimeout(timer); timer = setTimeout(save, done ? 0 : 800); }});
-    const h = host; aiVoiceOn.then(on => { if (on !== null) h.o.aiVoice = on; });
+    useServices(host);
     // a published version plays its own locked-in files; older versions use the lesson's files
     host.run(html, lesson.id, filesPrefix(), folder);
     latest = host.record.slice(); save();
