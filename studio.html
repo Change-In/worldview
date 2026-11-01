@@ -171,6 +171,9 @@
   .notecard label { display:grid; gap:4px; font-size:13px; font-weight:650; color:var(--ink-soft); }
   .notecard textarea { resize:vertical; min-height:60px; font-size:14.5px; color:var(--ink); }
   .notecard input[type=text] { font-size:14.5px; color:var(--ink); }
+  .pick { appearance:none; cursor:pointer; text-align:left; display:grid; gap:4px; padding:12px 14px; border-radius:14px; border:1.5px solid var(--line); background:var(--card); color:var(--ink); }
+  .pick:hover, .pick:focus-visible { border-color:var(--accent); background:var(--accent-100); }
+  .pick b { font:400 18px Georgia,serif; }
   .resultseg button.on[data-result="worked"] { color:var(--ok); } .resultseg button.on[data-result="unsure"] { color:var(--warn); } .resultseg button.on[data-result="didnt"] { color:var(--accent-700); }
 </style>
 </head>
@@ -247,8 +250,9 @@
             <label for="n-idea">The idea<textarea id="n-idea" rows="2" maxlength="1200" placeholder="e.g. The lecture stops after each point. You say okay, ask about a term, or guess first."></textarea></label>
             <label for="n-tried">Tried on<input type="text" id="n-tried" maxlength="300" placeholder="e.g. Corporate finance lecture, slides 1 to 3"></label>
             <label for="n-learned">What you learned (one per line)<textarea id="n-learned" rows="3" maxlength="4000"></textarea></label>
-            <p class="small muted" id="n-state">Your helper fills this in as you work. Change anything here: it saves by itself.</p>
+            <div class="row"><p class="small muted grow" id="n-state">Your helper fills this in as you work. Change anything here: it saves by itself.</p><button type="button" class="btn ghost small" id="makelesson">Make it a lesson…</button></div>
           </div>
+          <p class="small muted" id="fromexp" hidden>Started from the experiment <button type="button" class="linkbtn" id="fromlink"></button></p>
           <p class="small muted" id="draftcost"></p>
         </div>
       </div>
@@ -298,6 +302,12 @@
 </div>
 
 <dialog id="guide" style="width:min(560px,calc(100vw - 32px))"><div style="display:grid;gap:12px"><div class="row"><span class="small muted grow" id="gstep"></span><button type="button" class="btn ghost small" data-close>Close</button></div><div id="gbody" style="display:grid;gap:10px"></div><div class="row"><button type="button" class="btn ghost" id="gback">Back</button><span class="grow"></span><button type="button" class="btn" id="gnext">Next</button></div></div></dialog>
+<dialog id="lessondlg"><div style="display:grid;gap:10px">
+  <h2>Make it a lesson</h2>
+  <button type="button" class="pick" id="tolesson-copy"><b>Copy it into a new lesson</b><span class="small muted">The experiment stays on your shelf with its note, as a record of what you tried. The lesson starts as an exact copy, files included, and remembers which experiment it came from.</span></button>
+  <button type="button" class="pick" id="tolesson-move"><b>Move it</b><span class="small muted">This experiment becomes the lesson and leaves the Experiments shelf. Nothing is copied.</span></button>
+  <div class="row"><button type="button" class="btn ghost small" data-close>Cancel</button></div>
+</div></dialog>
 <dialog id="newdlg"><form id="newform"><h2 id="newhead">New lesson</h2><label class="small" for="newtitle" id="newlabel">What's it called? You can change it later.</label><input type="text" id="newtitle" maxlength="120" placeholder="e.g. Why the Moon has phases"><div class="row"><button type="submit" class="btn">Create</button><button type="button" class="btn ghost" data-close>Cancel</button></div></form></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -486,7 +496,9 @@ ${RULES}`;
   const noteFocused = () => !!document.activeElement && !!document.activeElement.closest && !!document.activeElement.closest('#notecard');
   function renderNote() {
     const exp = !!cur && cur.kind === 'experiment'; $('#notecard').hidden = !exp;
-    $('#kind').textContent = exp ? 'Turn into a lesson' : 'Move to experiments';
+    $('#kind').textContent = exp ? 'Make it a lesson…' : 'Move to experiments';
+    const from = !exp && cur && cur.note && cur.note.from; $('#fromexp').hidden = !from;
+    if (from) { $('#fromlink').dataset.open = from.id; $('#fromlink').textContent = from.title || 'an experiment'; }
     if (!exp) return;
     const n = cur.note || {};
     document.querySelectorAll('[data-result]').forEach(b => b.classList.toggle('on', b.dataset.result === n.result));
@@ -517,15 +529,29 @@ ${RULES}`;
     const m = $('#tilemenu'), r = btn.getBoundingClientRect();
     if (!m.hidden && tileTarget === btn.dataset.tilemenu) { m.hidden = true; return; }
     tileTarget = btn.dataset.tilemenu; $('#tdel').dataset.sure = ''; $('#tdel').textContent = 'Delete lesson'; $('#tlink').hidden = !btn.closest('.tile').querySelector('.ribbon');
-    $('#tkind').textContent = btn.closest('.tile').dataset.kind === 'experiment' ? 'Turn into a lesson' : 'Move to experiments';
+    $('#tkind').textContent = btn.closest('.tile').dataset.kind === 'experiment' ? 'Make it a lesson…' : 'Move to experiments';
     m.hidden = false; m.style.top = (r.bottom + 6) + 'px'; m.style.left = Math.max(8, r.right - m.offsetWidth) + 'px';
   }
-  async function copyLesson(id) {
-    const {data: l} = await db.from(T).select('title,html,kind,note').eq('id', id).single(); if (!l) return toast('Couldn\'t copy it.');
-    const {data, error} = await db.from(T).insert({title: (l.title + ' (copy)').slice(0, 120), html: l.html, kind: l.kind, note: l.note || {}}).select('id').single();
+  // A copy is a new draft with the same page and the same files (videos, pictures, scripts), so it works on its own (BUG-522).
+  // asLesson: an experiment copied into a new lesson; the lesson keeps the experiment's name and remembers where it came from.
+  async function copyLesson(id, asLesson) {
+    const {data: l} = await db.from(T).select('id,title,html,kind,note').eq('id', id).single(); if (!l) return toast('Couldn\'t copy it.');
+    const row = asLesson ? {title: l.title, html: l.html, kind: 'lesson', note: {from: {id: l.id, title: l.title}}} : {title: (l.title + ' (copy)').slice(0, 120), html: l.html, kind: l.kind, note: l.note || {}};
+    const {data, error} = await db.from(T).insert(row).select('id').single();
     if (error) return toast(/lesson_limit/.test(error.message) ? 'You have 50 lessons; delete one first.' : 'Couldn\'t copy it: ' + error.message);
-    toast('Copied. The copy is a new draft.'); return data.id;
+    let files = [], missed = 0;
+    try { files = await listLessonFiles(id, id, 0); } catch (e) { missed = -1; }
+    for (let i = 0; i < files.length; i++) {
+      toast('Copying files (' + (i + 1) + ' of ' + files.length + ')…');
+      const {error: err} = await db.storage.from('lesson-files').copy(id + '/' + files[i], data.id + '/' + files[i]);
+      if (err && !/exist/i.test(err.message)) missed++;
+    }
+    toast(missed ? 'Copied, but ' + (missed < 0 ? 'its files' : missed + ' of its files') + ' didn\'t come along. Open the copy in your AI so they upload from the folder.' : (asLesson ? 'Your new lesson is ready. The experiment stays on your shelf.' : 'Copied. The copy is a new draft.'));
+    return data.id;
   }
+  // An experiment becomes a lesson: copied (the experiment stays as a record) or moved.
+  let lessonTarget = null;
+  function askMakeLesson(id) { lessonTarget = id; $('#lessondlg').showModal(); }
   /* ---------- one lesson: the draft you edit, and what students get ---------- */
   let RELS = [], RUNS = [], side = 'draft';
   async function showLesson(id, push, want) {
@@ -563,14 +589,15 @@ ${RULES}`;
   /* NAV-179: a published version gets its own copy of the lesson's files (lesson-files/<id>/_v/<n>/),
      so later recordings or map edits in the draft don't change what students have. */
   const MEDIA_REF = /["'(\s]((?:[\w -]+\/)*[\w .-]+\.(?:mp4|webm|ogg|ogv|mov|m4v|mp3|m4a|wav|png|jpe?g|gif|webp|svg|json))(?=["')?#\s])/gi;
-  async function listLessonFiles(prefix, depth) {
+  // A lesson's files on Worldview (paths inside the lesson), leaving out published versions' locked copies (_v).
+  async function listLessonFiles(id, prefix, depth) {
     const out = [], {data, error} = await db.storage.from('lesson-files').list(prefix, {limit: 1000});
     if (error) throw error;
     for (const it of data || []) {
       if (it.name.startsWith('.')) continue;
       const p = prefix + '/' + it.name;
-      if (!it.id) { if (depth === 0 && it.name === '_v') continue; if (depth < 4) out.push(...await listLessonFiles(p, depth + 1)); }
-      else out.push(p.slice(cur.id.length + 1));
+      if (!it.id) { if (depth === 0 && it.name === '_v') continue; if (depth < 4) out.push(...await listLessonFiles(id, p, depth + 1)); }
+      else out.push(p.slice(id.length + 1));
     }
     return out;
   }
@@ -580,7 +607,7 @@ ${RULES}`;
     for (let i = 0; i < files.length; i += 100) await db.storage.from('lesson-files').remove(files.slice(i, i + 100));
   }
   async function lockInFiles(version) {
-    const files = await listLessonFiles(cur.id, 0);
+    const files = await listLessonFiles(cur.id, cur.id, 0);
     let copied = 0;
     for (const f of files) {
       $('#pubmsg').textContent = 'Locking files into v' + version + ' (' + (copied + 1) + ' of ' + files.length + ')…';
@@ -814,8 +841,11 @@ ${RULES}`;
         $('#newtitle').placeholder = exp ? 'e.g. Pause the lecture after each point' : 'e.g. Why the Moon has phases';
         $('#newtitle').value = ''; return $('#newdlg').showModal();
       }
-      case 'tkind': { $('#tilemenu').hidden = true; const t = document.querySelector(`.tile[data-open="${tileTarget}"]`); if (await setKind(tileTarget, t && t.dataset.kind === 'experiment' ? 'lesson' : 'experiment')) showGrid(); return; }
-      case 'kind': { moreMenu(false); if (cur) await setKind(cur.id, cur.kind === 'experiment' ? 'lesson' : 'experiment'); return; }
+      case 'tkind': { $('#tilemenu').hidden = true; const t = document.querySelector(`.tile[data-open="${tileTarget}"]`); if (t && t.dataset.kind === 'experiment') return askMakeLesson(tileTarget); if (await setKind(tileTarget, 'experiment')) showGrid(); return; }
+      case 'kind': { moreMenu(false); if (!cur) return; if (cur.kind === 'experiment') return askMakeLesson(cur.id); await setKind(cur.id, 'experiment'); return; }
+      case 'makelesson': if (cur) askMakeLesson(cur.id); return;
+      case 'tolesson-copy': { $('#lessondlg').close(); const nid = await copyLesson(lessonTarget, true); if (nid) showLesson(nid, true); return; }
+      case 'tolesson-move': { $('#lessondlg').close(); if (await setKind(lessonTarget, 'lesson') && !cur) showGrid(); return; }
       case 'back': history.pushState({}, '', 'studio.html'); return showGrid();
       case 'restart': return host.run(lastSaved || cur.html);
       case 'fs': return setFs(!$('#stage').classList.contains('fs'));
@@ -861,7 +891,7 @@ ${RULES}`;
   addEventListener('popstate', () => { const l = new URLSearchParams(location.search).get('l'); if (l) location.reload(); else showGrid(); });
   addEventListener('focus', poll);
   // A page keeps the code it loaded with. When Teacher Studio is updated, offer a reload (or just reload on the lessons page).
-  const STUDIO_VERSION = '3.1.61';
+  const STUDIO_VERSION = '3.1.62';
   async function checkStudioUpdate() {
     try {
       const t = await fetch('studio.html?check=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '');
