@@ -18,14 +18,6 @@
   const rnd = str => { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return ((h >>> 0) % 10000) / 10000; };
   const NAMES = ['Maya R. ’27', 'Jordan K. ’26', 'Priya S. ’27', 'Liam T. ’26', 'Ava M. ’28', 'Noah B. ’27', 'Sofia L. ’26', 'Ethan W. ’27', 'Grace H. ’26', 'Owen P. ’28'];
   const HOWS = [['A short video each day, then one hard question.', 'daily'], ['A group discussion with recorded replies.', 'discuss'], ['You teach it to an AI student that keeps getting confused.', 'asks'], ['Old-exam problems, harder every day.', 'asks'], ['The story of who needed this idea, and why.', 'daily'], ['A mentor from the field walks through real work.', 'mentor']];
-  const WAYS = [
-    {id: 'discuss', name: 'Group discussions', line: 'Everyone records a short answer, then replies to one classmate.'},
-    {id: 'sim', name: 'Simulations', line: 'Move things and see why they work.'},
-    {id: 'hands', name: 'Hands-on', line: 'Parts or an instrument in your hands, with the lesson guiding you.'},
-    {id: 'mentor', name: 'People who do the work', line: 'Someone with real experience walks you through it.'},
-    {id: 'asks', name: 'Tutors that ask', line: 'It never gives the answer. You explain until it holds.'},
-    {id: 'daily', name: 'A video a day', line: 'One video each day, then a conversation about it.'},
-  ];
   const ROOF = '<svg class="pl-roof" viewBox="0 0 320 126" aria-hidden="true"><path class="l" d="M160 2v12"/><path class="s" d="M146 40 Q146 19 160 14 Q174 19 174 40 Z"/><rect class="s" x="141" y="40" width="38" height="24"/><rect class="w" x="148" y="45" width="8" height="13" rx="4"/><rect class="w" x="164" y="45" width="8" height="13" rx="4"/><path class="s" d="M24 108 L160 58 L296 108 Z"/><circle class="s" cx="160" cy="91" r="9"/><path class="l" d="M160 91v-6M160 91l4 2"/><rect class="s" x="14" y="108" width="292" height="9"/><rect class="s" x="22" y="117" width="276" height="9"/></svg>';
   const LOT = '<svg class="pl-roof" viewBox="0 0 320 126" aria-hidden="true"><path class="l" d="M24 118 L160 54 L296 118" stroke-dasharray="7 7"/><path class="l" d="M160 74v30M145 89h30"/></svg>';
   const SEARCH = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
@@ -59,13 +51,13 @@
   const initials = w => w.split(' ').slice(0, 2).map(x => x[0]).join('');
 
   /* ---------- state ---------- */
-  const P = {scr: load('joined', false) ? 'school' : 'find', joined: load('joined', false), verified: load('verified', false), code: false, query: '', cquery: '', classes: load('classes', []), enrolled: load('enrolled', {}), stars: load('stars', {}), cur: 'MA 132', unit: 2, sort: 'rated', whole: false, day: null, sheet: null, demo: null, r: .5, ohm: 470, read: 0, str: 0, rec: false, said: false, wrong: '', solved: false};
+  const P = {scr: load('joined', false) ? 'school' : 'find', joined: load('joined', false), verified: load('verified', false), code: false, query: '', cquery: '', classes: load('classes', []), enrolled: load('enrolled', {}), stars: load('stars', {}), cur: 'MA 132', unit: 2, sort: 'rated', whole: false, others: false, done: load('done', {}), day: null, sheet: null, demo: null, r: .5, ohm: 470, read: 0, str: 0, rec: false, said: false, wrong: '', solved: false};
   let deps = {render() {}, toast() {}, real: () => [], startReal() {}, playLink: id => 'play.html?l=' + id};
   const mine = (c, i) => ((P.enrolled[c.code] || {})[i] || []);
   const myTutors = (c, i) => mine(c, i).map(id => c.units[i].tutors.find(t => t.id === id)).filter(Boolean);
   const myDots = c => { const out = []; c.units.forEach(u => myTutors(c, u.i).forEach(t => lessonDates(u, t.days).forEach(l => out.push(l.d)))); return out; };
   const realFor = (c, u) => { const pre = (c.name + ', unit ' + (u.i + 1)).toLowerCase(); return (deps.real() || []).filter(l => (l.title || '').toLowerCase().startsWith(pre)); };
-  const buildLink = (c, u) => 'studio.html?new=' + encodeURIComponent(c.name + ', Unit ' + (u.i + 1) + ': my way');
+  const buildLink = (c, u) => 'studio.html?from=places&new=' + encodeURIComponent(c.name + ', Unit ' + (u.i + 1) + ': my way');
 
   /* ---------- screens ---------- */
   const back = (act, label) => `<button type="button" class="cv-back" data-pa="${act}" aria-label="${label || 'Back'}">‹</button>`;
@@ -124,42 +116,50 @@
   const sorted = (c, u) => { const by = {rated: (a, b) => b.r - a.r, taken: (a, b) => b.n - a.n, newest: (a, b) => a.age - b.age}[P.sort]; const ids = mine(c, u.i); return u.tutors.slice().sort(by).sort((a, b) => ids.includes(b.id) - ids.includes(a.id)); };
   const row = (c, u, t) => { const on = mine(c, u.i).includes(t.id); return `<button type="button" class="pl-tutor${on ? ' yours' : ''}" data-pa="tutor" data-u="${u.i}" data-id="${esc(t.id)}"><span class="ava">${initials(t.w)}</span><span class="nm"><b>${t.w}</b><span>${t.how}</span></span><span class="sc"><span>★ ${t.r.toFixed(1)}</span><em>${t.n} students</em><span>$${t.p}</span></span></button>`; };
   const realRow = (c, u, l) => `<a class="pl-tutor real" href="${deps.playLink(l.id)}"><span class="ava">▶</span><span class="nm"><b>${esc(l.title.slice((c.name + ', Unit ' + (u.i + 1)).length).replace(/^[:\s]+/, '') || l.title)}</b><span>A real lesson, built in Teacher Studio</span></span><span class="sc"><span>New</span><em>Free for now</em></span></a>`;
-  const listBlock = (c, u, label) => { const real = realFor(c, u); return `<div class="pl-lhead"><span class="cv-lab" style="margin:0">${label}</span><div class="pl-sorts">${[['rated', 'Top rated'], ['taken', 'Most taken'], ['newest', 'Newest']].map(([k, l]) => `<button type="button" class="${P.sort === k ? 'on' : ''}" data-pa="sort" data-k="${k}">${l}</button>`).join('')}</div></div><div class="pl-tlist">${real.map(l => realRow(c, u, l)).join('')}${sorted(c, u).filter(t => label === 'Made by students' || !mine(c, u.i).includes(t.id)).map(t => row(c, u, t)).join('')}</div>`; };
+  const sortBtns = () => [['rated', 'Top rated'], ['taken', 'Most taken'], ['newest', 'Newest']].map(([k, l]) => `<button type="button" class="${P.sort === k ? 'on' : ''}" data-pa="sort" data-k="${k}">${l}</button>`).join('');
+  const listBlock = (c, u, mode) => { const real = realFor(c, u); return `<div class="pl-tlist">${real.map(l => realRow(c, u, l)).join('')}${sorted(c, u).filter(t => mode === 'all' || !mine(c, u.i).includes(t.id)).map(t => row(c, u, t)).join('')}</div>`; };
   const COLORS = ['ok', 'acc', 'vi'];
-  function zoomLine(c, u, tutors) {
-    const stops = {}; tutors.forEach((t, ti) => lessonDates(u, t.days).forEach(l => { const k = key(l.d); (stops[k] = stops[k] || {d: l.d, items: []}).items.push({t, ti, topic: l.t}); }));
-    const days = Object.values(stops).sort((a, b) => a.d - b.d);
-    let todayDone = false; const parts = [];
-    days.forEach(s => {
-      if (!todayDone && s.d > TODAY && TODAY >= u.from && TODAY <= u.end) { parts.push('<span class="pl-today" aria-label="Today"><i></i><em>Today</em></span>'); todayDone = true; }
-      const k = key(s.d), cl = s.d < TODAY ? 'done' : '', sel = k === P.day;
-      parts.push(`<button type="button" class="pl-stop ${cl}${sel ? ' sel' : ''}" data-pa="day" data-k="${k}" aria-pressed="${sel}"><span class="pips">${s.items.map(x => `<i class="${COLORS[x.ti % 3]}"></i>`).join('')}</span><b>${WD[s.d.getDay()]}</b><em>${fmtS(s.d)}</em></button>`);
-    });
-    parts.push(`<span class="pl-stop exam"><span class="pips"><i class="d"></i></span><b>${esc(u.exam)}</b><em>${fmtS(u.end)}</em></span>`);
-    const chosen = stops[P.day];
-    return `<div class="pl-zoom" data-zoom>${parts.join('')}</div>
-      ${chosen ? `<div class="pl-daycard"><span class="cv-lab" style="margin:0">${fmt(chosen.d)}${key(chosen.d) === key(TODAY) ? ' · today' : ''}</span>${chosen.items.map(x => `<div class="pl-dayrow"><span class="pip ${COLORS[x.ti % 3]}"></span><span class="nm"><b>${esc(x.topic)}</b><span>${x.t.w}</span></span>${startBtn(x.t, x.topic)}</div>`).join('')}</div>` : ''}`;
+  /* A unit you've taken: the same line as the term, zoomed to this unit. One lane per teacher; tap a lesson. */
+  const doneKey = (t, d) => t.id + '|' + key(d);
+  function zoomBar(c, u, tutors) {
+    const span = u.end - u.from, zp = d => Math.max(0, Math.min(100, (d - u.from) / span * 100)), n = zp(TODAY), hasNow = TODAY >= u.from && TODAY <= u.end;
+    const lanes = tutors.map((t, ti) => {
+      const dots = lessonDates(u, t.days).map(l => { const k = doneKey(t, l.d), sel = P.day === k, done = P.done[k]; return `<button type="button" class="ldot ${COLORS[ti % 3]}${done ? ' done' : ''}${sel ? ' sel' : ''}" style="left:${zp(l.d)}%" data-pa="day" data-k="${k}" aria-label="${fmt(l.d)}: ${esc(l.t)}, ${t.w}${done ? ', done' : ''}" aria-pressed="${sel}"><i></i></button>`; }).join('');
+      return `<div class="pl-lane">${tutors.length > 1 ? `<span class="who"><i class="${COLORS[ti % 3]}"></i>${t.w}</span>` : ''}<div class="track"><i class="past" style="width:${u.end < TODAY ? 100 : hasNow ? n : 0}%"></i><i class="fut" style="width:${u.end < TODAY ? 0 : hasNow ? 100 - n : 100}%"></i>${dots}<i class="ex${u.end < TODAY ? ' done' : ''}" style="left:100%"></i></div></div>`;
+    }).join('');
+    const weeks = []; for (let d = u.from, i = 0; d < u.end; d = add(d, 7), i++) weeks.push(d);
+    const step = Math.ceil(weeks.length / 4);
+    return `<div class="pl-zb"><div class="in">${hasNow ? `<i class="pl-nowline" style="left:${n}%"></i>` : ''}${lanes}
+      <div class="axis">${c.hwt.filter(d => d >= u.from && d <= u.end).map(d => `<i class="hw" style="left:${zp(d)}%"></i>`).join('')}${weeks.filter((_, i) => i % step === 0).map(d => `<span style="left:${zp(d)}%">${fmtS(d)}</span>`).join('')}<span class="end">${esc(u.exam)}</span></div></div></div>`;
+  }
+  function lessonCard(c, u, tutors) {
+    const all = tutors.flatMap(t => lessonDates(u, t.days).map(l => ({t, l}))), x = all.find(a => doneKey(a.t, a.l.d) === P.day); if (!x) return '';
+    const k = P.day, done = P.done[k], today = key(x.l.d) === key(TODAY);
+    return `<article class="pl-lesson"><span class="when">${fmt(x.l.d)}${today ? ' · Today' : ''}</span><h2>${esc(x.l.t)}</h2><div class="by"><span class="ava">${initials(x.t.w)}</span><span>${x.t.w}</span></div>
+      <p class="how">${x.t.how}</p>
+      <div class="acts">${startBtn(x.t, x.l.t)}<button type="button" class="pl-donebtn${done ? ' on' : ''}" data-pa="done" aria-pressed="${!!done}">${done ? '✓ Done' : 'Mark as done'}</button></div></article>`;
   }
   const realMatch = t => t.real && (deps.real() || []).find(l => t.real.test(l.title || ''));
-  const startBtn = (t, topic) => { const r = realMatch(t); return r ? `<a class="cv-pill small" style="text-decoration:none" href="${deps.playLink(r.id)}">Start</a>` : t.demo ? `<button type="button" class="cv-pill small" data-pa="demo" data-d="${t.demo}">Start</button>` : `<button type="button" class="cv-pill small" data-pa="voice" data-topic="${esc(cls(P.cur).name + ': ' + topic)}">Start</button>`; };
+  const startBtn = (t, topic) => { const r = realMatch(t); return r ? `<a class="cv-pill" style="text-decoration:none" href="${deps.playLink(r.id)}">Start</a>` : t.demo ? `<button type="button" class="cv-pill" data-pa="demo" data-d="${t.demo}">Start</button>` : `<button type="button" class="cv-pill" data-pa="voice" data-topic="${esc(cls(P.cur).name + ': ' + topic)}">Start</button>`; };
+  const buildBtn = (c, u) => `<a class="pl-build" href="${buildLink(c, u)}">Build your own</a>`;
   function classS() {
     const c = cls(P.cur), u = c.units[P.unit], tutors = myTutors(c, P.unit), rated = P.stars[c.code + P.unit];
-    const nav = `<div class="pl-unav"><button type="button" class="cv-back" data-pa="unit" data-u="${P.unit - 1}" aria-label="Previous unit"${P.unit ? '' : ' disabled'}>‹</button><div class="t"><b>Unit ${u.i + 1} · ${u.n}</b><span>${fmtS(u.from)} to ${esc(u.exam)}, ${fmtS(u.end)}</span></div><button type="button" class="cv-back" data-pa="unit" data-u="${P.unit + 1}" aria-label="Next unit"${P.unit < c.units.length - 1 ? '' : ' disabled'}>›</button></div>`;
     const todayBtn = P.unit !== c.cur ? `<button type="button" class="pl-todaybtn" data-pa="unit" data-u="${c.cur}"><i></i>Today</button>` : '';
-    const build = `<a class="pl-cta" href="${buildLink(c, u)}"><b>How would you teach this?</b><span>Build your own</span></a>`;
-    const head = `<div class="cv-head">${back('school')}<h1 class="sm">${c.name}</h1><span class="sp" style="flex:1"></span>${todayBtn}</div>`;
+    const head = `<div class="cv-head">${back('school')}<h1 class="sm">${c.name}</h1><span style="flex:1"></span>${todayBtn}</div>`;
+    const title = `<div class="pl-ut"><b>Unit ${u.i + 1} · ${u.n}</b><span>${fmtS(u.from)} to ${esc(u.exam)}, ${fmtS(u.end)}</span></div>`;
     if (tutors.length) {
-      const past = u.end < TODAY;
-      return `${head}
-        ${P.whole ? termBar(c) : ''}
-        ${nav}
-        <div class="pl-zoomhead"><span class="pl-keys">${tutors.map((t, i) => `<span><i class="${COLORS[i % 3]}"></i>${t.w}</span>`).join('')}</span><button type="button" class="pl-linkb" data-pa="whole">${P.whole ? 'Hide the term' : 'Whole term'}</button></div>
-        ${zoomLine(c, u, tutors)}
-        ${past ? tutors.map(t => `<div class="pl-rate"><b>How was ${t.w}?</b><div class="pl-stars" role="group" aria-label="Rate ${t.w}">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="${(rated || 0) >= n ? 'on' : ''}" data-pa="star" data-n="${n}" aria-label="${n} stars">★</button>`).join('')}</div></div>`).join('') : ''}
-        ${listBlock(c, u, 'Add another way to learn this')}
-        ${build}`;
+      const others = u.tutors.length - tutors.length, nav = `<div class="pl-unav"><button type="button" class="cv-back" data-pa="unit" data-u="${P.unit - 1}" aria-label="Previous unit"${P.unit ? '' : ' disabled'}>‹</button>${title}<button type="button" class="cv-back" data-pa="unit" data-u="${P.unit + 1}" aria-label="Next unit"${P.unit < c.units.length - 1 ? '' : ' disabled'}>›</button></div>`;
+      return `${head}${nav}
+        ${P.whole ? termBar(c) : zoomBar(c, u, tutors)}
+        <div class="pl-under"><button type="button" class="pl-linkb" data-pa="whole">${P.whole ? 'Back to this unit' : 'See the whole term'}</button></div>
+        ${lessonCard(c, u, tutors)}
+        ${u.end < TODAY ? tutors.map(t => `<div class="pl-rate"><b>How was ${t.w}?</b><div class="pl-stars" role="group" aria-label="Rate ${t.w}">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="${(rated || 0) >= n ? 'on' : ''}" data-pa="star" data-n="${n}" aria-label="${n} stars">★</button>`).join('')}</div></div>`).join('') : ''}
+        <div class="pl-under spread"><button type="button" class="pl-linkb" data-pa="others" aria-expanded="${P.others}">${P.others ? 'Hide other teachers' : `Other teachers for this unit (${others})`}</button>${buildBtn(c, u)}</div>
+        ${P.others ? listBlock(c, u, 'others') : ''}`;
     }
-    return `${head}${termBar(c)}${nav}${build}${listBlock(c, u, 'Made by students')}<p class="cv-muted cv-center cv-foot">Demo: sample tutors, prices and numbers. Nothing is charged.</p>`;
+    return `${head}${termBar(c)}${title}
+      <div class="pl-lhead"><div class="pl-sorts">${sortBtns()}</div>${buildBtn(c, u)}</div>
+      ${listBlock(c, u, 'all')}<p class="cv-muted cv-center cv-foot">Demo: sample teachers, prices and numbers. Nothing is charged.</p>`;
   }
   function sheetH() {
     if (!P.sheet) return '';
@@ -201,13 +201,9 @@
   /* ---------- API for courses.js ---------- */
   window.WorldviewPlaces = {
     init(d) { deps = Object.assign(deps, d); },
-    WAYS, initials, teachers, allTutors,
-    byWay: id => allTutors().filter(x => x.t.way === id),
+    initials, teachers, allTutors,
     html() { return (SCREENS[P.scr] || findS)() + sheetH(); },
-    afterRender(view) {
-      const z = view.querySelector('[data-zoom]'); if (!z) return;
-      const sel = z.querySelector('.pl-stop.sel') || z.querySelector('.pl-today'); if (sel) z.scrollLeft = Math.max(0, sel.offsetLeft - z.clientWidth / 2 + sel.offsetWidth / 2);
-    },
+    afterRender() {},
     home() { if (P.scr === 'demo' || P.sheet) { P.sheet = null; P.demo = null; } P.scr = P.joined ? 'places' : 'find'; deps.render(); },
     openTutor(code, u, id) { P.joined = true; save('joined', true); if (!P.classes.includes(code)) { P.classes = P.classes.concat(code); save('classes', P.classes); } openClass(code, u); P.sheet = {u, id}; },
     escape() { if (P.sheet) { P.sheet = null; deps.render(); return true; } if (P.scr === 'demo') { act('closedemo'); return true; } return false; },
@@ -225,11 +221,11 @@
     },
   };
   function openClass(code, u) {
-    const c = cls(code); P.cur = code; P.unit = u == null ? (mine(c, c.cur).length ? c.cur : Math.min(c.cur, c.units.length - 1)) : u; P.whole = false; P.scr = 'class'; pickDay(c);
+    const c = cls(code); P.cur = code; P.unit = u == null ? (mine(c, c.cur).length ? c.cur : Math.min(c.cur, c.units.length - 1)) : u; P.whole = false; P.others = false; P.scr = 'class'; pickDay(c);
   }
   function pickDay(c) {
-    const u = c.units[P.unit], list = myTutors(c, P.unit).flatMap(t => lessonDates(u, t.days).map(l => l.d)).sort((a, b) => a - b);
-    const next = list.find(d => d >= TODAY) || list[list.length - 1]; P.day = next ? key(next) : null;
+    const u = c.units[P.unit], all = myTutors(c, P.unit).flatMap(t => lessonDates(u, t.days).map(l => ({k: doneKey(t, l.d), d: l.d}))).sort((a, b) => a.d - b.d);
+    const next = all.find(x => x.d >= TODAY && !P.done[x.k]) || all[all.length - 1]; P.day = next ? next.k : null;
   }
   function act(a, d = {}) {
     const c = cls(P.cur);
@@ -245,8 +241,10 @@
       case 'pickc': { const k = d.c; P.classes = P.classes.includes(k) ? P.classes.filter(x => x !== k) : P.classes.concat(k); save('classes', P.classes); break; }
       case 'school': if (!P.classes.length) { P.scr = 'add'; break; } P.scr = 'school'; P.sheet = null; top(); break;
       case 'open': openClass(d.c); top(); break;
-      case 'unit': { const u = +d.u; if (u < 0 || u >= c.units.length) return; P.unit = u; pickDay(c); P.sheet = null; break; }
+      case 'unit': { const u = +d.u; if (u < 0 || u >= c.units.length) return; P.unit = u; P.whole = false; P.others = false; pickDay(c); P.sheet = null; break; }
       case 'whole': P.whole = !P.whole; break;
+      case 'others': P.others = !P.others; break;
+      case 'done': if (P.day) { if (P.done[P.day]) delete P.done[P.day]; else P.done[P.day] = 1; save('done', P.done); } break;
       case 'day': P.day = d.k; break;
       case 'sort': P.sort = d.k; break;
       case 'tutor': P.sheet = {u: +d.u, id: d.id}; break;

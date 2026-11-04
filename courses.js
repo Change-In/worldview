@@ -336,21 +336,13 @@
   const realRow = p => `<div class="cv-course cv-real"><span class="t"><b>${esc(p.title)}</b>${chip(isOwner() ? 'Yours' : 'Lesson', 'ok')}</span><span class="nx">${esc(realMeta(p))} · students open it with a link, no account needed</span><div class="cv-row" style="flex-wrap:wrap">${realActions(p)}</div></div>`;
   const realAlert = p => `<a class="cv-alert cv-real" href="${playLink(p.id)}" style="text-decoration:none"><span class="k"><i></i>New lesson</span><b>${esc(p.title)}</b><span>Made by a teacher on Worldview</span><span class="by">${esc(realMeta(p))}</span></a>`;
   const realTile = p => `<a class="cv-tile cv-real" href="${playLink(p.id)}" style="text-decoration:none"><span class="art" aria-hidden="true"></span><b>${esc(p.title)}</b><span>${esc(realMeta(p))}</span></a>`;
-  const footnote = '<p class="cv-muted cv-center cv-foot">Lessons marked Lesson are real. The rest are samples of how this page could look.</p>';
+  const footnote = '<p class="cv-muted cv-center cv-foot">Real lessons come first. The rest are samples of how this page could look.</p>';
 
   /* ---------------- screens ---------------- */
-  function scrHome() {
-    return `<div class="cv-head"><h1>Explore</h1><a class="cv-pill ghost" href="studio.html" style="text-decoration:none">Teacher Studio</a></div>` + explore() + footnote;
+function scrHome() {
+    return `<div class="cv-head"><h1>Explore</h1><a class="cv-pill ghost" href="studio.html?from=explore" style="text-decoration:none">Teacher Studio</a></div>` + explore() + footnote;
   }
-  /* Explore (NAV-205): ways of learning and the people teaching come first; courses after. */
   const WP = () => window.WorldviewPlaces;
-  function scrWay() {
-    const w = WP().WAYS.find(x => x.id === S.way) || WP().WAYS[0], list = WP().byWay(w.id);
-    return `<div class="cv-head"><button type="button" class="cv-back" data-go="home" aria-label="Back">‹</button><h1 class="sm">${esc(w.name)}</h1></div><p class="cv-muted" style="margin:0">${esc(w.line)}</p>
-      <a class="pl-cta" href="studio.html?new=${encodeURIComponent(w.name + ': my way')}"><b>How would you teach this way?</b><span>Build your own</span></a>
-      <div class="pl-tlist">${list.map(x => `<button type="button" class="pl-tutor" data-openuser="${x.c.code}|${x.u.i}|${esc(x.t.id)}"><span class="ava">${WP().initials(x.t.w)}</span><span class="nm"><b>${x.t.w}</b><span>${esc(x.c.name)} · ${esc(x.t.how)}</span></span><span class="sc"><span>★ ${x.t.r.toFixed(1)}</span><em>${x.t.n} students</em><span>$${x.t.p}</span></span></button>`).join('')}</div>
-      <p class="cv-muted cv-center cv-foot">Sample lessons, to show the idea.</p>`;
-  }
   function scrTeacher() {
     const t = WP().teachers().find(x => x.w === S.teacher); if (!t) { S.scr = 'home'; return scrHome(); }
     return `<div class="cv-head"><button type="button" class="cv-back" data-go="home" aria-label="Back">‹</button><h1 class="sm">${t.w}</h1></div>
@@ -358,7 +350,7 @@
       <div class="pl-tlist">${t.items.map(x => `<button type="button" class="pl-tutor" data-openuser="${x.c.code}|${x.u.i}|${esc(x.t.id)}"><span class="ava">${WP().initials(x.t.w)}</span><span class="nm"><b>${esc(x.c.name)}, Unit ${x.u.i + 1}</b><span>${esc(x.t.how)}</span></span><span class="sc"><span>★ ${x.t.r.toFixed(1)}</span><em>${x.t.n} students</em><span>$${x.t.p}</span></span></button>`).join('')}</div>
       <p class="cv-muted cv-center cv-foot">A sample teacher, to show the idea.</p>`;
   }
-  function courseRow(c) {
+    function courseRow(c) {
     const open = S.expanded === c.key;
     const head = `<span class="t"><b>${esc(c.title)}</b>${c.badge || ''}<span class="cv-chev${open ? ' up' : ''}">${ICON.chev}</span></span><span class="nx">${esc(c.sub)}</span>`;
     if (!open) return `<button type="button" class="cv-course" data-expand="${c.key}" aria-expanded="false">${head}${mini(c.items, c.done)}<span class="nx">${esc(c.next)}</span></button>`;
@@ -367,63 +359,29 @@
       <div class="cv-row" style="flex-wrap:wrap">${c.actions}<span class="sp"></span><span class="cv-chnav"><button type="button" data-rnav="-1" aria-label="Previous chapter">‹</button><button type="button" data-rnav="1" aria-label="Next chapter">›</button></span></div></div>`;
   }
   const sortFns = {popular:(a, b) => b.learners - a.learners, new:(a, b) => b.added.localeCompare(a.added), rated:(a, b) => b.rating - a.rating};
-  function courseCard(c) {
-    const isAdded = c.id === 'airace' || S.added.includes(c.id), cat = CATS.find(x => x.id === c.cat);
-    return `<div class="cv-ex${c.id === 'airace' ? ' feature' : ''}"><button type="button" class="cv-ex-main" data-viewcourse="${c.id}"><span class="cv-crumb">${esc(cat.name)} › ${esc(c.sub)}</span><span class="t"><b>${esc(c.title)}</b></span>
-        <span class="cv-muted">by ${esc(c.by)} · ${lessonCount(c)} lessons · ★ ${c.rating} · ${fmt(c.learners)} learners</span></button>
-      <div class="cv-row">${chip(c.price, /^Free/.test(c.price) ? 'ok' : 'acc')}<span class="sp"></span>${c.id === 'airace' ? chip('Yours', 'acc') : `<button type="button" class="cv-pill ${isAdded ? 'soft' : 'ghost'} small" data-add="${c.id}">${isAdded ? '✓ Added' : '+ Add'}</button>`}</div></div>`;
-  }
-  function results(list) {
+  const tint = id => CATS.findIndex(x => x.id === id) % 4;
+  const exCard = c => { const cat = CATS.find(x => x.id === c.cat); return `<button type="button" class="ex-card" data-viewcourse="${c.id}"><span class="cov t${tint(c.cat)}" aria-hidden="true">${cat.icon}</span><b>${esc(c.title)}</b><span class="by">${esc(c.by)}</span><span class="st">★ ${c.rating} · ${esc(c.price)}</span></button>`; };
+  const exReal = p => `<a class="ex-card" href="${playLink(p.id)}"><span class="cov real" aria-hidden="true">▶</span><b>${esc(p.title)}</b><span class="by">Real lesson</span><span class="st">${esc(realMeta(p))}</span></a>`;
+  function results() {
     const q = S.query.trim().toLowerCase();
-    const out = list.filter(c => !q || [c.title, c.by, c.sub, CATS.find(x => x.id === c.cat).name, ...c.chapters.flat()].join(' ').toLowerCase().includes(q)).sort(sortFns[S.sort]);
-    return out.length ? out.map(courseCard).join('') : `<div class="cv-empty">Nothing matches "${esc(S.query)}" yet. <button type="button" class="cv-linkbtn" data-go="make">Make that course</button></div>`;
+    const list = shown().filter(c => (!S.cat || c.cat === S.cat) && (!S.cat || S.sub === 'All' || c.sub === S.sub) && (!q || [c.title, c.by, c.sub, CATS.find(x => x.id === c.cat).name, ...c.chapters.flat()].join(' ').toLowerCase().includes(q))).sort(sortFns[S.sort]);
+    const real = S.cat ? [] : REAL().filter(p => !q || (p.title || '').toLowerCase().includes(q));
+    return real.map(exReal).join('') + list.map(exCard).join('') || `<div class="ex-empty">Nothing here yet. <a href="studio.html?from=explore">Be the first to teach it</a></div>`;
   }
-  const sortSeg = () => `<div class="cv-seg small" role="group" aria-label="Sort">${[['popular','Popular'],['new','New'],['rated','Top rated']].map(([k, l]) => `<button type="button" data-sort="${k}" class="${S.sort === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
-  const searchBox = () => `<label class="cv-search">${ICON.search}<input id="cv-q" type="search" placeholder="Search courses, subjects, makers" value="${esc(S.query)}" autocomplete="off"></label>`;
-  /* NAV-165: "Happening now" starts with alerts the owner picks by hand. */
-  const ALERTS = [
-    {kind:'Worth knowing now', id:'airace', line:'Why the AI labs are racing, in short lessons', by:'Picked by Worldview'},
-    {kind:'Many are learning', id:'inflation', line:'Prices and interest rates, explained', by:'980 learners this week (sample)'},
-    {kind:'Many are learning', id:'grid', line:'Why AI needs so much power', by:'Rising this week (sample)'},
-  ];
-  const HOT = ['tech', 'money'];
-  const ESSENTIALS = ['airace', 'inflation', 'rome', 'internet', 'sleep'];
-  const tile = c => `<button type="button" class="cv-tile" data-viewcourse="${c.id}"><span class="art" aria-hidden="true"></span><b>${esc(c.title)}</b><span>${esc(c.by)} · ★ ${c.rating}</span></button>`;
-  const shelf = (label, list, pre) => `<div class="cv-row" style="margin-top:2px"><span class="cv-lab" style="margin:0">${label}</span><span class="sp"></span><button type="button" class="cv-linkbtn" data-allcourses="1">See all</button></div><div class="cv-shelf cv-hscroll">${pre || ''}${list.filter(Boolean).map(tile).join('')}</div>`;
+  const sortSeg = () => `<div class="pl-sorts" role="group" aria-label="Sort">${[['popular','Popular'],['new','New'],['rated','Top rated']].map(([k, l]) => `<button type="button" data-sort="${k}" class="${S.sort === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  const searchBox = () => `<label class="cv-search">${ICON.search}<input id="cv-q" type="search" placeholder="Search lessons, subjects, teachers" value="${esc(S.query)}" autocomplete="off"></label>`;
   const shown = () => hasReal() ? CATALOG.filter(c => c.id !== 'airace') : CATALOG;
-  /* NAV-166: compact Explore. Subjects are one row of chips and courses sit on
-     sideways shelves, so more subjects never push the courses down. */
+  /* Explore is one page: search, then subjects that filter the results below in place (owner 2026-11-03). */
   function explore() {
-    if (S.allCourses) return `<div class="cv-head"><button type="button" class="cv-back" data-allback="1" aria-label="Back">‹</button><h1 class="sm">All courses</h1></div>
-      <div class="cv-row"><span class="cv-muted">${shown().length} courses</span><span class="sp"></span>${sortSeg()}</div>
-      <div class="cv-list">${shown().slice().sort(sortFns[S.sort]).map(courseCard).join('')}</div>`;
+    const cat = S.cat ? CATS.find(c => c.id === S.cat) : null;
     return `${searchBox()}
-      <div id="cv-results-wrap"${S.query ? '' : ' hidden'}><div class="cv-row"><span class="cv-lab" style="margin:0">Results</span><span class="sp"></span>${sortSeg()}</div><div class="cv-list" id="cv-results">${S.query ? results(shown()) : ''}</div></div>
-      <div id="cv-browse"${S.query ? ' hidden' : ''}>
-        <a class="ex-cta" href="studio.html?new=${encodeURIComponent('My first lesson')}"><b>What could you teach?</b><span>Build a lesson ›</span></a>
-        <span class="cv-lab" style="margin:0">Ways of learning</span>
-        <div class="ex-ways">${WP().WAYS.map(w => `<button type="button" class="ex-way" data-way="${w.id}"><b>${esc(w.name)}</b><span>${esc(w.line)}</span></button>`).join('')}</div>
-        <span class="cv-lab" style="margin:0">People teaching</span>
-        <div class="ex-people">${WP().teachers().slice(0, 8).map(t => `<button type="button" class="ex-person" data-teacher="${t.w}"><span class="ava">${WP().initials(t.w)}</span><b>${t.w}</b><span>★ ${t.r.toFixed(1)} · ${t.n} students</span></button>`).join('')}</div>
-        <span class="cv-lab" style="margin:0">Happening now</span>
-        <div class="cv-alerts cv-hscroll">${REAL().map(realAlert).join('')}${ALERTS.filter(x => !(hasReal() && x.id === 'airace')).map(x => { const c = course(x.id); return c ? `<button type="button" class="cv-alert" data-viewcourse="${c.id}"><span class="k"><i></i>${esc(x.kind)}</span><b>${esc(c.title)}</b><span>${esc(x.line)}</span><em>${esc(x.by)}</em></button>` : ''; }).join('')}</div>
-        <div class="cv-row" style="margin-top:2px"><span class="cv-lab" style="margin:0">Subjects</span><span class="sp"></span><span class="cv-muted" style="font-size:12px">${CATS.length} · scroll →</span></div>
-        <div class="cv-chips cv-hscroll">${CATS.map(c => `<button type="button" class="cv-chip-s" data-cat="${c.id}"><span class="i" aria-hidden="true">${c.icon}</span>${esc(c.name)}${HOT.includes(c.id) ? '<em title="Something is happening here"></em>' : ''}</button>`).join('')}</div>
-        ${shelf('Worldview Essentials', ESSENTIALS.filter(id => !(hasReal() && id === 'airace')).map(course), REAL().map(realTile).join(''))}
-        ${shelf('Popular this week', shown().slice().sort(sortFns.popular).slice(0, 8))}
-        ${shelf('New', shown().slice().sort(sortFns.new).slice(0, 8))}
-        <p class="cv-muted cv-center">Hover over a course, or tap it on a phone, for its description and reviews.</p>
-      </div>`;
+      <div class="ex-filters"><div class="ex-chips"><button type="button" class="ex-chip${cat ? '' : ' on'}" data-excat="">All</button>${CATS.map(c => `<button type="button" class="ex-chip${S.cat === c.id ? ' on' : ''}" data-excat="${c.id}">${esc(c.name)}</button>`).join('')}</div>
+      ${cat ? `<div class="ex-chips">${['All', ...cat.subs].map(s => `<button type="button" class="ex-chip sub${S.sub === s ? ' on' : ''}" data-sub="${esc(s)}">${esc(s)}</button>`).join('')}</div>` : ''}</div>
+      <div id="ex-people"${cat || S.query ? ' hidden' : ''}><span class="cv-lab" style="margin:0 0 8px;display:block">People teaching</span><div class="ex-people">${WP().teachers().slice(0, 10).map(t => `<button type="button" class="ex-person" data-teacher="${t.w}"><span class="ava">${WP().initials(t.w)}</span><b>${t.w}</b><span class="st">★ ${t.r.toFixed(1)}</span></button>`).join('')}</div></div>
+      <div class="pl-lhead"><span class="cv-lab" style="margin:0">${cat ? esc(cat.name) : 'Lessons and courses'}</span>${sortSeg()}</div>
+      <div class="ex-grid" id="cv-results">${results()}</div>`;
   }
-  function scrCategory() {
-    const cat = CATS.find(c => c.id === S.cat) || CATS[0];
-    const list = CATALOG.filter(c => c.cat === cat.id && (S.sub === 'All' || c.sub === S.sub));
-    return `<div class="cv-head"><button type="button" class="cv-back" data-go="home" aria-label="Back">‹</button><h1 class="sm">${esc(cat.name)}</h1></div>
-      <div class="cv-subs">${['All', ...cat.subs].map(s => `<button type="button" data-sub="${esc(s)}" class="${S.sub === s ? 'on' : ''}">${esc(s)}<em>${s === 'All' ? CATALOG.filter(c => c.cat === cat.id).length : CATALOG.filter(c => c.cat === cat.id && c.sub === s).length}</em></button>`).join('')}</div>
-      <div class="cv-row"><span class="cv-muted">${list.length} course${list.length === 1 ? '' : 's'}${S.sub === 'All' ? '' : ' in ' + esc(S.sub)}</span><span class="sp"></span>${sortSeg()}</div>
-      <div class="cv-list">${list.length ? list.slice().sort(sortFns[S.sort]).map(courseCard).join('') : `<div class="cv-empty">No courses in ${esc(S.sub)} yet. <button type="button" class="cv-linkbtn" data-go="make">Be the first to make one</button></div>`}</div>`;
-  }
-  function scrCourse() {
+    function scrCourse() {
     const total = AIRACE.chapters.reduce((n, c) => n + c.lessons.length, 0);
     const chs = AIRACE.chapters.map((c, ci) => {
       const open = S.openCh === ci;
@@ -574,7 +532,7 @@
   function render() {
     hidePeek();
     if (S.area === 'places') { view.innerHTML = `<div class="cv-wrap">${WP().html()}</div>`; document.body.classList.toggle('cv-sheet-open', !!view.querySelector('.cv-ov')); WP().afterRender(view); syncBar(); return; }
-    const html = {way:scrWay, teacher:scrTeacher, course:scrCourse, quiz:scrQuiz, make:scrMake, cat:scrCategory, sample:scrSample, cls:scrClass, school:scrSchool}[S.scr]?.() ?? scrHome();
+    const html = {teacher:scrTeacher, course:scrCourse, quiz:scrQuiz, make:scrMake, sample:scrSample, cls:scrClass, school:scrSchool}[S.scr]?.() ?? scrHome();
     view.innerHTML = `<div class="cv-wrap">${html}</div>${sheetHTML()}`;
     document.body.classList.toggle('cv-sheet-open', !!S.sheet);
     view.querySelectorAll('.uv-tl').forEach(el => { const now = el.querySelector('.uv-week.now'); if (now) el.scrollLeft = Math.max(0, now.offsetLeft - el.clientWidth / 2 + now.offsetWidth / 2); });
@@ -622,24 +580,24 @@
   function showPeek(el) {
     const c = course(el.dataset.viewcourse); if (!c) return;
     clearTimeout(peekTimer); peekId = c.id; peek.innerHTML = peekHTML(c); peek.hidden = false;
-    view.querySelectorAll('.cv-tile.peek').forEach(x => x.classList.remove('peek')); el.classList.add('peek');
+    view.querySelectorAll('.peek').forEach(x => x.classList.remove('peek')); el.classList.add('peek');
     const r = el.getBoundingClientRect(), w = peek.offsetWidth, h = peek.offsetHeight;
     let x = Math.min(Math.max(12, r.left + r.width / 2 - w / 2), innerWidth - w - 12), y = r.bottom + 8;
     if (y + h > innerHeight - 76) y = Math.max(12, r.top - h - 8);
     peek.style.left = x + 'px'; peek.style.top = y + 'px';
   }
-  function hidePeek() { clearTimeout(peekTimer); peekId = ''; peek.hidden = true; view.querySelectorAll('.cv-tile.peek').forEach(x => x.classList.remove('peek')); }
+  function hidePeek() { clearTimeout(peekTimer); peekId = ''; peek.hidden = true; view.querySelectorAll('.peek').forEach(x => x.classList.remove('peek')); }
   function peekTap(e) {
-    const el = e.target.closest('.cv-tile'); if (!el || !touchMode()) return false;
+    const el = e.target.closest('.cv-tile,.ex-card[data-viewcourse]'); if (!el || !touchMode()) return false;
     if (peekId === el.dataset.viewcourse) return false;
     e.preventDefault(); showPeek(el); return true;
   }
-  view.addEventListener('mouseover', e => { if (touchMode()) return; const el = e.target.closest('.cv-tile'); if (!el || el.classList.contains('peek')) return; clearTimeout(peekTimer); peekTimer = setTimeout(() => showPeek(el), 250); });
-  view.addEventListener('mouseout', e => { const el = e.target.closest('.cv-tile'); if (!el || el.contains(e.relatedTarget)) return; clearTimeout(peekTimer); peekTimer = setTimeout(hidePeek, 220); });
+  view.addEventListener('mouseover', e => { if (touchMode()) return; const el = e.target.closest('.cv-tile,.ex-card[data-viewcourse]'); if (!el || el.classList.contains('peek')) return; clearTimeout(peekTimer); peekTimer = setTimeout(() => showPeek(el), 250); });
+  view.addEventListener('mouseout', e => { const el = e.target.closest('.cv-tile,.ex-card[data-viewcourse]'); if (!el || el.contains(e.relatedTarget)) return; clearTimeout(peekTimer); peekTimer = setTimeout(hidePeek, 220); });
   peek.addEventListener('mouseenter', () => clearTimeout(peekTimer));
   peek.addEventListener('mouseleave', () => { if (!touchMode()) peekTimer = setTimeout(hidePeek, 220); });
   view.addEventListener('scroll', () => { if (!peek.hidden) hidePeek(); }, {capture:true, passive:true});
-  document.addEventListener('click', e => { if (!peek.hidden && !peek.contains(e.target) && !e.target.closest('.cv-tile')) hidePeek(); }, true);
+  document.addEventListener('click', e => { if (!peek.hidden && !peek.contains(e.target) && !e.target.closest('.cv-tile,.ex-card[data-viewcourse]')) hidePeek(); }, true);
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !peek.hidden) { hidePeek(); e.stopImmediatePropagation(); } }, true);
   peek.addEventListener('click', e => {
     const b = e.target.closest('[data-peekadd],[data-peekopen]'); if (!b) return;
@@ -654,7 +612,7 @@
     if (cl) { const link = playLink(cl.dataset.copylink); let ok = false; try { await navigator.clipboard.writeText(link); ok = true; } catch (x) {} toast(ok ? 'Student link copied.' : link); return; }
     if (S.area === 'places') { WP().click(e); return; }
     const ou = e.target.closest('[data-openuser]'); if (ou) { const [code, u, id] = ou.dataset.openuser.split('|'); S.area = 'places'; WP().openTutor(code, +u, id); render(); view.scrollTop = 0; return; }
-    const wy = e.target.closest('[data-way]'); if (wy) { S.way = wy.dataset.way; return go('way'); }
+    const xc = e.target.closest('[data-excat]'); if (xc) { const top = view.scrollTop; S.cat = xc.dataset.excat || null; S.sub = 'All'; render(); view.scrollTop = top; return; }
     const tc = e.target.closest('[data-teacher]'); if (tc) { S.teacher = tc.dataset.teacher; return go('teacher'); }
     if (peekTap(e)) return;
     const t = e.target.closest('[data-go],[data-expand],[data-open-lesson],[data-ch],[data-lesson],[data-try],[data-start],[data-sheet],[data-close],[data-toast],[data-qstep],[data-qexample],[data-qpause],[data-msend],[data-mex],[data-mreset],[data-mall],[data-copyprompt],[data-cat],[data-sub],[data-sort],[data-add],[data-remove],[data-viewcourse],[data-viewclass],[data-school],[data-schoolback],[data-join],[data-leave],[data-branch],[data-rnav],[data-allcourses],[data-allback]');
@@ -678,7 +636,6 @@
     if (d.sheet) { S.sheet = d.sheet; render(); if (d.sheet.startsWith('join:')) view.querySelector('#cv-code')?.focus(); return; }
     if (d.close) { S.sheet = null; return render(); }
     if (d.toast) { toast(d.toast); return; }
-    if (d.cat) { S.cat = d.cat; S.sub = 'All'; return go('cat'); }
     if (d.sub) { S.sub = d.sub; return render(); }
     if (d.sort) { S.sort = d.sort; return render(); }
     if (d.allcourses) { S.allCourses = true; render(); view.scrollTop = 0; return; }
@@ -708,8 +665,7 @@
     if (id === 'cv-make-in') S.make.input = e.target.value;
     if (id === 'cv-q') {
       S.query = e.target.value;
-      const wrap = view.querySelector('#cv-results-wrap'), browse = view.querySelector('#cv-browse'), out = view.querySelector('#cv-results');
-      if (wrap && browse && out) { const on = !!S.query.trim(); wrap.hidden = !on; browse.hidden = on; out.innerHTML = on ? results(CATALOG) : ''; }
+      const out = view.querySelector('#cv-results'), ppl = view.querySelector('#ex-people'); if (out) out.innerHTML = results(); if (ppl) ppl.hidden = !!(S.cat || S.query.trim());
     }
     if (id === 'cv-school-q') { S.schoolQuery = e.target.value; const q = S.schoolQuery.trim().toLowerCase(); const out = view.querySelector('#cv-school-list'); if (out) out.innerHTML = schoolList(SCHOOLS.filter(s => !q || s.name.toLowerCase().includes(q))); }
   });
@@ -736,8 +692,10 @@
     if (document.querySelector('#lesson-path-panel.open, #intro-demo.open, dialog[open]')) return true;
     return false;
   }
+  let hashDone = false;
   function tick() {
     const ok = allowed();
+    if (ok && !hashDone) { hashDone = true; const h = location.hash.slice(1); if (h === 'explore' || h === 'places') { history.replaceState(null, '', location.pathname + location.search); bar.querySelector('[data-tabbar=' + h + ']').click(); } }
     const home = document.getElementById('view-home')?.classList.contains('active');
     if (!ok && S.open) closeCourses();
     const show = ok && (home || S.open) && !blocked();

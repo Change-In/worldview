@@ -157,6 +157,7 @@
   .hc-pchip button { appearance:none; border:0; background:none; color:inherit; cursor:pointer; width:22px; height:22px; border-radius:50%; font-size:15px; line-height:1; }
   #pointbtn.on { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
   .pointhint { justify-self:center; background:var(--ink); color:var(--paper); border-radius:999px; padding:6px 14px; font-size:13px; font-weight:650; }
+  .backto { display:grid; place-items:center; width:34px; height:34px; border-radius:50%; border:1px solid var(--line); background:var(--card); color:var(--ink); font-size:20px; line-height:1; padding-bottom:2px; text-decoration:none; flex:none; margin-right:8px; }
   .fshelper { display:none; }
   .stage.fs .fshelper:not([hidden]) { display:inline-flex; position:fixed; left:16px; bottom:calc(env(safe-area-inset-bottom,0px) + 16px); z-index:61; appearance:none; border:0; border-radius:999px; padding:10px 16px; background:var(--accent); color:var(--on-accent); font-weight:700; cursor:pointer; box-shadow:0 10px 30px rgba(0,0,0,.3); }
   /* v3.1.61 experiments (NAV-200): their own shelf under the lessons, and a note under the preview */
@@ -179,7 +180,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="top"><a class="mark" href="./" aria-label="Back to Worldview">W</a><b class="grow">Teacher Studio</b><span class="status" id="who"></span></div>
+  <div class="top"><a class="backto" id="backto" href="./#explore" aria-label="Back to Explore">‹</a><a class="mark" href="./" aria-label="Back to Worldview">W</a><b class="grow">Teacher Studio</b><span class="status" id="who"></span></div>
 
   <div class="card" id="signedout" hidden>
     <h2>Sign in first</h2>
@@ -931,7 +932,8 @@ ${RULES}`;
     if (!s || !s.user || s.user.is_anonymous) { $('#signedout').hidden = false; return; }
     $('#who').textContent = s.user.email || '';
     showRequests(s.user.id);
-    const q = new URLSearchParams(location.search), l = q.get('l'), nw = q.get('new'); if (l) showLesson(l, false, q.get('side') === 'pub' ? 'pub' : 'draft'); else { await showGrid(); if (nw) { $('#newlabel').textContent = 'Keep the start of the name so it appears in that unit. You can change the rest.'; $('#newtitle').value = nw.replace(/[<>`'"\\]/g, '').slice(0, 120); $('#newdlg').showModal(); history.replaceState(null, '', location.pathname); } }
+    const q = new URLSearchParams(location.search), l = q.get('l'), nw = q.get('new');
+    try { const fr = q.get('from'); if (fr) sessionStorage.setItem('wv-studio-from', fr); const b = sessionStorage.getItem('wv-studio-from') === 'places' ? 'places' : 'explore'; $('#backto').href = './#' + b; $('#backto').setAttribute('aria-label', 'Back to ' + (b === 'places' ? 'Places' : 'Explore')); } catch (x) {} if (l) showLesson(l, false, q.get('side') === 'pub' ? 'pub' : 'draft'); else { await showGrid(); if (nw) { $('#newlabel').textContent = 'Keep the start of the name so it appears in that unit. You can change the rest.'; $('#newtitle').value = nw.replace(/[<>`'"\\]/g, '').slice(0, 120); $('#newdlg').showModal(); history.replaceState(null, '', location.pathname); } }
   })();
 })();
 </script>
