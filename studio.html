@@ -931,7 +931,7 @@ ${RULES}`;
     if (!s || !s.user || s.user.is_anonymous) { $('#signedout').hidden = false; return; }
     $('#who').textContent = s.user.email || '';
     showRequests(s.user.id);
-    const q = new URLSearchParams(location.search), l = q.get('l'); if (l) showLesson(l, false, q.get('side') === 'pub' ? 'pub' : 'draft'); else showGrid();
+    const q = new URLSearchParams(location.search), l = q.get('l'), nw = q.get('new'); if (l) showLesson(l, false, q.get('side') === 'pub' ? 'pub' : 'draft'); else { await showGrid(); if (nw) { $('#newlabel').textContent = 'Keep the start of the name so it appears in that unit. You can change the rest.'; $('#newtitle').value = nw.replace(/[<>`'"\\]/g, '').slice(0, 120); $('#newdlg').showModal(); history.replaceState(null, '', location.pathname); } }
   })();
 })();
 </script>

@@ -237,7 +237,7 @@
   const findClass = id => { for (const s of SCHOOLS) { const c = s.classes.find(x => x.id === id); if (c) return {school:s, cls:c}; } return null; };
 
   /* ---------------- state ---------------- */
-  const S = {open:false, scr:'home', tab:store.get('tab', 'mine'), expanded:null, added:store.get('added', []), joined:store.get('joined', []),
+  const S = {open:false, area:'places', scr:'home', way:null, teacher:null, tab:'explore', expanded:null, added:store.get('added', []), joined:store.get('joined', []),
     cat:null, sub:'All', sort:'popular', query:'', schoolId:null, schoolQuery:'', view:null, openCh:0, openLesson:'0:0',
     quiz:{step:0, answer:''}, make:{step:0, msgs:[], input:'', showAll:false}, sheet:null, back:'home'};
   /* Owner 2026-10-05: he wants to see My courses with several courses in it.
@@ -247,6 +247,7 @@
     store.set('added', S.added); store.set('joined', S.joined); store.set('seeded', true);
   }
   const ICON = {
+    places:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10 12 5l9 5zM5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"/></svg>',
     home:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1z"/></svg>',
     courses:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18M3 12h18M3 17h18"/><circle cx="7" cy="7" r="1.9" fill="currentColor"/><circle cx="15" cy="12" r="1.9" fill="currentColor"/><circle cx="10" cy="17" r="1.9" fill="currentColor"/></svg>',
     profile:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/></svg>',
@@ -257,9 +258,9 @@
   /* ---------------- DOM ---------------- */
   const bar = document.createElement('nav');
   bar.id = 'wv-tabbar'; bar.hidden = true; bar.setAttribute('aria-label', 'Main sections');
-  bar.innerHTML = `<div class="wv-tabbar-in"><button type="button" data-tabbar="home">${ICON.home}<span>Home</span></button><button type="button" data-tabbar="courses">${ICON.courses}<span>Courses</span></button><button type="button" data-tabbar="profile">${ICON.profile}<span>Profile</span></button></div>`;
+  bar.innerHTML = `<div class="wv-tabbar-in"><button type="button" data-tabbar="home">${ICON.home}<span>Home</span></button><button type="button" data-tabbar="places">${ICON.places}<span>Places</span></button><button type="button" data-tabbar="explore">${ICON.search}<span>Explore</span></button></div>`;
   const view = document.createElement('section');
-  view.id = 'courses-view'; view.className = 'cv'; view.hidden = true; view.setAttribute('aria-label', 'Courses');
+  view.id = 'courses-view'; view.className = 'cv'; view.hidden = true; view.setAttribute('aria-label', 'Places and Explore');
   document.body.append(view, bar);
   const peek = document.createElement('div');
   peek.id = 'cv-peek'; peek.hidden = true; peek.setAttribute('role', 'dialog'); peek.setAttribute('aria-label', 'Course preview');
@@ -335,106 +336,27 @@
   const realRow = p => `<div class="cv-course cv-real"><span class="t"><b>${esc(p.title)}</b>${chip(isOwner() ? 'Yours' : 'Lesson', 'ok')}</span><span class="nx">${esc(realMeta(p))} · students open it with a link, no account needed</span><div class="cv-row" style="flex-wrap:wrap">${realActions(p)}</div></div>`;
   const realAlert = p => `<a class="cv-alert cv-real" href="${playLink(p.id)}" style="text-decoration:none"><span class="k"><i></i>New lesson</span><b>${esc(p.title)}</b><span>Made by a teacher on Worldview</span><span class="by">${esc(realMeta(p))}</span></a>`;
   const realTile = p => `<a class="cv-tile cv-real" href="${playLink(p.id)}" style="text-decoration:none"><span class="art" aria-hidden="true"></span><b>${esc(p.title)}</b><span>${esc(realMeta(p))}</span></a>`;
-  const footnote = '<p class="cv-muted cv-center cv-foot">Faded courses are samples of how this page could look. They aren\'t real yet.</p>';
-
-  /* ---------------- University (NAV-186, demo): a school's real courses, taught by its students ----------------
-     Sample data for a demo of the idea: students who know a course make lessons for it (unit, chapter,
-     homework help, exam and final reviews), classmates use the best ones, tutors earn. Not affiliated with the school. */
-  const U = (code, title, students, units, exams) => ({code, sub: code.split(' ')[0], title, students, units: units.map(([n, a, b, ...topics]) => ({n, a, b, topics})), exams});
-  const UNI = {
-    name: 'Clarkson University', term: 'Fall 2026', week: 9, weeks: 15,
-    subjects: {BY: 'Biology', CE: 'Civil Engineering', CH: 'Chemical Engineering', CM: 'Chemistry', CS: 'Computer Science', EC: 'Economics', EE: 'Electrical Engineering', ES: 'Engineering Science', HP: 'Honors Program', MA: 'Mathematics', ME: 'Mechanical Engineering', PH: 'Physics', PY: 'Psychology'},
-    classes: [
-      U('MA 131', 'Calculus I', 412, [['Limits and continuity', 1, 3, 'What a limit really means', 'One-sided limits', 'Continuity'], ['Derivatives', 4, 7, 'The derivative as a rate', 'Product and quotient rules', 'The chain rule'], ['Applications of derivatives', 8, 11, 'Related rates', 'Optimization', 'Curve sketching'], ['Integrals', 12, 14, 'Riemann sums', 'The Fundamental Theorem', 'u-substitution']], [['Exam 1', 5], ['Exam 2', 10], ['Final', 15]]),
-      U('MA 132', 'Calculus II', 318, [['Integration techniques', 1, 4, 'Integration by parts', 'Trig substitution', 'Partial fractions'], ['Applications of integrals', 5, 7, 'Volumes of revolution', 'Arc length', 'Work'], ['Sequences and series', 8, 12, 'Convergence tests', 'Power series', 'Taylor series'], ['Parametric and polar', 13, 14, 'Parametric curves', 'Polar area']], [['Exam 1', 6], ['Exam 2', 11], ['Final', 15]]),
-      U('MA 232', 'Differential Equations', 241, [['First-order equations', 1, 4, 'Separable equations', 'Linear equations', 'Modeling with ODEs'], ['Second-order linear', 5, 8, 'Constant coefficients', 'Undetermined coefficients', 'Springs and circuits'], ['Laplace transforms', 9, 12, 'The transform', 'Solving with Laplace', 'Step functions'], ['Systems', 13, 14, 'Eigenvalue methods']], [['Exam 1', 5], ['Exam 2', 10], ['Final', 15]]),
-      U('PH 131', 'Physics I: Mechanics', 389, [['Motion', 1, 3, 'Kinematics in one dimension', 'Projectile motion'], ['Newton\'s laws', 4, 6, 'Free-body diagrams', 'Friction', 'Circular motion'], ['Energy and momentum', 7, 10, 'Work and energy', 'Conservation of momentum', 'Collisions'], ['Rotation', 11, 14, 'Torque', 'Angular momentum']], [['Exam 1', 5], ['Exam 2', 10], ['Final', 15]]),
-      U('PH 132', 'Physics II: Electricity and Magnetism', 276, [['Electric fields', 1, 4, 'Coulomb\'s law', 'Gauss\'s law'], ['Potential and circuits', 5, 8, 'Electric potential', 'Capacitors', 'DC circuits'], ['Magnetism', 9, 12, 'Magnetic force', 'Ampère\'s law', 'Faraday\'s law'], ['Waves and light', 13, 14, 'Electromagnetic waves']], [['Exam 1', 6], ['Exam 2', 11], ['Final', 15]]),
-      U('CM 131', 'General Chemistry I', 297, [['Atoms and molecules', 1, 3, 'Atomic structure', 'Moles and stoichiometry'], ['Reactions', 4, 7, 'Limiting reagents', 'Acids and bases', 'Redox'], ['Gases and thermochemistry', 8, 11, 'Ideal gas law', 'Enthalpy', 'Hess\'s law'], ['Bonding', 12, 14, 'Lewis structures', 'VSEPR shapes']], [['Exam 1', 5], ['Exam 2', 10], ['Final', 15]]),
-      U('CS 141', 'Introduction to Computer Science I', 254, [['Programming basics', 1, 4, 'Variables and types', 'Conditionals', 'Loops'], ['Functions and data', 5, 8, 'Functions', 'Lists and dictionaries', 'Files'], ['Problem solving', 9, 12, 'Recursion', 'Searching and sorting', 'Debugging'], ['Objects', 13, 14, 'Classes and objects']], [['Exam 1', 6], ['Exam 2', 11], ['Final', 15]]),
-      U('ES 220', 'Statics', 266, [['Forces and moments', 1, 4, 'Vectors and forces', 'Moments'], ['Equilibrium', 5, 8, 'Free-body diagrams', 'Rigid-body equilibrium'], ['Structures', 9, 12, 'Trusses: method of joints', 'Method of sections', 'Frames'], ['Friction and centroids', 13, 14, 'Friction', 'Centroids']], [['Exam 1', 5], ['Exam 2', 10], ['Final', 15]]),
-      U('ES 340', 'Thermodynamics', 198, [['Properties', 1, 4, 'Property tables', 'Ideal gases'], ['First law', 5, 8, 'Closed systems', 'Control volumes'], ['Second law', 9, 12, 'Entropy', 'Carnot and efficiency'], ['Cycles', 13, 14, 'Rankine cycle', 'Refrigeration']], [['Exam 1', 6], ['Exam 2', 11], ['Final', 15]]),
-      U('EE 221', 'Linear Circuits', 187, [['Circuit basics', 1, 4, 'Ohm\'s and Kirchhoff\'s laws', 'Node analysis'], ['Network theorems', 5, 8, 'Thevenin and Norton', 'Superposition'], ['Transients', 9, 12, 'RC circuits', 'RL and RLC circuits'], ['AC circuits', 13, 14, 'Phasors']], [['Exam 1', 5], ['Exam 2', 10], ['Final', 15]]),
-      U('ME 212', 'Dynamics', 176, [['Particle kinematics', 1, 4, 'Rectilinear motion', 'Curvilinear motion'], ['Particle kinetics', 5, 8, 'Newton\'s second law', 'Work and energy'], ['Rigid bodies', 9, 12, 'Rigid-body kinematics', 'Rigid-body kinetics'], ['Impulse', 13, 14, 'Impulse and momentum']], [['Exam 1', 6], ['Exam 2', 11], ['Final', 15]]),
-      U('CH 210', 'Material Balances', 92, [['Units and processes', 1, 4, 'Process variables', 'Flowcharts'], ['Single-unit balances', 5, 8, 'Degrees of freedom', 'Reactive systems'], ['Multi-unit balances', 9, 12, 'Recycle and bypass', 'Combustion'], ['Phase behavior', 13, 14, 'Vapor pressure']], [['Exam 1', 5], ['Exam 2', 10], ['Final', 15]]),
-      U('CE 212', 'Strength of Materials', 143, [['Stress and strain', 1, 4, 'Axial load', 'Hooke\'s law'], ['Torsion and bending', 5, 9, 'Torsion of shafts', 'Bending stress'], ['Beams', 10, 12, 'Shear and moment diagrams', 'Beam deflection'], ['Columns', 13, 14, 'Buckling']], [['Exam 1', 6], ['Exam 2', 11], ['Final', 15]]),
-      U('EC 150', 'Principles of Microeconomics', 231, [['Markets', 1, 4, 'Supply and demand', 'Elasticity'], ['Consumers and firms', 5, 8, 'Utility', 'Costs of production'], ['Market structures', 9, 12, 'Perfect competition', 'Monopoly', 'Game theory'], ['Policy', 13, 14, 'Externalities']], [['Exam 1', 5], ['Exam 2', 10], ['Final', 15]]),
-      U('BY 140', 'Biology I: Cellular and Molecular', 168, [['Cells', 1, 4, 'Cell structure', 'Membranes'], ['Energy', 5, 8, 'Cellular respiration', 'Photosynthesis'], ['Genetics', 9, 12, 'DNA replication', 'Gene expression'], ['Cell division', 13, 14, 'Mitosis and meiosis']], [['Exam 1', 6], ['Exam 2', 11], ['Final', 15]]),
-      U('PY 151', 'Introduction to Psychology', 214, [['Mind and brain', 1, 4, 'Neurons', 'Sensation and perception'], ['Learning and memory', 5, 8, 'Conditioning', 'How memory works'], ['Development and social', 9, 12, 'Development', 'Social influence'], ['Disorders', 13, 14, 'Disorders and treatment']], [['Exam 1', 5], ['Exam 2', 10], ['Final', 15]]),
-      U('HP 101', 'Honors Seminar: Big Questions', 64, [['What counts as knowledge', 1, 4, 'Evidence and belief'], ['Technology and society', 5, 9, 'The AI race', 'Who decides about new technology'], ['Ethics in practice', 10, 13, 'Case studies'], ['Project', 14, 14, 'Presenting an argument']], [['Essay 1', 6], ['Essay 2', 11], ['Final project', 15]]),
-    ],
-  };
-  const TUTORS = ['Maya R. ’27', 'Jordan K. ’26', 'Priya S. ’27', 'Liam T. ’26', 'Ava M. ’28', 'Noah B. ’27', 'Sofia L. ’26', 'Ethan W. ’27', 'Grace H. ’26', 'Owen P. ’28'];
-  const seed = str => { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return ((h >>> 0) % 1000) / 1000; };
-  /* Every class's lessons, scored by what its students need this week of the term. */
-  function uLessons(c) {
-    const W = UNI.week, out = [], add = (type, title, topic, weight) => {
-      const r = seed(c.code + title), week = Math.round(c.students * weight * (0.35 + r * 0.5));
-      out.push({cls: c.code, type, title, topic, tutor: TUTORS[Math.floor(r * TUTORS.length)], rating: (4.4 + seed(title) * 0.5).toFixed(1), week, now: Math.max(0, Math.round(week / 14 + r * 3))});
-    };
-    c.exams.forEach(([label, w], i) => {
-      const covered = c.units.filter(u => u.a <= w && (i === 0 ? true : u.b > c.exams[i - 1][1])).map(u => u.n);
-      const until = w - W, weight = until >= 0 && until <= 2 ? 1.9 : until < 0 ? 0.08 : 0.15;
-      add(/^Final/.test(label) ? 'Final review' : 'Exam review', label + ' review: ' + (covered.join(' + ') || c.title), c.title + ': review for ' + label + ' (' + covered.join(', ') + ')', /^Final/.test(label) ? (W >= 13 ? 1 : 0.12) : weight);
-    });
-    c.units.forEach(u => {
-      const cur = u.a <= W && W <= u.b, past = u.b < W;
-      add('Unit lesson', u.n, c.title + ': ' + u.n, cur ? 0.7 : past ? 0.18 : 0.08);
-      u.topics.forEach(t => {
-        add('Chapter lesson', t, c.title + ': ' + t, cur ? 0.55 : past ? 0.12 : 0.05);
-        if (cur) add('Homework help', 'Homework help: ' + t, c.title + ': ' + t + ' (worked homework-style problems, without giving answers away)', 0.6);
-      });
-    });
-    return out.sort((a, b) => b.week - a.week);
-  }
-  const uClass = code => UNI.classes.find(c => c.code === code);
-  const TYPES = ['All', 'Exam review', 'Homework help', 'Unit lesson', 'Chapter lesson', 'Final review'];
-  const typeChip = t => chip(t, /review/i.test(t) ? 'acc' : t === 'Homework help' ? 'vi' : '');
-  const uLessonRow = (l, withClass) => `<button type="button" class="uv-lesson" data-ulesson="${esc(l.cls)}|${esc(l.title)}"><span class="uv-l1">${typeChip(l.type)}${withClass ? '<span class="uv-code">' + esc(l.cls) + '</span>' : ''}<span class="sp"></span><span class="uv-live"><i></i>${l.now} now</span></span><b>${esc(l.title)}</b><span class="cv-muted">by ${esc(l.tutor)} · ★ ${l.rating} · ${fmt(l.week)} students this week</span></button>`;
-  function scrUni() {
-    const subs = Object.keys(UNI.subjects).filter(k => UNI.classes.some(c => c.sub === k)).sort();
-    const firsts = [...new Set(subs.map(k => k[0]))];
-    const L = S.uL && firsts.includes(S.uL) ? S.uL : '', seconds = L ? subs.filter(k => k[0] === L) : [];
-    const sub = S.uSub && subs.includes(S.uSub) ? S.uSub : '';
-    const top = UNI.classes.flatMap(c => uLessons(c).slice(0, 2)).sort((a, b) => b.week - a.week).slice(0, 6);
-    const classes = sub ? UNI.classes.filter(c => c.sub === sub) : [];
-    return `<div class="uv-school"><div><b class="cv-serif" style="font-size:22px">${esc(UNI.name)}</b><span class="cv-muted">${esc(UNI.term)} · week ${UNI.week} of ${UNI.weeks}</span></div>${chip('Demo', 'acc')}</div>
-      <div class="cv-lab">Most essential right now</div>
-      <div class="uv-hot cv-hscroll">${top.map(l => uLessonRow(l, true)).join('')}</div>
-      <div class="cv-lab">Find your class</div>
-      <div class="uv-pick" role="group" aria-label="Subject, first letter">${firsts.map(f => `<button type="button" class="uv-key${f === L ? ' on' : ''}" data-uletter="${f}">${f}</button>`).join('')}</div>
-      ${L ? `<div class="uv-pick two" role="group" aria-label="Subject">${seconds.map(k => `<button type="button" class="uv-key wide${k === sub ? ' on' : ''}" data-usub="${k}"><b>${k}</b><span>${esc(UNI.subjects[k])}</span></button>`).join('')}</div>` : '<p class="cv-muted" style="margin:0">Tap the first letter of a subject code, then the second: M then A for MA, Mathematics; H then P for HP, the Honors Program.</p>'}
-      ${sub ? `<div class="cv-lab">${esc(sub)} · ${esc(UNI.subjects[sub])}</div><div class="uv-classes">${classes.map(c => { const next = c.exams.find(([, w]) => w >= UNI.week); return `<button type="button" class="uv-class" data-ucls="${esc(c.code)}"><b>${esc(c.code)} · ${esc(c.title)}</b><span class="cv-muted">${c.students} students · ${uLessons(c).length} lessons by students${next ? ' · ' + esc(next[0]) + (next[1] === UNI.week ? ' this week' : ' in ' + (next[1] - UNI.week) + ' week' + (next[1] - UNI.week === 1 ? '' : 's')) : ''}</span></button>`; }).join('')}</div>` : ''}
-      <div class="cv-card uv-tutor"><h3 style="margin:0">Know a course? Teach it.</h3><p class="cv-muted" style="margin:0">Students who've taken a class make lessons for it in Teacher Studio: unit and chapter lessons, homework help, exam reviews. Classmates use the best ones, and tutors earn from every student who learns with them.</p><a class="cv-pill" href="studio.html" style="text-decoration:none;justify-self:start">Make a lesson</a></div>
-      <p class="cv-muted cv-center cv-foot">Demo with sample classes and numbers, to show the idea. Not affiliated with Clarkson University.</p>`;
-  }
-  function scrUClass() {
-    const c = uClass(S.ucls); if (!c) { S.scr = 'home'; return scrHome(); }
-    const W = UNI.week, n = UNI.weeks, all = uLessons(c), f = S.uFilter || 'All', list = f === 'All' ? all : all.filter(l => l.type === f);
-    const cur = c.units.find(u => u.a <= W && W <= u.b), next = c.exams.find(([, w]) => w >= W);
-    const col = w => `grid-column:${w}`;
-    const timeline = `<div class="uv-tl cv-hscroll" data-start="${W}"><div class="uv-grid" style="grid-template-columns:repeat(${n},58px)">
-      ${c.units.map((u, i) => `<div class="uv-unit${u.b < W ? ' past' : u.a <= W && W <= u.b ? ' cur' : ''}" style="grid-column:${u.a} / ${u.b + 1};grid-row:1"><b>Unit ${i + 1}</b><span>${esc(u.n)}</span></div>`).join('')}
-      ${c.exams.map(([l, w]) => `<div class="uv-exam${w < W ? ' past' : ''}" style="${col(w)};grid-row:2">◆ ${esc(l)}</div>`).join('')}
-      ${Array.from({length: n}, (_, i) => `<div class="uv-week${i + 1 < W ? ' past' : i + 1 === W ? ' now' : ''}" style="${col(i + 1)};grid-row:3">${i + 1 === W ? 'Now' : 'Wk ' + (i + 1)}</div>`).join('')}
-    </div></div>`;
-    return `<div class="cv-head"><button type="button" class="cv-back" data-go="home" aria-label="Back">‹</button><h1 class="sm">${esc(c.code)} · ${esc(c.title)}</h1></div>
-      <span class="cv-muted">${esc(UNI.name)} · ${esc(UNI.term)} · ${c.students} students</span>
-      <div class="cv-card uv-now"><span class="uv-live big"><i></i>Week ${W}</span><b>Now: ${esc(cur ? cur.n : 'Review')}</b><span class="cv-muted">${next ? esc(next[0]) + (next[1] === W ? ' is this week' : ' in ' + (next[1] - W) + ' week' + (next[1] - W === 1 ? '' : 's')) : 'Term finished'}</span></div>
-      ${timeline}
-      <div class="cv-lab">Lessons for ${esc(c.code)}, most used this week first</div>
-      <div class="cv-chips cv-hscroll">${TYPES.map(t => `<button type="button" class="cv-chip-s${t === f ? ' on' : ''}" data-ufilter="${t}">${esc(t)}</button>`).join('')}</div>
-      <div class="uv-list">${list.slice(0, 14).map(l => uLessonRow(l, false)).join('')}</div>
-      <div class="cv-card uv-tutor"><h3 style="margin:0">Teach ${esc(c.code)}</h3><p class="cv-muted" style="margin:0">Took this class? Make a lesson for the part students are on now. You earn from every classmate who learns with it.</p><a class="cv-pill" href="studio.html" style="text-decoration:none;justify-self:start">Make a lesson</a></div>
-      <p class="cv-muted cv-center cv-foot">Demo with sample classes and numbers. Not affiliated with Clarkson University.</p>`;
-  }
+  const footnote = '<p class="cv-muted cv-center cv-foot">Lessons marked Lesson are real. The rest are samples of how this page could look.</p>';
 
   /* ---------------- screens ---------------- */
   function scrHome() {
-    const tabs = `<div class="cv-seg" role="tablist"><button type="button" role="tab" data-ctab="mine" class="${S.tab === 'mine' ? 'on' : ''}" aria-selected="${S.tab === 'mine'}">My courses</button><button type="button" role="tab" data-ctab="uni" class="${S.tab === 'uni' ? 'on' : ''}" aria-selected="${S.tab === 'uni'}">University</button><button type="button" role="tab" data-ctab="explore" class="${S.tab === 'explore' ? 'on' : ''}" aria-selected="${S.tab === 'explore'}">Explore</button></div>`;
-    const head = `<div class="cv-head"><h1>Courses</h1><a class="cv-pill" href="studio.html" style="text-decoration:none">Teacher Studio</a></div>` + (isOwner() ? `<span class="cv-note"><i></i>Preview · only your account sees this</span>` : '');
-    if (S.tab === 'uni') return head + tabs + scrUni();
-    return head + tabs + '<div class="cv-samples">' + (S.tab === 'mine' ? mine() : explore()) + '</div>' + footnote;
+    return `<div class="cv-head"><h1>Explore</h1><a class="cv-pill ghost" href="studio.html" style="text-decoration:none">Teacher Studio</a></div>` + explore() + footnote;
+  }
+  /* Explore (NAV-205): ways of learning and the people teaching come first; courses after. */
+  const WP = () => window.WorldviewPlaces;
+  function scrWay() {
+    const w = WP().WAYS.find(x => x.id === S.way) || WP().WAYS[0], list = WP().byWay(w.id);
+    return `<div class="cv-head"><button type="button" class="cv-back" data-go="home" aria-label="Back">‹</button><h1 class="sm">${esc(w.name)}</h1></div><p class="cv-muted" style="margin:0">${esc(w.line)}</p>
+      <a class="pl-cta" href="studio.html?new=${encodeURIComponent(w.name + ': my way')}"><b>How would you teach this way?</b><span>Build your own</span></a>
+      <div class="pl-tlist">${list.map(x => `<button type="button" class="pl-tutor" data-openuser="${x.c.code}|${x.u.i}|${esc(x.t.id)}"><span class="ava">${WP().initials(x.t.w)}</span><span class="nm"><b>${x.t.w}</b><span>${esc(x.c.name)} · ${esc(x.t.how)}</span></span><span class="sc"><span>★ ${x.t.r.toFixed(1)}</span><em>${x.t.n} students</em><span>$${x.t.p}</span></span></button>`).join('')}</div>
+      <p class="cv-muted cv-center cv-foot">Sample lessons, to show the idea.</p>`;
+  }
+  function scrTeacher() {
+    const t = WP().teachers().find(x => x.w === S.teacher); if (!t) { S.scr = 'home'; return scrHome(); }
+    return `<div class="cv-head"><button type="button" class="cv-back" data-go="home" aria-label="Back">‹</button><h1 class="sm">${t.w}</h1></div>
+      <div class="pl-stats"><div><b>★ ${t.r.toFixed(1)}</b><span>rating</span></div><div><b>${t.n}</b><span>students</span></div><div><b>${t.items.length}</b><span>lesson${t.items.length === 1 ? '' : 's'}</span></div></div>
+      <div class="pl-tlist">${t.items.map(x => `<button type="button" class="pl-tutor" data-openuser="${x.c.code}|${x.u.i}|${esc(x.t.id)}"><span class="ava">${WP().initials(x.t.w)}</span><span class="nm"><b>${esc(x.c.name)}, Unit ${x.u.i + 1}</b><span>${esc(x.t.how)}</span></span><span class="sc"><span>★ ${x.t.r.toFixed(1)}</span><em>${x.t.n} students</em><span>$${x.t.p}</span></span></button>`).join('')}</div>
+      <p class="cv-muted cv-center cv-foot">A sample teacher, to show the idea.</p>`;
   }
   function courseRow(c) {
     const open = S.expanded === c.key;
@@ -443,34 +365,6 @@
     return `<div class="cv-course open"><button type="button" class="cv-course-h" data-expand="${c.key}" aria-expanded="true">${head}</button>
       ${c.rows}
       <div class="cv-row" style="flex-wrap:wrap">${c.actions}<span class="sp"></span><span class="cv-chnav"><button type="button" data-rnav="-1" aria-label="Previous chapter">‹</button><button type="button" data-rnav="1" aria-label="Next chapter">›</button></span></div></div>`;
-  }
-  function mine() {
-    const rows = [];
-    if (hasReal()) REAL().forEach(p => rows.push(realRow(p)));
-    else if (PUB === null || CAT === null) rows.push('<div class="cv-course cv-real"><span class="nx">Loading your lessons…</span></div>');
-    else {
-      rows.push(courseRow({key:'airace', title:'The AI Race', badge:isOwner() ? chip('Yours', 'acc') : '', sub:(isOwner() ? 'You made this' : 'by Cristian P.') + ' · 3 chapters · 17 lessons', items:aiItems(), done:AI_DONE, next:'Next: ' + aiNext(),
-        rows:route(aiChapters(), {done:AI_DONE, attr:(ci, li) => `data-open-lesson="${ci}:${li}"`, quizAttr:ci => `data-go="quiz" data-quizch="${ci}"`}),
-        actions:'<button type="button" class="cv-pill" data-go="course">Open course</button><button type="button" class="cv-pill ghost" data-try="0:1">Continue for real</button>'}));
-    }
-    S.added.filter(id => id !== 'airace' && course(id)).forEach(id => {
-      const c = course(id), items = []; c.chapters.forEach(ch => { ch.forEach(() => items.push(false)); items.push(true); });
-      const done = PROGRESS[id] || 0;
-      rows.push(courseRow({key:id, title:c.title, sub:'by ' + c.by + ' · ' + c.chapters.length + ' chapter' + (c.chapters.length === 1 ? '' : 's') + ' · ' + lessonCount(c) + ' lessons', items, done, next:'Next: ' + nextOf(c.chapters, done),
-        rows:route(c.chapters.map((t, i) => ({title:'', titles:t})), {done, attr:() => `data-viewcourse="${id}"`, quizAttr:() => `data-viewcourse="${id}"`}),
-        actions:`<button type="button" class="cv-pill" data-viewcourse="${id}">Open course</button><button type="button" class="cv-pill ghost" data-remove="${id}">Remove</button>`}));
-    });
-    const classes = S.joined.map(findClass).filter(Boolean);
-    const classRows = classes.map(({school, cls}) => {
-      const items = []; cls.chapters.forEach(ch => { ch.forEach(() => items.push(false)); items.push(true); });
-      return courseRow({key:'class-' + cls.id, title:`${cls.code} · ${cls.title}`, badge:chip('Class', 'ok'), sub:`${school.name} · ${cls.teacher}`, items, done:1, next:cls.due,
-        rows:route(cls.chapters.map((t, i) => ({label:'Week ' + (i + 1), title:'', titles:t})), {done:1, quizName:'Friday quiz', attr:() => `data-viewclass="${cls.id}"`, quizAttr:() => `data-go="quiz"`}),
-        actions:`<button type="button" class="cv-pill" data-viewclass="${cls.id}">Open class</button><button type="button" class="cv-pill ghost" data-leave="${cls.id}">Leave</button>`});
-    }).join('');
-    return `<div class="cv-lab">Your courses</div>${rows.join('')}
-      <div class="cv-lab">Your classes</div>${classRows || ''}
-      <button type="button" class="cv-find" data-go="school"><span class="cv-find-i">${ICON.search}</span><span><b>${classes.length ? 'Join another class' : 'Taking a class? Find your school'}</b><span>Join your class with the code your teacher gives you. Students may already have made courses for it.</span></span></button>
-      <button type="button" class="cv-find" data-ctab="explore"><span class="cv-find-i">◇</span><span><b>Find something new</b><span>Browse courses by subject in Explore, and add the ones you want here.</span></span></button>`;
   }
   const sortFns = {popular:(a, b) => b.learners - a.learners, new:(a, b) => b.added.localeCompare(a.added), rated:(a, b) => b.rating - a.rating};
   function courseCard(c) {
@@ -506,6 +400,11 @@
     return `${searchBox()}
       <div id="cv-results-wrap"${S.query ? '' : ' hidden'}><div class="cv-row"><span class="cv-lab" style="margin:0">Results</span><span class="sp"></span>${sortSeg()}</div><div class="cv-list" id="cv-results">${S.query ? results(shown()) : ''}</div></div>
       <div id="cv-browse"${S.query ? ' hidden' : ''}>
+        <a class="ex-cta" href="studio.html?new=${encodeURIComponent('My first lesson')}"><b>What could you teach?</b><span>Build a lesson ›</span></a>
+        <span class="cv-lab" style="margin:0">Ways of learning</span>
+        <div class="ex-ways">${WP().WAYS.map(w => `<button type="button" class="ex-way" data-way="${w.id}"><b>${esc(w.name)}</b><span>${esc(w.line)}</span></button>`).join('')}</div>
+        <span class="cv-lab" style="margin:0">People teaching</span>
+        <div class="ex-people">${WP().teachers().slice(0, 8).map(t => `<button type="button" class="ex-person" data-teacher="${t.w}"><span class="ava">${WP().initials(t.w)}</span><b>${t.w}</b><span>★ ${t.r.toFixed(1)} · ${t.n} students</span></button>`).join('')}</div>
         <span class="cv-lab" style="margin:0">Happening now</span>
         <div class="cv-alerts cv-hscroll">${REAL().map(realAlert).join('')}${ALERTS.filter(x => !(hasReal() && x.id === 'airace')).map(x => { const c = course(x.id); return c ? `<button type="button" class="cv-alert" data-viewcourse="${c.id}"><span class="k"><i></i>${esc(x.kind)}</span><b>${esc(c.title)}</b><span>${esc(x.line)}</span><em>${esc(x.by)}</em></button>` : ''; }).join('')}</div>
         <div class="cv-row" style="margin-top:2px"><span class="cv-lab" style="margin:0">Subjects</span><span class="sp"></span><span class="cv-muted" style="font-size:12px">${CATS.length} · scroll →</span></div>
@@ -665,9 +564,6 @@
     } else if (S.sheet.startsWith('try:')) {
       const [ci, li] = S.sheet.slice(4).split(':').map(Number), l = AIRACE.chapters[ci].lessons[li];
       h = `${chip('Real lesson', 'acc')}<h3>${esc(l.t)}</h3><p>This starts an ordinary Worldview voice lesson on this lesson's topic, so you can feel what it would be like. The course parts (snapshots, the chapter quiz, your clips) aren't built yet.</p><p class="cv-muted" style="font-size:12.5px">Topic: ${esc(l.topic)}</p><button type="button" class="cv-pill wide" data-start="${ci}:${li}">Start the voice lesson</button><button type="button" class="cv-pill ghost wide" data-close="1">Not now</button>`;
-    } else if (S.sheet.startsWith('ul:')) {
-      const [code, title] = S.sheet.slice(3).split('|'), l = (uClass(code) ? uLessons(uClass(code)) : []).find(x => x.title === title);
-      if (l) h = `${typeChip(l.type)}<h3>${esc(l.title)}</h3><p class="cv-muted" style="margin:0">${esc(code)} · by ${esc(l.tutor)} · ★ ${l.rating} · ${fmt(l.week)} students this week</p><p>In the real version this is a lesson the tutor made for this class. In this demo, you can try a Worldview voice lesson on the same topic right now.</p><p class="cv-muted" style="font-size:12.5px">Topic: ${esc(l.topic)}</p><button type="button" class="cv-pill wide" data-ustart="1">Start a voice lesson on this</button><button type="button" class="cv-pill ghost wide" data-close="1">Not now</button>`;
     } else if (S.sheet.startsWith('join:')) {
       const f = findClass(S.sheet.slice(5));
       h = `<h3>Join ${f ? esc(f.cls.code + ' · ' + f.cls.title) : 'a class'}</h3><p class="cv-muted">Type the class code from your teacher. Any code works in this demo.</p>
@@ -677,7 +573,8 @@
   }
   function render() {
     hidePeek();
-    const html = {uclass:scrUClass, course:scrCourse, quiz:scrQuiz, make:scrMake, cat:scrCategory, sample:scrSample, cls:scrClass, school:scrSchool}[S.scr]?.() ?? scrHome();
+    if (S.area === 'places') { view.innerHTML = `<div class="cv-wrap">${WP().html()}</div>`; document.body.classList.toggle('cv-sheet-open', !!view.querySelector('.cv-ov')); WP().afterRender(view); syncBar(); return; }
+    const html = {way:scrWay, teacher:scrTeacher, course:scrCourse, quiz:scrQuiz, make:scrMake, cat:scrCategory, sample:scrSample, cls:scrClass, school:scrSchool}[S.scr]?.() ?? scrHome();
     view.innerHTML = `<div class="cv-wrap">${html}</div>${sheetHTML()}`;
     document.body.classList.toggle('cv-sheet-open', !!S.sheet);
     view.querySelectorAll('.uv-tl').forEach(el => { const now = el.querySelector('.uv-week.now'); if (now) el.scrollLeft = Math.max(0, now.offsetLeft - el.clientWidth / 2 + now.offsetWidth / 2); });
@@ -692,13 +589,10 @@
   let forcedTab = '', forcedAt = 0;
   function syncBar() {
     let active = 'home';
-    if (S.open) active = 'courses';
+    if (S.open) active = S.area;
     else if (forcedTab && Date.now() - forcedAt < 800) active = forcedTab;
-    else if (deckIsProfile()) active = 'profile';
     bar.querySelectorAll('button').forEach(b => { const on = b.dataset.tabbar === active; b.classList.toggle('on', on); if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   }
-  /* Which Home page is on screen, read from where the pages actually sit. */
-  function deckIsProfile() { const p = document.getElementById('profile-page'); if (!p) return false; const r = p.getBoundingClientRect(); return r.height > 0 && r.bottom > innerHeight * 0.5 && r.top < innerHeight * 0.5; }
   /* Jump straight to a Home page with no visible scroll. */
   function jumpDeck(target) {
     read(() => { if (typeof show === 'function') show('home'); });
@@ -710,7 +604,7 @@
   bar.addEventListener('click', e => {
     const b = e.target.closest('[data-tabbar]'); if (!b) return;
     const t = b.dataset.tabbar;
-    if (t === 'courses') { if (S.open) { S.tab = 'mine'; S.expanded = null; go('home'); } else openCourses(); return; }
+    if (t === 'places' || t === 'explore') { S.area = t; S.sheet = null; if (t === 'places') WP().home(); else { S.expanded = null; S.scr = 'home'; } if (S.open) render(); else openCourses(); view.scrollTop = 0; return; }
     jumpDeck(t);
     if (S.open) requestAnimationFrame(() => requestAnimationFrame(closeCourses)); else syncBar();
   });
@@ -758,8 +652,12 @@
   view.addEventListener('click', async e => {
     const cl = e.target.closest('[data-copylink]');
     if (cl) { const link = playLink(cl.dataset.copylink); let ok = false; try { await navigator.clipboard.writeText(link); ok = true; } catch (x) {} toast(ok ? 'Student link copied.' : link); return; }
+    if (S.area === 'places') { WP().click(e); return; }
+    const ou = e.target.closest('[data-openuser]'); if (ou) { const [code, u, id] = ou.dataset.openuser.split('|'); S.area = 'places'; WP().openTutor(code, +u, id); render(); view.scrollTop = 0; return; }
+    const wy = e.target.closest('[data-way]'); if (wy) { S.way = wy.dataset.way; return go('way'); }
+    const tc = e.target.closest('[data-teacher]'); if (tc) { S.teacher = tc.dataset.teacher; return go('teacher'); }
     if (peekTap(e)) return;
-    const t = e.target.closest('[data-uletter],[data-usub],[data-ucls],[data-ufilter],[data-ulesson],[data-ustart],[data-go],[data-ctab],[data-expand],[data-open-lesson],[data-ch],[data-lesson],[data-try],[data-start],[data-sheet],[data-close],[data-toast],[data-qstep],[data-qexample],[data-qpause],[data-msend],[data-mex],[data-mreset],[data-mall],[data-copyprompt],[data-cat],[data-sub],[data-sort],[data-add],[data-remove],[data-viewcourse],[data-viewclass],[data-school],[data-schoolback],[data-join],[data-leave],[data-branch],[data-rnav],[data-allcourses],[data-allback]');
+    const t = e.target.closest('[data-go],[data-expand],[data-open-lesson],[data-ch],[data-lesson],[data-try],[data-start],[data-sheet],[data-close],[data-toast],[data-qstep],[data-qexample],[data-qpause],[data-msend],[data-mex],[data-mreset],[data-mall],[data-copyprompt],[data-cat],[data-sub],[data-sort],[data-add],[data-remove],[data-viewcourse],[data-viewclass],[data-school],[data-schoolback],[data-join],[data-leave],[data-branch],[data-rnav],[data-allcourses],[data-allback]');
     if (!t) return;
     if (t.dataset.close && t.classList.contains('cv-ov') && e.target !== t) return;
     const d = t.dataset;
@@ -771,13 +669,6 @@
       return;
     }
     if (d.go) { if (d.go === 'quiz') S.quiz.step = 0; if (d.go === 'course') S.back = S.scr === 'quiz' || S.scr === 'make' ? 'home' : S.scr; if (d.go === 'school' && S.scr === 'home') S.schoolId = null; return go(d.go); }
-    if (d.uletter) { S.uL = S.uL === d.uletter ? '' : d.uletter; const subs = Object.keys(UNI.subjects).filter(k => k[0] === S.uL && UNI.classes.some(c => c.sub === k)); S.uSub = subs.length === 1 ? subs[0] : ''; return render(); }
-    if (d.usub) { S.uSub = d.usub; return render(); }
-    if (d.ucls) { S.ucls = d.ucls; S.uFilter = 'All'; S.back = 'home'; return go('uclass'); }
-    if (d.ufilter) { S.uFilter = d.ufilter; return render(); }
-    if (d.ulesson) { S.sheet = 'ul:' + d.ulesson; return render(); }
-    if (d.ustart) { const [code, title] = S.sheet.slice(3).split('|'), l = uLessons(uClass(code)).find(x => x.title === title); return startReal(l ? l.topic : title); }
-    if (d.ctab) { S.tab = d.ctab; store.set('tab', S.tab); S.scr = 'home'; S.sheet = null; render(); view.scrollTop = 0; return; }
     if (d.expand) { S.expanded = S.expanded === d.expand ? null : d.expand; return render(); }
     if (d.openLesson) { const [ci, li] = d.openLesson.split(':').map(Number); S.openCh = ci; S.openLesson = ci + ':' + li; S.back = 'home'; go('course'); setTimeout(() => view.querySelector('.cv-ls-h[aria-expanded="true"]')?.scrollIntoView({block:'center'}), 30); return; }
     if (d.ch !== undefined) { const c = +d.ch; S.openCh = S.openCh === c ? -1 : c; S.openLesson = c + ':0'; return render(); }
@@ -811,6 +702,7 @@
     if (d.copyprompt) { try { navigator.clipboard.writeText(PROMPT).then(() => toast('Prompt copied. Paste it into ChatGPT.'), () => toast('Copy did not work on this device.')); } catch (err) { toast('Copy did not work on this device.'); } }
   });
   view.addEventListener('input', e => {
+    if (S.area === 'places') { WP().input(e); return; }
     const id = e.target.id;
     if (id === 'cv-answer') S.quiz.answer = e.target.value;
     if (id === 'cv-make-in') S.make.input = e.target.value;
@@ -823,7 +715,7 @@
   });
   /* Sideways rows (a course's stops, subjects, shelves) scroll with the browser's own two-finger swipe, touch and scrollbar. No wheel or click-and-drag handling: it got in the way (BUG-519). */
   view.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'cv-code') view.querySelector('[data-join]')?.click(); });
-  document.addEventListener('keydown', e => { if (e.key !== 'Escape' || !S.open) return; if (S.sheet) { S.sheet = null; render(); } else if (S.scr !== 'home') go('home'); });
+  document.addEventListener('keydown', e => { if (e.key !== 'Escape' || !S.open) return; if (S.area === 'places') { WP().escape(); return; } if (S.sheet) { S.sheet = null; render(); } else if (S.scr !== 'home') go('home'); });
 
   async function startReal(topic) {
     if (typeof openHomeLearnerRun !== 'function') { toast('Lessons can only start from the app.'); return; }
@@ -833,6 +725,8 @@
     try { ok = await openHomeLearnerRun({topic, entryMode:'voice'}); } catch (err) { ok = false; }
     if (!ok) toast('The lesson did not start. Check that you are signed in, then try again.');
   }
+
+  WP().init({render, toast, real: () => REAL(), startReal, playLink});
 
   /* ---------------- visibility ---------------- */
   function blocked() {

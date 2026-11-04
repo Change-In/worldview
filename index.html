@@ -18,7 +18,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <link rel="stylesheet" href="lesson-entry-popup.css?v=2.1.38">
 <script src="lesson-entry-popup.js?v=2.1.71"></script>
 <link rel="stylesheet" href="lesson-folders.css?v=2.1.77">
-<link rel="stylesheet" href="courses.css?v=3.1.51">
+<link rel="stylesheet" href="courses.css?v=3.1.64">
+<link rel="stylesheet" href="places.css?v=3.1.64">
 <link rel="stylesheet" href="boot-splash.css?v=3.1.22">
 <link rel="stylesheet" href="map-tools.css?v=3.1.21">
 <script src="lesson-folders.js?v=3.1.13"></script>
@@ -2222,7 +2223,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.63 · Nov 1";
+const BUILD = "v3.1.64 · Nov 3";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2230,6 +2231,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.64",date:"Nov 3",changes:["The bottom bar is now Home, Places and Explore. Profile stays on your account button and the rail.","Places: find your university, add your classes and see each one as a term line. This is a demo with a made-up school.","Open a class to see one unit at a time, starting today. At the top: how would you teach this? Below: lessons by other students, led by their names and ratings.","Sign up for a unit and it zooms in: tap a day to see its lesson. You can take more than one way of learning a unit.","Build your own goes to Teacher Studio. Name your lesson like Calculus II, Unit 3: my way and publish it, and it shows up in that unit.","Explore now starts with ways of learning and people teaching."]},
   {tag:"v3.1.63",date:"Nov 1",changes:["Lessons can listen all the time (wv.listen.start): the student just talks, and the lesson sees the words as they come, knows the moment they start speaking, and gets each finished sentence. There is no AI voice of its own, so the lesson decides what to say back.","When the student talks over the lesson's voice, Worldview stops the voice. Its own voice heard back through the speaker is ignored.","It uses Deepgram (about $0.008 a minute, counted in the lesson's AI cost). A small Listening bar shows Mute and Stop. Turn it on in AI requests: the FINA 3010 request now has a Turn on button."]},
   {tag:"v3.1.62",date:"Nov 1",changes:["An experiment can become a lesson: press Make it a lesson (under its note, or in its ⋯ menu).","Copy it into a new lesson keeps the experiment on your shelf as a record; the new lesson is an exact copy, files included, and shows which experiment it started from. Or move it: the experiment itself becomes the lesson.","Make a copy now brings a lesson's files along too (videos, pictures, scripts), so the copy works on its own."]},
   {tag:"v3.1.61",date:"Oct 30",changes:["Teacher Studio has an Experiments shelf under your lessons: tries at new ways to teach, kept apart from real lessons. Only you see them, and they never go on the Courses page.","+ New experiment starts one. Any lesson can move there, or back, from its ⋯ menu (Move to experiments / Turn into a lesson).","Each experiment has a short note under the preview: the idea, what you tried it on, what you learned, and Worked / Not sure / Didn't work. Your helper fills it in as you work; you can change anything.","Your finance slides are ready as their own experiment, \"Pause the lecture after each point\". Press + New experiment and the small Worldview Lessons window offers it."]},
@@ -16555,7 +16557,8 @@ window.addEventListener("blur", () => {
 });
 </script>
 <!-- NAV-152/154: owner-only Courses preview (bottom tabs Home · Courses · Profile). -->
-<script src="courses.js?v=3.1.51"></script>
+<script src="places.js?v=3.1.64"></script>
+<script src="courses.js?v=3.1.64"></script>
 <!-- NAV-157: lesson map tools; NAV-156: lift the loading screen when Home is ready. -->
 <script src="map-tools.js?v=3.1.21"></script>
 <script src="boot-splash.js?v=3.1.22"></script>
