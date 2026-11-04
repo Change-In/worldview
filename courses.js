@@ -344,10 +344,12 @@ function scrHome() {
   }
   const WP = () => window.WorldviewPlaces;
   function scrTeacher() {
-    const t = WP().teachers().find(x => x.w === S.teacher); if (!t) { S.scr = 'home'; return scrHome(); }
-    return `<div class="cv-head"><button type="button" class="cv-back" data-go="home" aria-label="Back">‹</button><h1 class="sm">${t.w}</h1></div>
-      <div class="pl-stats"><div><b>★ ${t.r.toFixed(1)}</b><span>rating</span></div><div><b>${t.n}</b><span>students</span></div><div><b>${t.items.length}</b><span>lesson${t.items.length === 1 ? '' : 's'}</span></div></div>
-      <div class="pl-tlist">${t.items.map(x => `<button type="button" class="pl-tutor" data-openuser="${x.c.code}|${x.u.i}|${esc(x.t.id)}"><span class="ava">${WP().initials(x.t.w)}</span><span class="nm"><b>${esc(x.c.name)}, Unit ${x.u.i + 1}</b><span>${esc(x.t.how)}</span></span><span class="sc"><span>★ ${x.t.r.toFixed(1)}</span><em>${x.t.n} students</em><span>$${x.t.p}</span></span></button>`).join('')}</div>
+    const t = WP().teachers().find(x => x.w === S.teacher), own = CATALOG.filter(c => sameName(c.by, S.teacher)); if (!t && !own.length) { S.scr = 'home'; return scrHome(); }
+    const n = (t ? t.n : 0) + own.reduce((a, c) => a + c.learners, 0), sum = (t ? t.sum : 0) + own.reduce((a, c) => a + c.rating * c.learners, 0), count = (t ? t.items.length : 0) + own.length;
+    return `<div class="cv-head"><button type="button" class="cv-back" data-go="home" aria-label="Back">‹</button><h1 class="sm">${esc(S.teacher)}</h1></div>
+      <div class="pl-stats"><div><b>★ ${(sum / n).toFixed(1)}</b><span>rating</span></div><div><b>${n}</b><span>students</span></div><div><b>${count}</b><span>${count === 1 ? 'course' : 'courses'}</span></div></div>
+      ${t ? `<div class="pl-tlist">${t.items.map(x => `<button type="button" class="pl-tutor" data-openuser="${x.c.code}|${x.u.i}|${esc(x.t.id)}"><span class="ava">${WP().initials(x.t.w)}</span><span class="nm"><b>${esc(x.c.name)}, Unit ${x.u.i + 1}</b><span>${esc(x.t.how)}</span></span><span class="sc"><span>★ ${x.t.r.toFixed(1)}</span><em>${x.t.n} students</em><span>$${x.t.p}</span></span></button>`).join('')}</div>` : ''}
+      ${own.length ? `<div class="ex-grid">${own.map(exCard).join('')}</div>` : ''}
       <p class="cv-muted cv-center cv-foot">A sample teacher, to show the idea.</p>`;
   }
     function courseRow(c) {
@@ -371,13 +373,21 @@ function scrHome() {
   const sortSeg = () => `<div class="pl-sorts" role="group" aria-label="Sort">${[['popular','Popular'],['new','New'],['rated','Top rated']].map(([k, l]) => `<button type="button" data-sort="${k}" class="${S.sort === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
   const searchBox = () => `<label class="cv-search">${ICON.search}<input id="cv-q" type="search" placeholder="Search lessons, subjects, teachers" value="${esc(S.query)}" autocomplete="off"></label>`;
   const shown = () => hasReal() ? CATALOG.filter(c => c.id !== 'airace') : CATALOG;
+  const sameName = (a, b) => a.replace(/ ’\d+$/, '') === b.replace(/ ’\d+$/, '');
+  const peopleList = () => {
+    const q = S.query.trim().toLowerCase(), by = {};
+    if (S.sub === 'All' || !S.cat) WP().teachers(S.cat).forEach(t => { by[t.w] = {w: t.w, n: t.n, sum: t.r * t.n}; });
+    shown().filter(c => (!S.cat || c.cat === S.cat) && (!S.cat || S.sub === 'All' || c.sub === S.sub)).forEach(c => { const k = Object.keys(by).find(w => sameName(w, c.by)) || c.by, p = by[k] = by[k] || {w: c.by, n: 0, sum: 0}; p.n += c.learners; p.sum += c.rating * c.learners; });
+    return Object.values(by).map(p => Object.assign(p, {r: p.sum / p.n})).filter(p => !q || p.w.toLowerCase().includes(q)).sort((a, b) => b.r - a.r || b.n - a.n).slice(0, 12);
+  };
+  const peopleRow = () => { const list = peopleList(); return list.length ? `<span class="cv-lab" style="margin:0 0 8px;display:block">People teaching</span><div class="ex-people">${list.map(t => `<button type="button" class="ex-person" data-teacher="${esc(t.w)}"><span class="ava">${WP().initials(t.w)}</span><b>${esc(t.w)}</b><span class="st">★ ${t.r.toFixed(1)}</span></button>`).join('')}</div>` : ''; };
   /* Explore is one page: search, then subjects that filter the results below in place (owner 2026-11-03). */
   function explore() {
     const cat = S.cat ? CATS.find(c => c.id === S.cat) : null;
     return `${searchBox()}
       <div class="ex-filters"><div class="ex-chips"><button type="button" class="ex-chip${cat ? '' : ' on'}" data-excat="">All</button>${CATS.map(c => `<button type="button" class="ex-chip${S.cat === c.id ? ' on' : ''}" data-excat="${c.id}">${esc(c.name)}</button>`).join('')}</div>
       ${cat ? `<div class="ex-chips">${['All', ...cat.subs].map(s => `<button type="button" class="ex-chip sub${S.sub === s ? ' on' : ''}" data-sub="${esc(s)}">${esc(s)}</button>`).join('')}</div>` : ''}</div>
-      <div id="ex-people"${cat || S.query ? ' hidden' : ''}><span class="cv-lab" style="margin:0 0 8px;display:block">People teaching</span><div class="ex-people">${WP().teachers().slice(0, 10).map(t => `<button type="button" class="ex-person" data-teacher="${t.w}"><span class="ava">${WP().initials(t.w)}</span><b>${t.w}</b><span class="st">★ ${t.r.toFixed(1)}</span></button>`).join('')}</div></div>
+      <div id="ex-people">${peopleRow()}</div>
       <div class="pl-lhead"><span class="cv-lab" style="margin:0">${cat ? esc(cat.name) : 'Lessons and courses'}</span>${sortSeg()}</div>
       <div class="ex-grid" id="cv-results">${results()}</div>`;
   }
@@ -665,7 +675,7 @@ function scrHome() {
     if (id === 'cv-make-in') S.make.input = e.target.value;
     if (id === 'cv-q') {
       S.query = e.target.value;
-      const out = view.querySelector('#cv-results'), ppl = view.querySelector('#ex-people'); if (out) out.innerHTML = results(); if (ppl) ppl.hidden = !!(S.cat || S.query.trim());
+      const out = view.querySelector('#cv-results'), ppl = view.querySelector('#ex-people'); if (out) out.innerHTML = results(); if (ppl) ppl.innerHTML = peopleRow();
     }
     if (id === 'cv-school-q') { S.schoolQuery = e.target.value; const q = S.schoolQuery.trim().toLowerCase(); const out = view.querySelector('#cv-school-list'); if (out) out.innerHTML = schoolList(SCHOOLS.filter(s => !q || s.name.toLowerCase().includes(q))); }
   });

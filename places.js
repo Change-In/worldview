@@ -17,45 +17,65 @@
   const BREAKS = new Set(['2026-09-07', '2026-10-12', '2026-10-13', '2026-11-25', '2026-11-26', '2026-11-27']);
   const rnd = str => { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return ((h >>> 0) % 10000) / 10000; };
   const NAMES = ['Maya R. ’27', 'Jordan K. ’26', 'Priya S. ’27', 'Liam T. ’26', 'Ava M. ’28', 'Noah B. ’27', 'Sofia L. ’26', 'Ethan W. ’27', 'Grace H. ’26', 'Owen P. ’28'];
-  const HOWS = [['A short video each day, then one hard question.', 'daily'], ['A group discussion with recorded replies.', 'discuss'], ['You teach it to an AI student that keeps getting confused.', 'asks'], ['Old-exam problems, harder every day.', 'asks'], ['The story of who needed this idea, and why.', 'daily'], ['A mentor from the field walks through real work.', 'mentor']];
   const ROOF = '<svg class="pl-roof" viewBox="0 0 320 126" aria-hidden="true"><path class="l" d="M160 2v12"/><path class="s" d="M146 40 Q146 19 160 14 Q174 19 174 40 Z"/><rect class="s" x="141" y="40" width="38" height="24"/><rect class="w" x="148" y="45" width="8" height="13" rx="4"/><rect class="w" x="164" y="45" width="8" height="13" rx="4"/><path class="s" d="M24 108 L160 58 L296 108 Z"/><circle class="s" cx="160" cy="91" r="9"/><path class="l" d="M160 91v-6M160 91l4 2"/><rect class="s" x="14" y="108" width="292" height="9"/><rect class="s" x="22" y="117" width="276" height="9"/></svg>';
   const LOT = '<svg class="pl-roof" viewBox="0 0 320 126" aria-hidden="true"><path class="l" d="M24 118 L160 54 L296 118" stroke-dasharray="7 7"/><path class="l" d="M160 74v30M145 89h30"/></svg>';
   const SEARCH = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
 
   const CLASSES = [
-    {code: 'MA 132', name: 'Calculus II', days: [1, 3, 5], hw: [5, 1], nowU: 2, units: [['Integration techniques', '2026-09-25', 'Exam 1', ['Integration by parts', 'Trig integrals', 'Trig substitution', 'Partial fractions', 'Improper integrals']], ['Applications of integrals', '2026-10-23', 'Exam 2', ['Area between curves', 'Volumes', 'Arc length', 'Work and force']], ['Sequences and series', '2026-11-20', 'Exam 3', ['Sequences', 'Geometric series', 'Convergence tests', 'Alternating series', 'Power series', 'Taylor series']], ['Parametric and polar', '2026-12-09', 'Final', ['Parametric curves', 'Polar coordinates', 'Area in polar', 'Review for the final']]],
-      now: [['maya', 'Maya R. ’27', 'Move a slider and watch the series settle, before any formula.', 4.9, 212, 2, 40, [1, 4], 'sliders', 'sim'], ['jordan', 'Jordan K. ’26', 'A tutor that only asks questions and makes you explain.', 4.7, 340, 2, 90, [2, 5], 'voice', 'asks'], ['priya', 'Priya S. ’27', 'Real wrong answers. You find what went wrong.', 4.8, 156, 1, 12, [3], 'mistake', 'asks'], ['sofia', 'Sofia L. ’26', 'Study group: everyone records one minute, then replies to a classmate.', 4.6, 64, 1, 5, [4], 'group', 'discuss'], ['liam', 'Liam T. ’26', 'Old-exam problems, harder every day.', 4.4, 98, 1, 200, [1, 3], '', 'asks']]},
-    {code: 'PH 132', name: 'Physics II', days: [2, 4], hw: [1, 1], nowU: 2, units: [['Charge and fields', '2026-09-24', 'Exam 1', ['Coulomb’s law', 'Electric fields', 'Gauss’s law']], ['Potential', '2026-10-15', 'Exam 2', ['Potential', 'Capacitors']], ['Circuits', '2026-11-12', 'Exam 3', ['Current and resistance', 'DC circuits', 'Kirchhoff’s rules', 'RC circuits']], ['Magnetism and waves', '2026-12-10', 'Final', ['Magnetic force', 'Faraday’s law', 'Light']]],
-      now: [['noah', 'Noah B. ’27', 'A parts kit comes in the mail. Build it for real, or use my simulation.', 4.9, 88, 2, 30, [2, 4], 'circuit', 'hands'], ['ethan', 'Ethan W. ’27', 'A tutor guides you through each problem and never gives the answer.', 4.8, 190, 2, 70, [2, 5], '', 'asks'], ['ava', 'Ava M. ’28', 'A short video each day, then one hard question.', 4.3, 41, 1, 9, [3], '', 'daily']]},
-    {code: 'FI 301', name: 'Financial Management', days: [1, 3], hw: [3, 1], nowU: 1, units: [['Time value of money', '2026-10-01', 'Exam 1', ['Present value', 'Annuities', 'Loans']], ['Reading a company', '2026-11-05', 'Exam 2', ['Income statements', 'Cash flow', 'Debt', 'Ratios']], ['Valuation', '2026-12-10', 'Final', ['Discounted cash flow', 'Risk', 'Capital structure']]],
-      now: [['grace', 'Grace H. ’26', 'My uncle reads company statements for a living. He recorded how he does it. Then you try.', 4.9, 124, 2, 25, [1, 3], 'statement', 'mentor'], ['owenf', 'Owen P. ’28', 'A group picks one company and argues about it, in recorded replies.', 4.5, 52, 1, 15, [2], '', 'discuss'], ['liamf', 'Liam T. ’26', 'Old-exam problems, harder every day.', 4.2, 87, 1, 150, [1, 4], '', 'asks']]},
-    {code: 'MU 110', name: 'Guitar I', days: [2, 4], hw: [2, 2], nowU: 1, units: [['Open chords', '2026-10-06', 'Playing test 1', ['Holding the guitar', 'Open chords', 'Strumming']], ['Barre chords and scales', '2026-11-17', 'Playing test 2', ['Barre chords', 'The major scale', 'Changing chords in time']], ['Your song', '2026-12-08', 'Recital', ['Pick a song', 'Arrange it', 'Play it']]],
-      now: [['owen', 'Owen P. ’28', 'Every lesson starts in tune: hold your phone to the guitar, string by string.', 4.8, 76, 1, 20, [2, 4], 'tuner', 'hands', /tuning/i], ['sofiag', 'Sofia L. ’26', 'Record your playing. Classmates and I reply with what to try next.', 4.7, 33, 2, 8, [3], '', 'discuss']]},
+    {code: 'MA 132', name: 'Calculus II', cat: 'science', days: [1, 3, 5], hw: [5, 1], nowU: 2, units: [['Integration techniques', '2026-09-25', 'Exam 1', ['integration by parts', 'trig integrals', 'trig substitution', 'partial fractions', 'improper integrals']], ['Applications of integrals', '2026-10-23', 'Exam 2', ['area between curves', 'volumes of revolution', 'arc length', 'work and force']], ['Sequences and series', '2026-11-20', 'Exam 3', ['sequences', 'geometric series', 'convergence tests', 'alternating series', 'power series', 'Taylor series']], ['Parametric and polar', '2026-12-09', 'Final', ['parametric curves', 'polar coordinates', 'area in polar', 'conic sections']]],
+      now: [
+        ['maya', 'Maya R. ’27', 'Move a slider and watch the series settle, before any formula.', 4.9, 212, 2, 40, [1, 4], 'sliders', ['Watch a sequence settle', 'Drag the ratio of a geometric series', 'When adding forever explodes', 'The integral test, seen as area', 'Race two series side by side', 'Alternating series on a number line', 'Build a power series, term by term', 'Fit a curve with Taylor polynomials']],
+        ['jordan', 'Jordan K. ’26', 'A tutor that only asks questions and makes you explain.', 4.7, 340, 2, 90, [2, 5], 'voice', ['What does it mean to converge?', 'Explain geometric series out loud', 'Why the harmonic series diverges', 'Defend your choice of test', 'Ratio test or root test? Argue it', 'Find the interval of convergence, aloud', 'Where does a Taylor series come from?']],
+        ['priya', 'Priya S. ’27', 'Real wrong answers. You find what went wrong.', 4.8, 156, 1, 12, [3], 'mistake', ['The limit that isn’t', 'Whose geometric sum is wrong?', 'The test that doesn’t apply', 'The Taylor series with a bad center']],
+        ['sofia', 'Sofia L. ’26', 'Study group: everyone records one minute, then replies to a classmate.', 4.6, 64, 1, 5, [4], 'group', ['Convergence, in your own words', 'Which test would you pick, and why?', 'Group problem: the tricky series', 'Group review before Exam 3']],
+        ['liam', 'Liam T. ’26', 'Old-exam problems, harder every day.', 4.4, 98, 1, 200, [1, 3], '', ['Drill: limits of sequences', 'Drill: geometric and telescoping', 'Drill: the integral test', 'Drill: comparison tests', 'Drill: the ratio test', 'Drill: power series', 'Drill: Taylor series', 'Timed practice for Exam 3']]]},
+    {code: 'PH 132', name: 'Physics II', cat: 'science', days: [2, 4], hw: [1, 1], nowU: 2, units: [['Charge and fields', '2026-09-24', 'Exam 1', ['Coulomb’s law', 'electric fields', 'Gauss’s law']], ['Potential', '2026-10-15', 'Exam 2', ['electric potential', 'capacitors', 'dielectrics']], ['Circuits', '2026-11-12', 'Exam 3', ['current and resistance', 'DC circuits', 'Kirchhoff’s rules', 'RC circuits']], ['Magnetism and waves', '2026-12-10', 'Final', ['magnetic force', 'Faraday’s law', 'electromagnetic waves']]],
+      now: [
+        ['noah', 'Noah B. ’27', 'A parts kit comes in the mail. Build it for real, or use my simulation.', 4.9, 88, 2, 30, [2, 4], 'circuit', ['Light your first LED', 'Measure current with a meter', 'Series and parallel on a breadboard', 'Why your bulbs go dim', 'Build a voltage divider', 'Charge a capacitor and time it', 'Find the fault in my circuit']],
+        ['ethan', 'Ethan W. ’27', 'A tutor guides you through each problem and never gives the answer.', 4.8, 190, 2, 70, [2, 5], '', ['Why does current flow at all?', 'Reduce this network, step by step', 'Set up Kirchhoff’s loops', 'When your loop equations disagree', 'A capacitor at the first instant', 'What the RC time constant means', 'An exam-style circuit, guided', 'Explain your hardest problem']],
+        ['ava', 'Ava M. ’28', 'A short video each day, then one hard question.', 4.3, 41, 1, 9, [3], '', ['Video: charge moving through a wire', 'Video: what a resistor does', 'Video: Kirchhoff’s two rules', 'Video: the RC curve']]]},
+    {code: 'FI 301', name: 'Financial Management', cat: 'money', days: [1, 3], hw: [3, 1], nowU: 1, units: [['Time value of money', '2026-10-01', 'Exam 1', ['present value', 'annuities', 'loans']], ['Reading a company', '2026-11-05', 'Exam 2', ['income statements', 'cash flow', 'debt', 'ratios']], ['Valuation', '2026-12-10', 'Final', ['discounted cash flow', 'risk and return', 'capital structure']]],
+      now: [
+        ['grace', 'Grace H. ’26', 'My uncle reads company statements for a living. He recorded how he does it. Then you try.', 4.9, 124, 2, 25, [1, 3], 'statement', ['How my uncle opens an annual report', 'Revenue: what’s really in it?', 'Why profit isn’t cash', 'Reading the cash flow statement', 'Debt: can they pay it?', 'The footnotes people skip', 'The few ratios he actually uses', 'Compare two retailers', 'Your turn: read one alone']],
+        ['owenf', 'Owen P. ’28', 'A group picks one company and argues about it, in recorded replies.', 4.5, 52, 1, 15, [2], '', ['Pick your company', 'Argue: is the revenue real?', 'Argue: too much debt?', 'Argue: where is the cash going?', 'Group verdict: would you buy it?']],
+        ['liamf', 'Liam T. ’26', 'Old-exam problems, harder every day.', 4.2, 87, 1, 150, [1, 4], '', ['Drill: building an income statement', 'Drill: indirect cash flow', 'Drill: common-size statements', 'Drill: liquidity ratios', 'Drill: leverage ratios', 'Drill: return on equity', 'Timed practice for Exam 2']]]},
+    {code: 'ES 220', name: 'Statics', cat: 'science', days: [1, 3, 5], hw: [3, 1], nowU: 1, units: [['Forces and moments', '2026-10-02', 'Exam 1', ['force vectors', 'moments', 'couples', 'equivalent systems']], ['Rigid bodies and structures', '2026-11-06', 'Exam 2', ['free-body diagrams', 'equilibrium', 'trusses', 'frames and machines']], ['Friction and centroids', '2026-12-08', 'Final', ['dry friction', 'centroids', 'moments of inertia']]],
+      now: [
+        ['owen', 'Owen P. ’28', 'Build a small truss at home, load it until it breaks, then work out why.', 4.8, 76, 2, 20, [2, 4], 'beam', ['Move the load along a beam', 'Free-body diagrams from real photos', 'Two-force members', 'Build a popsicle-stick truss', 'Method of joints on your truss', 'Method of sections', 'Why your truss failed', 'Frames and machines at home', 'Redesign and test again', 'Show your best truss']],
+        ['priyas', 'Priya S. ’27', 'Real wrong answers. You find what went wrong.', 4.7, 133, 1, 18, [3], '', ['The free-body diagram with a force missing', 'The sign that flipped', 'The truss solved from the wrong joint', 'The frame taken apart wrong', 'The moment taken about the wrong point']],
+        ['sofias', 'Sofia L. ’26', 'Record your solution. Classmates and I reply with what to try next.', 4.5, 47, 1, 11, [5], '', ['Record your free-body diagram', 'Reply: is this equilibrium right?', 'Record a truss, joint by joint', 'Reply: find the zero-force members', 'Group review before Exam 2']]]},
   ];
+  const STYLES = [['A short video each day, then one hard question.', t => 'Video: ' + t], ['A group discussion with recorded replies.', t => 'Group: ' + t], ['You teach it to an AI student that keeps getting confused.', t => 'Teach back: ' + t], ['Old-exam problems, harder every day.', t => 'Drill: ' + t], ['The story of who needed this idea, and why.', t => 'Where this came from: ' + t], ['A mentor from the field walks through real work.', t => 'In real work: ' + t]];
   CLASSES.forEach(c => {
     let from = START;
     c.units = c.units.map(([n, end, exam, topics], i) => { const e = D(end), u = {i, n, from, end: e, exam, topics}; from = add(e, 1); return u; });
     const k = c.units.findIndex(u => TODAY <= u.end); c.cur = k < 0 ? c.units.length - 1 : k;
     c.hwt = []; for (let w = 2; w <= 15; w += c.hw[1]) { const d = add(START, (w - 1) * 7 + c.hw[0] - 1); if (!BREAKS.has(key(d)) && !c.units.some(u => key(u.end) === key(d))) c.hwt.push(d); }
     c.units.forEach(u => {
-      if (u.i === c.nowU) { u.tutors = c.now.map(([id, w, how, r, n, p, age, days, demo, way, real]) => ({id, u: u.i, w, how, r, n, p, age, days, demo, way, real})); return; }
+      if (u.i === c.nowU) { u.tutors = c.now.map(([id, w, how, r, n, p, age, days, demo, lessons]) => ({id, u: u.i, w, how, r, n, p, age, days, demo, lessons})); return; }
       const seed = c.code + u.n, later = u.end > TODAY && u.i > c.cur, count = later ? 2 : 4, base = Math.floor(rnd(seed) * 10);
-      u.tutors = Array.from({length: count}, (_, i) => { const x = rnd(seed + i), h = HOWS[(base + i) % 6]; return {id: seed + i, u: u.i, w: NAMES[(base + i * 3) % 10], how: h[0], way: h[1], r: +(4.2 + x * .7).toFixed(1), n: Math.round((later ? 8 : 40) + x * (later ? 30 : 260)), p: x > .5 ? 2 : 1, age: Math.round(5 + x * 260), days: i % 2 ? [2, 5] : [1, 4]}; });
+      u.tutors = Array.from({length: count}, (_, i) => {
+        const x = rnd(seed + i), s = STYLES[(base + i) % 6], picks = u.topics.filter((t, j) => rnd(seed + i + t) > .25 || j < 2);
+        return {id: seed + i, u: u.i, w: NAMES[(base + i * 3) % 10], how: s[0], r: +(4.2 + x * .7).toFixed(1), n: Math.round((later ? 8 : 40) + x * (later ? 30 : 260)), p: x > .5 ? 2 : 1, age: Math.round(5 + x * 260), days: i % 2 ? [2, 5] : [1, 4], lessons: picks.map(s[1])};
+      });
     });
   });
   const cls = code => CLASSES.find(c => c.code === code);
-  function lessonDates(u, days) {
-    const out = []; for (let d = u.from; d < u.end; d = add(d, 1)) if (days.includes(d.getDay()) && !BREAKS.has(key(d))) out.push(d);
-    return out.map((d, k) => ({d, t: u.topics[Math.min(u.topics.length - 1, Math.floor(k * u.topics.length / Math.max(1, out.length)))]}));
+  /* Each teacher has their own lessons, each on its own topic, spread over their days in the unit. */
+  function lessonDates(u, t) {
+    if (t.plan) return t.plan;
+    const all = []; for (let d = u.from; d < u.end; d = add(d, 1)) if (t.days.includes(d.getDay()) && !BREAKS.has(key(d))) all.push(d);
+    const titles = t.lessons || u.topics, n = Math.min(titles.length, all.length);
+    return (t.plan = Array.from({length: n}, (_, k) => ({d: all[Math.floor(k * all.length / n)], t: titles[k]})));
   }
-  const initials = w => w.split(' ').slice(0, 2).map(x => x[0]).join('');
+    const initials = w => w.split(' ').slice(0, 2).map(x => x[0]).join('');
 
   /* ---------- state ---------- */
-  const P = {scr: load('joined', false) ? 'school' : 'find', joined: load('joined', false), verified: load('verified', false), code: false, query: '', cquery: '', classes: load('classes', []), enrolled: load('enrolled', {}), stars: load('stars', {}), cur: 'MA 132', unit: 2, sort: 'rated', whole: false, others: false, done: load('done', {}), day: null, sheet: null, demo: null, r: .5, ohm: 470, read: 0, str: 0, rec: false, said: false, wrong: '', solved: false};
+  const P = {scr: load('joined', false) ? 'school' : 'find', joined: load('joined', false), verified: load('verified', false), code: false, query: '', cquery: '', classes: load('classes', []).filter(k => CLASSES.some(c => c.code === k)), enrolled: load('enrolled', {}), stars: load('stars', {}), cur: 'MA 132', unit: 2, sort: 'rated', whole: false, others: false, done: load('done', {}), day: null, sheet: null, demo: null, r: .5, ohm: 470, read: 0, pos: 5, rec: false, said: false, wrong: '', solved: false};
   let deps = {render() {}, toast() {}, real: () => [], startReal() {}, playLink: id => 'play.html?l=' + id};
   const mine = (c, i) => ((P.enrolled[c.code] || {})[i] || []);
   const myTutors = (c, i) => mine(c, i).map(id => c.units[i].tutors.find(t => t.id === id)).filter(Boolean);
-  const myDots = c => { const out = []; c.units.forEach(u => myTutors(c, u.i).forEach(t => lessonDates(u, t.days).forEach(l => out.push(l.d)))); return out; };
+  const myDots = c => { const out = []; c.units.forEach(u => myTutors(c, u.i).forEach(t => lessonDates(u, t).forEach(l => out.push(l.d)))); return out; };
   const realFor = (c, u) => { const pre = (c.name + ', unit ' + (u.i + 1)).toLowerCase(); return (deps.real() || []).filter(l => (l.title || '').toLowerCase().startsWith(pre)); };
   const buildLink = (c, u) => 'studio.html?from=places&new=' + encodeURIComponent(c.name + ', Unit ' + (u.i + 1) + ': my way');
 
@@ -94,7 +114,7 @@
     return `<span class="pl-term" aria-hidden="true"><i class="past" style="width:${n}%"></i><i class="fut" style="width:${100 - n}%"></i>${c.hwt.map(d => `<i class="hw" style="left:${pos(d)}%"></i>`).join('')}${myDots(c).map(d => `<i class="dot" style="left:${pos(d)}%"></i>`).join('')}${c.units.map(u => `<i class="ex${u.end < TODAY ? ' done' : ''}" style="left:${pos(u.end)}%"></i>`).join('')}<i class="now" style="left:${n}%"></i></span>`;
   }
   function nextLine(c) {
-    const u = c.units[c.cur], next = myTutors(c, c.cur).flatMap(t => lessonDates(u, t.days).map(l => ({d: l.d, w: t.w}))).filter(l => l.d >= TODAY).sort((a, b) => a.d - b.d)[0];
+    const u = c.units[c.cur], next = myTutors(c, c.cur).flatMap(t => lessonDates(u, t).map(l => ({d: l.d, w: t.w}))).filter(l => l.d >= TODAY).sort((a, b) => a.d - b.d)[0];
     return next ? `Next lesson: <b>${fmt(next.d)}</b> · ${next.w}` : `Next: <b>${u.exam}</b> · ${fmtS(u.end)}`;
   }
   function schoolS() {
@@ -124,7 +144,7 @@
   function zoomBar(c, u, tutors) {
     const span = u.end - u.from, zp = d => Math.max(0, Math.min(100, (d - u.from) / span * 100)), n = zp(TODAY), hasNow = TODAY >= u.from && TODAY <= u.end;
     const lanes = tutors.map((t, ti) => {
-      const dots = lessonDates(u, t.days).map(l => { const k = doneKey(t, l.d), sel = P.day === k, done = P.done[k]; return `<button type="button" class="ldot ${COLORS[ti % 3]}${done ? ' done' : ''}${sel ? ' sel' : ''}" style="left:${zp(l.d)}%" data-pa="day" data-k="${k}" aria-label="${fmt(l.d)}: ${esc(l.t)}, ${t.w}${done ? ', done' : ''}" aria-pressed="${sel}"><i></i></button>`; }).join('');
+      const dots = lessonDates(u, t).map(l => { const k = doneKey(t, l.d), sel = P.day === k, done = P.done[k]; return `<button type="button" class="ldot ${COLORS[ti % 3]}${done ? ' done' : ''}${sel ? ' sel' : ''}" style="left:${zp(l.d)}%" data-pa="day" data-k="${k}" aria-label="${fmt(l.d)}: ${esc(l.t)}, ${t.w}${done ? ', done' : ''}" aria-pressed="${sel}"><i></i></button>`; }).join('');
       return `<div class="pl-lane">${tutors.length > 1 ? `<span class="who"><i class="${COLORS[ti % 3]}"></i>${t.w}</span>` : ''}<div class="track"><i class="past" style="width:${u.end < TODAY ? 100 : hasNow ? n : 0}%"></i><i class="fut" style="width:${u.end < TODAY ? 0 : hasNow ? 100 - n : 100}%"></i>${dots}<i class="ex${u.end < TODAY ? ' done' : ''}" style="left:100%"></i></div></div>`;
     }).join('');
     const weeks = []; for (let d = u.from, i = 0; d < u.end; d = add(d, 7), i++) weeks.push(d);
@@ -133,14 +153,13 @@
       <div class="axis">${c.hwt.filter(d => d >= u.from && d <= u.end).map(d => `<i class="hw" style="left:${zp(d)}%"></i>`).join('')}${weeks.filter((_, i) => i % step === 0).map(d => `<span style="left:${zp(d)}%">${fmtS(d)}</span>`).join('')}<span class="end">${esc(u.exam)}</span></div></div></div>`;
   }
   function lessonCard(c, u, tutors) {
-    const all = tutors.flatMap(t => lessonDates(u, t.days).map(l => ({t, l}))), x = all.find(a => doneKey(a.t, a.l.d) === P.day); if (!x) return '';
+    const all = tutors.flatMap(t => lessonDates(u, t).map(l => ({t, l}))), x = all.find(a => doneKey(a.t, a.l.d) === P.day); if (!x) return '';
     const k = P.day, done = P.done[k], today = key(x.l.d) === key(TODAY);
     return `<article class="pl-lesson"><span class="when">${fmt(x.l.d)}${today ? ' · Today' : ''}</span><h2>${esc(x.l.t)}</h2><div class="by"><span class="ava">${initials(x.t.w)}</span><span>${x.t.w}</span></div>
       <p class="how">${x.t.how}</p>
       <div class="acts">${startBtn(x.t, x.l.t)}<button type="button" class="pl-donebtn${done ? ' on' : ''}" data-pa="done" aria-pressed="${!!done}">${done ? '✓ Done' : 'Mark as done'}</button></div></article>`;
   }
-  const realMatch = t => t.real && (deps.real() || []).find(l => t.real.test(l.title || ''));
-  const startBtn = (t, topic) => { const r = realMatch(t); return r ? `<a class="cv-pill" style="text-decoration:none" href="${deps.playLink(r.id)}">Start</a>` : t.demo ? `<button type="button" class="cv-pill" data-pa="demo" data-d="${t.demo}">Start</button>` : `<button type="button" class="cv-pill" data-pa="voice" data-topic="${esc(cls(P.cur).name + ': ' + topic)}">Start</button>`; };
+  const startBtn = (t, topic) => { return t.demo ? `<button type="button" class="cv-pill" data-pa="demo" data-d="${t.demo}">Start</button>` : `<button type="button" class="cv-pill" data-pa="voice" data-topic="${esc(cls(P.cur).name + ': ' + topic)}">Start</button>`; };
   const buildBtn = (c, u) => `<a class="pl-build" href="${buildLink(c, u)}">Build your own</a>`;
   function classS() {
     const c = cls(P.cur), u = c.units[P.unit], tutors = myTutors(c, P.unit), rated = P.stars[c.code + P.unit];
@@ -164,20 +183,20 @@
   function sheetH() {
     if (!P.sheet) return '';
     const c = cls(P.cur), u = c.units[P.sheet.u], t = u.tutors.find(x => x.id === P.sheet.id); if (!t) return '';
-    const on = mine(c, u.i).includes(t.id), list = lessonDates(u, t.days), late = u.end >= TODAY && list.some(l => l.d < TODAY), x = rnd(t.w + u.n), started = u.from <= TODAY, r = realMatch(t);
+    const on = mine(c, u.i).includes(t.id), list = lessonDates(u, t), late = u.end >= TODAY && list.some(l => l.d < TODAY), x = rnd(t.w + u.n), started = u.from <= TODAY;
     return `<div class="cv-ov" data-pa="closesheet"><div class="cv-sheet pl-sheet" role="dialog" aria-modal="true" aria-label="${t.w}"><span class="grab"></span><button type="button" class="cv-x" data-pa="closesheet" aria-label="Close">✕</button>
       <div class="pl-who"><span class="ava">${initials(t.w)}</span><h3>${t.w}</h3></div><p style="margin:0">${t.how}</p>
       ${started ? `<div class="pl-stats"><div><b>★ ${t.r.toFixed(1)}</b><span>${t.n} students</span></div><div><b>${Math.round(72 + x * 24)}%</b><span>finished the unit</span></div><div><b>+${Math.round(2 + x * 7)}</b><span>exam points vs. the class</span></div></div><p class="cv-muted" style="margin:0;font-size:12.5px">Exam points come from students who chose to share their grades. Sample numbers.</p>` : ''}
-      <div class="pl-dates">${list.map(l => `<div class="${l.d < TODAY && u.end >= TODAY ? 'done' : ''}"><time>${fmt(l.d)}</time><span>${esc(l.t)}</span></div>`).join('')}</div>
+      <span class="cv-lab" style="margin:0">${list.length} lessons</span><div class="pl-dates">${list.map(l => `<div class="${l.d < TODAY && u.end >= TODAY ? 'done' : ''}"><time>${fmt(l.d)}</time><span>${esc(l.t)}</span></div>`).join('')}</div>
       ${late && !on ? '<p class="cv-muted" style="margin:0;font-size:12.5px">Starting late? Earlier lessons wait for you.</p>' : ''}
-      <div class="cv-row" style="flex-wrap:wrap">${r ? `<a class="cv-pill ghost" style="text-decoration:none" href="${deps.playLink(r.id)}">Try the real lesson</a>` : t.demo ? `<button type="button" class="cv-pill ghost" data-pa="demo" data-d="${t.demo}">Try a demo</button>` : ''}${on ? '<button type="button" class="cv-pill ghost" data-pa="drop">Leave this tutor</button>' : `<button type="button" class="cv-pill" data-pa="take">Take Unit ${u.i + 1} · $${t.p}</button>`}</div>
+      <div class="cv-row" style="flex-wrap:wrap">${t.demo ? `<button type="button" class="cv-pill ghost" data-pa="demo" data-d="${t.demo}">Try a demo</button>` : ''}${on ? '<button type="button" class="cv-pill ghost" data-pa="drop">Leave this tutor</button>' : `<button type="button" class="cv-pill" data-pa="take">Take Unit ${u.i + 1} · $${t.p}</button>`}</div>
     </div></div>`;
   }
   const barsH = () => { const r = P.r, lim = 1 / (1 - r), m = Math.max(lim, 2) * 1.08; let s = 0, o = ''; for (let n = 0; n < 12; n++) { s += Math.pow(r, n); o += `<i style="height:${s / m * 100}%"></i>`; } return o + `<div class="limit" style="bottom:${lim / m * 100}%"><span>Stops at ${lim.toFixed(2)}</span></div>`; };
   const circOut = () => { const I = 7 / P.ohm * 1000, hot = I > 20; return `<div class="led" style="opacity:${Math.max(.15, Math.min(1, I / 20))}"></div><p class="cv-center" style="margin:0"><b>${P.ohm} Ω</b> · ${I.toFixed(0)} mA</p><p class="cv-muted cv-center" style="margin:0">${hot ? 'Too much current. A real LED would burn out above about 20 mA.' : 'Safe. Now build it with the parts in your kit.'}</p>`; };
   const STATEMENT = [['Cash from operations $420M. Net income $610M.', 'Profit looks great, but less cash came in. I always ask why first.'], ['Debt due this year $900M. Cash on hand $300M.', 'Can they pay it? This is the second thing I look at.'], ['Footnote 4: revenue is now counted earlier.', 'Did the rules change, or did the business? People skip the footnotes. Don’t.']];
-  const STRINGS = ['low E', 'A', 'D', 'G', 'B', 'high E'];
-  const TITLES = {sliders: 'Geometric series', voice: 'Geometric series', mistake: 'Geometric series', group: 'Study group', circuit: 'Your first circuit', statement: 'Reading a company', tuner: 'Tune first'};
+  const beamOut = () => { const x = P.pos, l = 10 - x, r = x; return `<div class="pl-beam"><i class="load" style="left:${x * 10}%"><b>10 kN</b></i><i class="bar"></i><i class="sup l"></i><i class="sup r"></i></div><div class="pl-reac"><span><b>${l.toFixed(1)} kN</b> left support</span><span><b>${r.toFixed(1)} kN</b> right support</span></div><p class="cv-muted" style="margin:0">${x === 5 ? 'In the middle, each support carries half.' : 'The closer support carries more. Why?'}</p>`; };
+    const TITLES = {sliders: 'Geometric series', voice: 'Geometric series', mistake: 'Geometric series', group: 'Study group', circuit: 'Your first circuit', statement: 'Reading a company', beam: 'Move the load'};
   function demoS() {
     const d = P.demo; let b;
     if (d === 'voice') b = `<div class="pl-orb" aria-hidden="true"></div><div class="pl-bub">Add 1/2 + 1/4 + 1/8 and keep going forever. Why doesn't it blow up?</div>${P.said ? `<div class="pl-bub you">Because the pieces keep getting smaller.</div><div class="pl-bub">So do the pieces of 1 + 1/2 + 1/3 + 1/4, and that one never stops growing. So what's different?</div>` : '<button type="button" class="cv-pill wide" data-pa="said">Hold to talk</button>'}<p class="cv-muted cv-center" style="margin:0">Sample conversation. No sound in this demo.</p>`;
@@ -185,7 +204,7 @@
     else if (d === 'group') b = `<p class="pl-q">In one minute: why can adding forever give a finite total?</p>${[['Ana', '0:52'], ['Ben', '1:00']].map(([n, l]) => `<div class="pl-clip"><span class="ava">${n[0]}</span><b>${n}</b><span class="wave" aria-hidden="true"></span><em>${l}</em></div>`).join('')}${P.rec ? '<div class="pl-clip me"><span class="ava">You</span><b>You</b><span class="wave" aria-hidden="true"></span><em>0:47</em></div><p class="cv-muted" style="margin:0">Now reply to one classmate. Sample: nothing was recorded.</p>' : '<button type="button" class="cv-pill wide" data-pa="rec">Record your minute</button>'}`;
     else if (d === 'circuit') b = `<p class="pl-q">9-volt battery, one LED, one resistor. Pick the resistor.</p><div data-circ class="pl-narrow" style="gap:6px">${circOut()}</div><input type="range" min="100" max="1000" step="10" value="${P.ohm}" data-ohm aria-label="Resistor in ohms"><p class="cv-muted" style="margin:0">Noah's simulation. The real lesson also mails you the parts.</p>`;
     else if (d === 'statement') b = `<p class="pl-q">What I read first, in order.</p><div class="pl-bub you wide"><b>${STATEMENT[P.read][0]}</b></div><div class="pl-bub">${STATEMENT[P.read][1]}</div><p class="cv-muted" style="margin:0">Grace's uncle, recorded. Made-up company.</p>${P.read < 2 ? '<button type="button" class="cv-pill wide" data-pa="readn">Next</button>' : '<p style="margin:0;font-weight:600">Now you read one on your own.</p>'}`;
-    else if (d === 'tuner') b = P.str < 6 ? `<p class="pl-q">Hold your phone to your guitar. Play the ${STRINGS[P.str]} string.</p><div class="pl-strings">${STRINGS.map((s, i) => `<span class="${i < P.str ? 'ok' : i === P.str ? 'cur' : ''}">${s}</span>`).join('')}</div><button type="button" class="cv-pill wide" data-pa="tune">It's in tune</button><p class="cv-muted" style="margin:0">Sample. The real lesson listens through the microphone and moves on by itself.</p>` : '<p class="pl-q">All six strings are in tune. On to the lesson.</p>';
+    else if (d === 'beam') b = `<p class="pl-q">A 10 kN load sits on a 10-meter beam. Move it. What does each support carry?</p><div data-beamout>${beamOut()}</div><input type="range" min="0" max="10" step="0.5" value="${P.pos}" data-beam aria-label="Where the load sits, in meters"><p class="cv-muted" style="margin:0">Owen's first lesson. Later you build a truss at home and test it.</p>`;
     else b = `<p class="pl-q">Keep adding forever. Each step adds r times the last step. Does the total ever stop growing?</p><div class="pl-bars" data-bars>${barsH()}</div><p class="cv-muted" style="margin:0">Slide r: <b data-rv>${P.r.toFixed(2)}</b></p><input type="range" min="0.1" max="0.9" step="0.05" value="${P.r}" data-range aria-label="Ratio r"><p class="cv-muted" style="margin:0">Now try 0.9. It takes much longer, and it still stops.</p>`;
     return `<div class="cv-head">${back('closedemo')}<h1 class="sm">${TITLES[d]}</h1></div><span class="cv-muted">Demo of a student's lesson</span><div class="pl-demo">${b}</div>`;
   }
@@ -193,8 +212,8 @@
 
   /* ---------- what Explore borrows ---------- */
   const allTutors = () => CLASSES.flatMap(c => c.now.map(n => { const u = c.units[c.nowU]; return u.tutors.find(t => t.id === n[0]) && {c, u, t: u.tutors.find(t => t.id === n[0])}; }));
-  function teachers() {
-    const by = {}; allTutors().forEach(x => { const k = x.t.w; (by[k] = by[k] || {w: k, items: [], n: 0, sum: 0}).items.push(x); by[k].n += x.t.n; by[k].sum += x.t.r * x.t.n; });
+  function teachers(cat) {
+    const by = {}; allTutors().filter(x => !cat || x.c.cat === cat).forEach(x => { const k = x.t.w; (by[k] = by[k] || {w: k, items: [], n: 0, sum: 0}).items.push(x); by[k].n += x.t.n; by[k].sum += x.t.r * x.t.n; });
     return Object.values(by).map(t => Object.assign(t, {r: t.sum / t.n})).sort((a, b) => b.r - a.r);
   }
 
@@ -211,6 +230,7 @@
       const id = e.target.id;
       if (id === 'pl-q') { P.query = e.target.value; const pos2 = e.target.selectionStart; deps.render(); const i = document.getElementById('pl-q'); if (i) { i.focus(); try { i.setSelectionRange(pos2, pos2); } catch (x) {} } return; }
       if (id === 'pl-cq') { P.cquery = e.target.value; const q = P.cquery.trim().toLowerCase(), o = document.getElementById('pl-clist'); if (o) o.innerHTML = classRows(CLASSES.filter(c => !q || (c.name + ' ' + c.code).toLowerCase().includes(q))); return; }
+      if (e.target.matches('[data-beam]')) { P.pos = +e.target.value; const b = document.querySelector('[data-beamout]'); if (b) b.innerHTML = beamOut(); return; }
       if (e.target.matches('[data-ohm]')) { P.ohm = +e.target.value; const b = document.querySelector('[data-circ]'); if (b) b.innerHTML = circOut(); return; }
       if (e.target.matches('[data-range]')) { P.r = +e.target.value; const b = document.querySelector('[data-bars]'), v = document.querySelector('[data-rv]'); if (b) b.innerHTML = barsH(); if (v) v.textContent = P.r.toFixed(2); }
     },
@@ -224,7 +244,7 @@
     const c = cls(code); P.cur = code; P.unit = u == null ? (mine(c, c.cur).length ? c.cur : Math.min(c.cur, c.units.length - 1)) : u; P.whole = false; P.others = false; P.scr = 'class'; pickDay(c);
   }
   function pickDay(c) {
-    const u = c.units[P.unit], all = myTutors(c, P.unit).flatMap(t => lessonDates(u, t.days).map(l => ({k: doneKey(t, l.d), d: l.d}))).sort((a, b) => a.d - b.d);
+    const u = c.units[P.unit], all = myTutors(c, P.unit).flatMap(t => lessonDates(u, t).map(l => ({k: doneKey(t, l.d), d: l.d}))).sort((a, b) => a.d - b.d);
     const next = all.find(x => x.d >= TODAY && !P.done[x.k]) || all[all.length - 1]; P.day = next ? next.k : null;
   }
   function act(a, d = {}) {
@@ -244,7 +264,7 @@
       case 'unit': { const u = +d.u; if (u < 0 || u >= c.units.length) return; P.unit = u; P.whole = false; P.others = false; pickDay(c); P.sheet = null; break; }
       case 'whole': P.whole = !P.whole; break;
       case 'others': P.others = !P.others; break;
-      case 'done': if (P.day) { if (P.done[P.day]) delete P.done[P.day]; else P.done[P.day] = 1; save('done', P.done); } break;
+      case 'done': if (P.day) { if (P.done[P.day]) delete P.done[P.day]; else { P.done[P.day] = 1; const u = c.units[P.unit], all = myTutors(c, P.unit).flatMap(t => lessonDates(u, t).map(l => ({k: doneKey(t, l.d), d: l.d}))).sort((a, b) => a.d - b.d), i = all.findIndex(x => x.k === P.day), nx = all.slice(i + 1).find(x => !P.done[x.k]); if (nx) P.day = nx.k; } save('done', P.done); } break;
       case 'day': P.day = d.k; break;
       case 'sort': P.sort = d.k; break;
       case 'tutor': P.sheet = {u: +d.u, id: d.id}; break;
@@ -252,13 +272,12 @@
       case 'take': { const {u, id} = P.sheet; const e = P.enrolled[c.code] = P.enrolled[c.code] || {}; e[u] = (e[u] || []).concat(id); save('enrolled', P.enrolled); P.sheet = null; P.unit = u; P.whole = false; pickDay(c); deps.render(); top(); deps.toast('You\'re in. Tap a day to see its lesson. (Demo: nothing was charged.)'); return; }
       case 'drop': { const {u, id} = P.sheet, e = P.enrolled[c.code] || {}; e[u] = (e[u] || []).filter(x => x !== id); P.enrolled[c.code] = e; save('enrolled', P.enrolled); P.sheet = null; pickDay(c); break; }
       case 'star': P.stars[c.code + P.unit] = +d.n; save('stars', P.stars); break;
-      case 'demo': P.back = P.sheet; P.demo = d.d; P.sheet = null; P.said = false; P.wrong = ''; P.solved = false; P.read = 0; P.str = 0; P.rec = false; P.scr = 'demo'; top(); break;
+      case 'demo': P.back = P.sheet; P.demo = d.d; P.sheet = null; P.said = false; P.wrong = ''; P.solved = false; P.read = 0; P.pos = 5; P.rec = false; P.scr = 'demo'; top(); break;
       case 'closedemo': P.demo = null; P.scr = 'class'; P.sheet = P.back || null; P.back = null; break;
       case 'voice': deps.startReal(d.topic); return;
       case 'said': P.said = true; break;
       case 'rec': P.rec = true; break;
       case 'readn': P.read = Math.min(2, P.read + 1); break;
-      case 'tune': P.str++; break;
       case 'mis': if (d.k === 'c') P.solved = true; else P.wrong = d.k; break;
     }
     deps.render();

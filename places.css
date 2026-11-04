@@ -179,3 +179,14 @@
 .ex-person b { font-size:12.5px; font-weight:600; line-height:1.2; }
 .ex-person span.st { font-size:11.5px; color:var(--ink-soft); }
 .pl-lesson .cv-pill { color:var(--paper); padding-left:24px; padding-right:24px; }
+.pl-beam { position:relative; height:96px; margin:8px 14px 0; }
+.pl-beam i { position:absolute; display:block; }
+.pl-beam .bar { left:-8px; right:-8px; top:56px; height:8px; border-radius:3px; background:var(--ink); }
+.pl-beam .sup { top:64px; width:0; height:0; margin-left:-11px; border-left:11px solid transparent; border-right:11px solid transparent; border-bottom:18px solid var(--ink-soft); }
+.pl-beam .sup.l { left:0; } .pl-beam .sup.r { left:100%; }
+.pl-beam .load { top:6px; height:50px; width:0; border-left:3px solid var(--accent); margin-left:-1.5px; }
+.pl-beam .load::after { content:""; position:absolute; left:-8px; bottom:0; border-left:6.5px solid transparent; border-right:6.5px solid transparent; border-top:10px solid var(--accent); }
+.pl-beam .load b { position:absolute; top:-6px; left:8px; font-size:12px; font-style:normal; white-space:nowrap; }
+.pl-reac { display:flex; justify-content:space-between; gap:10px; font-size:13px; color:var(--ink-soft); margin:8px 0; }
+.pl-reac b { display:block; font:400 22px/1.1 Georgia,"Times New Roman",serif; color:var(--ink); }
+.pl-reac span:last-child { text-align:right; }
