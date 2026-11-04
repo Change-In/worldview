@@ -348,6 +348,7 @@ function scrHome() {
     const t = WP().teachers().find(x => x.w === S.teacher), own = CATALOG.filter(c => sameName(c.by, S.teacher)); if (!t && !own.length) { S.scr = 'home'; return scrHome(); }
     const n = (t ? t.n : 0) + own.reduce((a, c) => a + c.learners, 0), sum = (t ? t.sum : 0) + own.reduce((a, c) => a + c.rating * c.learners, 0), count = (t ? t.items.length : 0) + own.length;
     return `<div class="cv-head"><button type="button" class="cv-back" data-go="home" aria-label="Back">‹</button><h1 class="sm">${esc(S.teacher)}</h1></div>
+      ${WP().about(S.teacher) ? `<p class="cv-muted" style="margin:0">${esc(WP().about(S.teacher))}</p>` : ''}
       <div class="pl-stats"><div><b>★ ${(sum / n).toFixed(1)}</b><span>rating</span></div><div><b>${n}</b><span>students</span></div><div><b>${count}</b><span>${count === 1 ? 'course' : 'courses'}</span></div></div>
       ${t ? `<div class="pl-tlist">${t.items.map(x => `<button type="button" class="pl-tutor" data-openuser="${x.c.code}|${x.u.i}|${esc(x.t.id)}"><span class="ava">${WP().initials(x.t.w)}</span><span class="nm"><b>${esc(x.c.name)}, Unit ${x.u.i + 1}</b><span>${esc(x.t.how)}</span></span><span class="sc"><span>★ ${x.t.r.toFixed(1)}</span><em>${x.t.n} students</em><span>$${x.t.p}</span></span></button>`).join('')}</div>` : ''}
       ${own.length ? `<div class="ex-grid">${own.map(exCard).join('')}</div>` : ''}
