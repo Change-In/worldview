@@ -190,3 +190,11 @@
 .pl-reac { display:flex; justify-content:space-between; gap:10px; font-size:13px; color:var(--ink-soft); margin:8px 0; }
 .pl-reac b { display:block; font:400 22px/1.1 Georgia,"Times New Roman",serif; color:var(--ink); }
 .pl-reac span:last-child { text-align:right; }
+.pl-mine { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border-radius:16px; background:var(--surface-soft); border:1px solid var(--line); color:var(--ink); text-decoration:none; }
+.pl-mine:hover { border-color:var(--ink-soft); }
+.pl-mine .tx { display:grid; gap:1px; min-width:0; }
+.pl-mine em { font-style:normal; font-size:12px; font-weight:700; color:var(--cv-warn); }
+.pl-mine em.pub { color:var(--cv-ok); }
+.pl-mine b { font:400 17px/1.2 Georgia,"Times New Roman",serif; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pl-mine .go { flex:0 0 auto; font-size:13px; font-weight:700; color:var(--accent); }
+.pl-tb .seg .bm { display:inline-block; width:6px; height:6px; margin-left:4px; border-radius:50%; background:var(--cv-warn); vertical-align:middle; }

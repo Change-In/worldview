@@ -302,7 +302,7 @@
 
   /* ---------------- real lessons published in Teacher Studio (NAV-180) ----------------
      Everything else on this page is a sample; these are the owner's real, published lessons. */
-  let PUB = null, CAT = null;
+  let PUB = null, CAT = null, MY = [];
   async function loadPublished() {
     const db = read(() => backendClient); if (!db) { PUB = []; CAT = []; return; }
     try {
@@ -313,7 +313,8 @@
       PUB = (ls || []).map(l => ({id: l.id, title: l.title, version: V[l.id] ? V[l.id].version : null, at: V[l.id] ? V[l.id].published_at : l.updated_at}));
     } catch (e) { PUB = []; }
     try { const {data} = await db.rpc('worldview_teacher_lessons_catalog'); CAT = data || []; } catch (e) { CAT = []; }
-    if (S.open && S.scr === 'home') render();
+    try { const {data} = await db.from('worldview_teacher_lessons').select('id,title,shared,updated_at,kind').order('updated_at', {ascending: false}); MY = (data || []).filter(l => l.kind !== 'experiment'); } catch (e) { MY = []; }
+    if (S.open && (S.area === 'places' || S.scr === 'home')) render();
   }
   const playLink = id => new URL('play.html?l=' + id, location.href).href;
   function catalogSection(label) {
@@ -692,7 +693,7 @@ function scrHome() {
     if (!ok) toast('The lesson did not start. Check that you are signed in, then try again.');
   }
 
-  WP().init({render, toast, real: () => REAL(), startReal, playLink});
+  WP().init({render, toast, real: () => REAL(), my: () => MY, startReal, playLink});
 
   /* ---------------- visibility ---------------- */
   function blocked() {

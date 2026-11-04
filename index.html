@@ -18,8 +18,8 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <link rel="stylesheet" href="lesson-entry-popup.css?v=2.1.38">
 <script src="lesson-entry-popup.js?v=2.1.71"></script>
 <link rel="stylesheet" href="lesson-folders.css?v=2.1.77">
-<link rel="stylesheet" href="courses.css?v=3.1.66">
-<link rel="stylesheet" href="places.css?v=3.1.66">
+<link rel="stylesheet" href="courses.css?v=3.1.67">
+<link rel="stylesheet" href="places.css?v=3.1.67">
 <link rel="stylesheet" href="boot-splash.css?v=3.1.22">
 <link rel="stylesheet" href="map-tools.css?v=3.1.21">
 <script src="lesson-folders.js?v=3.1.13"></script>
@@ -2223,7 +2223,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.66 · Nov 3";
+const BUILD = "v3.1.67 · Nov 3";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2231,6 +2231,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.67",date:"Nov 3",changes:["The lesson you're building now shows in its unit, even as a draft, with Keep building to jump back into Teacher Studio. A small dot on the timeline marks that unit.","Places and your school page list what you're building, so it's one tap away.","It works for any lesson named like Calculus II, Unit 3: my way."]},
   {tag:"v3.1.66",date:"Nov 3",changes:["Every teacher now has their own lessons, each on a different topic. No more two lessons in a row on the same thing.","Guitar is gone from the sample classes. Statics takes its place, with a teacher who has you build a truss at home.","People teaching now shows up in every Explore subject, with the people who teach that subject. Tap a person to see everything they teach.","Marking a lesson done moves you on to the next one."]},
   {tag:"v3.1.65",date:"Nov 3",changes:["A unit you've signed up for is now the same timeline, zoomed in. Tap a lesson on the line to see it, and mark it done. Done lessons fill in.","Paid for two teachers in a unit? Each one gets their own line on the same dates.","Build your own is a small button now, not a bright banner.","Explore is one page: tap a subject and the results below change. Ways of learning and the extra shelves are gone. People teaching stays.","Teacher Studio has a back arrow to where you came from."]},
   {tag:"v3.1.64",date:"Nov 3",changes:["The bottom bar is now Home, Places and Explore. Profile stays on your account button and the rail.","Places: find your university, add your classes and see each one as a term line. This is a demo with a made-up school.","Open a class to see one unit at a time, starting today. At the top: how would you teach this? Below: lessons by other students, led by their names and ratings.","Sign up for a unit and it zooms in: tap a day to see its lesson. You can take more than one way of learning a unit.","Build your own goes to Teacher Studio. Name your lesson like Calculus II, Unit 3: my way and publish it, and it shows up in that unit.","Explore now starts with ways of learning and people teaching."]},
@@ -16559,8 +16560,8 @@ window.addEventListener("blur", () => {
 });
 </script>
 <!-- NAV-152/154: owner-only Courses preview (bottom tabs Home · Courses · Profile). -->
-<script src="places.js?v=3.1.66"></script>
-<script src="courses.js?v=3.1.66"></script>
+<script src="places.js?v=3.1.67"></script>
+<script src="courses.js?v=3.1.67"></script>
 <!-- NAV-157: lesson map tools; NAV-156: lift the loading screen when Home is ready. -->
 <script src="map-tools.js?v=3.1.21"></script>
 <script src="boot-splash.js?v=3.1.22"></script>

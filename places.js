@@ -72,11 +72,19 @@
 
   /* ---------- state ---------- */
   const P = {scr: load('joined', false) ? 'school' : 'find', joined: load('joined', false), verified: load('verified', false), code: false, query: '', cquery: '', classes: load('classes', []).filter(k => CLASSES.some(c => c.code === k)), enrolled: load('enrolled', {}), stars: load('stars', {}), cur: 'MA 132', unit: 2, sort: 'rated', whole: false, others: false, done: load('done', {}), day: null, sheet: null, demo: null, r: .5, ohm: 470, read: 0, pos: 5, rec: false, said: false, wrong: '', solved: false};
-  let deps = {render() {}, toast() {}, real: () => [], startReal() {}, playLink: id => 'play.html?l=' + id};
+  let deps = {render() {}, toast() {}, real: () => [], my: () => [], startReal() {}, playLink: id => 'play.html?l=' + id};
   const mine = (c, i) => ((P.enrolled[c.code] || {})[i] || []);
   const myTutors = (c, i) => mine(c, i).map(id => c.units[i].tutors.find(t => t.id === id)).filter(Boolean);
   const myDots = c => { const out = []; c.units.forEach(u => myTutors(c, u.i).forEach(t => lessonDates(u, t).forEach(l => out.push(l.d)))); return out; };
   const realFor = (c, u) => { const pre = (c.name + ', unit ' + (u.i + 1)).toLowerCase(); return (deps.real() || []).filter(l => (l.title || '').toLowerCase().startsWith(pre)); };
+  /* The lessons you're building: your own Teacher Studio lessons named for a class and unit (drafts too). */
+  const unitPrefix = (c, u) => (c.name + ', unit ' + (u.i + 1)).toLowerCase();
+  const myFor = (c, u) => (deps.my() || []).filter(l => { const t = (l.title || '').toLowerCase(), p = unitPrefix(c, u); return t.startsWith(p) && !/\d/.test(t.charAt(p.length)); });
+  const shortTitle = (c, u, l) => l.title.slice(unitPrefix(c, u).length).replace(/^[:\s]+/, '') || l.title;
+  const studioLink = l => 'studio.html?from=places&l=' + encodeURIComponent(l.id);
+  const statusOf = l => l.shared ? 'Published' : 'Draft';
+  const myCard = (c, u) => myFor(c, u).map(l => `<a class="pl-mine" href="${studioLink(l)}"><span class="tx"><em class="${l.shared ? 'pub' : ''}">Your lesson · ${statusOf(l)}</em><b>${esc(shortTitle(c, u, l))}</b></span><span class="go">Keep building ›</span></a>`).join('');
+  const myStrip = () => { const rows = CLASSES.flatMap(c => c.units.flatMap(u => myFor(c, u).map(l => ({c, u, l})))); return rows.length ? `<span class="cv-lab" style="margin:0">What you're building</span><div class="pl-list">${rows.map(({c, u, l}) => `<a class="pl-mine" href="${studioLink(l)}"><span class="tx"><em class="${l.shared ? 'pub' : ''}">${esc(c.name)}, Unit ${u.i + 1} · ${statusOf(l)}</em><b>${esc(shortTitle(c, u, l))}</b></span><span class="go">Keep building ›</span></a>`).join('')}</div>` : ''; };
   const buildLink = (c, u) => 'studio.html?from=places&new=' + encodeURIComponent(c.name + ', Unit ' + (u.i + 1) + ': my way');
 
   /* ---------- screens ---------- */
@@ -85,6 +93,7 @@
     return `<div class="cv-head"><h1>Places</h1></div><div class="pl-cards">
       <button type="button" class="pl-card" data-pa="school">${ROOF}<b>Halden University</b><span>Fall 2026</span></button>
       <button type="button" class="pl-card add" data-pa="find">${LOT}<b>Add a place</b><span>A school, a company, a club</span></button></div>
+      ${myStrip()}
       <p class="cv-muted cv-center cv-foot">Demo: a made-up school, with sample classes, tutors and prices.</p>`;
   }
   function findS() {
@@ -121,6 +130,7 @@
     const any = CLASSES.some(c => myDots(c).length);
     return `<div class="cv-head">${back('places')}<h1 class="sm">Halden University</h1></div>
       <div class="pl-sub">${ROOF}<span class="cv-muted">Fall 2026 · week ${WEEK} of 15</span></div>
+      ${myStrip()}
       <span class="cv-lab" style="margin:0">Your classes</span>
       <div class="pl-lines">${CLASSES.filter(c => P.classes.includes(c.code)).map(c => `<button type="button" class="pl-line" data-pa="open" data-c="${c.code}"><span class="info"><span class="n"><b>${c.name}</b><span>${c.code}</span></span><span class="next">${nextLine(c)}</span></span>${termLine(c)}</button>`).join('')}</div>
       <div class="pl-legend"><span><i class="lx"></i>Exam</span><span><i class="lh"></i>Homework</span><span><i class="ln"></i>Today</span>${any ? '<span><i class="ld"></i>Your lessons</span>' : ''}</div>
@@ -129,13 +139,14 @@
   }
   function termBar(c) {
     const n = pos(TODAY), mo = [['Sep', '2026-09-01'], ['Oct', '2026-10-01'], ['Nov', '2026-11-01'], ['Dec', '2026-12-01']];
-    return `<div class="pl-tb">${c.units.map(u => `<button type="button" class="seg${u.i === P.unit ? ' on' : ''}" data-pa="unit" data-u="${u.i}" aria-pressed="${u.i === P.unit}" style="left:${pos(u.from)}%;width:${pos(u.end) - pos(u.from)}%">Unit ${u.i + 1}</button>`).join('')}
+    return `<div class="pl-tb">${c.units.map(u => `<button type="button" class="seg${u.i === P.unit ? ' on' : ''}" data-pa="unit" data-u="${u.i}" aria-pressed="${u.i === P.unit}" style="left:${pos(u.from)}%;width:${pos(u.end) - pos(u.from)}%">Unit ${u.i + 1}${myFor(c, u).length ? '<i class="bm" title="You\'re building a lesson here"></i>' : ''}</button>`).join('')}
       <i class="past" style="width:${n}%"></i><i class="fut" style="width:${100 - n}%"></i>${c.hwt.map(d => `<i class="hw" style="left:${pos(d)}%"></i>`).join('')}${myDots(c).map(d => `<i class="dot" style="left:${pos(d)}%"></i>`).join('')}${c.units.map(u => `<i class="ex${u.end < TODAY ? ' done' : ''}" style="left:${pos(u.end)}%"></i>`).join('')}<i class="now" style="left:${n}%"></i>
       ${mo.map(([l, d]) => `<span class="mo" style="left:${pos(D(d))}%">${l}</span>`).join('')}</div>`;
   }
   const sorted = (c, u) => { const by = {rated: (a, b) => b.r - a.r, taken: (a, b) => b.n - a.n, newest: (a, b) => a.age - b.age}[P.sort]; const ids = mine(c, u.i); return u.tutors.slice().sort(by).sort((a, b) => ids.includes(b.id) - ids.includes(a.id)); };
   const row = (c, u, t) => { const on = mine(c, u.i).includes(t.id); return `<button type="button" class="pl-tutor${on ? ' yours' : ''}" data-pa="tutor" data-u="${u.i}" data-id="${esc(t.id)}"><span class="ava">${initials(t.w)}</span><span class="nm"><b>${t.w}</b><span>${t.how}</span></span><span class="sc"><span>★ ${t.r.toFixed(1)}</span><em>${t.n} students</em><span>$${t.p}</span></span></button>`; };
-  const realRow = (c, u, l) => `<a class="pl-tutor real" href="${deps.playLink(l.id)}"><span class="ava">▶</span><span class="nm"><b>${esc(l.title.slice((c.name + ', Unit ' + (u.i + 1)).length).replace(/^[:\s]+/, '') || l.title)}</b><span>A real lesson, built in Teacher Studio</span></span><span class="sc"><span>New</span><em>Free for now</em></span></a>`;
+  const isMine = l => (deps.my() || []).some(m => m.id === l.id);
+  const realRow = (c, u, l) => `<a class="pl-tutor real" href="${deps.playLink(l.id)}"><span class="ava">▶</span><span class="nm"><b>${esc(l.title.slice((c.name + ', Unit ' + (u.i + 1)).length).replace(/^[:\s]+/, '') || l.title)}</b><span>${isMine(l) ? 'Your lesson, as students see it' : 'A real lesson, built in Teacher Studio'}</span></span><span class="sc"><span>New</span><em>Free for now</em></span></a>`;
   const sortBtns = () => [['rated', 'Top rated'], ['taken', 'Most taken'], ['newest', 'Newest']].map(([k, l]) => `<button type="button" class="${P.sort === k ? 'on' : ''}" data-pa="sort" data-k="${k}">${l}</button>`).join('');
   const listBlock = (c, u, mode) => { const real = realFor(c, u); return `<div class="pl-tlist">${real.map(l => realRow(c, u, l)).join('')}${sorted(c, u).filter(t => mode === 'all' || !mine(c, u.i).includes(t.id)).map(t => row(c, u, t)).join('')}</div>`; };
   const COLORS = ['ok', 'acc', 'vi'];
@@ -169,6 +180,7 @@
     if (tutors.length) {
       const others = u.tutors.length - tutors.length, nav = `<div class="pl-unav"><button type="button" class="cv-back" data-pa="unit" data-u="${P.unit - 1}" aria-label="Previous unit"${P.unit ? '' : ' disabled'}>‹</button>${title}<button type="button" class="cv-back" data-pa="unit" data-u="${P.unit + 1}" aria-label="Next unit"${P.unit < c.units.length - 1 ? '' : ' disabled'}>›</button></div>`;
       return `${head}${nav}
+        ${myCard(c, u)}
         ${P.whole ? termBar(c) : zoomBar(c, u, tutors)}
         <div class="pl-under"><button type="button" class="pl-linkb" data-pa="whole">${P.whole ? 'Back to this unit' : 'See the whole term'}</button></div>
         ${lessonCard(c, u, tutors)}
@@ -177,6 +189,7 @@
         ${P.others ? listBlock(c, u, 'others') : ''}`;
     }
     return `${head}${termBar(c)}${title}
+      ${myCard(c, u)}
       <div class="pl-lhead"><div class="pl-sorts">${sortBtns()}</div>${buildBtn(c, u)}</div>
       ${listBlock(c, u, 'all')}<p class="cv-muted cv-center cv-foot">Demo: sample teachers, prices and numbers. Nothing is charged.</p>`;
   }
