@@ -165,6 +165,9 @@
   .shelf + .shelf { margin-top:34px; padding-top:22px; border-top:1px solid var(--line); }
   .shelfhead { display:flex; flex-wrap:wrap; gap:4px 12px; align-items:baseline; }
   .shelfhead h2 { font-size:24px; }
+  .new.small2 { min-height:96px; }
+  .forsel { width:100%; font:inherit; color:var(--ink); background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:8px 9px; }
+  .bar2 .forsel { width:auto; max-width:230px; font-size:13.5px; }
   .result { display:inline-flex; align-items:center; gap:6px; }
   .result i { width:8px; height:8px; border-radius:50%; background:var(--line); flex:none; }
   .result.worked i { background:var(--ok); } .result.unsure i { background:var(--warn); } .result.didnt i { background:var(--accent); }
@@ -191,6 +194,7 @@
   <!-- ALL LESSONS -->
   <div id="gridview" hidden>
     <div class="row" style="margin-bottom:14px"><h1 class="grow" style="font-size:30px">Your lessons</h1><a class="btn ghost" id="reqlink" href="requests" hidden>AI requests</a><button type="button" class="btn ghost" data-guide="1">New to AI?</button></div>
+    <p class="small muted" style="margin:-8px 0 16px">Pick a class, build a lesson with your AI, and publish. It shows up in that unit for your classmates.</p>
     <div id="grid"><p class="muted">Loading…</p></div>
   </div>
 
@@ -198,6 +202,7 @@
   <div id="workview" hidden>
     <div class="bar2">
       <button type="button" class="btn ghost small" id="back">← All lessons</button>
+      <select class="forsel" id="forclass" aria-label="Which class this lesson is for" hidden></select>
       <label class="ttlwrap" title="Click to rename"><input class="ttl" id="title" maxlength="120" aria-label="Lesson title (click to rename)"><span class="pen" aria-hidden="true">✎</span></label>
       <div class="seg" role="group" aria-label="Draft or published"><button type="button" class="on" data-side="draft">Draft</button><button type="button" data-side="pub" id="pubtab">Published</button></div>
       <button type="button" class="pill draftonly" id="conn"><span class="term">&gt;_</span><i></i><span id="connlabel">Not connected</span></button>
@@ -309,9 +314,10 @@
   <button type="button" class="pick" id="tolesson-move"><b>Move it</b><span class="small muted">This experiment becomes the lesson and leaves the Experiments shelf. Nothing is copied.</span></button>
   <div class="row"><button type="button" class="btn ghost small" data-close>Cancel</button></div>
 </div></dialog>
-<dialog id="newdlg"><form id="newform"><h2 id="newhead">New lesson</h2><label class="small" for="newtitle" id="newlabel">What's it called? You can change it later.</label><input type="text" id="newtitle" maxlength="120" placeholder="e.g. Why the Moon has phases"><div class="row"><button type="submit" class="btn">Create</button><button type="button" class="btn ghost" data-close>Cancel</button></div></form></dialog>
+<dialog id="newdlg"><form id="newform"><h2 id="newhead">New lesson</h2><div id="newforwrap" style="display:grid;gap:4px"><label class="small" for="newfor">Which class is it for?</label><select class="forsel" id="newfor"></select></div><label class="small" for="newtitle" id="newlabel">What's it called? You can change it later.</label><input type="text" id="newtitle" maxlength="120" placeholder="e.g. Why the Moon has phases"><div class="row"><button type="submit" class="btn">Create</button><button type="button" class="btn ghost" data-close>Cancel</button></div></form></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="places-data.js?v=3.1.69"></script>
 <script src="port-host.js?v=3.1.60"></script>
 <script src="studio-chat.js?v=3.1.58"></script>
 <script src="lesson-days.js?v=3.1.59"></script>
@@ -477,6 +483,38 @@ ${RULES}`;
   document.addEventListener('mouseout', e => { const t = e.target.closest('.tile'); if (t && !t.contains(e.relatedTarget)) thumbPlay(t, false); });
   /* ---------- lessons ---------- */
   async function readFileHtml(input) { const file = input.files && input.files[0]; input.value = ''; if (!file) return null; if (file.size > 400000) { toast('That file is over 400 KB.'); return null; } return file.text(); }
+  /* ---------- lessons are built for a class (NAV-209) ----------
+     The class and unit are kept at the start of the title ("Calculus II, Unit 3: ..."), which is how Places finds a lesson.
+     Teachers pick them from a list and only ever type the short name. */
+  const PD = window.WorldviewPlacesData || {classes: [], currentUnit: () => 0}, CLS = PD.classes;
+  function classOf(title) {
+    const t = title || '';
+    for (const c of CLS) {
+      const pre = c.name + ', unit ';
+      if (t.slice(0, pre.length).toLowerCase() !== pre.toLowerCase()) continue;
+      const m = t.slice(pre.length).match(/^(\d+)(?!\d)\s*:?\s*/);
+      if (m && c.units[+m[1] - 1]) return {c, u: +m[1] - 1, name: t.slice(pre.length + m[0].length) || 'Untitled'};
+    }
+    return null;
+  }
+  const shortOf = title => { const k = classOf(title); return k ? k.name : title; };
+  const fullTitle = (c, u, name) => (c.name + ', Unit ' + (u + 1) + ': ' + name).slice(0, 120);
+  const classOptions = none => '<option value="">' + none + '</option>' + CLS.map((c, ci) => '<optgroup label="' + esc(c.name) + '">' + c.units.map((u, ui) => '<option value="' + ci + '|' + ui + '">' + esc(c.name) + ', Unit ' + (ui + 1) + ': ' + esc(u[0]) + '</option>').join('') + '</optgroup>').join('');
+  const pickValue = v => { const [ci, ui] = (v || '').split('|'); return v && CLS[+ci] ? {c: CLS[+ci], u: +ui} : null; };
+  function openNew(ci, ui) {
+    $('#newform').dataset.kind = 'lesson'; $('#newhead').textContent = 'New lesson'; $('#newforwrap').hidden = false;
+    $('#newfor').innerHTML = classOptions('No class');
+    $('#newfor').value = ci == null || !CLS[ci] ? '' : ci + '|' + (ui == null || !CLS[ci].units[ui] ? PD.currentUnit(CLS[ci]) : ui);
+    $('#newtitle').placeholder = 'Give your lesson a name'; $('#newtitle').value = ''; $('#newdlg').showModal();
+  }
+  function syncClass() {
+    if (!cur) return;
+    const f = $('#forclass'), k = classOf(cur.title); f.hidden = cur.kind === 'experiment' || !CLS.length;
+    if (f.hidden) return;
+    if (!f.options.length) f.innerHTML = classOptions('No class');
+    f.value = k ? CLS.indexOf(k.c) + '|' + k.u : '';
+    if (document.activeElement !== $('#title')) $('#title').value = shortOf(cur.title);
+  }
   async function showGrid() {
     cur = null; if (live) { db.removeChannel(live); live = null; liveInfo = null; } $('#workview').hidden = true; $('#gridview').hidden = false; document.title = 'Teacher Studio · Worldview';
     const [{data, error}, rels] = await Promise.all([db.from(T).select('id,title,shared,updated_at,html,kind,note').order('updated_at', {ascending: false}), db.from('worldview_teacher_lesson_releases').select('lesson_id,version')]);
@@ -484,8 +522,10 @@ ${RULES}`;
     const V = {}; ((rels && rels.data) || []).forEach(r => { V[r.lesson_id] = Math.max(V[r.lesson_id] || 0, r.version); });
     const list = (data || []).map(l => Object.assign(l, {pub: l.shared ? (V[l.id] || -1) : 0})).sort((a, b) => (b.pub !== 0) - (a.pub !== 0));
     const lessons = list.filter(l => l.kind !== 'experiment'), exps = list.filter(l => l.kind === 'experiment').sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-    const tile = l => `<div class="tile" role="button" tabindex="0" data-open="${l.id}" data-kind="${l.kind === 'experiment' ? 'experiment' : 'lesson'}"><div class="thumb"><iframe sandbox="" scrolling="no" tabindex="-1" title="" data-thumb="${l.id}"></iframe></div>${l.pub ? `<span class="ribbon" data-results="${l.id}" title="See students' results"><span class="a">Published${l.pub > 0 ? ' v' + l.pub : ''}</span><span class="b">See results →</span></span><button type="button" class="tilelink" data-copylink="${l.id}">Copy link</button>` : ''}<div class="info"><b>${esc(l.title)}</b><span class="small muted">${l.kind === 'experiment' ? resultLine(l.note) + ' · ' : ''}${ago(l.updated_at)}</span></div><button type="button" class="tilemore" data-tilemenu="${l.id}" aria-label="More">⋯</button></div>`;
-    $('#grid').innerHTML = '<section class="shelf"><div class="grid"><div style="display:grid;gap:10px"><button type="button" class="new" id="new" style="min-height:180px">+ New lesson</button><label class="new" for="upnew" style="min-height:46px;font-size:15px;cursor:pointer">Upload a lesson file</label><input type="file" id="upnew" accept=".html,.htm,text/html" hidden></div>' + lessons.map(tile).join('') + '</div></section>'
+    const tile = l => `<div class="tile" role="button" tabindex="0" data-open="${l.id}" data-kind="${l.kind === 'experiment' ? 'experiment' : 'lesson'}"><div class="thumb"><iframe sandbox="" scrolling="no" tabindex="-1" title="" data-thumb="${l.id}"></iframe></div>${l.pub ? `<span class="ribbon" data-results="${l.id}" title="See students' results"><span class="a">Published${l.pub > 0 ? ' v' + l.pub : ''}</span><span class="b">See results →</span></span><button type="button" class="tilelink" data-copylink="${l.id}">Copy link</button>` : ''}<div class="info"><b>${esc(l.kind === 'experiment' ? l.title : shortOf(l.title))}</b><span class="small muted">${l.kind === 'experiment' ? resultLine(l.note) + ' · ' : ''}${classOf(l.title) && l.kind !== 'experiment' ? 'Unit ' + (classOf(l.title).u + 1) + ' · ' : ''}${ago(l.updated_at)}</span></div><button type="button" class="tilemore" data-tilemenu="${l.id}" aria-label="More">⋯</button></div>`;
+    const forClass = c => lessons.filter(l => { const k = classOf(l.title); return k && k.c === c; }), others = lessons.filter(l => !classOf(l.title));
+    $('#grid').innerHTML = CLS.map((c, ci) => '<section class="shelf"><div class="shelfhead"><h2>' + esc(c.name) + '</h2><span class="small muted">' + esc(c.code) + '</span></div><div class="grid"><button type="button" class="new small2" data-newfor="' + ci + '">+ New lesson</button>' + forClass(c).map(tile).join('') + '</div></section>').join('')
+      + '<section class="shelf"><div class="shelfhead"><h2>Other lessons</h2></div><div class="grid"><div style="display:grid;gap:10px"><button type="button" class="new small2" id="new">+ New lesson</button><label class="new" for="upnew" style="min-height:46px;font-size:15px;cursor:pointer">Upload a lesson file</label><input type="file" id="upnew" accept=".html,.htm,text/html" hidden></div>' + others.map(tile).join('') + '</div></section>'
       + '<section class="shelf" aria-labelledby="exphead"><div class="shelfhead"><h2 id="exphead">Experiments</h2><span class="small muted">Tries at new ways to teach, kept apart from your lessons. Only you see them.</span></div><div class="grid"><button type="button" class="new" id="newexp" style="min-height:236px">+ New experiment</button>' + exps.map(tile).join('') + '</div></section>';
     THUMBS = {}; list.forEach(l => { THUMBS[l.id] = l.html; const f = document.querySelector(`[data-thumb="${l.id}"]`); if (f) f.srcdoc = WorldviewPortHost.compose(l.html, l.id); });
   }
@@ -570,7 +610,7 @@ ${RULES}`;
     if (error || !data) { toast('Couldn\'t open that lesson.'); return showGrid(); }
     if (push) history.pushState({l: id}, '', '?l=' + id);
     cur = data; lastSaved = data.html; RELS = []; RUNS = []; $('#gridview').hidden = true; $('#workview').hidden = false; document.title = data.title + ' · Teacher Studio';
-    $('#title').value = data.title; $('#html').value = ''; host.o.lessonId = data.id; host.run(data.html); noteDirty = false; renderNote();
+    $('#title').value = data.kind === 'experiment' ? data.title : shortOf(data.title); $('#html').value = ''; host.o.lessonId = data.id; host.run(data.html); noteDirty = false; renderNote(); syncClass();
     showSide(want === 'pub' ? 'pub' : 'draft'); renderShare(); loadReleases(); loadRuns(); loadAiUse();
     joinLive(data.id); if (helper) helper.lessonChanged();
   }
@@ -715,7 +755,7 @@ ${RULES}`;
     const {data} = await db.from(T).select('html,updated_at,title,kind,note').eq('id', cur.id).single();
     if (data && data.html !== lastSaved) { lastSaved = data.html; cur.html = data.html; host.run(data.html); renderPubBar(); lastSaveAt = lastSaveAt || Date.now(); renderLive(); if (helper) helper.previewChanged(); }
     if (data && (data.kind !== cur.kind || JSON.stringify(data.note) !== JSON.stringify(cur.note)) && !noteFocused() && !noteDirty) { cur.kind = data.kind; cur.note = data.note; renderNote(); }
-    if (data && data.title !== cur.title && document.activeElement !== $('#title')) { cur.title = data.title; $('#title').value = data.title; document.title = data.title + ' · Teacher Studio'; }
+    if (data && data.title !== cur.title && document.activeElement !== $('#title')) { cur.title = data.title; $('#title').value = cur.kind === 'experiment' ? data.title : shortOf(data.title); document.title = data.title + ' · Teacher Studio'; syncClass(); }
   }
   setInterval(poll, 3000);
   /* ---------- which AI edits: chosen from the Edit button's menu ---------- */
@@ -841,12 +881,14 @@ ${RULES}`;
     if (b.dataset.view) { setView(b.dataset.view); host.run(lastSaved || cur.html); return; }
     if (b.dataset.dev) return setDev(b.dataset.dev);
     if (b.dataset.result) { if (cur && cur.kind === 'experiment') saveNote((cur.note || {}).result === b.dataset.result ? '' : b.dataset.result); return; }
+    if (b.dataset.newfor != null) return openNew(+b.dataset.newfor);
     switch (b.id) {
-      case 'new': case 'newexp': {
-        const exp = b.id === 'newexp'; $('#newform').dataset.kind = exp ? 'experiment' : 'lesson';
-        $('#newhead').textContent = exp ? 'New experiment' : 'New lesson';
-        $('#newlabel').textContent = exp ? 'Name it by the idea you want to try. You can change it later.' : 'What\'s it called? You can change it later.';
-        $('#newtitle').placeholder = exp ? 'e.g. Pause the lecture after each point' : 'e.g. Why the Moon has phases';
+      case 'new': return openNew();
+      case 'newexp': {
+        $('#newform').dataset.kind = 'experiment'; $('#newforwrap').hidden = true;
+        $('#newhead').textContent = 'New experiment';
+        $('#newlabel').textContent = 'Name it by the idea you want to try. You can change it later.';
+        $('#newtitle').placeholder = 'e.g. Pause the lecture after each point';
         $('#newtitle').value = ''; return $('#newdlg').showModal();
       }
       case 'tkind': { $('#tilemenu').hidden = true; const t = document.querySelector(`.tile[data-open="${tileTarget}"]`); if (t && t.dataset.kind === 'experiment') return askMakeLesson(tileTarget); if (await setKind(tileTarget, 'experiment')) showGrid(); return; }
@@ -884,8 +926,8 @@ ${RULES}`;
     }
   });
   $('#newform').addEventListener('submit', async e => {
-    e.preventDefault(); const exp = $('#newform').dataset.kind === 'experiment', t = ($('#newtitle').value.trim() || (exp ? 'New experiment' : 'New lesson')).replace(/[<>`'"\\]/g, '').slice(0, 120);
-    const {data, error} = await db.from(T).insert(exp ? {title: t, html: STARTER(t, true), kind: 'experiment', note: {idea: '', triedOn: '', learned: [], result: ''}} : {title: t, html: STARTER(t)}).select('id').single();
+    e.preventDefault(); const exp = $('#newform').dataset.kind === 'experiment', t = ($('#newtitle').value.trim() || (exp ? 'New experiment' : 'New lesson')).replace(/[<>`'"\\]/g, '').slice(0, 120), pick = exp ? null : pickValue($('#newfor').value);
+    const {data, error} = await db.from(T).insert(exp ? {title: t, html: STARTER(t, true), kind: 'experiment', note: {idea: '', triedOn: '', learned: [], result: ''}} : {title: pick ? fullTitle(pick.c, pick.u, t) : t, html: STARTER(t)}).select('id').single();
     $('#newdlg').close(); if (error) return toast(/lesson_limit/.test(error.message) ? 'You have 50 lessons; delete one first.' : 'Couldn\'t create it: ' + error.message);
     await showLesson(data.id, 'stay'); editOnComputer();
   });
@@ -893,7 +935,8 @@ ${RULES}`;
   document.addEventListener('keydown', e => { const t = e.target.closest && e.target.closest('.tile[data-open]'); if (t && (e.key === 'Enter' || e.key === ' ') && e.target === t) { e.preventDefault(); showLesson(t.dataset.open, true); } });
   document.addEventListener('change', async e => { if (e.target.id !== 'upnew') return; const name = (e.target.files && e.target.files[0] && e.target.files[0].name || 'Uploaded lesson').replace(/\.html?$/i, ''); const h = await readFileHtml(e.target); if (!h) return; const t = (titleFromHtml(h) || name).slice(0, 120); const {data, error} = await db.from(T).insert({title: t, html: h}).select('id').single(); if (error) return toast('Couldn\'t upload it: ' + error.message); showLesson(data.id, true); });
   const titleFromHtml = h => { const m = String(h).match(/\btitle\s*:\s*(['"`])((?:\\.|(?!\1).){2,120}?)\1/) || String(h).match(/<title>([^<]{2,120})<\/title>/i); return m ? (m[2] || m[1]).trim() : ''; };
-  $('#title').addEventListener('change', () => { const t = $('#title').value.trim(); if (t && cur && t !== cur.title) save({title: t.slice(0, 120)}); });
+  $('#title').addEventListener('change', async () => { const t = $('#title').value.trim(); if (!t || !cur) return; const k = cur.kind === 'experiment' ? null : classOf(cur.title), full = k && !classOf(t) ? fullTitle(k.c, k.u, t) : t.slice(0, 120); if (full !== cur.title && await save({title: full})) { cur.title = full; syncClass(); } });
+  $('#forclass').addEventListener('change', async e => { if (!cur) return; const p = pickValue(e.target.value), name = shortOf(cur.title), full = p ? fullTitle(p.c, p.u, name) : name; if (full !== cur.title && await save({title: full})) { cur.title = full; document.title = full + ' · Teacher Studio'; toast(p ? 'This lesson now shows in ' + p.c.name + ', Unit ' + (p.u + 1) + '.' : 'This lesson no longer belongs to a class.'); } syncClass(); });
   $('#listed').addEventListener('change', async e => { if (!(await save({listed: e.target.checked}, true))) e.target.checked = !e.target.checked; else toast(e.target.checked ? 'Listed: it shows on the Courses page for everyone signed in.' : 'Not listed: only people with the link can open it.'); });
   $('#shared').addEventListener('change', async e => { if (!(await save({shared: e.target.checked}, true))) e.target.checked = !e.target.checked; renderShare(); renderPubBar(); toast(e.target.checked ? 'Open: the link works again.' : 'Closed: the link stops working until you open it again.'); });
   addEventListener('popstate', () => { const l = new URLSearchParams(location.search).get('l'); if (l) location.reload(); else showGrid(); });
@@ -933,7 +976,7 @@ ${RULES}`;
     $('#who').textContent = s.user.email || '';
     showRequests(s.user.id);
     const q = new URLSearchParams(location.search), l = q.get('l'), nw = q.get('new');
-    try { const fr = q.get('from'); if (fr) sessionStorage.setItem('wv-studio-from', fr); const b = sessionStorage.getItem('wv-studio-from') === 'places' ? 'places' : 'explore'; $('#backto').href = './#' + b; $('#backto').setAttribute('aria-label', 'Back to ' + (b === 'places' ? 'Places' : 'Explore')); } catch (x) {} if (l) showLesson(l, false, q.get('side') === 'pub' ? 'pub' : 'draft'); else { await showGrid(); if (nw) { $('#newlabel').textContent = 'Keep the start of the name so it appears in that unit. You can change the rest.'; $('#newtitle').value = nw.replace(/[<>`'"\\]/g, '').slice(0, 120); $('#newdlg').showModal(); history.replaceState(null, '', location.pathname); } }
+    try { const fr = q.get('from'); if (fr) sessionStorage.setItem('wv-studio-from', fr); const b = sessionStorage.getItem('wv-studio-from') === 'places' ? 'places' : 'explore'; $('#backto').href = './#' + b; $('#backto').setAttribute('aria-label', 'Back to ' + (b === 'places' ? 'Places' : 'Explore')); } catch (x) {} if (l) showLesson(l, false, q.get('side') === 'pub' ? 'pub' : 'draft'); else { await showGrid(); if (nw) { const ci = CLS.findIndex(c => c.code === q.get('class')), un = q.get('unit'); openNew(ci < 0 ? 0 : ci, un == null ? null : +un); history.replaceState(null, '', location.pathname); } }
   })();
 })();
 </script>

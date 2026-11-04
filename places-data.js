@@ -11,17 +11,11 @@ window.WorldviewPlacesData = (() => {
     'Tomás V. ’27': 'Computer engineering major. Builds things to understand them.',
     'Daniel O. ’28': 'Went from a C on the first exam to the top of the class by making it a game.',
     'Hana P. ’28': 'Architecture minor. Never without a sketchbook.',
-    'Noah B. ’28': 'Works in the robotics lab.',
-    'Ethan W. ’28': 'Physics major. Answers questions with questions.',
-    'Ava M. ’29': 'Makes short physics videos for fun.',
-    'Aisha N. ’28': 'Grew up on job sites. Their dad is an electrician.',
-    'Jun L. ’28': 'Wants to teach high school science.',
     'Grace H. ’27': 'Spent last summer at the desk of the uncle in these lessons.',
     'Marcus T. ’27': 'Runs the investment club.',
     'Rina K. ’28': 'Ran the campus coffee cart for two years.',
     'Dev S. ’29': 'Debate team captain.',
     'Nadia F. ’28': 'Accounting major.',
-    'Owen P. ’29': 'Civil engineering major. Breaks things on purpose.',
   };
   const lesson = l => { const [t, what, min] = l.split('|').map(x => x.trim()); return {t, what: what || '', min: +min || 0}; };
   /* T(name, 'term taken|grade', how they teach, [rating, students, price, days since published], lesson weekdays, demo, sample review, lessons) */
@@ -105,67 +99,6 @@ window.WorldviewPlacesData = (() => {
         T('Liam T. ’27', 'Fall 2024|A', 'Old exams, harder every day, hints before answers.', [4.4, 18, 1, 30], [1, 3], '', '', ['Parametric derivatives: old exam set', 'Polar area: old exam set', 'Conics: old exam set', 'Timed practice for the final']),
       ]],
     ]},
-    {code: 'PH 132', name: 'Physics II', cat: 'science', hw: [1, 1], units: [
-      ['Charge and fields', '2026-09-24', 'Exam 1', [
-        T('Noah B. ’28', 'Spring 2025|A', 'A balloon, tape and a soda can. Experiments at home.', [4.8, 190, 1, 100], [2, 4], '', '', ['Bend water with a balloon', 'Tape that attracts and repels', 'Roll a soda can without touching it', 'Map a field with a charged straw', 'Gauss’s law with a paper box']),
-        T('Ethan W. ’28', 'Fall 2025|A', 'A tutor asks questions until you can explain it.', [4.7, 210, 2, 120], [2, 5], '', '', ['Why does a balloon stick to a wall?', 'Set up Coulomb’s law yourself', 'What is a field, really?', 'Pick your Gaussian surface']),
-        T('Ava M. ’29', 'Fall 2025|A−', 'A short video each day, then one hard question.', [4.3, 96, 1, 110], [3], '', '', ['What charge is', 'Drawing field lines', 'Gauss’s law in four minutes', 'The hardest Exam 1 problem']),
-      ]],
-      ['Potential', '2026-10-15', 'Exam 2', [
-        T('Aisha N. ’28', 'Fall 2025|A', 'Potential is a hill. You hike a contour map of it.', [4.8, 120, 2, 70], [2, 4], '', '', ['Hike a voltage map', 'Why charges roll downhill', 'Where a capacitor keeps its energy', 'What a dielectric changes']),
-        T('Ethan W. ’28', 'Fall 2025|A', 'A tutor asks questions until you can explain it.', [4.7, 175, 2, 80], [2, 5], '', '', ['Why is voltage per charge?', 'Energy or potential?', 'What does a capacitor store?', 'An exam-style problem, guided']),
-        T('Noah B. ’28', 'Spring 2025|A', 'A parts kit in the mail: build a foil capacitor.', [4.6, 90, 1, 60], [2, 4], '', '', ['Build a foil capacitor', 'Measure it with your meter', 'Slide paper between the plates']),
-      ]],
-      ['Circuits', '2026-11-12', 'Exam 3', [
-        T('Noah B. ’28', 'Spring 2025|A', 'Parts come in the mail. Build it, or simulate it.', [4.9, 88, 2, 30], [2, 4], 'circuit', 'My first circuit actually lit up. I called my mom.', [
-          'Light your first LED | Battery, resistor, LED. You pick the resistor, then check your math when it lights. | 15',
-          'Measure current with a meter | Put the meter in the loop and see that current is the same all the way around. | 15',
-          'Series and parallel on a breadboard | Wire two bulbs both ways and predict which is brighter before you switch on. | 20',
-          'Why your bulbs go dim | Add bulbs one at a time and work out where the voltage went. | 15',
-          'Build a voltage divider | Two resistors can give you any voltage you want. Build one and hit 3 volts. | 20',
-          'Charge a capacitor and time it | Time an LED as it fades and find the time constant from your own data. | 20',
-          'Find the fault in the board | The kit’s last board is broken on purpose. Use your meter to find what’s wrong. | 25',
-        ]),
-        T('Ethan W. ’28', 'Fall 2025|A', 'A tutor guides you and never gives the answer.', [4.8, 190, 2, 70], [2, 5], 'bulbs', 'It kept asking why until I actually knew why.', [
-          'Why does current flow at all? | It starts with a wire and a battery, and keeps asking until you can say what pushes the charge. | 12',
-          'Two bulbs in a row | Predict what happens to each bulb. Every wrong guess gets a question, not a correction. | 10',
-          'Reduce this network, step by step | You simplify a resistor network. The tutor only asks what you’d combine next, and why. | 15',
-          'Set up Kirchhoff’s loops | You choose the loops and the signs. The tutor questions each choice before you solve. | 15',
-          'When your loop equations disagree | Your answers contradict each other. Find which sign you flipped. | 15',
-          'A capacitor at the first instant | What does a capacitor act like the moment you close the switch? And long after? | 12',
-          'What the RC time constant means | Predict the voltage after one time constant, then see why it’s about 63% of the way. | 15',
-          'An exam-style circuit, guided | A full old exam circuit. You do the work, and it only asks questions. | 25',
-        ]),
-        T('Aisha N. ’28', 'Fall 2025|A', 'My dad’s an electrician. You diagnose his real jobs.', [4.8, 102, 2, 14], [1, 4], 'breaker', 'Now I know why the kitchen breaker trips.', [
-          'Why this breaker tripped | A kitchen circuit keeps tripping. Add up the current yourself and find out why. | 12',
-          'Why your outlets are in parallel | He opens up a wall. You work out what would happen if they were wired in series. | 12',
-          'The lights that dim | A real house where the lights dim when the AC starts. You explain what’s going on. | 15',
-          'Voltage drop on a long cord | A saw runs weak at the end of a long extension cord. Calculate where the volts went. | 15',
-          'Reading a panel | He walks through a real breaker panel. You say which circuits add up and which don’t. | 15',
-          'Solve a job before he does | He films the symptoms first. You send your diagnosis, then watch what he found. | 20',
-        ]),
-        T('Jun L. ’28', 'Spring 2026|A−', 'Predict first. Then watch the real experiment.', [4.6, 57, 1, 6], [2, 5], 'predict', 'I was wrong so often, and I’ve never remembered anything better.', [
-          'Which bulb is brightest? | Commit to an answer. Then watch the real circuit light up. | 8',
-          'Add a second battery | Predict what changes in each bulb, then watch. | 8',
-          'Unscrew one bulb | Which bulbs go out, and which get brighter? Say why before you see it. | 8',
-          'The bulb and the capacitor | Close the switch. Does the bulb brighten or fade? Most people get this wrong. | 10',
-          'Design a surprise | Build a circuit that fools your classmates. The best one goes in next year’s lesson. | 20',
-        ]),
-        T('Ava M. ’29', 'Fall 2025|A−', 'A short video each day, then one hard question.', [4.3, 41, 1, 9], [1, 3, 5], 'video', 'Four minutes a day. I actually kept up.', [
-          'Charge moving through a wire | A 4-minute video. Then: if electrons drift so slowly, why does the light come on at once? | 8',
-          'What a resistor really does | A 4-minute video. Then: why does a thinner wire get hotter? | 8',
-          'Kirchhoff’s two rules | A 5-minute video. Then: which conservation law is each rule really about? | 8',
-          'Power, and why bulbs burn out | A 4-minute video. Then: why do bulbs usually fail the moment you switch them on? | 8',
-          'The RC curve | A 5-minute video. Then: why does charging slow down as it goes? | 8',
-          'The circuit in your charger | A 4-minute video. Then: why does your phone charge slowly near 100%? | 8',
-        ]),
-      ]],
-      ['Magnetism and waves', '2026-12-10', 'Final', [
-        T('Noah B. ’28', 'Spring 2025|A', 'Build a motor from a battery, a magnet and wire.', [4.8, 36, 2, 14], [2, 4], '', '', ['Build a motor from a battery and wire', 'Why the wire spins', 'A coil and a magnet make a current', 'Build a speaker from a paper cup']),
-        T('Ethan W. ’28', 'Fall 2025|A', 'A tutor asks questions until you can explain it.', [4.7, 42, 2, 20], [2, 5], '', '', ['Which way does the force point?', 'Why does a changing field matter?', 'Faraday’s law, in your words', 'Why is light a wave of fields?']),
-        T('Ava M. ’29', 'Fall 2025|A−', 'A short video each day, then one hard question.', [4.2, 15, 1, 9], [1, 3, 5], '', '', ['Magnets up close', 'Why generators work', 'Light as a wave']),
-      ]],
-    ]},
     {code: 'FI 301', name: 'Financial Management', cat: 'money', hw: [3, 1], units: [
       ['Time value of money', '2026-10-01', 'Exam 1', [
         T('Rina K. ’28', 'Fall 2025|A', 'Put in your real student loan. See what it costs.', [4.8, 240, 2, 110], [1, 4], '', '', ['What $1,000 is worth in ten years', 'Your loan, month by month', 'What an extra $50 a month saves', 'Rent or buy? Run it', 'Saving at 22 or at 32']),
@@ -223,60 +156,6 @@ window.WorldviewPlacesData = (() => {
         T('Marcus T. ’27', 'Spring 2025|A', 'Value a company you use, then pitch it to the class.', [4.7, 34, 2, 16], [2, 4], '', '', ['Pick a company you use', 'Forecast its cash', 'Discount it back', 'How wrong could you be?', 'Pitch it and take questions']),
       ]],
     ]},
-    {code: 'ES 220', name: 'Statics', cat: 'science', hw: [3, 1], units: [
-      ['Forces and moments', '2026-10-02', 'Exam 1', [
-        T('Owen P. ’29', 'Spring 2026|A', 'All with things on your desk: rulers, coins, string.', [4.8, 200, 2, 95], [2, 4], '', '', ['Balance a ruler with coins', 'Weigh your phone with a ruler', 'Two strings, one weight', 'Hang a picture so it stays level']),
-        T('Hana P. ’28', 'Fall 2025|A', 'Photograph what holds weight. Draw forces on it.', [4.7, 150, 2, 90], [1, 4], '', '', ['Draw the forces in your desk lamp', 'Add vectors on your photo', 'Why door handles sit far from the hinge', 'Couples: turning a steering wheel', 'Replace it all with one force']),
-        T('Liam T. ’27', 'Spring 2025|A−', 'Old exams, harder every day, hints before answers.', [4.4, 120, 1, 250], [1, 3], '', '', ['Vectors: old exam set', 'Moments: old exam set', 'Equivalent systems: old exam set', 'Timed practice for Exam 1']),
-      ]],
-      ['Rigid bodies and structures', '2026-11-13', 'Exam 2', [
-        T('Owen P. ’29', 'Spring 2026|A', 'Build a truss at home, break it, work out why.', [4.8, 76, 2, 20], [2, 4], 'beam', 'My truss held 40 pounds. I’ve never cared about homework this much.', [
-          'Move the load along a beam | Slide a load along a beam and predict what each support carries before you look. | 10',
-          'Free-body diagrams from real photos | Draw every force on photos of real bridges and shelves, then check your diagram. | 12',
-          'Two-force members | Find which parts of a real crane only push or pull, and why that makes them simple. | 12',
-          'Build a popsicle-stick truss | Sticks and glue, to a design you choose. It has to span 30 cm. | 30',
-          'Method of joints on your truss | Solve your own truss joint by joint. Predict which member fails first. | 20',
-          'Method of sections | Cut your truss on paper and get one member’s force in three lines. | 15',
-          'Why your truss failed | Load it until it breaks. Film it, then compare what broke with what you predicted. | 25',
-          'Frames and machines at home | Take apart pliers or a bike brake on paper and find the force in each part. | 15',
-          'Redesign and test again | Fix the weak member and test again. Your score is load held per gram. | 30',
-          'Show your best truss | Post your video. The class votes on the strongest and the cleverest. | 10',
-        ]),
-        T('Priya S. ’28', 'Fall 2025|A', 'Real wrong answers. You find what went wrong.', [4.7, 133, 1, 18], [3], 'supports', 'I stopped making the sign mistake after this.', [
-          'The free-body diagram with a force missing | A diagram looks complete but leaves out one force. Find it. | 10',
-          'The supports that don’t add up | The moments are right and the answer is still wrong. Find the line. | 10',
-          'The truss solved from the wrong joint | Someone starts where there are too many unknowns. See why they got stuck. | 12',
-          'The frame taken apart wrong | A force is shown pushing both parts the same way. Catch it. | 12',
-          'The moment arm that isn’t | They used the distance along the beam, not the perpendicular one. Spot it and fix the answer. | 12',
-        ]),
-        T('Hana P. ’28', 'Fall 2025|A', 'Photograph campus structures and draw the forces.', [4.7, 64, 2, 8], [1, 4], 'sign', 'I can’t walk past a bridge now without drawing on it in my head.', [
-          'Photograph something that holds weight | A shelf, a sign, a crane. Draw every force on your own photo. | 12',
-          'What’s holding up that sign? | A cable, a beam and a wall. Find the force everyone forgets. | 10',
-          'Find a truss on campus | Find a real truss, photograph it, and mark what’s in tension and compression. | 20',
-          'Why this bridge has that shape | Compare two bridges and explain why each member is where it is. | 15',
-          'Your photo, on the class map | Post your best analysis. Classmates try to find your mistake. | 15',
-        ]),
-        T('Sofia L. ’27', 'Spring 2026|A', 'Record your solution. Classmates reply with ideas.', [4.5, 47, 1, 11], [5], 'fbdgroup', 'People caught things my textbook never would have.', [
-          'Record your free-body diagram | Point your phone at your paper and explain each force in one minute. | 10',
-          'Reply: is this equilibrium right? | Listen to a classmate’s solution and record what you’d check first. | 10',
-          'Record a truss, joint by joint | Each person in your group takes one joint and passes it on. | 15',
-          'Reply: find the zero-force members | Two classmates disagree about which members carry nothing. You settle it. | 10',
-          'Group review before Exam 2 | Each person teaches one topic in two minutes. | 25',
-        ]),
-        T('Jun L. ’28', 'Fall 2025|A', 'Teach statics to an AI student that stays confused.', [4.4, 39, 1, 4], [1, 3], 'teachback', 'You don’t know it until you’ve explained it to something that keeps asking why.', [
-          'Teach it: balanced forces | An AI student thinks a still beam has no forces on it. Set it straight. | 10',
-          'Teach it: free-body diagrams | The AI student draws one with a force missing. Get it to find the force itself. | 12',
-          'Teach it: two-force members | It keeps asking why some parts only push or pull. Explain until it can predict one. | 12',
-          'Teach it: method of joints | It starts at the wrong joint. Talk it to the answer without giving it away. | 15',
-          'Final: it takes your exam | You write three questions. The AI student answers using only what you taught it. | 20',
-        ]),
-      ]],
-      ['Friction and centroids', '2026-12-08', 'Final', [
-        T('Owen P. ’29', 'Spring 2026|A', 'Tilt a book until it slides. All at your desk.', [4.8, 30, 2, 9], [2, 4], '', '', ['Tilt a book until it slides', 'Why wedges hold', 'Balance a cardboard shape', 'Find its center by hanging it', 'Why a long pole is hard to swing']),
-        T('Hana P. ’28', 'Fall 2025|A', 'The physics of ladders, letters and steel beams.', [4.6, 18, 2, 6], [1, 4], '', '', ['How far can a ladder lean?', 'Find the center of your initials', 'Cut a hole, move the center', 'Why steel beams are shaped like an I']),
-        T('Liam T. ’27', 'Spring 2025|A−', 'Old exams, harder every day, hints before answers.', [4.4, 22, 1, 30], [1, 3], '', '', ['Friction: old exam set', 'Centroids: old exam set', 'Moments of inertia: old exam set', 'Timed practice for the final']),
-      ]],
-    ]},
   ];
 
   const FINE = 'That line is fine. Keep looking.';
@@ -303,23 +182,6 @@ window.WorldviewPlacesData = (() => {
       {s: '1 − 1/2 + 1/3 − 1/4 + …', conv: true, why: 'It jumps back and forth by less each time. It settles near 0.693.'},
       {s: '1/2 + 1/4 + 1/8 + 1/16 + …', conv: true, why: 'Each step covers half of what’s left. It settles at 1.'},
     ]},
-    circuit: {k: 'circuit', title: 'Light your first LED'},
-    bulbs: {k: 'pick', title: 'Two bulbs in a row', q: 'Two identical bulbs in a row on one battery. Compared with one bulb alone, each one is:', opts: [
-      {t: 'Brighter', fb: 'Two bulbs, same battery. Does the battery push more current or less through two bulbs in a row?'},
-      {t: 'The same', fb: 'If each one still got the full voltage, what would the voltages around the loop add up to?'},
-      {t: 'Dimmer', ok: true, fb: 'Yes. So where did the voltage go? And if each bulb gets half, what happens to the current through it?'},
-    ]},
-    breaker: {k: 'breaker', title: 'Why this breaker tripped', apps: [['Toaster', 900], ['Kettle', 1500], ['Microwave', 1000], ['Lamp', 60]]},
-    predict: {k: 'pick', title: 'Which bulb is brightest?', svg: '<svg class="pl-svg" viewBox="0 0 240 120" aria-hidden="true"><path class="w" d="M30 56V20H210V46M210 74V102H30V64M170 20V46M170 74V102M18 56H42M24 64H36"/><circle class="b" cx="100" cy="20" r="14"/><circle class="b" cx="170" cy="60" r="14"/><circle class="b" cx="210" cy="60" r="14"/><text x="100" y="25" text-anchor="middle">A</text><text x="170" y="65" text-anchor="middle">B</text><text x="210" y="65" text-anchor="middle">C</text></svg>', q: 'Three identical bulbs. Commit to an answer: which is brightest?', opts: [
-      {t: 'A', ok: true, fb: 'Yes. All the current goes through A, then splits between B and C. In the real lesson you watch it light up now.'},
-      {t: 'B and C, equally', fb: 'B and C do match each other. But how much of the current does each of them get?'},
-      {t: 'All three the same', fb: 'Follow the current from the battery. Does it stay whole the entire way around?'},
-    ]},
-    video: {k: 'video', title: 'Charge moving through a wire', day: 'Day 1', len: '4 min', q: 'Electrons drift through a wire at less than a millimeter a second. So why does the light come on at once?', opts: [
-      {t: 'Electrons actually race through at nearly light speed', fb: 'The drift speed really is that slow. So what travels fast?'},
-      {t: 'The field travels fast and pushes electrons already in the wire', ok: true, fb: 'Yes. The wire is already full of electrons, and they all start moving almost together.'},
-      {t: 'The bulb holds some charge, ready to go', fb: 'A bulb doesn’t store charge. What’s already sitting right next to the filament?'},
-    ]},
     statement: {k: 'steps', title: 'How my uncle opens an annual report', q: 'What I read first, in order.', note: 'Grace’s uncle, recorded. A made-up company.', end: 'Now you read one on your own.', steps: [
       ['Cash from operations $420M. Net income $610M.', 'Profit looks great, but less cash came in. I always ask why first.'],
       ['Debt due this year $900M. Cash on hand $300M.', 'Can they pay it? This is the second thing I look at.'],
@@ -333,24 +195,8 @@ window.WorldviewPlacesData = (() => {
     cashsim: {k: 'cashsim', title: 'Sell on credit'},
     debate: {k: 'group', title: 'Group verdict: would you buy it?', q: 'One minute: would you buy this company? Use one number from its statements.', clips: [['Chris', '0:58'], ['Lena', '0:44']], btn: 'Record your take', after: 'Your group votes once everyone has recorded. Sample: nothing was recorded.'},
     drillfin: {k: 'drill', title: 'Indirect cash flow', q: 'Net income is $50. Depreciation is $10. Customers owe you $15 more than last year. What is cash from operations?', pace: 'About 4 minutes on the old exam', hints: ['Start from net income and undo what wasn’t cash.', 'Depreciation was subtracted, but no cash left. Add it back.', 'Customers owing more means sales you haven’t collected. Subtract it.'], answer: '50 + 10 − 15 = $45.'},
-    beam: {k: 'beam', title: 'Move the load along a beam'},
-    supports: {k: 'pick', title: 'The supports that don’t add up', q: 'A 6-meter beam holds 12 kN, 2 meters from support A. Someone got 4 kN at each support. Tap the line that’s wrong.', opts: [
-      {t: 'Moments about A: 12 × 2 = B × 6', fb: FINE},
-      {t: 'So B = 4 kN', fb: FINE},
-      {t: 'Up equals down: A + B = 12', fb: FINE},
-      {t: 'So A = 4 kN', ok: true, fb: 'Yes. A + 4 = 12, so A = 8 kN. The load sits closer to A, so A should carry more.'},
-    ]},
-    fbdgroup: {k: 'group', title: 'Record your free-body diagram', q: 'Point your phone at your diagram and explain each force in one minute.', clips: [['Ravi', '0:49'], ['Kim', '1:00']], btn: 'Record your minute', after: 'Now reply to the classmate whose diagram you’d change. Sample: nothing was recorded.'},
-    sign: {k: 'pick', title: 'What’s holding up that sign?', svg: '<svg class="pl-svg" viewBox="0 0 240 120" aria-hidden="true"><path class="w" d="M20 4V116M20 62H204M20 10L204 62M144 62V82"/><circle class="b" cx="20" cy="62" r="5"/><rect class="b" x="112" y="82" width="64" height="30" rx="4"/><text x="144" y="102" text-anchor="middle">OPEN</text></svg>', q: 'A sign hangs from a beam, and a cable holds the beam’s far end. Your diagram has the sign’s weight and the cable’s pull. What’s missing?', opts: [
-      {t: 'Nothing. That’s all of them', fb: 'Add up the sideways forces. The cable pulls the beam toward the wall. What stops it?'},
-      {t: 'The force from the wall', ok: true, fb: 'Yes. The cable pulls the beam into the wall, so the wall has to push back at the hinge. You can’t see it, so everyone forgets it.'},
-      {t: 'The wind on the sign', fb: 'Good instinct on a windy day, but it’s missing even with no wind.'},
-    ]},
-    teachback: {k: 'chat', title: 'Teach it: balanced forces', btn: 'Answer', note: 'Sample conversation with the AI student.', turns: [
-      ['I think I get it. The beam isn’t moving, so there are no forces on it. Right?', 'No. There are forces. They just balance.'],
-      ['Oh. So if I push down in the middle, which support pushes back?', 'Both of them. Half each, if it’s the middle.'],
-      ['And if I move my hand toward the left support?'],
-    ]},
   };
-  return {classes, demos};
+  /* The unit that holds today. The sample term moves with the calendar (places.js), so this never changes. */
+  const currentUnit = c => c.units.findIndex(u => u[1] >= '2026-11-02');
+  return {classes, demos, currentUnit};
 })();

@@ -3,11 +3,6 @@
 .pl-roof .s { fill:var(--card); stroke:var(--ink); stroke-width:1.6; stroke-linejoin:round; }
 .pl-roof .l { fill:none; stroke:var(--ink); stroke-width:1.6; stroke-linecap:round; }
 .pl-roof .w { fill:var(--accent-100); stroke:var(--ink); stroke-width:1.2; }
-.pl-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
-.pl-card { appearance:none; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:20px; padding:14px 12px; display:grid; gap:4px; justify-items:center; text-align:center; font:inherit; cursor:pointer; }
-.pl-card b { font-family:Georgia,"Times New Roman",serif; font-weight:400; font-size:16.5px; line-height:1.2; }
-.pl-card span { font-size:12px; color:var(--ink-soft); }
-.pl-card.add { border-style:dashed; background:none; }
 .pl-narrow { display:grid; gap:12px; max-width:460px; width:100%; margin:0 auto; }
 .pl-code { display:flex; justify-content:center; gap:8px; }
 .pl-code i { font-style:normal; width:44px; height:52px; border:1px solid var(--line); border-radius:12px; background:var(--card); display:grid; place-items:center; font-size:20px; font-weight:700; }
@@ -17,11 +12,6 @@
 .pl-row b { font-weight:600; }
 .pl-row span span { font-size:13px; color:var(--ink-soft); }
 .pl-row em { font-style:normal; color:var(--ink-soft); font-size:20px; }
-.pl-row.pick { border-color:var(--ink); }
-.pl-tick { width:22px; height:22px; flex:0 0 auto; border-radius:50%; border:1.5px solid var(--line); display:grid; place-items:center; font-size:13px; font-weight:800; font-style:normal; }
-.pl-row.pick .pl-tick { background:var(--ink); border-color:var(--ink); color:var(--paper); }
-.pl-sub { display:grid; justify-items:center; gap:4px; margin-top:-6px; }
-.pl-sub svg.pl-roof { max-width:74px; }
 .pl-lines { display:grid; gap:10px; }
 .pl-line { appearance:none; width:100%; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:18px; padding:12px 14px 14px; text-align:left; display:grid; gap:10px; font:inherit; cursor:pointer; }
 .pl-line .info { display:grid; gap:2px; min-width:0; }
@@ -108,7 +98,6 @@
 .pl-clip em { font-style:normal; font-size:12px; color:var(--ink-soft); }
 .pl-clip.me { border-color:var(--cv-ok); }
 .pl-clip .wave { height:20px; background:repeating-linear-gradient(90deg,var(--accent) 0 2px,transparent 2px 6px); opacity:.6; border-radius:2px; }
-.pl-live .led { width:72px; height:72px; border-radius:50%; margin:6px auto; background:var(--accent); box-shadow:0 0 40px var(--accent); }
 /* a unit you've taken: the same line as the term, zoomed in */
 .pl-zb { position:relative; display:grid; gap:4px; padding:4px 12px 0; }
 .pl-lane { display:grid; gap:2px; }
@@ -135,13 +124,6 @@
 .pl-under { display:flex; justify-content:flex-end; }
 .pl-under.spread { justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
 .pl-linkb { appearance:none; border:0; background:none; color:var(--ink-soft); font:inherit; font-size:13px; font-weight:600; cursor:pointer; padding:4px 0; text-decoration:underline; text-underline-offset:3px; }
-.pl-lesson { border-radius:22px; background:var(--card); border:1px solid var(--line); padding:18px; display:grid; gap:8px; box-shadow:0 8px 24px rgba(0,0,0,.05); }
-.pl-lesson .when { font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); }
-.pl-lesson h2 { margin:0; font:400 28px/1.12 Georgia,"Times New Roman",serif; text-wrap:balance; }
-.pl-lesson .by { display:flex; align-items:center; gap:8px; font-size:14px; font-weight:600; }
-.pl-lesson .by .ava { width:28px; height:28px; font-size:10.5px; }
-.pl-lesson .how { margin:0; font-size:14px; color:var(--ink-soft); }
-.pl-lesson .acts { display:flex; align-items:center; gap:12px; margin-top:6px; }
 .pl-donebtn { appearance:none; border:0; background:none; color:var(--ink-soft); font:inherit; font-size:13.5px; font-weight:600; cursor:pointer; padding:6px 0; }
 .pl-donebtn.on { color:var(--cv-ok); }
 .pl-ut { display:grid; gap:1px; min-width:0; }
@@ -174,15 +156,6 @@
 .ex-person .ava { width:58px; height:58px; font-size:17px; }
 .ex-person b { font-size:12.5px; font-weight:600; line-height:1.2; }
 .ex-person span.st { font-size:11.5px; color:var(--ink-soft); }
-.pl-lesson .cv-pill { color:var(--paper); padding-left:24px; padding-right:24px; }
-.pl-beam { position:relative; height:96px; margin:8px 14px 0; }
-.pl-beam i { position:absolute; display:block; }
-.pl-beam .bar { left:-8px; right:-8px; top:56px; height:8px; border-radius:3px; background:var(--ink); }
-.pl-beam .sup { top:64px; width:0; height:0; margin-left:-11px; border-left:11px solid transparent; border-right:11px solid transparent; border-bottom:18px solid var(--ink-soft); }
-.pl-beam .sup.l { left:0; } .pl-beam .sup.r { left:100%; }
-.pl-beam .load { top:6px; height:50px; width:0; border-left:3px solid var(--accent); margin-left:-1.5px; }
-.pl-beam .load::after { content:""; position:absolute; left:-8px; bottom:0; border-left:6.5px solid transparent; border-right:6.5px solid transparent; border-top:10px solid var(--accent); }
-.pl-beam .load b { position:absolute; top:-6px; left:8px; font-size:12px; font-style:normal; white-space:nowrap; }
 .pl-reac { display:flex; justify-content:space-between; gap:10px; font-size:13px; color:var(--ink-soft); margin:8px 0; }
 .pl-reac b { display:block; font:400 22px/1.1 Georgia,"Times New Roman",serif; color:var(--ink); }
 .pl-reac span:last-child { text-align:right; }
@@ -200,35 +173,48 @@
 .pl-teaches { margin:0; font:400 17px/1.3 Georgia,"Times New Roman",serif; }
 .pl-quote { margin:0; padding:10px 12px; border-radius:12px; background:var(--surface-soft); font-size:14px; line-height:1.35; }
 .pl-quote span { display:block; margin-top:3px; font-size:11px; color:var(--ink-soft); }
-.pl-lesson .by em { margin-left:auto; font-style:normal; font-weight:400; font-size:12.5px; color:var(--ink-soft); white-space:nowrap; }
-.pl-lesson .how { color:var(--ink); line-height:1.4; }
 .pl-live { display:grid; gap:8px; }
 .pl-mis.miss { border-color:var(--ink-soft); opacity:.75; }
 .pl-formula { margin:0; font:400 19px/1.3 Georgia,"Times New Roman",serif; text-align:center; }
-.pl-reac b.bad, .pl-amps.bad { color:var(--accent); }
+.pl-reac b.bad { color:var(--accent); }
 .pl-pace { justify-self:start; font-size:12px; font-weight:700; padding:3px 9px; border-radius:999px; background:var(--cv-warn-100); color:var(--cv-warn); }
 .pl-score { display:flex; align-items:baseline; gap:8px; }
 .pl-score b { font:400 34px/1 Georgia,"Times New Roman",serif; }
 .pl-score span { font-size:12.5px; color:var(--ink-soft); }
 .pl-2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-.pl-apps { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-.pl-app { appearance:none; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:14px; padding:12px; font:inherit; text-align:left; display:grid; gap:1px; cursor:pointer; }
-.pl-app b { font-weight:600; }
-.pl-app span { font-size:12.5px; color:var(--ink-soft); }
-.pl-app.on { background:var(--ink); border-color:var(--ink); color:var(--paper); }
-.pl-app.on span { color:var(--paper); opacity:.8; }
-.pl-meter { position:relative; height:12px; border-radius:8px; background:var(--surface-soft); box-shadow:inset 0 0 0 1px var(--line); overflow:hidden; }
-.pl-meter i { display:block; height:100%; background:var(--cv-ok); transition:width .15s; }
-.pl-meter.trip i { background:var(--accent); }
-.pl-meter em { position:absolute; left:75%; top:0; bottom:0; width:2px; background:var(--ink); }
-.pl-amps { margin:0; font-weight:700; font-variant-numeric:tabular-nums; }
-.pl-video { appearance:none; border:0; width:100%; aspect-ratio:16/8; border-radius:16px; background:linear-gradient(135deg,#2a211c,#7a4128); color:#fff; font:inherit; display:grid; place-items:center; position:relative; cursor:pointer; }
-.pl-video span { font-size:30px; }
-.pl-video em { position:absolute; left:12px; bottom:10px; font-style:normal; font-size:12.5px; font-weight:600; }
-.pl-video.seen { aspect-ratio:16/4; opacity:.75; }
-.pl-svg { display:block; width:100%; max-width:300px; margin:0 auto; }
-.pl-svg .w { fill:none; stroke:var(--ink); stroke-width:2; stroke-linecap:round; }
-.pl-svg .b { fill:var(--card); stroke:var(--ink); stroke-width:2; }
-.pl-svg text { fill:var(--ink); font-size:13px; font-weight:700; font-family:inherit; }
-.pl-demo .pl-video { color:#fff; }
 .pl-dh h1.sm { white-space:normal; line-height:1.15; }
+/* Places home: classes first, then Teacher Studio (NAV-209) */
+.pl-week { margin-top:-8px; }
+.pl-teach { background:var(--card); border:1px solid var(--line); border-radius:20px; padding:16px; display:grid; gap:10px; }
+.pl-teach .top { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+.pl-teach h2 { margin:0; font:400 23px/1.15 Georgia,"Times New Roman",serif; }
+.pl-teach p { margin:0; font-size:14.5px; line-height:1.4; }
+.pl-teach > .cv-pill { justify-self:start; color:var(--paper); text-decoration:none; }
+.pl-teach .mine { display:grid; border-top:1px solid var(--line); margin-top:2px; }
+.pl-teach .mine a { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 0; color:var(--ink); text-decoration:none; border-bottom:1px solid var(--line); }
+.pl-teach .mine a:last-child { border-bottom:0; padding-bottom:0; }
+.pl-teach .mine span { display:grid; gap:1px; min-width:0; }
+.pl-teach .mine b { font-weight:600; font-size:14.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pl-teach .mine em { font-style:normal; font-size:12px; color:var(--ink-soft); }
+.pl-teach .mine i { flex:0 0 auto; font-style:normal; font-size:13px; font-weight:700; color:var(--accent); }
+/* A class you've taken: every lesson in order, the open one with its Start */
+.pl-mytutors { display:flex; flex-wrap:wrap; gap:6px; min-width:0; }
+.pl-chip { appearance:none; display:flex; align-items:center; gap:6px; border:1px solid var(--line); background:var(--card); border-radius:999px; padding:3px 11px 3px 3px; font-size:13px; font-weight:600; cursor:pointer; }
+.pl-chip .ava { width:24px; height:24px; font-size:9.5px; }
+.pl-count { font-size:12.5px; color:var(--ink-soft); font-variant-numeric:tabular-nums; }
+.pl-ll { background:var(--card); border:1px solid var(--line); border-radius:18px; overflow:hidden; }
+.pl-ll .item + .item { border-top:1px solid var(--line); }
+.pl-ll .head { appearance:none; width:100%; border:0; background:none; display:flex; align-items:center; gap:11px; padding:11px 14px; text-align:left; cursor:pointer; }
+.pl-ll .st { --c:var(--cv-ok); flex:0 0 auto; width:20px; height:20px; border-radius:50%; border:2px solid var(--c); display:grid; place-items:center; font-style:normal; font-size:11px; font-weight:800; color:var(--paper); }
+.pl-ll .st.acc { --c:var(--accent); } .pl-ll .st.vi { --c:var(--cv-violet); }
+.pl-ll .done .st { background:var(--c); }
+.pl-ll .tx { display:grid; gap:1px; min-width:0; }
+.pl-ll .tx b { font:400 16.5px/1.25 Georgia,"Times New Roman",serif; }
+.pl-ll .tx span { font-size:12.5px; color:var(--ink-soft); }
+.pl-ll .done:not(.open) .tx b { color:var(--ink-soft); }
+.pl-ll .open { background:var(--surface-soft); }
+.pl-ll .open .tx b { font-size:19px; }
+.pl-ll .body { padding:0 14px 14px 45px; display:grid; gap:10px; }
+.pl-ll .body p { margin:0; font-size:14px; line-height:1.4; }
+.pl-ll .acts { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; }
+.pl-ll .acts .cv-pill { color:var(--paper); }
