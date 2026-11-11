@@ -52,7 +52,9 @@
   const unitPrefix = (c, u) => (c.name + ', unit ' + (u.i + 1)).toLowerCase();
   const myFor = (c, u) => (deps.my() || []).filter(l => { const t = (l.title || '').toLowerCase(), p = unitPrefix(c, u); return t.startsWith(p) && !/\d/.test(t.charAt(p.length)); });
   const shortTitle = (c, u, l) => l.title.slice(unitPrefix(c, u).length).replace(/^[:\s]+/, '') || l.title;
-  const studioLink = l => 'studio.html?from=places&l=' + encodeURIComponent(l.id);
+  /* A lesson made from slides (LES-338, v3.1.70) opens on its slides page; any other lesson in Teacher Studio. */
+  const studioLink = l => (l.note && l.note.format === 'slides-v1' ? 'slides.html?l=' : 'studio.html?from=places&l=') + encodeURIComponent(l.id);
+  const slidesLink = (c, u) => 'slides.html' + (c ? '?class=' + encodeURIComponent(c.code) + '&unit=' + u.i : '');
   const statusOf = l => l.shared ? 'Published' : 'Draft';
   const myCard = (c, u) => myFor(c, u).map(l => `<a class="pl-mine" href="${studioLink(l)}"><span class="tx"><em class="${l.shared ? 'pub' : ''}">Your lesson · ${statusOf(l)}</em><b>${esc(shortTitle(c, u, l))}</b></span><span class="go">Keep building ›</span></a>`).join('');
   /* Build a lesson for a class: Teacher Studio's New lesson box opens with the class and unit chosen. */
@@ -60,8 +62,8 @@
   function teachCard() {
     const rows = CLASSES.flatMap(c => c.units.flatMap(u => myFor(c, u).map(l => ({c, u, l})))), more = rows.length - 3;
     return `<section class="pl-teach" aria-labelledby="pl-teach-h"><div class="top"><h2 id="pl-teach-h">Teacher Studio</h2><a class="pl-linkb" href="studio.html?from=places">All my lessons</a></div>
-      <p>How would you teach your class? Build a lesson with ChatGPT, Claude or any AI you already use.</p>
-      <a class="cv-pill" href="${buildLink()}">Build a lesson</a>
+      <p>Turn your class presentations into lessons: Worldview writes what the AI says on each slide, and you edit it. Or build a lesson with any AI you already use.</p>
+      <div class="cv-row" style="flex-wrap:wrap"><a class="cv-pill" href="${slidesLink()}">Add presentations</a><a class="cv-pill ghost" href="${buildLink()}">Build a lesson</a></div>
       ${rows.length ? `<div class="mine">${rows.slice(0, 3).map(({c, u, l}) => `<a href="${studioLink(l)}"><span><b>${esc(shortTitle(c, u, l))}</b><em>${esc(c.name)}, Unit ${u.i + 1} · ${statusOf(l)}</em></span><i>Keep building ›</i></a>`).join('')}${more > 0 ? `<a href="studio.html?from=places"><span><em>${more} more</em></span><i>›</i></a>` : ''}</div>` : ''}</section>`;
   }
 
@@ -143,7 +145,7 @@
     }).join('')}</div>`;
   }
   const startBtn = (t, l) => t.demo ? `<button type="button" class="cv-pill" data-pa="demo" data-d="${t.demo}" data-w="${esc(t.w)}">${DEMOS[t.demo].title === l.t ? 'Start' : 'Try a sample lesson'}</button>` : `<button type="button" class="cv-pill" data-pa="voice" data-topic="${esc(cls(P.cur).name + ': ' + l.t)}">Start as a voice lesson</button>`;
-  const buildBtn = (c, u) => `<a class="pl-build" href="${buildLink(c, u)}">Build your own</a>`;
+  const buildBtn = (c, u) => `<span class="pl-builds"><a class="pl-build" href="${slidesLink(c, u)}">Add presentations</a><a class="pl-build" href="${buildLink(c, u)}">Build your own</a></span>`;
   function classS() {
     const c = cls(P.cur), u = c.units[P.unit], tutors = myTutors(c, P.unit), rated = P.stars[c.code + P.unit];
     const todayBtn = P.unit !== c.cur ? `<button type="button" class="pl-todaybtn" data-pa="unit" data-u="${c.cur}"><i></i>Today</button>` : '';

@@ -132,6 +132,7 @@
 .pl-unav .pl-ut { text-align:center; }
 .pl-build { flex:0 0 auto; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:999px; padding:6px 13px; font-size:13px; font-weight:600; text-decoration:none; }
 .pl-build:hover { border-color:var(--ink-soft); }
+.pl-builds { display:inline-flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; }
 /* Explore: one page; subjects filter what's below */
 .ex-filters { position:sticky; top:0; z-index:3; background:var(--paper); margin:0 -18px; padding:6px 18px 8px; display:grid; gap:6px; }
 .ex-chips { display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; margin:0 -18px; padding:0 18px; }

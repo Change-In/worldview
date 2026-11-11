@@ -313,7 +313,7 @@
       PUB = (ls || []).map(l => ({id: l.id, title: l.title, version: V[l.id] ? V[l.id].version : null, at: V[l.id] ? V[l.id].published_at : l.updated_at}));
     } catch (e) { PUB = []; }
     try { const {data} = await db.rpc('worldview_teacher_lessons_catalog'); CAT = data || []; } catch (e) { CAT = []; }
-    try { const {data} = await db.from('worldview_teacher_lessons').select('id,title,shared,updated_at,kind').order('updated_at', {ascending: false}); MY = (data || []).filter(l => l.kind !== 'experiment'); } catch (e) { MY = []; }
+    try { const {data} = await db.from('worldview_teacher_lessons').select('id,title,shared,updated_at,kind,note').order('updated_at', {ascending: false}); MY = (data || []).filter(l => l.kind !== 'experiment'); } catch (e) { MY = []; }
     if (S.open && (S.area === 'places' || S.scr === 'home')) render();
   }
   const playLink = id => new URL('play.html?l=' + id, location.href).href;
