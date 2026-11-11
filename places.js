@@ -343,7 +343,8 @@
   /* ---------- v3.1.77 (LES-342): students' results in the teacher's day panel ----------
      Reads worldview_teacher_lesson_runs (only the lesson's owner can) the way Teacher Studio does. Shows evidence, never a score:
      where each student is, what they said, and the explain-it-back verdicts as the lesson recorded them. No polling; Refresh reloads. */
-  const RES = {id: '', rows: null, loading: false, err: '', open: '', at: null}, RC = {key: '', n: {}};
+  const RES = {id: '', rows: null, loading: false, err: '', open: '', at: null, all: false, stack: '', cost: null}, RC = {key: '', n: {}};
+  const RATE = {'gemini-3.8-flash': [0.75, 3.75], 'claude-haiku-4-5': [1, 5]}, PER_SEC = {'deepgram-nova-3': 0.0043 / 60, 'gpt-live-1': 0.05 / 60};
   const STYLE = {lecture: 'Lecture with pauses', conversation: 'Conversation'};
   const SHORT = /^(next|ok(ay)?|yes|yeah|yep|sure|continue|go on|got it|again|say it again|mhm+|uh huh|right|done|ready)\W*$/i;
   const RUN_COLS = 'id,learner_name,answers,finished,updated_at,created_at,finished_at,version,day,attempt';
@@ -402,6 +403,59 @@
     if (keys.length) h += '<h4>Explain it back</h4>' + keys.map(n => { const c = ck[n], v = VERDICT[c.v], q = L && L.check && L.check[n - 1] && L.check[n - 1].question; return `<div class="rs-g"><div class="rs-q"><b>Question ${n}${q ? ': ' + esc(q) : ''}</b><span class="rs-v ${v[1]}">${v[0]}</span></div>${c.said ? `<q>${esc(c.said)}</q>` : '<p class="cv-muted">Said nothing.</p>'}<p class="cv-muted">${c.unjudged ? 'The AI could not judge this one. Please read their words.' : esc(WHY[c.why] || '')}</p></div>`; }).join('');
     return h + '<p class="rs-rule">Worldview shows evidence. You decide the grade.</p></div>';
   }
+  /* v3.1.78: one lesson line instead of a bar per student. Each student is a small V above the track at their place;
+     students at the same place stack into one numbered V. Hover or focus shows who; tap or Enter opens a side panel. */
+  const ZL = 74, ZC = 88; /* the lesson fills 0-74% of the track, the check 74-88%, "Finished" 88-100% */
+  function spotOf(s, N, C) {
+    const p = s.p; if (!p || !STYLE[p.style]) return null;
+    if (s.done) return {k: 'end', x: 94};
+    if (p.phase === 'check') { const q = p.question || 0, Q = Math.max(p.questions || 0, q); return {k: 'q' + q, x: ZL + (q && Q ? (q - 0.5) / Q * (ZC - ZL) : (ZC - ZL) / 2)}; }
+    if (p.phase === 'lecture' && p.slide) return {k: 's' + p.slide, x: (p.slide - 0.5) / Math.max(N, p.slide) * ZL};
+    if (p.phase === 'conv' && p.chapter) return {k: 'c' + p.chapter, x: (p.chapter - 0.5) / Math.max(C, p.chapter) * ZL};
+    if (p.phase === 'conv') return {k: 'c0', x: 2};
+    return null;
+  }
+  const money = n => '$' + (n === 0 ? '0' : n < 0.01 ? n.toFixed(4) : n.toFixed(2));
+  function trackH(label, style, group, ticks) {
+    const spots = {};
+    group.forEach(x => (spots[x.sp.k] = spots[x.sp.k] || {sp: x.sp, who: []}).who.push(x.s));
+    const tk = []; for (let i = 0; i <= ticks; i++) tk.push(`<i class="rs-tick" style="left:${(i / ticks * ZL).toFixed(2)}%"></i>`);
+    const gs = Object.keys(spots).map(k => spots[k]);
+    const marks = gs.map(g => {
+      const w = g.who.slice().sort((a, b) => new Date(b.at) - new Date(a.at)), one = w.length === 1, x = g.sp.x, side = x < 28 ? ' l' : x > 72 ? ' r' : '', key = style + g.sp.k;
+      const tip = one ? `<b>${esc(w[0].name)}</b><span>${esc(w[0].text)}</span><span>Active ${esc(ago(w[0].at))}</span>` : `<b>${w.length} students · ${esc(w[0].text)}</b><span>${esc(w.slice(0, 6).map(s => s.name).join(', '))}${w.length > 6 ? ' and ' + (w.length - 6) + ' more' : ''}</span>`;
+      const isOpen = one ? RES.open === w[0].r.id : RES.stack === key;
+      const att = one ? `data-pa="resopen" data-r="${esc(w[0].r.id)}"` : `data-pa="resstack" data-k="${esc(key)}"`;
+      return `<button type="button" class="rs-mk${g.sp.k === 'end' ? ' fin' : ''}${isOpen ? ' on' : ''}${side}" style="left:${x.toFixed(2)}%" ${att} aria-label="${esc(one ? w[0].name + ', ' + w[0].text : w.length + ' students, ' + w[0].text)}" aria-expanded="${isOpen}">${one ? '' : `<em>${w.length}</em>`}<u></u><span class="rs-tip" role="presentation">${tip}</span></button>`;
+    }).join('');
+    const op = gs.find(g => g.who.length > 1 && RES.stack === style + g.sp.k);
+    return `<div class="rs-lane"><div class="rs-lh"><b>${esc(label)}</b><span>${sayCount(group.length, 'student')}</span></div>
+      <div class="rs-track">${marks}<div class="rs-rail"><span class="rs-z chk" style="left:${ZL}%;width:${ZC - ZL}%"></span><span class="rs-z fin" style="left:${ZC}%;width:${100 - ZC}%"></span>${tk.join('')}</div>
+      <div class="rs-lab"><span>Start</span><span class="c">Check</span><span class="f">Finished</span></div></div>
+      ${op ? `<div class="rs-stack"><b>${esc(op.who[0].text)}:</b> ${op.who.map(s => `<button type="button" class="rs-chip" data-pa="resopen" data-r="${esc(s.r.id)}">${esc(s.name)}</button>`).join('')}</div>` : ''}</div>`;
+  }
+  function lineH(sums, L) {
+    const sl = Math.max((L && L.slides && L.slides.length) || 0, ...sums.map(s => (s.p && s.p.slides) || 0));
+    const ch = Math.max((L && L.map && Array.isArray(L.map.chapters) && L.map.chapters.length) || 0, ...sums.map(s => (s.p && s.p.chapters) || 0));
+    const by = {lecture: [], conversation: []};
+    sums.forEach(s => { const sp = spotOf(s, sl, ch); if (sp) by[s.p.style].push({s, sp}); });
+    const off = sums.filter(s => !spotOf(s, sl, ch));
+    let h = '<div class="rs-lanes">';
+    if (by.lecture.length) h += trackH(STYLE.lecture, 'lecture', by.lecture, Math.max(sl, 1));
+    if (by.conversation.length) h += trackH(STYLE.conversation, 'conversation', by.conversation, Math.max(ch, 1));
+    h += '</div>';
+    if (!by.lecture.length && !by.conversation.length) h += '<p class="cv-muted">Nobody has a place on the line yet. Everyone who started is in All students.</p>';
+    else h += '<p class="cv-muted rs-hint">Each V is a student. Hover or tab to a V to see who; tap it to open their detail.</p>';
+    h += `<button type="button" class="rs-allb" data-pa="resall" aria-expanded="${!!RES.all}"><span aria-hidden="true">${RES.all ? '▾' : '▸'}</span> All students (${sums.length})</button>`;
+    if (RES.all) {
+      const ord = sums.slice().sort((a, b) => new Date(b.at) - new Date(a.at));
+      h += `<div class="rs-list">${ord.map(s => `<button type="button" class="rs-li${RES.open === s.r.id ? ' on' : ''}" data-pa="resopen" data-r="${esc(s.r.id)}"><b>${esc(s.name)}</b><span>${esc(s.text)}</span><small>${esc(ago(s.at))}</small></button>`).join('')}</div>`;
+    } else if (off.length) h += `<p class="cv-muted">${sayCount(off.length, 'student')} ${off.length === 1 ? 'has' : 'have'} no place on the line (see All students).</p>`;
+    return h;
+  }
+  function sideH(s, L) {
+    return `<aside class="rs-side" role="dialog" aria-modal="false" aria-label="${esc(s.name)}, progress"><div class="rs-sh"><div><h3>${esc(s.name)}</h3><p class="cv-muted">${esc([s.style, s.text, 'active ' + ago(s.at)].filter(Boolean).join(' · '))}</p></div><button type="button" class="cv-pill ghost rs-x" data-pa="resclose">Close</button></div>${detailH(s, L)}</aside>`;
+  }
   function resultsH(it) {
     const ready = RES.id === it.id && RES.rows, L = LX.id === it.id ? LX.L : null;
     let h = `<section class="rs" aria-label="Results"><div class="rs-top"><h3>Results</h3><button type="button" class="sc-link" data-pa="resrefresh" data-id="${esc(it.id)}"${RES.loading ? ' disabled' : ''}>${RES.loading ? 'Loading…' : 'Refresh'}</button></div>`;
@@ -411,12 +465,12 @@
     let n = 0; const sums = sorted.map(r => summarize(r, String(r.learner_name || '').trim() ? 0 : ++n));
     const fin = sums.filter(s => s.done).length;
     h += `<div class="rs-tiles"><div><b>${sums.length}</b><span>started</span></div><div><b>${fin}</b><span>finished</span></div></div>`;
+    if (RES.cost && RES.cost.id === it.id) h += `<p class="rs-cost cv-muted">AI cost so far: ${money(RES.cost.students)}${RES.cost.draft ? ' · drafting ' + money(RES.cost.draft) : ''}${RES.cost.testing ? ' · your testing ' + money(RES.cost.testing) : ''}</p>`;
     if (!sums.length) return h + '<p class="cv-muted">No results yet. Results appear when students take the published lesson. Your own “Try it as a student” previews are not saved, so they never show here.</p></section>';
     sums.sort((a, b) => new Date(b.at) - new Date(a.at));
-    h += `<div class="rs-list">${sums.map(s => {
-      const open = RES.open === s.r.id;
-      return `<div class="rs-row${open ? ' on' : ''}"><button type="button" class="rs-btn" data-pa="resopen" data-r="${esc(s.r.id)}" aria-expanded="${open}"><span class="rs-n"><b>${esc(s.name)}</b>${s.style ? `<span class="rs-st">${esc(s.style)}</span>` : ''}</span><span class="rs-bar" role="img" aria-label="${esc(s.text)}"><i style="width:${Math.round(s.frac * 100)}%"></i></span><span class="rs-t">${esc(s.text)}</span><span class="rs-a">${esc(ago(s.at))}</span></button>${open ? detailH(s, L) : ''}</div>`;
-    }).join('')}</div>`;
+    h += lineH(sums, L);
+    const open = sums.find(s => s.r.id === RES.open);
+    if (open) h += sideH(open, L);
     if (rows.length >= 200) h += '<p class="cv-muted">Showing the 200 most recent.</p>';
     if (sums.some(s => s.anon)) h += '<p class="cv-muted">Students who gave no name are numbered in the order they started.</p>';
     /* where the class got stuck: students' turns per slide (or chapter), counting real questions, not "next" or "okay" */
@@ -434,7 +488,7 @@
   async function loadRuns(it, force) {
     const db = deps.db(); if (!db || !it) return;
     if (RES.id === it.id && (RES.loading || ((RES.rows || RES.err) && !force))) return;
-    if (RES.id !== it.id) Object.assign(RES, {id: it.id, rows: null, err: '', open: ''});
+    if (RES.id !== it.id) Object.assign(RES, {id: it.id, rows: null, err: '', open: '', all: false, stack: '', cost: null});
     RES.loading = true; RES.err = ''; deps.render();
     try {
       const {data, error} = await db.from('worldview_teacher_lesson_runs').select(RUN_COLS).eq('lesson_id', it.id).order('updated_at', {ascending: false}).limit(200);
@@ -442,6 +496,14 @@
       if (error) RES.err = 'Couldn\'t load results (' + (error.message || 'error') + '). Press Refresh to try again.';
       else { RES.rows = data || []; RES.at = new Date(); RC.n[it.id] = {started: RES.rows.length, finished: RES.rows.filter(isDone).length}; }
     } catch (e) { if (RES.id === it.id) RES.err = 'Couldn\'t load results. Check the internet connection and press Refresh.'; }
+    try { /* what this lesson has cost in AI so far, added up the way Teacher Studio's Published side does (counts only, no words) */
+      const {data, error} = await db.from('worldview_teacher_lesson_ai_calls').select('kind,by_owner,model,input_tokens,output_tokens,audio_seconds,cost_usd').eq('lesson_id', it.id).eq('state', 'ok').limit(5000);
+      if (!error && RES.id === it.id) {
+        const c = r => { if (r.cost_usd != null) return +r.cost_usd || 0; if (PER_SEC[r.model]) return (+r.audio_seconds || 0) * PER_SEC[r.model]; const k = RATE[r.model] || [1, 5]; return ((r.input_tokens || 0) * k[0] + (r.output_tokens || 0) * k[1]) / 1e6; };
+        const sum = f => (data || []).filter(f).reduce((t, r) => t + c(r), 0);
+        RES.cost = {id: it.id, students: sum(r => !r.by_owner && r.kind !== 'draft'), draft: sum(r => r.kind === 'draft'), testing: sum(r => r.by_owner && r.kind !== 'draft')};
+      }
+    } catch (e) {}
     RES.loading = false; deps.render();
   }
   /* The calendar cards' "3 started · 1 finished": one small query for the class's published lessons, once per class view. */
@@ -574,7 +636,7 @@
     },
     home() { P.scr = 'school'; P.sel = null; P.edit = false; deps.render(); },
     openTutor() { P.scr = 'school'; },
-    escape() { if (P.sel) { P.sel = null; deps.render(); return true; } return false; },
+    escape() { if (RES.open) { RES.open = ''; deps.render(); return true; } if (P.sel) { P.sel = null; deps.render(); return true; } return false; },
     input(e) {
       const id = e.target.id;
       if (id === 'pl-q') { P.query = e.target.value; const pos2 = e.target.selectionStart; deps.render(); const i = document.getElementById('pl-q'); if (i) { i.focus(); try { i.setSelectionRange(pos2, pos2); } catch (x) {} } return; }
@@ -624,7 +686,10 @@
       case 'publish': publishLx(d.id); return;
       case 'unpub': unpublishLx(d.id); return;
       case 'style': changeStyle(P.sel && (viewItems().find(x => x.key === P.sel) || {}).id, d.s, d.checked === true || d.checked === 'true'); return;
-      case 'resopen': RES.open = RES.open === d.r ? '' : d.r; break;
+      case 'resopen': RES.open = RES.open === d.r ? '' : d.r; RES.stack = ''; if (RES.open) setTimeout(() => { const x = document.querySelector('.rs-x'); if (x) x.focus(); }, 30); break;
+      case 'resclose': { const was = RES.open; RES.open = ''; deps.render(); setTimeout(() => { const m = [...document.querySelectorAll('[data-r]')].find(x => x.dataset.r === was); if (m) m.focus(); }, 30); return; }
+      case 'resstack': RES.stack = RES.stack === d.k ? '' : d.k; break;
+      case 'resall': RES.all = !RES.all; break;
       case 'resrefresh': { const it = mineItem(d.id); RC.key = ''; if (it) { loadRuns(it, true); return; } break; }
       case 'closeday': P.sel = null; break;
       case 'mon': P.month = new Date(P.month.getFullYear(), P.month.getMonth() + (+d.n), 1); break;
