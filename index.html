@@ -2223,7 +2223,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.78 · Nov 11";
+const BUILD = "v3.1.79 · Nov 11";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2231,6 +2231,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.79",date:"Nov 11",changes:["Slides lessons: new Hands-free (18+) switch on the start screen and in the top bar, in the lecture, the conversation and explain it back. Turn it on once and the microphone stays on: just talk, no Talk button.","Worldview stops talking the moment you start, and listens. A pause or a half sentence waits for the rest; an um, or talk to someone else in the room, gets no reply.","Say next, wait, go on, say that again or go back, and it happens at once. It never moves on by itself; after a point it may ask once if you want to go on. Note-taking silence is fine.","A small line shows Listening, Hearing you, Thinking or Speaking. Mute, Talk and typing still work, and listening stops while the tab is hidden.","Teachers: the old Always listening setting is now Students may turn on Hands-free (18+), on by default. Untick it for a class under 18."]},
   {tag:"v3.1.78",date:"Nov 11",changes:["School, teacher view, Results: no more page of bars. One line per way of learning (Lecture with pauses, Conversation) with a small V for each student at their place. Students at the same spot stack into one numbered V.","Hover a V to see the name, place and last active. Tap it to open that student in a side panel (full screen on a phone). \"All students\" opens a plain list.","Results also shows what the lesson has cost in AI so far."]},
   {tag:"v3.1.77",date:"Nov 11",changes:["School, teacher view: open a published lesson to see Results. How many students started and finished, and each student with how far they got, which way they learned, and when they were last active.","Tap a student to read what they said, slide by slide, and their explain-it-back answers with Shown, Partly or Not yet. Worldview shows evidence; you decide the grade.","New: Where the class got stuck, showing the slides students asked about most. The calendar cards show '3 started · 1 finished'. Results appear when students take the published lesson; your own previews are not saved."]},
   {tag:"v3.1.76",date:"Nov 11",changes:["Say it again now repeats the last thing Worldview said: the point, the answer or the question.","Answers in Lecture with pauses know the whole lesson. When you ask about something a later slide covers, it says so and offers to go there, instead of teaching it early or naming points still covered.","A long lesson no longer runs out of AI replies. A reply that fails is tried again quietly; if a limit is ever reached, it says so once and the buttons keep working.","A slide's question is asked once, not twice.","Saying okay, got it or yes, next after a point moves on straight away.","Teachers: a Conversation chapter can have one thing to see: a formula, a slide picture or a worked example.","Back from a lesson's slides page to the School tab is quicker. How far each student got is now saved as they go, for a teacher view in a later release.","Lessons already published get these fixes without publishing again."]},
@@ -16574,7 +16575,7 @@ window.addEventListener("blur", () => {
 <script src="places-data.js?v=3.1.69"></script>
 <script src="places-classes.js?v=3.1.73"></script>
 <script src="lesson-publish.js?v=3.1.72"></script>
-<script src="places.js?v=3.1.78"></script>
+<script src="places.js?v=3.1.79"></script>
 <script src="courses.js?v=3.1.76"></script>
 <!-- NAV-157: lesson map tools; NAV-156: lift the loading screen when Home is ready. -->
 <script src="map-tools.js?v=3.1.21"></script>

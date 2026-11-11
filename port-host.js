@@ -932,8 +932,17 @@
       case 'hearmute': this._hearMute(!!m.on); break;
       /* v3.1.75: the student's own learning preferences ("How I like to learn"), kept on this device for every lesson.
          Only a short note (300 characters); a lesson reads it with wv.prefs.get() and changes it with wv.prefs.set({learn}). */
-      case 'prefget': { var pv = {}; try { pv = JSON.parse(localStorage.getItem('worldview-learner-prefs') || '{}') || {}; } catch (e) { pv = {}; } this._send('answer', {id: clip(m.id, 40), value: {learn: clip(String(pv.learn || ''), 300)}}); break; }
-      case 'prefset': { var pl = clip(String((m.value && m.value.learn) || ''), 300); try { localStorage.setItem('worldview-learner-prefs', JSON.stringify({learn: pl})); } catch (e) {} break; }
+      /* v3.1.79: also the learner's Hands-free (18+) choice on this device: handsFree (on/off) and handsFreeOk (the one-time
+         notice was accepted). A set changes only the keys it carries. */
+      case 'prefget': { var pv = {}; try { pv = JSON.parse(localStorage.getItem('worldview-learner-prefs') || '{}') || {}; } catch (e) { pv = {}; } this._send('answer', {id: clip(m.id, 40), value: {learn: clip(String(pv.learn || ''), 300), handsFree: pv.handsFree === true, handsFreeOk: pv.handsFreeOk === true}}); break; }
+      case 'prefset': {
+        var po = {}, nv = m.value || {}; try { po = JSON.parse(localStorage.getItem('worldview-learner-prefs') || '{}') || {}; } catch (e) { po = {}; }
+        var pn = {learn: clip(String(po.learn || ''), 300), handsFree: po.handsFree === true, handsFreeOk: po.handsFreeOk === true};
+        if (typeof nv.learn === 'string') pn.learn = clip(nv.learn, 300);
+        if (typeof nv.handsFree === 'boolean') pn.handsFree = nv.handsFree;
+        if (typeof nv.handsFreeOk === 'boolean') pn.handsFreeOk = nv.handsFreeOk;
+        try { localStorage.setItem('worldview-learner-prefs', JSON.stringify(pn)); } catch (e) {} break;
+      }
       case 'stateget': { var sv = null; try { sv = this.o.state ? this.o.state.load() : this._mem; } catch (e) {} this._send('answer', {id: clip(m.id, 40), value: sv == null ? null : sv}); break; }
       case 'stateset': { var js = ''; try { js = JSON.stringify(m.value); } catch (e) {} if (!js || js.length > 65536) { this._line('note', 'The lesson tried to save more than 64 KB of progress; it wasn\'t saved.'); break; } var val = JSON.parse(js); if (this.o.state) { try { this.o.state.save(val); } catch (e) {} } else this._mem = val; break; }
       /* NAV-198 lessons over several days: wv.days() says which day this is and how the earlier ones went;

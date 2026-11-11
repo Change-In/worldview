@@ -79,7 +79,7 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.76"></script>
+<script src="port-host.js?v=3.1.79"></script>
 <script src="lesson-days.js?v=3.1.59"></script>
 <script>
 (() => {
@@ -263,7 +263,7 @@
   async function freshStyle(html) {
     const mine = styleNo(html); if (!mine) return html;
     try {
-      const r = await fetch('slides-lesson.html?v=3.1.76', {cache: 'no-cache'});
+      const r = await fetch('slides-lesson.html?v=3.1.79', {cache: 'no-cache'});
       const tpl = r.ok ? await r.text() : '';
       return styleNo(tpl) > mine ? tpl : html;
     } catch (e) { return html; }
