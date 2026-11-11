@@ -19,7 +19,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <script src="lesson-entry-popup.js?v=2.1.71"></script>
 <link rel="stylesheet" href="lesson-folders.css?v=2.1.77">
 <link rel="stylesheet" href="courses.css?v=3.1.68">
-<link rel="stylesheet" href="places.css?v=3.1.75">
+<link rel="stylesheet" href="places.css?v=3.1.77">
 <link rel="stylesheet" href="boot-splash.css?v=3.1.22">
 <link rel="stylesheet" href="map-tools.css?v=3.1.21">
 <script src="lesson-folders.js?v=3.1.13"></script>
@@ -2223,7 +2223,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.76 · Nov 11";
+const BUILD = "v3.1.77 · Nov 11";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2231,6 +2231,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.77",date:"Nov 11",changes:["School, teacher view: open a published lesson to see Results. How many students started and finished, and each student with how far they got, which way they learned, and when they were last active.","Tap a student to read what they said, slide by slide, and their explain-it-back answers with Shown, Partly or Not yet. Worldview shows evidence; you decide the grade.","New: Where the class got stuck, showing the slides students asked about most. The calendar cards show '3 started · 1 finished'. Results appear when students take the published lesson; your own previews are not saved."]},
   {tag:"v3.1.76",date:"Nov 11",changes:["Say it again now repeats the last thing Worldview said: the point, the answer or the question.","Answers in Lecture with pauses know the whole lesson. When you ask about something a later slide covers, it says so and offers to go there, instead of teaching it early or naming points still covered.","A long lesson no longer runs out of AI replies. A reply that fails is tried again quietly; if a limit is ever reached, it says so once and the buttons keep working.","A slide's question is asked once, not twice.","Saying okay, got it or yes, next after a point moves on straight away.","Teachers: a Conversation chapter can have one thing to see: a formula, a slide picture or a worked example.","Back from a lesson's slides page to the School tab is quicker. How far each student got is now saved as they go, for a teacher view in a later release.","Lessons already published get these fixes without publishing again."]},
   {tag:"v3.1.75",date:"Nov 11",changes:["The Conversation now follows a map of the lesson: one broad question, a few quick questions about what you already know, then one chapter per goal, then the explain-it-back check.","Parts you already know get one question to confirm them, not a lesson. A small strip shows the chapters and where you are; Slides for this part opens that chapter's slides.","Replies are short: one idea and one question at a time, no metaphors unless you ask. Where a chapter has an equation, it explains what each part means first.","New: How I like to learn. Write a short note, such as no metaphors or shorter answers, at the start or during a lesson. It is kept on this device for every lesson.","Teachers: each lesson has a Conversation map you can edit: the opening and quick questions, and each chapter's title, points, terms, trip-ups, slides and equation. Reorder, add or remove chapters, or draft the map again keeping your edits.","Teachers: in the class day panel each way of learning has its own row and Open button (Lecture with pauses opens slides and scripts, Conversation opens the map). Try it as a student is now the main button."]},
   {tag:"v3.1.74",date:"Nov 11",changes:["Slides lessons explain instead of reading: each new term in plain words, and formulas as what they mean, not the arithmetic. Busy slides are taught one point at a time.","Lecture with pauses waits after each point until you say you follow or press Next. Where Worldview can tell where each line sits on the slide, the lines still to come are covered.","Ask about many things at once and the answer takes two on purpose, says so, and invites you to ask about the rest.","Talk with the Talk button (tap to start, tap to send) or hold Space on a laptop. Typing is behind the small keyboard button. The lesson says whether your speech is turned into text on your device or by Worldview's service.","New: Audio only (no slide or chat, big Pause, Next and Say it again) and Full screen (the chat opens over the slide).","Continue where you left off now returns to the same way of learning, slide, point and conversation.","Teachers: select several slides and Draft these again, with an instruction. Older lessons offer Draft again with the newer version, keeping slides you edited. Always listening is a setting for adult classes only, off by default."]},
@@ -16572,7 +16573,7 @@ window.addEventListener("blur", () => {
 <script src="places-data.js?v=3.1.69"></script>
 <script src="places-classes.js?v=3.1.73"></script>
 <script src="lesson-publish.js?v=3.1.72"></script>
-<script src="places.js?v=3.1.75"></script>
+<script src="places.js?v=3.1.77"></script>
 <script src="courses.js?v=3.1.76"></script>
 <!-- NAV-157: lesson map tools; NAV-156: lift the loading screen when Home is ready. -->
 <script src="map-tools.js?v=3.1.21"></script>

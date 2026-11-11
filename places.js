@@ -253,7 +253,7 @@
   /* Everything the current view shows: the class (teacher) or every class not filtered out (student). */
   const viewItems = () => P.role === 'teacher' ? itemsFor(curClass()) : UC().filter(c => !hidden().includes(c.id)).flatMap(c => itemsFor(c));
   const byDay = items => { const m = {}; items.forEach(it => it.d && (m[key(it.d)] = m[key(it.d)] || []).push(it)); return m; };
-  const scCard = (it, sel) => `<div class="sc-lc${sel === it.key ? ' on' : ''}" style="--cc:${ccolor(ucls(it.cid))}" role="button" tabindex="0" data-pa="pick" data-k="${esc(it.key)}"${P.role === 'teacher' && it.mine ? ' draggable="true"' : ''}><b>${esc(it.title)}</b>${P.role === 'teacher' ? `<span class="sc-tag ${it.pub ? 'p' : 'd'}">${it.pub ? 'Published' : 'Draft'}</span>` : ''}</div>`;
+  const scCard = (it, sel) => `<div class="sc-lc${sel === it.key ? ' on' : ''}" style="--cc:${ccolor(ucls(it.cid))}" role="button" tabindex="0" data-pa="pick" data-k="${esc(it.key)}"${P.role === 'teacher' && it.mine ? ' draggable="true"' : ''}><b>${esc(it.title)}</b>${P.role === 'teacher' ? `<span class="sc-tag ${it.pub ? 'p' : 'd'}">${it.pub ? 'Published' : 'Draft'}</span>` : ''}${countLine(it)}</div>`;
   const switchH = () => `<div class="sc-switch" role="group" aria-label="View as">${['student', 'teacher'].map(r => `<button type="button" data-pa="role" data-r="${r}" class="${P.role === r ? 'on' : ''}" aria-pressed="${P.role === r}">${r[0].toUpperCase() + r.slice(1)}</button>`).join('')}</div>`;
   /* The month grid (laptop) and the day list (phone) for a set of items. */
   function calHtml(items) {
@@ -319,7 +319,7 @@
     const ready = !it.slides || !!(LX.L && LX.L.status !== 'drafting' && LX.L.slides && LX.L.slides.every(s => s.script));
     const st = LX.styles, busy = LX.busy, id = esc(it.id), off = busy || LX.loading ? ' disabled' : '', pubOff = busy || LX.loading || !ready ? ' disabled' : '';
     let h = `<p><span class="sc-tag ${it.pub ? 'p' : 'd'}">${it.pub ? 'Published' : 'Draft'}</span></p>
-      <label class="sc-f" for="sc-mv">${it.d ? 'Move to' : 'Put on a day'}</label><div class="sc-row"><input type="date" id="sc-mv" value="${it.d ? key(it.d) : nextMeetKey(c)}"><button type="button" class="cv-pill ghost" data-pa="move" data-id="${id}"${busy ? ' disabled' : ''}>${it.d ? 'Move' : 'Put on this day'}</button></div>${it.d ? `<button type="button" class="sc-link" data-pa="todrafts" data-id="${id}"${busy ? ' disabled' : ''}>Move back to drafts</button>` : ''}`;
+      ${it.pub && it.mine ? resultsH(it) : ''}<label class="sc-f" for="sc-mv">${it.d ? 'Move to' : 'Put on a day'}</label><div class="sc-row"><input type="date" id="sc-mv" value="${it.d ? key(it.d) : nextMeetKey(c)}"><button type="button" class="cv-pill ghost" data-pa="move" data-id="${id}"${busy ? ' disabled' : ''}>${it.d ? 'Move' : 'Put on this day'}</button></div>${it.d ? `<button type="button" class="sc-link" data-pa="todrafts" data-id="${id}"${busy ? ' disabled' : ''}>Move back to drafts</button>` : ''}`;
     if (it.slides) {
       const ck = (k, label) => `<label class="sc-ck"><input type="checkbox" data-pa="style" data-s="${k}"${st[k] ? ' checked' : ''}${busy ? ' disabled' : ''}> ${label}</label>`;
       /* v3.1.75: each way of learning opens what is behind it: Lecture with pauses its slides and scripts, Conversation its map. */
@@ -339,6 +339,131 @@
       <p class="cv-muted"><a class="sc-link" href="studio.html?from=places&l=${encodeURIComponent(it.id)}">More in Teacher Studio</a></p>
       <div class="sc-danger">${LX.del ? `<p><b>Delete "${esc(it.title)}"?</b> The lesson, its slides and scripts are removed for good. This can't be undone.</p><div class="sc-acts"><button type="button" class="cv-pill sc-del" data-pa="delyes" data-id="${id}"${busy ? ' disabled' : ''}>Yes, delete this lesson</button><button type="button" class="cv-pill ghost" data-pa="delno">Keep it</button></div>` : `<button type="button" class="cv-pill ghost sc-del" data-pa="del" data-id="${id}"${busy || it.pub ? ' disabled' : ''}>Delete lesson</button>${it.pub ? '<p class="cv-muted">Unpublish this lesson before you can delete it.</p>' : ''}`}</div>`;
     return h;
+  }
+  /* ---------- v3.1.77 (LES-342): students' results in the teacher's day panel ----------
+     Reads worldview_teacher_lesson_runs (only the lesson's owner can) the way Teacher Studio does. Shows evidence, never a score:
+     where each student is, what they said, and the explain-it-back verdicts as the lesson recorded them. No polling; Refresh reloads. */
+  const RES = {id: '', rows: null, loading: false, err: '', open: '', at: null}, RC = {key: '', n: {}};
+  const STYLE = {lecture: 'Lecture with pauses', conversation: 'Conversation'};
+  const SHORT = /^(next|ok(ay)?|yes|yeah|yep|sure|continue|go on|got it|again|say it again|mhm+|uh huh|right|done|ready)\W*$/i;
+  const RUN_COLS = 'id,learner_name,answers,finished,updated_at,created_at,finished_at,version,day,attempt';
+  const placeOf = r => { const a = (Array.isArray(r.answers) ? r.answers : []).find(x => x && x.kind === 'place' && x.place && typeof x.place === 'object'); return a ? a.place : null; };
+  const isDone = r => !!r.finished || (placeOf(r) || {}).phase === 'end';
+  const sayCount = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+  function ago(t) {
+    const ms = Date.now() - new Date(t).getTime(); if (!(ms >= 0)) return t ? new Date(t).toLocaleDateString([], {month: 'short', day: 'numeric'}) : '';
+    const m = Math.round(ms / 60000); if (m < 1) return 'just now'; if (m < 60) return m + ' min ago';
+    const h = Math.round(m / 60); if (h < 24) return h + ' h ago'; const d = Math.round(h / 24); if (d < 8) return d + ' d ago';
+    return new Date(t).toLocaleDateString([], {month: 'short', day: 'numeric'});
+  }
+  /* One student's row: name, style, progress (0-1) and words, from the run and its place entry. Runs saved before v3.1.76 (no place) still list. */
+  function summarize(r, n) {
+    const p = placeOf(r), done = isDone(r);
+    let frac = 0, text = 'Started', style = '';
+    if (p) {
+      style = STYLE[p.style] || '';
+      if (done) { frac = 1; text = 'Finished'; }
+      else if (p.phase === 'check') { frac = 0.95; text = 'In the check' + (p.question && p.questions ? ' · question ' + p.question + ' of ' + p.questions : ''); }
+      else if (p.phase === 'lecture' && p.slide && p.slides) { frac = Math.max(0.03, (p.slide - 1) / p.slides); text = 'Slide ' + p.slide + ' of ' + p.slides; }
+      else if (p.phase === 'conv' && p.chapter && p.chapters) { frac = Math.max(0.03, (p.chapter - 1) / p.chapters); text = 'Chapter ' + p.chapter + ' of ' + p.chapters; }
+      else if (p.phase === 'conv') { frac = 0.03; text = 'Getting started'; }
+      else text = p.label || 'Started';
+    } else if (done) { frac = 1; text = 'Finished'; }
+    else text = 'Started · no progress saved';
+    const nm = String(r.learner_name || '').trim();
+    return {r, p, done, frac, text, style, name: nm || 'Student ' + n, anon: !nm, at: (p && p.at) || r.updated_at};
+  }
+  /* The explain-it-back lines the lesson recorded: "Question 2: partly (stopped: nothing_more). Said: ..." */
+  function checkOf(r) {
+    const out = {};
+    (Array.isArray(r.answers) ? r.answers : []).forEach(a => {
+      if (!a || a.kind !== 'evidence' || typeof a.answer !== 'string') return;
+      const m = /^Question (\d+): (shown|partly|not_yet) \(stopped: (\w+)\)([\s\S]*)$/.exec(a.answer); if (!m) return;
+      const said = /Said: ([\s\S]*)$/.exec(m[4]);
+      out[+m[1]] = {v: m[2], why: m[3], said: said ? said[1] : '', unjudged: /could not judge/.test(m[4])};
+    });
+    return out;
+  }
+  const VERDICT = {shown: ['Shown', 'ok'], partly: ['Partly', 'mid'], not_yet: ['Not yet', 'no']};
+  const WHY = {shown: 'Stopped because their explanation showed it.', nothing_more: 'Stopped because they had nothing more to add.'};
+  function turnsByWhere(s) {
+    const g = [], idx = {};
+    ((s.p && Array.isArray(s.p.said) && s.p.said) || []).forEach(x => { if (!x || !x.text) return; const k = String(x.where || 'conversation').replace(/ point \d+$/, ''); if (!(k in idx)) { idx[k] = g.length; g.push({k, t: []}); } g[idx[k]].t.push(x.text); });
+    return g;
+  }
+  const whereLabel = k => /^slide \d+$/.test(k) ? 'Slide ' + k.slice(6) : /^chapter \d+$/.test(k) ? 'Chapter ' + k.slice(8) : /^question \d+$/.test(k) ? 'Explain it back, question ' + k.slice(9) : k === 'conversation' ? 'Conversation' : k;
+  function detailH(s, L) {
+    const ck = checkOf(s.r), keys = Object.keys(ck).map(Number).sort((a, b) => a - b);
+    const groups = turnsByWhere(s).filter(g => { const m = /^question (\d+)$/.exec(g.k); return !(m && ck[+m[1]]); });
+    let h = '<div class="rs-det">';
+    if (!s.p) h += '<p class="cv-muted">This student took the lesson before Worldview saved progress, so only the explain-it-back record (if any) is below.</p>';
+    if (groups.length) h += '<h4>What they said</h4>' + groups.map(g => `<div class="rs-g"><b>${esc(whereLabel(g.k))}</b>${g.t.map(t => `<q>${esc(t)}</q>`).join('')}</div>`).join('') + (((s.p && s.p.said) || []).length >= 30 ? '<p class="cv-muted">Shows their last 30 lines.</p>' : '');
+    else if (s.p) h += '<p class="cv-muted">Nothing said yet.</p>';
+    if (keys.length) h += '<h4>Explain it back</h4>' + keys.map(n => { const c = ck[n], v = VERDICT[c.v], q = L && L.check && L.check[n - 1] && L.check[n - 1].question; return `<div class="rs-g"><div class="rs-q"><b>Question ${n}${q ? ': ' + esc(q) : ''}</b><span class="rs-v ${v[1]}">${v[0]}</span></div>${c.said ? `<q>${esc(c.said)}</q>` : '<p class="cv-muted">Said nothing.</p>'}<p class="cv-muted">${c.unjudged ? 'The AI could not judge this one. Please read their words.' : esc(WHY[c.why] || '')}</p></div>`; }).join('');
+    return h + '<p class="rs-rule">Worldview shows evidence. You decide the grade.</p></div>';
+  }
+  function resultsH(it) {
+    const ready = RES.id === it.id && RES.rows, L = LX.id === it.id ? LX.L : null;
+    let h = `<section class="rs" aria-label="Results"><div class="rs-top"><h3>Results</h3><button type="button" class="sc-link" data-pa="resrefresh" data-id="${esc(it.id)}"${RES.loading ? ' disabled' : ''}>${RES.loading ? 'Loading…' : 'Refresh'}</button></div>`;
+    if (RES.err && RES.id === it.id) h += `<p class="cv-muted">${esc(RES.err)}</p>`;
+    if (!ready) return h + (RES.err ? '' : '<p class="cv-muted">Loading results…</p>') + '</section>';
+    const rows = RES.rows, sorted = rows.slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    let n = 0; const sums = sorted.map(r => summarize(r, String(r.learner_name || '').trim() ? 0 : ++n));
+    const fin = sums.filter(s => s.done).length;
+    h += `<div class="rs-tiles"><div><b>${sums.length}</b><span>started</span></div><div><b>${fin}</b><span>finished</span></div></div>`;
+    if (!sums.length) return h + '<p class="cv-muted">No results yet. Results appear when students take the published lesson. Your own “Try it as a student” previews are not saved, so they never show here.</p></section>';
+    sums.sort((a, b) => new Date(b.at) - new Date(a.at));
+    h += `<div class="rs-list">${sums.map(s => {
+      const open = RES.open === s.r.id;
+      return `<div class="rs-row${open ? ' on' : ''}"><button type="button" class="rs-btn" data-pa="resopen" data-r="${esc(s.r.id)}" aria-expanded="${open}"><span class="rs-n"><b>${esc(s.name)}</b>${s.style ? `<span class="rs-st">${esc(s.style)}</span>` : ''}</span><span class="rs-bar" role="img" aria-label="${esc(s.text)}"><i style="width:${Math.round(s.frac * 100)}%"></i></span><span class="rs-t">${esc(s.text)}</span><span class="rs-a">${esc(ago(s.at))}</span></button>${open ? detailH(s, L) : ''}</div>`;
+    }).join('')}</div>`;
+    if (rows.length >= 200) h += '<p class="cv-muted">Showing the 200 most recent.</p>';
+    if (sums.some(s => s.anon)) h += '<p class="cv-muted">Students who gave no name are numbered in the order they started.</p>';
+    /* where the class got stuck: students' turns per slide (or chapter), counting real questions, not "next" or "okay" */
+    const per = {};
+    sums.forEach(s => ((s.p && Array.isArray(s.p.said) && s.p.said) || []).forEach(x => { const m = x && /^(slide|chapter) (\d+)/.exec(x.where || ''); if (!m || !x.text || SHORT.test(String(x.text).trim())) return; const k = m[1] + ' ' + m[2], e = per[k] = per[k] || {k, kind: m[1], n: +m[2], turns: 0, who: new Set()}; e.turns++; e.who.add(s.r.id); }));
+    const list = Object.values(per).sort((a, b) => b.turns - a.turns || a.n - b.n);
+    h += '<h4>Where the class got stuck</h4>';
+    if (!list.length) h += '<p class="cv-muted">Nothing yet. This counts what students ask on each slide.</p>';
+    else {
+      const max = list[0].turns, top = new Set(list.slice(0, 3).map(x => x.k));
+      h += `<div class="rs-stuck">${list.slice(0, 12).map(x => { const t = x.kind === 'slide' && L && L.slides && L.slides[x.n - 1] && L.slides[x.n - 1].title; return `<div class="rs-s${top.has(x.k) ? ' hot' : ''}"><span class="rs-sl">${x.kind === 'slide' ? 'Slide' : 'Chapter'} ${x.n}${t ? ` <small>${esc(String(t).slice(0, 40))}</small>` : ''}</span><span class="rs-bar"><i style="width:${Math.max(6, Math.round(x.turns / max * 100))}%"></i></span><span class="rs-c">${sayCount(x.who.size, 'student')} · ${sayCount(x.turns, 'turn')}</span></div>`; }).join('')}</div><p class="cv-muted">The top three are marked. This counts what students said on each slide (their last 30 lines each), not short replies like “next”.</p>`;
+    }
+    return h + '</section>';
+  }
+  async function loadRuns(it, force) {
+    const db = deps.db(); if (!db || !it) return;
+    if (RES.id === it.id && (RES.loading || ((RES.rows || RES.err) && !force))) return;
+    if (RES.id !== it.id) Object.assign(RES, {id: it.id, rows: null, err: '', open: ''});
+    RES.loading = true; RES.err = ''; deps.render();
+    try {
+      const {data, error} = await db.from('worldview_teacher_lesson_runs').select(RUN_COLS).eq('lesson_id', it.id).order('updated_at', {ascending: false}).limit(200);
+      if (RES.id !== it.id) return;
+      if (error) RES.err = 'Couldn\'t load results (' + (error.message || 'error') + '). Press Refresh to try again.';
+      else { RES.rows = data || []; RES.at = new Date(); RC.n[it.id] = {started: RES.rows.length, finished: RES.rows.filter(isDone).length}; }
+    } catch (e) { if (RES.id === it.id) RES.err = 'Couldn\'t load results. Check the internet connection and press Refresh.'; }
+    RES.loading = false; deps.render();
+  }
+  /* The calendar cards' "3 started · 1 finished": one small query for the class's published lessons, once per class view. */
+  async function loadCounts(ids) {
+    const db = deps.db(), key = ids.join(','); if (!db || !ids.length || RC.key === key) return;
+    RC.key = key;
+    try {
+      const {data, error} = await db.from('worldview_teacher_lesson_runs').select('lesson_id,finished,answers').in('lesson_id', ids).limit(2000);
+      if (error) return;
+      ids.forEach(i => RC.n[i] = {started: 0, finished: 0});
+      (data || []).forEach(r => { const c = RC.n[r.lesson_id]; if (!c) return; c.started++; if (isDone(r)) c.finished++; });
+      deps.render();
+    } catch (e) {}
+  }
+  const countLine = it => { const c = P.role === 'teacher' && it.pub && it.mine && RC.n[it.id]; return c ? `<span class="sc-rs">${c.started ? c.started + ' started · ' + c.finished + ' finished' : 'No one has started'}</span>` : ''; };
+  /* After each render: fetch what the teacher's view needs once (counts for the class, results for the open published lesson). */
+  function syncResults() {
+    if (P.role !== 'teacher' || P.scr !== 'class') return;
+    const items = itemsFor(curClass()), pubs = items.filter(x => x.mine && x.pub);
+    loadCounts(pubs.map(x => x.id).sort());
+    const sel = P.sel && items.find(x => x.key === P.sel);
+    if (sel && sel.mine && sel.pub) loadRuns(sel);
   }
   const mineItem = id => itemsFor(curClass()).find(x => x.kind === 'real' && x.id === id);
   async function tryAsStudent(id) {
@@ -436,6 +561,7 @@
     goClass(id) { if (!ucls(id)) return; P.role = 'teacher'; save('role', 'teacher'); P.cur = id; P.scr = 'class'; P.sel = null; P.edit = false; P.month = monthOf(TODAY); deps.render(); },
     afterRender(root) {
       if (P.scr !== 'class' && P.scr !== 'school') return;
+      syncResults();
       root.querySelectorAll('.sc-lc').forEach(el => {
         el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); } });
         if (el.draggable) el.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', el.dataset.k); e.dataTransfer.effectAllowed = 'move'; });
@@ -498,6 +624,8 @@
       case 'publish': publishLx(d.id); return;
       case 'unpub': unpublishLx(d.id); return;
       case 'style': changeStyle(P.sel && (viewItems().find(x => x.key === P.sel) || {}).id, d.s, d.checked === true || d.checked === 'true'); return;
+      case 'resopen': RES.open = RES.open === d.r ? '' : d.r; break;
+      case 'resrefresh': { const it = mineItem(d.id); RC.key = ''; if (it) { loadRuns(it, true); return; } break; }
       case 'closeday': P.sel = null; break;
       case 'mon': P.month = new Date(P.month.getFullYear(), P.month.getMonth() + (+d.n), 1); break;
       case 'monnow': P.month = monthOf(TODAY); break;
