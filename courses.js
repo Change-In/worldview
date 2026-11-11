@@ -342,7 +342,7 @@
   /* ---------------- screens ---------------- */
 function scrHome() {
     S.cat = ''; S.sub = 'All';
-    return `<div class="ex-hero"><h1>Anyone can build a lesson</h1><p>Make a lesson once, and anyone can learn from it by talking with an AI.</p><a class="cv-pill" href="studio.html?from=explore" style="text-decoration:none">Build a lesson</a></div><label class="cv-search">${ICON.search}<input id="cv-q" type="search" placeholder="Search lessons" value="${esc(S.query)}" autocomplete="off"></label><div class="ex-grid" id="cv-results">${results()}</div>` + footnote;
+    return `<div class="ex-hero"><h2>Anyone can build a lesson</h2><p>Make a lesson once, and anyone can learn from it by talking with an AI. <a class="sc-link" href="studio.html?from=explore">Build a lesson</a></p></div><label class="cv-search">${ICON.search}<input id="cv-q" type="search" placeholder="Search lessons" value="${esc(S.query)}" autocomplete="off"></label><div class="ex-grid" id="cv-results">${results()}</div>` + footnote;
   }
   const WP = () => window.WorldviewPlaces;
   function scrTeacher() {
@@ -713,7 +713,7 @@ function scrHome() {
   let hashDone = false;
   function tick() {
     const ok = allowed();
-    if (ok && !hashDone) { hashDone = true; const h = location.hash.slice(1); if (h === 'explore' || h === 'places') { history.replaceState(null, '', location.pathname + location.search); bar.querySelector('[data-tabbar=' + h + ']').click(); } }
+    if (ok && !hashDone) { hashDone = true; const [h, hc] = location.hash.slice(1).split('/'); if (h === 'explore' || h === 'places') { history.replaceState(null, '', location.pathname + location.search); bar.querySelector('[data-tabbar=' + h + ']').click(); if (h === 'places' && hc) WP().goClass(decodeURIComponent(hc)); } }
     const home = document.getElementById('view-home')?.classList.contains('active');
     if (!ok && S.open) closeCourses();
     const show = ok && (home || S.open) && !blocked();

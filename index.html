@@ -19,7 +19,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <script src="lesson-entry-popup.js?v=2.1.71"></script>
 <link rel="stylesheet" href="lesson-folders.css?v=2.1.77">
 <link rel="stylesheet" href="courses.css?v=3.1.68">
-<link rel="stylesheet" href="places.css?v=3.1.72">
+<link rel="stylesheet" href="places.css?v=3.1.73">
 <link rel="stylesheet" href="boot-splash.css?v=3.1.22">
 <link rel="stylesheet" href="map-tools.css?v=3.1.21">
 <script src="lesson-folders.js?v=3.1.13"></script>
@@ -2223,7 +2223,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.72 · Nov 10";
+const BUILD = "v3.1.73 · Nov 11";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2231,6 +2231,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.73",date:"Nov 11",changes:["School, student view: one calendar with the lessons of all your classes, each class in its own colour. Tap a class name to show or hide it.","School, teacher view: pick a class, then edit its name, code, meeting days and colour. These are saved on this device.","The sample classes and sample lessons are gone. Only your real lessons show.","New Drafts list beside the class calendar: drag a lesson onto a day, or open it and Put on a day. A new lesson no longer lands on a day by itself.","In a lesson: Move back to drafts, and Delete lesson (unpublish it first).","Add presentations: choose several PDFs at once and they draft one after another, each with its own progress and cost. Choose Lecture with pauses, Conversation, or both.","After drafting: Put it on the calendar and Back to class, at the top and the end. Back now returns to your class.","Explore is quieter."]},
   {tag:"v3.1.72",date:"Nov 10",changes:["Students can now take a lesson made from slides: Conversation or Lecture with pauses, one tap each. You can type to either, and speak when your device allows.","Both end with a short explain-it-back check. Worldview never teaches or hints during it, and shows you no grade. What you say is kept for your teacher.","Teacher view: a small “Ways students may learn this” row, Try it as a student (works on a draft), and Publish or Unpublish right in the class day panel."]},
   {tag:"v3.1.71",date:"Nov 10",changes:["The middle tab is now School. It opens on your two classes, with a Student | Teacher switch at the top.","Open a class to see a month calendar of its lessons. Tap a lesson to see its day and start it.","Teacher view adds Add presentations, moving a lesson to another day (drag it on a computer), and a Draft tag. Students only see published lessons.","Explore is simpler: Anyone can build a lesson, a Build a lesson button, search, and the lessons."]},
   {tag:"v3.1.70",date:"Nov 10",changes:["Make a lesson from your slides: in Places, Add presentations takes a PDF of your class presentation (in PowerPoint, File › Save As › PDF).","Worldview writes what the AI will say on each slide, with key points, where students trip, and goals and explain-it-back questions for the end. Slides it could not read clearly are flagged for you.","Edit any of it; Draft this slide again redoes one slide. Check questions can have a picture, such as a photo of an equation.","You see what drafting cost. Worldview stops if one presentation would pass $2.","The lesson is saved as a draft in its class. Taking it as a student comes next."]},
@@ -16566,9 +16567,10 @@ window.addEventListener("blur", () => {
 </script>
 <!-- NAV-152/154: owner-only Courses preview (bottom tabs Home · Courses · Profile). -->
 <script src="places-data.js?v=3.1.69"></script>
+<script src="places-classes.js?v=3.1.73"></script>
 <script src="lesson-publish.js?v=3.1.72"></script>
-<script src="places.js?v=3.1.72"></script>
-<script src="courses.js?v=3.1.72"></script>
+<script src="places.js?v=3.1.73"></script>
+<script src="courses.js?v=3.1.73"></script>
 <!-- NAV-157: lesson map tools; NAV-156: lift the loading screen when Home is ready. -->
 <script src="map-tools.js?v=3.1.21"></script>
 <script src="boot-splash.js?v=3.1.22"></script>

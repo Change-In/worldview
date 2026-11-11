@@ -222,62 +222,83 @@
     return `<div class="cv-head pl-dh">${back('closedemo')}<h1 class="sm">${esc(d.title)}</h1></div><span class="cv-muted">A sample lesson from ${esc(P.demoW)}. In this demo, one lesson per teacher is built.</span><div class="pl-demo">${BODY[d.k](d)}</div>`;
   }
 
-  /* ---------- the simple school page (v3.1.71): classes, a month calendar per class, a Student | Teacher switch ----------
-     Calendar lessons are the class's sample lessons plus real Teacher Studio lessons whose title starts "Class name, Unit N".
-     A real lesson's date is stored in its own note (note.date, "YYYY-MM-DD"); a lesson with none sits on the next class meeting day. */
-  const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  /* ---------- the simple school page (v3.1.73) ----------
+     Student: one month calendar of the published lessons of all the student's classes, each class in its own colour, with filter chips.
+     Teacher: class cards, then one class: its calendar, a Drafts list (lessons with no date yet), and an editable class.
+     Classes come from places-classes.js (sample data, edits kept on this device). The old sample classes, lessons and teachers
+     in places-data.js are no longer shown here. A real lesson's date is its note.date; a lesson with no date is a draft and is never put on a day by itself. */
+  const WC = window.WorldviewClasses;
   const DOWH = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const monthOf = d => new Date(d.getFullYear(), d.getMonth(), 1);
   const validKey = v => /^\d{4}-\d\d-\d\d$/.test(v || '') && key(D(v)) === v;
-  const meetDays = c => { const t = myTutors(c, c.cur)[0] || c.units[c.cur].tutors[0]; return ((t && t.days) || [1, 3]).slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)); };
-  const meetText = c => meetDays(c).map(n => WD[n]).join(' and ');
-  const nextMeet = c => { const md = meetDays(c); for (let d = TODAY, i = 0; i < 14; d = add(d, 1), i++) if (md.includes(d.getDay())) return d; return TODAY; };
-  const realTitle = (c, t) => (t || '').replace(new RegExp('^' + escRe(c.name) + ',\\s*unit\\s*\\d+\\s*[:\\-]?\\s*', 'i'), '') || t;
+  const ucls = id => WC.get(id), UC = () => WC.list();
+  const ccolor = c => WC.COLORS[c.color] || WC.COLORS[0];
+  const meetText = c => WC.meetText(c);
+  const nextMeetKey = c => WC.nextMeetKey(c, TODAY);
+  const hidden = () => P.hide || (P.hide = load('hide', []));
+  const curClass = () => ucls(P.cur) || UC()[0];
+  /* Real lessons of one class: the teacher's own (drafts too) and, for students, the published catalog. No sample lessons. */
   function itemsFor(c) {
-    const out = [], teacher = P.role === 'teacher';
-    c.units.forEach(u => { const t = myTutors(c, u.i)[0] || u.tutors[0]; if (t) lessonDates(u, t).forEach(l => out.push({kind: 'sample', key: 's|' + c.code + '|' + u.i + '|' + t.id + '|' + l.t, title: l.t, d: l.d, pub: true, t, l})); });
-    const seen = new Set(), re = new RegExp('^' + escRe(c.name) + ',\\s*unit\\s*\\d+', 'i'), dflt = nextMeet(c);
+    const out = [], teacher = P.role === 'teacher', seen = new Set();
     const real = (l, mine) => {
-      if (seen.has(l.id) || !re.test(l.title || '')) return; seen.add(l.id);
+      if (seen.has(l.id) || WC.ofLesson(l) !== c) return; seen.add(l.id);
       const pub = mine ? !!l.shared : true; if (!teacher && !pub) return;
       const n = l.note && typeof l.note === 'object' ? l.note : {};
-      out.push({kind: 'real', key: 'r|' + l.id, id: l.id, title: realTitle(c, l.title), d: validKey(n.date) ? D(n.date) : dflt, pub, mine, slides: n.format === 'slides-v1', row: l});
+      out.push({kind: 'real', key: 'r|' + l.id, id: l.id, cid: c.id, title: WC.plainTitle(c, l.title), d: validKey(n.date) ? D(n.date) : null, pub, mine, slides: n.format === 'slides-v1', row: l});
     };
     (deps.my() || []).forEach(l => real(l, true));
     if (!teacher) (deps.real() || []).forEach(l => real(l, false));
     return out;
   }
-  const byDay = items => { const m = {}; items.forEach(it => (m[key(it.d)] = m[key(it.d)] || []).push(it)); return m; };
-  const scCard = (it, sel) => `<div class="sc-lc${sel === it.key ? ' on' : ''}" role="button" tabindex="0" data-pa="pick" data-k="${esc(it.key)}"${P.role === 'teacher' && it.kind === 'real' && it.mine ? ' draggable="true"' : ''}><b>${esc(it.title)}</b>${P.role === 'teacher' ? `<span class="sc-tag ${it.kind === 'sample' ? '' : it.pub ? 'p' : 'd'}">${it.kind === 'sample' ? 'Sample' : it.pub ? 'Published' : 'Draft'}</span>` : ''}</div>`;
+  /* Everything the current view shows: the class (teacher) or every class not filtered out (student). */
+  const viewItems = () => P.role === 'teacher' ? itemsFor(curClass()) : UC().filter(c => !hidden().includes(c.id)).flatMap(c => itemsFor(c));
+  const byDay = items => { const m = {}; items.forEach(it => it.d && (m[key(it.d)] = m[key(it.d)] || []).push(it)); return m; };
+  const scCard = (it, sel) => `<div class="sc-lc${sel === it.key ? ' on' : ''}" style="--cc:${ccolor(ucls(it.cid))}" role="button" tabindex="0" data-pa="pick" data-k="${esc(it.key)}"${P.role === 'teacher' && it.mine ? ' draggable="true"' : ''}><b>${esc(it.title)}</b>${P.role === 'teacher' ? `<span class="sc-tag ${it.pub ? 'p' : 'd'}">${it.pub ? 'Published' : 'Draft'}</span>` : ''}</div>`;
   const switchH = () => `<div class="sc-switch" role="group" aria-label="View as">${['student', 'teacher'].map(r => `<button type="button" data-pa="role" data-r="${r}" class="${P.role === r ? 'on' : ''}" aria-pressed="${P.role === r}">${r[0].toUpperCase() + r.slice(1)}</button>`).join('')}</div>`;
-  function schoolHome() {
-    const teacher = P.role === 'teacher';
-    return `${switchH()}<div class="sc-main"><h1 class="sc-h">Places</h1><p class="sc-sub">${teacher ? 'Your classes. Pick one to plan its days.' : 'Your classes. Pick one to see your lessons.'}</p>
-      <div class="sc-classes">${CLASSES.map(c => { const n = itemsFor(c).length; return `<button type="button" class="sc-class" data-pa="open" data-c="${esc(c.code)}"><b>${esc(c.name)}</b><span>${esc(c.code)} · meets ${meetText(c)}</span><span>${n} lesson${n === 1 ? '' : 's'} on the calendar</span></button>`; }).join('')}</div>
-      ${teacher ? '<a class="sc-link" href="studio.html?from=places">Build your own in Teacher Studio</a>' : ''}</div>`;
-  }
-  function panelH(c, items) {
-    const it = items.find(x => x.key === P.sel); if (!it) return '';
-    const teacher = P.role === 'teacher', close = '<button type="button" class="sc-x" data-pa="closeday">Close</button>';
-    let h = `<aside class="sc-panel" aria-label="Lesson">${close}<h2>${esc(it.title)}</h2><p class="sc-sub">${esc(c.name)} · ${fmt(it.d)}</p>`;
-    if (it.kind === 'sample') {
-      if (it.l.what) h += `<p>${esc(it.l.what)}</p>`;
-      h += `<div class="sc-acts">${startBtn(it.t, it.l)}</div>`;
-      if (teacher) h += '<p class="cv-muted">Sample lesson</p>';
-    } else if (!teacher) {
-      h += `<div class="sc-acts"><a class="cv-pill" href="${esc(deps.playLink(it.id))}">Start</a></div>`;
-    } else {
-      h += teacherPanel(it);
+  /* The month grid (laptop) and the day list (phone) for a set of items. */
+  function calHtml(items) {
+    const by = byDay(items), y = P.month.getFullYear(), m = P.month.getMonth(), days = new Date(y, m + 1, 0).getDate(), lead = (new Date(y, m, 1).getDay() + 6) % 7, inNow = key(P.month) === key(monthOf(TODAY));
+    let grid = DOWH.map(d => `<div class="sc-dow">${d}</div>`).join('') + '<div class="sc-blank"></div>'.repeat(lead), list = '', n = 0;
+    for (let i = 1; i <= days; i++) {
+      const d = new Date(y, m, i), k = key(d), its = by[k] || [], isT = k === key(TODAY);
+      grid += `<div class="sc-cell${isT ? ' today' : ''}" data-dk="${k}"><div class="sc-dn">${isT ? `<span>${i}</span>` : i}</div>${its.map(x => scCard(x, P.sel)).join('')}</div>`;
+      if (its.length) { n += its.length; list += `<div class="sc-ld"><div class="sc-dh${isT ? ' today' : ''}">${isT ? 'Today · ' : ''}${fmt(d)}</div>${its.map(x => scCard(x, P.sel)).join('')}</div>`; }
     }
+    const label = P.month.toLocaleDateString([], {month: 'long', year: 'numeric'});
+    return {n, html: `<div class="sc-mon"><button type="button" class="sc-nav" data-pa="mon" data-n="-1" aria-label="Previous month">‹</button><b>${label}</b><button type="button" class="sc-nav" data-pa="mon" data-n="1" aria-label="Next month">›</button>${inNow ? '' : '<button type="button" class="sc-link" data-pa="monnow">This month</button>'}</div>
+      <div class="sc-cal">${grid}</div><div class="sc-list">${list}</div>`};
+  }
+  const ensureSel = items => { if (P.sel && !items.some(x => x.key === P.sel)) P.sel = null; };
+  /* School home. Student: the one calendar for all classes. Teacher: class cards. */
+  function schoolHome() {
+    const teacher = P.role === 'teacher', all = UC();
+    if (teacher) {
+      return `${switchH()}<div class="sc-main"><h1 class="sc-h">School</h1><p class="sc-sub">Your classes. Pick one to plan its days.</p>
+        <div class="sc-classes">${all.map(c => { const its = itemsFor(c), dr = its.filter(x => !x.d).length, on = its.length - dr; return `<button type="button" class="sc-class" style="--cc:${ccolor(c)}" data-pa="open" data-c="${esc(c.id)}"><b>${esc(c.name)}</b><span>${esc(c.code)}${c.code ? ' · ' : ''}meets ${meetText(c)}</span><span>${on} on the calendar · ${dr} in drafts</span></button>`; }).join('')}</div>
+        <a class="sc-link" href="studio.html?from=places">Build your own in Teacher Studio</a></div>`;
+    }
+    const items = viewItems(); ensureSel(items);
+    const everything = all.flatMap(c => itemsFor(c)), cal = calHtml(items), anytime = items.filter(x => !x.d);
+    const chips = `<div class="sc-chips" role="group" aria-label="Show classes">${all.map(c => { const on = !hidden().includes(c.id); return `<button type="button" class="sc-chip${on ? ' on' : ''}" style="--cc:${ccolor(c)}" data-pa="filter" data-c="${esc(c.id)}" aria-pressed="${on}"><i></i>${esc(c.name)}</button>`; }).join('')}</div>`;
+    const empty = !everything.length ? 'No lessons yet. When a teacher publishes a lesson for your class, it shows up here.' : !items.length ? 'Every class is hidden. Turn one back on above.' : !cal.n && !anytime.length ? 'No lessons this month.' : '';
+    return `${switchH()}<div class="sc-layout"><div class="sc-main"><h1 class="sc-h">School</h1><p class="sc-sub">All your classes on one calendar. Open a lesson to start it.</p>${chips}
+      ${cal.html}${empty ? `<p class="cv-muted sc-none">${empty}</p>` : ''}
+      ${anytime.length ? `<div class="sc-any"><h2 class="sc-h2">Not on the calendar yet</h2><p class="cv-muted">Published, but the teacher hasn't picked a day. You can start these any time.</p>${anytime.map(x => scCard(x, P.sel)).join('')}</div>` : ''}</div>${panelH(items)}</div>`;
+  }
+  function panelH(items) {
+    const it = items.find(x => x.key === P.sel); if (!it) return '';
+    const c = ucls(it.cid), teacher = P.role === 'teacher', close = '<button type="button" class="sc-x" data-pa="closeday">Close</button>';
+    let h = `<aside class="sc-panel" style="--cc:${ccolor(c)}" aria-label="Lesson">${close}<h2>${esc(it.title)}</h2><p class="sc-sub">${esc(c.name)} · ${it.d ? fmt(it.d) : 'No day yet'}</p>`;
+    h += teacher ? teacherPanel(it, c) : `<div class="sc-acts"><a class="cv-pill" href="${esc(deps.playLink(it.id))}">Start</a></div>`;
     return h + '</aside>';
   }
   /* ---------- the teacher's panel for a real lesson (v3.1.72): ways to learn, try it as a student, publish ----------
      lesson.json holds the lesson and a small `styles` setting; publishing uses lesson-publish.js, the same code as Teacher Studio. */
-  const LX = {id: '', loading: false, L: null, styles: {conversation: true, lecture: true, voice: true}, msg: '', busy: '', sure: false};
+  const LX = {del: false, id: '', loading: false, L: null, styles: {conversation: true, lecture: true, voice: true}, msg: '', busy: '', sure: false};
   const BUCKET = 'lesson-files';
   const readLesson = async (db, id) => { const {data, error} = await db.storage.from(BUCKET).download(id + '/lesson.json'); if (error || !data) return null; try { const j = JSON.parse(await data.text()); return j && j.format === 'slides-v1' ? j : null; } catch (e) { return null; } };
   async function loadLx(it) {
-    Object.assign(LX, {id: it.id, loading: !!it.slides, L: null, msg: '', busy: '', sure: false, styles: {conversation: true, lecture: true, voice: true}});
+    Object.assign(LX, {del: false, id: it.id, loading: !!it.slides, L: null, msg: '', busy: '', sure: false, styles: {conversation: true, lecture: true, voice: true}});
     if (!it.slides) return;
     const db = deps.db(); let L = null; try { L = db ? await readLesson(db, it.id) : null; } catch (e) {}
     if (LX.id !== it.id) return;
@@ -294,11 +315,11 @@
       return !error;
     } catch (e) { return false; }
   }
-  function teacherPanel(it) {
+  function teacherPanel(it, c) {
     const ready = !it.slides || !!(LX.L && LX.L.status !== 'drafting' && LX.L.slides && LX.L.slides.every(s => s.script));
     const st = LX.styles, busy = LX.busy, id = esc(it.id), off = busy || LX.loading ? ' disabled' : '', pubOff = busy || LX.loading || !ready ? ' disabled' : '';
     let h = `<p><span class="sc-tag ${it.pub ? 'p' : 'd'}">${it.pub ? 'Published' : 'Draft'}</span></p>
-      <label class="sc-f" for="sc-mv">Move to</label><div class="sc-row"><input type="date" id="sc-mv" value="${key(it.d)}"><button type="button" class="cv-pill ghost" data-pa="move" data-id="${id}">Move</button></div>`;
+      <label class="sc-f" for="sc-mv">${it.d ? 'Move to' : 'Put on a day'}</label><div class="sc-row"><input type="date" id="sc-mv" value="${it.d ? key(it.d) : nextMeetKey(c)}"><button type="button" class="cv-pill ghost" data-pa="move" data-id="${id}"${busy ? ' disabled' : ''}>${it.d ? 'Move' : 'Put on this day'}</button></div>${it.d ? `<button type="button" class="sc-link" data-pa="todrafts" data-id="${id}"${busy ? ' disabled' : ''}>Move back to drafts</button>` : ''}`;
     if (it.slides) {
       const ck = (k, label) => `<label class="sc-ck"><input type="checkbox" data-pa="style" data-s="${k}"${st[k] ? ' checked' : ''}${busy ? ' disabled' : ''}> ${label}</label>`;
       h += `<div class="sc-ways" role="group" aria-label="Ways students may learn this"><span class="sc-f">Ways students may learn this</span>${LX.loading ? '<p class="cv-muted">Loading…</p>' : !LX.L ? '<p class="cv-muted">This lesson\'s file couldn\'t be read. Reload and try again.</p>' : ck('conversation', 'Conversation') + ck('lecture', 'Lecture with pauses') + ck('voice', 'Voice: speaks and listens when the device allows; typing always works')}</div>`;
@@ -308,10 +329,11 @@
       <div class="sc-acts">${it.pub ? `<button type="button" class="cv-pill ghost" data-pa="unpub" data-id="${id}"${busy ? ' disabled' : ''}>${LX.sure ? 'Press again: students lose access' : 'Unpublish'}</button><button type="button" class="cv-pill" data-pa="publish" data-id="${id}"${pubOff}>Publish changes</button>` : `<button type="button" class="cv-pill" data-pa="publish" data-id="${id}"${pubOff}>Publish to students</button>`}</div>
       ${!ready && !LX.loading ? '<p class="cv-muted">Finish drafting every slide in Slides and scripts, then you can publish.</p>' : ''}
       <p class="sc-note" role="status">${esc(busy || LX.msg)}</p>
-      <p class="cv-muted"><a class="sc-link" href="studio.html?from=places&l=${encodeURIComponent(it.id)}">More in Teacher Studio</a></p>`;
+      <p class="cv-muted"><a class="sc-link" href="studio.html?from=places&l=${encodeURIComponent(it.id)}">More in Teacher Studio</a></p>
+      <div class="sc-danger">${LX.del ? `<p><b>Delete "${esc(it.title)}"?</b> The lesson, its slides and scripts are removed for good. This can't be undone.</p><div class="sc-acts"><button type="button" class="cv-pill sc-del" data-pa="delyes" data-id="${id}"${busy ? ' disabled' : ''}>Yes, delete this lesson</button><button type="button" class="cv-pill ghost" data-pa="delno">Keep it</button></div>` : `<button type="button" class="cv-pill ghost sc-del" data-pa="del" data-id="${id}"${busy || it.pub ? ' disabled' : ''}>Delete lesson</button>${it.pub ? '<p class="cv-muted">Unpublish this lesson before you can delete it.</p>' : ''}`}</div>`;
     return h;
   }
-  const mineItem = id => itemsFor(cls(P.cur)).find(x => x.kind === 'real' && x.id === id);
+  const mineItem = id => itemsFor(curClass()).find(x => x.kind === 'real' && x.id === id);
   async function tryAsStudent(id) {
     const db = deps.db(), it = mineItem(id); if (!db || !it) return;
     LX.busy = 'Opening your draft…'; deps.render();
@@ -347,27 +369,49 @@
     LX.msg = ok ? 'Saved. ' + (it && it.pub ? 'Students get this when you publish changes.' : 'Students get this when you publish.') : 'Couldn\'t save that. Check the internet connection and try again.';
     deps.render();
   }
+  /* The teacher's class page: month calendar, the Drafts list beside it (below it on a phone), and the lesson panel. */
+  function editForm(c) {
+    return `<form class="sc-edit" data-form="class" novalidate><h2 class="sc-h2">Edit this class</h2>
+      <label class="sc-f" for="ce-name">Name</label><input id="ce-name" type="text" maxlength="60" value="${esc(c.name)}" autocomplete="off">
+      <label class="sc-f" for="ce-code">Short code</label><input id="ce-code" type="text" maxlength="20" value="${esc(c.code)}" autocomplete="off">
+      <span class="sc-f" id="ce-dl">Meeting days</span><div class="sc-days" role="group" aria-labelledby="ce-dl">${[1, 2, 3, 4, 5, 6, 0].map(n => `<label class="sc-day"><input type="checkbox" name="ce-day" value="${n}"${c.days.includes(n) ? ' checked' : ''}><span>${WC.WD[n]}</span></label>`).join('')}</div>
+      <span class="sc-f" id="ce-cl">Colour</span><div class="sc-sw" role="radiogroup" aria-labelledby="ce-cl">${WC.COLORS.map((h, i) => `<label class="sc-swl" title="${WC.COLOR_NAMES[i]}"><input type="radio" name="ce-color" value="${i}"${c.color === i ? ' checked' : ''} aria-label="${WC.COLOR_NAMES[i]}"><i style="background:${h}"></i></label>`).join('')}</div>
+      <p class="sc-note" id="ce-msg" role="status"></p>
+      <div class="sc-acts"><button type="button" class="cv-pill" data-pa="saveclass">Save class</button><button type="button" class="cv-pill ghost" data-pa="cancelclass">Cancel</button></div>
+      <p class="cv-muted">Class details are saved on this device only. Your lessons stay with the class if you rename it.</p></form>`;
+  }
   function classCal() {
-    const c = cls(P.cur), teacher = P.role === 'teacher', items = itemsFor(c), by = byDay(items);
-    if (P.sel && !items.some(x => x.key === P.sel)) P.sel = null;
-    const y = P.month.getFullYear(), m = P.month.getMonth(), days = new Date(y, m + 1, 0).getDate(), lead = (new Date(y, m, 1).getDay() + 6) % 7, inNow = key(P.month) === key(monthOf(TODAY));
-    let grid = DOWH.map(d => `<div class="sc-dow">${d}</div>`).join('') + '<div class="sc-blank"></div>'.repeat(lead), list = '', n = 0;
-    for (let i = 1; i <= days; i++) {
-      const d = new Date(y, m, i), k = key(d), its = by[k] || [], isT = k === key(TODAY);
-      grid += `<div class="sc-cell${isT ? ' today' : ''}" data-dk="${k}"><div class="sc-dn">${isT ? `<span>${i}</span>` : i}</div>${its.map(x => scCard(x, P.sel)).join('')}</div>`;
-      if (its.length) { n += its.length; list += `<div class="sc-ld"><div class="sc-dh${isT ? ' today' : ''}">${isT ? 'Today · ' : ''}${fmt(d)}</div>${its.map(x => scCard(x, P.sel)).join('')}</div>`; }
-    }
-    const label = P.month.toLocaleDateString([], {month: 'long', year: 'numeric'});
-    return `${switchH()}<div class="sc-layout"><div class="sc-main"><button type="button" class="sc-link" data-pa="school">← All classes</button>
-      <div class="sc-top"><div><h1 class="sc-h">${esc(c.name)}</h1><p class="sc-sub">${esc(c.code)} · meets ${meetText(c)} · ${teacher ? 'Plan your days. Open a lesson to change it.' : 'Open a lesson to start it.'}</p></div>${teacher ? `<a class="cv-pill" href="${slidesLink(c, c.units[c.cur])}">Add presentations</a>` : ''}</div>
-      <div class="sc-mon"><button type="button" class="sc-nav" data-pa="mon" data-n="-1" aria-label="Previous month">‹</button><b>${label}</b><button type="button" class="sc-nav" data-pa="mon" data-n="1" aria-label="Next month">›</button>${inNow ? '' : '<button type="button" class="sc-link" data-pa="monnow">This month</button>'}</div>
-      <div class="sc-cal">${grid}</div><div class="sc-list">${list}</div>${n ? '' : '<p class="cv-muted sc-none">No lessons this month.</p>'}</div>${panelH(c, items)}</div>`;
+    const c = curClass(), items = itemsFor(c); ensureSel(items);
+    const cal = calHtml(items), drafts = items.filter(x => !x.d);
+    const dr = `<section class="sc-drafts" aria-labelledby="sc-dh"><h2 class="sc-h2" id="sc-dh">Drafts <span>${drafts.length}</span></h2>
+      ${drafts.length ? `<p class="cv-muted">Lessons with no day yet. Open one and choose a day. On a laptop you can also drag it onto a day.</p>${drafts.map(x => scCard(x, P.sel)).join('')}` : '<p class="cv-muted">Nothing waiting. A lesson you make from slides lands here until you give it a day.</p>'}</section>`;
+    return `${switchH()}<div class="sc-layout two"><div class="sc-main"><button type="button" class="sc-link" data-pa="school">← All classes</button>
+      <div class="sc-top"><div><h1 class="sc-h"><i class="sc-dot" style="background:${ccolor(c)}"></i>${esc(c.name)}</h1><p class="sc-sub">${esc(c.code)}${c.code ? ' · ' : ''}meets ${meetText(c)}</p></div><div class="sc-acts"><a class="cv-pill" href="slides.html?class=${encodeURIComponent(c.id)}">Add presentations</a><button type="button" class="cv-pill ghost" data-pa="editclass">Edit class</button></div></div>
+      ${P.edit ? editForm(c) : ''}${cal.html}${items.length ? (cal.n || drafts.length ? '' : '<p class="cv-muted sc-none">No lessons this month.</p>') : '<p class="cv-muted sc-none">No lessons in this class yet. Press Add presentations to make one from your slides.</p>'}</div>
+      <div class="sc-side">${dr}${panelH(items)}</div></div>`;
   }
-  function moveLesson(id, k) {
+  async function moveLesson(id, k) {
     const l = (deps.my() || []).find(x => x.id === id); if (!l || !validKey(k)) { deps.toast('Pick a valid date.'); return; }
-    Promise.resolve(deps.saveNote(id, Object.assign({}, l.note || {}, {date: k}))).then(ok => { deps.toast(ok ? 'Moved to ' + fmt(D(k)) + '.' : 'Could not move it. Check your connection and try again.'); deps.render(); });
+    const had = !!(l.note && validKey(l.note.date)), ok = await deps.saveNote(id, Object.assign({}, l.note || {}, {date: k}));
+    deps.toast(ok ? (had ? 'Moved to ' : 'Put on ') + fmt(D(k)) + '.' : 'Could not save the day. Check your connection and try again.'); deps.render();
   }
-  const SCREENS = {find: findS, email: emailS, school: schoolHome, class: classCal, demo: demoS};
+  async function backToDrafts(id) {
+    const l = (deps.my() || []).find(x => x.id === id); if (!l) return;
+    const n = Object.assign({}, l.note || {}); delete n.date;
+    const ok = await deps.saveNote(id, n);
+    deps.toast(ok ? 'Moved back to drafts.' : 'Could not do that. Check your connection and try again.'); deps.render();
+  }
+  /* Delete a lesson through the same table call Teacher Studio uses. A published lesson must be unpublished first. */
+  async function deleteLesson(id) {
+    const db = deps.db(), it = mineItem(id); if (!db || !it) return;
+    if (it.pub) { LX.msg = 'Unpublish this lesson first, then you can delete it.'; LX.del = false; deps.render(); return; }
+    LX.busy = 'Deleting…'; deps.render();
+    let ok = false; try { const {error} = await db.from('worldview_teacher_lessons').delete().eq('id', id); ok = !error; } catch (e) {}
+    LX.busy = ''; LX.del = false;
+    if (!ok) { LX.msg = 'Couldn\'t delete it. Check the internet connection and try again.'; deps.render(); return; }
+    P.sel = null; LX.id = ''; await deps.reload(); deps.toast('Lesson deleted.'); deps.render();
+  }
+  const SCREENS = {school: schoolHome, class: classCal};
 
   /* ---------- what Explore borrows ---------- */
   const allTutors = () => CLASSES.flatMap(c => c.units.flatMap(u => u.tutors.map(t => ({c, u, t}))));
@@ -381,9 +425,10 @@
     init(d) { deps = Object.assign(deps, d); },
     initials, teachers, allTutors,
     about: w => { const x = allTutors().find(a => a.t.w === w); return x ? x.t.about : ''; },
-    html() { return (SCREENS[P.scr] || schoolS)() + sheetH(); },
+    html() { if (P.scr === 'class' && P.role !== 'teacher') P.scr = 'school'; return (SCREENS[P.scr] || schoolHome)(); },
+    goClass(id) { if (!ucls(id)) return; P.role = 'teacher'; save('role', 'teacher'); P.cur = id; P.scr = 'class'; P.sel = null; P.edit = false; P.month = monthOf(TODAY); deps.render(); },
     afterRender(root) {
-      if (P.scr !== 'class') return;
+      if (P.scr !== 'class' && P.scr !== 'school') return;
       root.querySelectorAll('.sc-lc').forEach(el => {
         el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); } });
         if (el.draggable) el.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', el.dataset.k); e.dataTransfer.effectAllowed = 'move'; });
@@ -394,9 +439,9 @@
         c.addEventListener('drop', e => { e.preventDefault(); c.classList.remove('over'); const k = e.dataTransfer.getData('text/plain'); if (k.startsWith('r|')) moveLesson(k.slice(2), c.dataset.dk); });
       });
     },
-    home() { if (P.scr === 'demo' || P.sheet) { P.sheet = null; P.demo = null; } P.scr = 'school'; deps.render(); },
-    openTutor(code, u, id) { openClass(code, u); P.sheet = {u, id}; },
-    escape() { if (P.sel && P.scr === 'class') { P.sel = null; deps.render(); return true; } if (P.sheet) { P.sheet = null; deps.render(); return true; } if (P.scr === 'demo') { act('closedemo'); return true; } return false; },
+    home() { P.scr = 'school'; P.sel = null; P.edit = false; deps.render(); },
+    openTutor() { P.scr = 'school'; },
+    escape() { if (P.sel) { P.sel = null; deps.render(); return true; } return false; },
     input(e) {
       const id = e.target.id;
       if (id === 'pl-q') { P.query = e.target.value; const pos2 = e.target.selectionStart; deps.render(); const i = document.getElementById('pl-q'); if (i) { i.focus(); try { i.setSelectionRange(pos2, pos2); } catch (x) {} } return; }
@@ -416,7 +461,7 @@
     const next = all.find(x => x.d >= TODAY && !P.done[x.k]) || all[all.length - 1]; P.day = next ? next.k : null;
   }
   function act(a, d = {}) {
-    const c = cls(P.cur);
+    const c = curClass();
     const top = () => { const v = document.getElementById('courses-view'); if (v) v.scrollTop = 0; };
     switch (a) {
       case 'find': P.scr = 'find'; P.code = false; top(); break;
@@ -424,14 +469,28 @@
       case 'sendcode': P.code = true; break;
       case 'verified': P.verified = true; save('verified', true); P.scr = 'school'; top(); break;
       case 'look': P.scr = 'school'; top(); break;
-      case 'school': P.scr = 'school'; P.sheet = null; P.sel = null; top(); break;
-      case 'open': openClass(d.c); P.sel = null; P.month = monthOf(TODAY); top(); break;
+      case 'school': P.scr = 'school'; P.sheet = null; P.sel = null; P.edit = false; top(); break;
+      case 'open': if (!ucls(d.c)) return; P.cur = d.c; P.scr = 'class'; P.edit = false; P.sel = null; P.month = monthOf(TODAY); top(); break;
+      case 'filter': { const h = hidden(), i = h.indexOf(d.c); if (i < 0) h.push(d.c); else h.splice(i, 1); save('hide', h); P.sel = null; break; }
+      case 'editclass': P.edit = true; break;
+      case 'cancelclass': P.edit = false; break;
+      case 'saveclass': {
+        const f = document.querySelector('[data-form=class]'); if (!f) return;
+        const name = f.querySelector('#ce-name').value.trim(), days = [...f.querySelectorAll('[name=ce-day]:checked')].map(x => +x.value), col = f.querySelector('[name=ce-color]:checked'), msg = f.querySelector('#ce-msg');
+        if (!name) { msg.textContent = 'Give the class a name.'; return; }
+        if (!days.length) { msg.textContent = 'Pick at least one meeting day.'; return; }
+        WC.update(c.id, {name, code: f.querySelector('#ce-code').value, days, color: col ? +col.value : c.color}); P.edit = false; deps.toast('Class saved on this device.'); break;
+      }
+      case 'todrafts': backToDrafts(d.id); return;
+      case 'del': LX.del = true; LX.msg = ''; break;
+      case 'delno': LX.del = false; break;
+      case 'delyes': deleteLesson(d.id); return;
       case 'role': if (d.r !== P.role) { P.role = d.r; save('role', d.r); } break;
-      case 'pick': { P.sel = P.sel === d.k ? null : d.k; const it = P.sel && itemsFor(c).find(x => x.key === P.sel); if (it && it.kind === 'real' && it.mine && P.role === 'teacher' && LX.id !== it.id) loadLx(it); break; }
+      case 'pick': { P.sel = P.sel === d.k ? null : d.k; const it = P.sel && viewItems().find(x => x.key === P.sel); if (it && it.mine && P.role === 'teacher' && LX.id !== it.id) loadLx(it); break; }
       case 'try': tryAsStudent(d.id); return;
       case 'publish': publishLx(d.id); return;
       case 'unpub': unpublishLx(d.id); return;
-      case 'style': changeStyle(P.sel && (itemsFor(c).find(x => x.key === P.sel) || {}).id, d.s, d.checked === true || d.checked === 'true'); return;
+      case 'style': changeStyle(P.sel && (viewItems().find(x => x.key === P.sel) || {}).id, d.s, d.checked === true || d.checked === 'true'); return;
       case 'closeday': P.sel = null; break;
       case 'mon': P.month = new Date(P.month.getFullYear(), P.month.getMonth() + (+d.n), 1); break;
       case 'monnow': P.month = monthOf(TODAY); break;

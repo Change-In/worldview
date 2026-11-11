@@ -7,11 +7,11 @@
 <title>Lesson from slides · Worldview</title>
 <link rel="icon" href="icon.png">
 <link rel="stylesheet" href="teacher.css?v=3.1.39">
-<link rel="stylesheet" href="slides.css?v=3.1.70b">
+<link rel="stylesheet" href="slides.css?v=3.1.73">
 </head>
 <body>
 <div class="wrap sl-wrap">
-  <div class="top"><a class="backto" id="backto" href="./#places" aria-label="Back to Places">‹</a><a class="mark" href="./" aria-label="Back to Worldview">W</a><b class="grow">Lesson from slides</b><span class="status" id="who"></span></div>
+  <div class="top"><a class="backto" id="backto" href="./#places" aria-label="Back to class">‹</a><a class="mark" href="./" aria-label="Back to Worldview">W</a><b class="grow">Lesson from slides</b><span class="status" id="who"></span></div>
 
   <div class="card" id="signedout" hidden>
     <h2>Sign in first</h2>
@@ -21,29 +21,32 @@
 
   <div class="card sl-msg" id="loading"><p class="muted">Loading…</p></div>
 
-  <!-- NEW: choose a PDF, read it, draft it (LES-338) -->
+  <!-- NEW: choose PDFs, read them, draft them one after another (LES-338; queue v3.1.73) -->
   <section class="card sl-new" id="newview" hidden>
-    <h1>Make a lesson from your slides</h1>
-    <p class="muted">Choose a presentation saved as a PDF. Worldview writes what the AI will say on each slide, the lesson's goals, and questions for the end. You can change all of it before students see anything.</p>
-    <label class="sl-field"><span>For</span><select id="for"></select></label>
-    <label class="sl-drop" id="drop"><input type="file" id="pdf" accept="application/pdf,.pdf,.ppt,.pptx,.key,.odp"><b>Choose a PDF</b><span>or drop it here · up to 60 slides</span></label>
-    <div class="sl-ask" id="typeask" role="status" hidden></div>
+    <h1 id="nvh">Make lessons from your slides</h1>
+    <p class="muted" id="nvp">Choose one or more presentations saved as PDFs. Worldview writes what the AI will say on each slide, each lesson's goals, and questions for the end. You can change all of it before students see anything.</p>
+    <label class="sl-field"><span>For class</span><select id="for"></select></label>
+    <label class="sl-drop" id="drop"><input type="file" id="pdf" accept="application/pdf,.pdf,.ppt,.pptx,.key,.odp" multiple><b id="dropb">Choose PDFs</b><span>or drop them here · up to 60 slides each</span></label>
     <div id="deck" hidden>
-      <p class="sl-deckline" id="deckline"></p>
-      <div class="sl-thumbs" id="thumbs"></div>
-      <label class="sl-field"><span>Lesson name</span><input type="text" id="name" maxlength="90" autocomplete="off"></label>
-      <label class="sl-field"><span>Anything the AI should know <em>optional</em></span><textarea id="notes" rows="4" maxlength="40000" placeholder="What to stress, what students find hard, or paste the lecture transcript. The AI teaches only from your slides and this box."></textarea></label>
+      <div id="queue" class="sl-queue"></div>
+      <label class="sl-field"><span>Anything the AI should know <em>optional, used for every presentation here</em></span><textarea id="notes" rows="3" maxlength="40000" placeholder="What to stress, what students find hard, or paste the lecture transcript. The AI teaches only from your slides and this box."></textarea></label>
+      <fieldset class="sl-ways" id="ways"><legend>Build these ways to learn</legend>
+        <label class="sl-ck"><input type="checkbox" id="w-lecture" checked> Lecture with pauses</label>
+        <label class="sl-ck"><input type="checkbox" id="w-conv" checked> Conversation</label>
+        <p class="muted small" id="wmsg">Students can use either one. You can change this later in each lesson.</p>
+      </fieldset>
       <p class="muted small" id="estimate"></p>
-      <div class="row"><button type="button" class="btn" id="go">Draft the lesson</button><button type="button" class="btn ghost" id="other">Choose another file</button></div>
+      <p class="sl-keep"><b>Keep this tab open while they draft.</b> They draft one after another.</p>
+      <div class="row"><button type="button" class="btn" id="go">Draft the lessons</button><button type="button" class="btn ghost" id="other">Add more PDFs</button></div>
     </div>
-    <div class="sl-progress" id="progress" hidden><div class="bar"><i id="pbar"></i></div><p id="ptext" role="status"></p></div>
   </section>
 
   <!-- THE TEACHER'S LESSON PAGE: slides, goals, check (LES-339) -->
   <div id="lessonview" hidden>
     <header class="sl-head">
       <input class="sl-title" id="title" aria-label="Lesson name" maxlength="90" autocomplete="off">
-      <div class="sl-meta"><select id="lfor" aria-label="Class and unit"></select><span class="chip" id="state">Draft · only you see it</span></div>
+      <div class="sl-bar" data-bar="top"></div>
+      <div class="sl-meta"><select id="lfor" aria-label="Class"></select><span class="chip" id="state">Draft · only you see it</span></div>
       <p class="sl-cost" id="cost"></p>
       <div class="sl-resume" id="resume" hidden></div>
       <nav class="sl-nav" aria-label="Parts of this lesson"><a href="#slides">Slides</a><a href="#goals">Goals</a><a href="#check">Check</a><span class="grow"></span><span class="status" id="saved" role="status"></span></nav>
@@ -56,13 +59,14 @@
       <label class="sl-field"><span>Rules, one per line <em>for example: Don't give homework answers</em></span><textarea id="lrules" rows="3"></textarea></label>
       <p class="muted small" id="recipe"></p>
     </details>
-    <p class="muted small sl-foot">How students take this lesson (a conversation, or a lecture with pauses) comes in the next version. <a id="studio" href="studio.html">Open in Teacher Studio</a></p>
+    <div class="sl-bar end" data-bar="end"></div>
+    <p class="muted small sl-foot"><a id="studio" href="studio.html">Open in Teacher Studio</a></p>
   </div>
 </div>
 <input type="file" id="checkpic" accept="image/*" hidden>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="places-data.js?v=3.1.69"></script>
+<script src="places-classes.js?v=3.1.73"></script>
 <script src="lesson-publish.js?v=3.1.72"></script>
-<script src="slides.js?v=3.1.72"></script>
+<script src="slides.js?v=3.1.73"></script>
 </body>
 </html>

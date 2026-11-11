@@ -82,3 +82,29 @@
   .sl-head { position:static; }
 }
 .sl-edit label em { font-style:normal; font-weight:500; }
+
+/* v3.1.73: several presentations in a queue, ways to learn, and the calendar bar */
+.sl-drop[hidden], .sl-progress[hidden], .sl-bar[hidden] { display:none; }
+.sl-queue { display:grid; gap:12px; margin-bottom:14px; }
+.sl-q-item { border:1px solid var(--line); border-radius:14px; padding:12px 14px; display:grid; gap:8px; background:var(--card,var(--paper)); min-width:0; }
+.sl-q-item.error, .sl-q-item.failed { border-color:var(--warn,#c2703a); }
+.sl-q-item .q-top { display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+.sl-q-item input.q-name { flex:1 1 220px; min-width:0; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--paper); color:var(--ink); font:inherit; font-weight:650; }
+.sl-q-item b.q-name { flex:1 1 220px; min-width:0; overflow-wrap:anywhere; }
+.sl-q-item .q-meta { margin:0; overflow-wrap:anywhere; }
+.sl-q-item .q-acts { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+.sl-q-item .q-acts:empty { display:none; }
+.sl-q-item .sl-thumbs { margin:0; }
+.sl-ways { border:1px solid var(--line); border-radius:14px; padding:10px 14px 12px; display:grid; gap:6px; margin:0 0 12px; min-width:0; }
+.sl-ways legend { font-weight:650; padding:0 6px; }
+.sl-ways .sl-ck { display:flex; gap:8px; align-items:center; font-size:15px; cursor:pointer; }
+.sl-ways input { accent-color:var(--accent); width:18px; height:18px; }
+.sl-ways p { margin:0; }
+.sl-keep { margin:0 0 10px; padding:10px 12px; border-radius:12px; background:var(--accent-100); font-size:14.5px; }
+.sl-bar { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; padding:10px 12px; border-radius:14px; background:var(--accent-100); }
+.sl-bar.end { margin:16px 0 8px; }
+.sl-barmsg { flex:1 1 220px; min-width:0; font-weight:600; }
+.sl-barday { display:flex; gap:6px; align-items:center; font-size:14px; }
+.sl-barday input { font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:10px; background:var(--paper); color:var(--ink); }
+.sl-bar .btn { text-decoration:none; }
+@media (max-width:600px) { .sl-bar { align-items:stretch; } .sl-bar .btn, .sl-barday { flex:1 1 100%; justify-content:center; } .sl-barday input { flex:1; } }

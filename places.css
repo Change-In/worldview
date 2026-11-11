@@ -238,7 +238,7 @@
 .sc-class b { font:400 20px/1.2 Georgia,"Times New Roman",serif; }
 .sc-class span { font-size:13px; color:var(--ink-soft); }
 .sc-layout { display:grid; grid-template-columns:minmax(0,1fr); gap:18px; align-items:start; }
-.sc-layout:has(.sc-panel) { grid-template-columns:minmax(0,1fr) 340px; }
+.sc-layout:has(.sc-panel), .sc-layout.two { grid-template-columns:minmax(0,1fr) 340px; }
 .sc-mon { display:flex; align-items:center; gap:12px; }
 .sc-mon b { font-weight:600; min-width:9em; text-align:center; }
 .sc-nav { all:unset; cursor:pointer; width:34px; height:34px; border-radius:50%; display:grid; place-items:center; background:var(--surface-soft); font-size:20px; }
@@ -272,21 +272,21 @@
 .sc-row input[type=date] { font:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--ink); }
 .sc-acts { display:flex; gap:8px; flex-wrap:wrap; margin-top:4px; }
 .sc-acts .cv-pill { text-decoration:none; }
-.ex-hero { display:grid; gap:10px; justify-items:start; padding:6px 0 2px; }
-.ex-hero h1 { margin:0; font:400 32px/1.1 Georgia,"Times New Roman",serif; }
-.ex-hero p { margin:0; color:var(--ink-soft); max-width:36em; }
+.ex-hero { display:grid; gap:4px; justify-items:start; padding:2px 0; }
+.ex-hero h2 { margin:0; font:600 16px/1.3 system-ui,sans-serif; }
+.ex-hero p { margin:0; color:var(--ink-soft); max-width:36em; font-size:14px; }
 @media (max-width:700px) {
   .sc-classes { grid-template-columns:minmax(0,1fr); }
   .sc-cal { display:none; }
   .sc-list { display:grid; }
-  .sc-layout:has(.sc-panel) { grid-template-columns:minmax(0,1fr); }
+  .sc-layout:has(.sc-panel), .sc-layout.two { grid-template-columns:minmax(0,1fr); }
   .sc-panel { position:fixed; left:0; right:0; top:0; bottom:0; z-index:210; border-radius:0; border:0; padding:56px 20px calc(96px + env(safe-area-inset-bottom)); overflow-y:auto; align-content:start; }
   .sc-x { top:16px; right:18px; font-size:15px; }
   .sc-panel h2 { padding-right:0; }
 }
 @media (min-width:900px) { .cv-wrap:has(.sc-switch) { max-width:1250px; padding-left:84px; } }
 @media (min-width:701px) and (max-width:1100px) {
-  .sc-layout:has(.sc-panel) { grid-template-columns:minmax(0,1fr); }
+  .sc-layout:has(.sc-panel), .sc-layout.two { grid-template-columns:minmax(0,1fr); }
   .sc-panel { position:fixed; right:16px; top:64px; width:340px; max-height:calc(100vh - 150px); overflow-y:auto; z-index:5; box-shadow:0 10px 30px rgba(0,0,0,.28); }
 }
 
@@ -296,3 +296,44 @@
 .sc-ck input { margin-top:3px; flex:none; accent-color:var(--accent); }
 .sc-note { min-height:1.2em; font-size:13px; color:var(--ink-soft); overflow-wrap:anywhere; }
 .sc-acts .cv-pill[disabled] { opacity:.45; cursor:default; }
+
+/* v3.1.73: one student calendar with class colours and filters, the teacher's class edit, Drafts, delete */
+.sc-lc { border-left:4px solid var(--cc,var(--line)); }
+.sc-class { border-left:6px solid var(--cc,var(--line)); }
+.sc-dot { display:inline-block; width:14px; height:14px; border-radius:50%; margin-right:10px; vertical-align:middle; }
+.sc-chips { display:flex; flex-wrap:wrap; gap:8px; }
+.sc-chip { all:unset; box-sizing:border-box; cursor:pointer; display:inline-flex; align-items:center; gap:8px; padding:6px 14px; border-radius:999px; border:1px solid var(--line); font-size:13.5px; color:var(--ink-soft); background:var(--card); }
+.sc-chip i { width:10px; height:10px; border-radius:50%; border:2px solid var(--cc); box-sizing:border-box; }
+.sc-chip.on { color:var(--ink); border-color:var(--cc); }
+.sc-chip.on i { background:var(--cc); }
+.sc-chip:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.sc-h2 { margin:0; font:600 16px/1.3 system-ui,sans-serif; }
+.sc-h2 span { font-weight:400; color:var(--ink-soft); margin-left:6px; }
+.sc-any { display:grid; gap:8px; }
+.sc-any .sc-lc { font-size:14px; padding:10px 12px; margin:0; }
+.sc-side { display:grid; gap:14px; align-content:start; min-width:0; }
+.sc-drafts { display:grid; gap:8px; border:1px solid var(--line); border-radius:14px; padding:14px 16px; background:var(--card); min-width:0; align-content:start; }
+.sc-drafts p { margin:0; font-size:13px; }
+.sc-drafts .sc-lc { margin:0; font-size:13.5px; padding:8px 10px; }
+.sc-edit { display:grid; gap:8px; border:1px solid var(--line); border-radius:14px; padding:16px 18px; background:var(--card); max-width:520px; }
+.sc-edit input[type=text] { font:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--paper); color:var(--ink); min-width:0; width:100%; box-sizing:border-box; }
+.sc-edit p { margin:0; }
+.sc-days, .sc-sw { display:flex; flex-wrap:wrap; gap:6px; }
+.sc-day { position:relative; cursor:pointer; }
+.sc-day input, .sc-swl input { position:absolute; opacity:0; inset:0; margin:0; cursor:pointer; }
+.sc-day span { display:block; padding:6px 12px; border:1px solid var(--line); border-radius:999px; font-size:13.5px; }
+.sc-day input:checked + span { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+.sc-day input:focus-visible + span, .sc-swl input:focus-visible + i { outline:2px solid var(--accent); outline-offset:2px; }
+.sc-swl { position:relative; cursor:pointer; }
+.sc-swl i { display:block; width:30px; height:30px; border-radius:50%; border:3px solid transparent; box-shadow:0 0 0 1px var(--line); box-sizing:border-box; }
+.sc-swl input:checked + i { border-color:var(--paper); box-shadow:0 0 0 2px var(--ink); }
+.sc-danger { display:grid; gap:8px; border-top:1px solid var(--line); padding-top:10px; }
+.sc-danger p { margin:0; font-size:13.5px; }
+.sc-del { color:#b3261e !important; }
+.cv-pill.sc-del:not(.ghost) { background:#b3261e; color:#fff !important; }
+.sc-link[disabled] { opacity:.45; cursor:default; }
+.sc-panel .sc-link { justify-self:start; }
+.sc-panel { border-top:4px solid var(--cc,var(--line)); }
+@media (max-width:700px) { .sc-panel { border-top-width:0; } .sc-edit { max-width:none; } }
+:root[data-theme="dark"] .sc-del:not(.cv-pill:not(.ghost)), :root[data-theme="dark"] .cv-pill.ghost.sc-del { color:#f2988e !important; }
+@media (prefers-color-scheme:dark) { :root[data-theme="system"] .cv-pill.ghost.sc-del { color:#f2988e !important; } }
