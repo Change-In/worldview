@@ -337,3 +337,11 @@
 @media (max-width:700px) { .sc-panel { border-top-width:0; } .sc-edit { max-width:none; } }
 :root[data-theme="dark"] .sc-del:not(.cv-pill:not(.ghost)), :root[data-theme="dark"] .cv-pill.ghost.sc-del { color:#f2988e !important; }
 @media (prefers-color-scheme:dark) { :root[data-theme="system"] .cv-pill.ghost.sc-del { color:#f2988e !important; } }
+
+/* v3.1.75: each way of learning has its own row with an Open link */
+.sc-way { display:flex; flex-wrap:wrap; gap:4px 10px; align-items:center; padding:6px 0; border-bottom:1px solid var(--line); min-width:0; }
+.sc-way .sc-ck { flex:1 1 auto; min-width:0; }
+.sc-open { flex:none; font-size:13.5px; font-weight:650; padding:5px 12px; border:1px solid var(--line); border-radius:999px; text-decoration:none; color:inherit; }
+.sc-open:hover, .sc-open:focus-visible { border-color:var(--accent); }
+.sc-wsub { flex:1 0 100%; font-size:12.5px; padding-left:24px; }
+.sc-goals { font-size:13.5px; padding:4px 0 2px; }

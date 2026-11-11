@@ -124,3 +124,27 @@
 .sl-upgrade { padding:12px 14px; border-radius:14px; background:var(--accent-100); display:grid; gap:8px; }
 .sl-upgrade p { margin:0; }
 .sl-upgrade .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+
+/* v3.1.75: the conversation map (a short vertical line of chapter cards) */
+.mp-survey { display:grid; gap:8px; }
+.mp-survey em { font-style:normal; font-weight:500; }
+.mp-about { display:flex; gap:6px; align-items:center; flex-wrap:wrap; min-width:0; }
+.mp-about select { flex:1 1 160px; min-width:0; max-width:100%; }
+.mp-line { list-style:none; margin:0; padding:0 0 0 14px; display:grid; gap:10px; border-left:2px solid var(--line); }
+.mp-ch { position:relative; min-width:0; }
+.mp-ch details { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:10px 14px; min-width:0; }
+.mp-ch details[open] { border-color:var(--accent); }
+.mp-ch summary { display:flex; gap:10px; align-items:center; cursor:pointer; list-style:none; min-width:0; }
+.mp-ch summary::-webkit-details-marker { display:none; }
+.mp-n { flex:none; width:28px; height:28px; border-radius:50%; display:grid; place-items:center; background:var(--accent-100); color:var(--accent-700); font-weight:700; font-size:14px; margin-left:-31px; border:2px solid var(--paper); }
+.mp-sum { display:grid; gap:1px; min-width:0; }
+.mp-sum b { overflow-wrap:anywhere; }
+.mp-thumbs { margin:8px 0 0; }
+.mp-thumbs img { height:54px; }
+.mp-body { display:grid; gap:8px; margin-top:10px; }
+.mp-body label { display:grid; gap:3px; font-size:12.5px; font-weight:700; color:var(--ink-soft); min-width:0; }
+.mp-body label em { font-style:normal; font-weight:500; }
+.mp-body input[type=text], .mp-body textarea, .mp-body select { width:100%; min-width:0; background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:8px 10px; font-size:14.5px; color:var(--ink); font-weight:400; resize:vertical; font-family:inherit; }
+.mp-eq { display:grid; gap:8px; padding:10px 12px; border-radius:12px; background:var(--soft); }
+.mp-eqck { color:var(--ink) !important; }
+.mp-again { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }

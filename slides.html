@@ -7,7 +7,7 @@
 <title>Lesson from slides · Worldview</title>
 <link rel="icon" href="icon.png">
 <link rel="stylesheet" href="teacher.css?v=3.1.39">
-<link rel="stylesheet" href="slides.css?v=3.1.74">
+<link rel="stylesheet" href="slides.css?v=3.1.75">
 </head>
 <body>
 <div class="wrap sl-wrap">
@@ -50,11 +50,12 @@
       <p class="sl-cost" id="cost"></p>
       <div class="sl-resume" id="resume" hidden></div>
       <div class="sl-upgrade" id="upgrade" hidden></div>
-      <nav class="sl-nav" aria-label="Parts of this lesson"><a href="#slides">Slides</a><a href="#goals">Goals</a><a href="#check">Check</a><span class="grow"></span><span class="status" id="saved" role="status"></span></nav>
+      <nav class="sl-nav" aria-label="Parts of this lesson"><a href="#slides">Slides</a><a href="#goals">Goals</a><a href="#check">Check</a><a href="#map">Conversation map</a><span class="grow"></span><span class="status" id="saved" role="status"></span></nav>
     </header>
     <section id="slides" class="sl-sec"><h2>Slides</h2><p class="muted small">What the AI says on each slide. Edit anything; your words are what students hear. Tick <b>Select</b> on several slides to draft them again together, with an instruction.</p><div class="sl-selbar" id="selbar" hidden><b id="selcount"></b><input type="text" id="selask" maxlength="500" placeholder="What should change? Optional, for example: explain the concepts, not the numbers" aria-label="What should change"><button type="button" class="btn small" data-act="redosel">Draft these again</button><button type="button" class="linkbtn" data-act="selall">Select all</button><button type="button" class="linkbtn" data-act="selnone">Clear</button><span class="muted small" id="selcost"></span></div><div id="slidelist"></div></section>
     <section id="goals" class="sl-sec"><h2>Goals</h2><p class="muted small">What students should be able to do, and what they would say that shows it.</p><div id="goallist"></div><button type="button" class="btn ghost small" data-act="addgoal">Add a goal</button></section>
     <section id="check" class="sl-sec"><h2>Check</h2><p class="muted small">At the end, each student explains these in their own words. Add a picture, such as a photo of an equation, to any question.</p><div id="checklist"></div><button type="button" class="btn ghost small" data-act="addcheck">Add a question</button></section>
+    <section id="map" class="sl-sec"><h2>Conversation map</h2><p class="muted small">What the Conversation follows: an opening question, a few quick questions to find out what the student already knows, then one chapter per goal, then the check. Open a chapter to change it.</p><div id="mapbox"></div></section>
     <details class="sl-sec sl-told"><summary>What the AI was told</summary>
       <label class="sl-field"><span>Your notes and transcript</span><textarea id="lnotes" rows="5" maxlength="40000"></textarea></label>
       <label class="sl-field"><span>Rules, one per line <em>for example: Don't give homework answers</em></span><textarea id="lrules" rows="3"></textarea></label>
@@ -68,6 +69,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="places-classes.js?v=3.1.73"></script>
 <script src="lesson-publish.js?v=3.1.72"></script>
-<script src="slides.js?v=3.1.74"></script>
+<script src="slides.js?v=3.1.75"></script>
 </body>
 </html>

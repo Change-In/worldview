@@ -146,7 +146,7 @@
     $('#go').textContent = ready.length > 1 ? 'Draft these ' + ready.length + ' lessons' : 'Draft the lesson';
     $('#other').disabled = busy;
     $('#drop').hidden = running;
-    const est = ready.reduce((t, x) => t + x.pages.length * 0.012 + 0.03, 0);
+    const est = ready.reduce((t, x) => t + x.pages.length * 0.012 + 0.03 + ($('#w-conv').checked ? 0.01 + x.pages.length * 0.0015 : 0), 0);
     $('#estimate').innerHTML = ready.length ? `Drafting should cost about <b>${money(est)}</b>${ready.length > 1 ? ' in all' : ''}. Worldview stops any one presentation that would pass $2.` : '';
     Q.forEach(it => { if (it.prog) setProg(it, it.prog[0], it.prog[1]); });
   }
@@ -228,6 +228,144 @@
     if (!L.goals.length) L.goals = r.lesson.goals;
     if (!L.check.length) L.check = r.lesson.check;
     L.status = 'ready'; await saveNow();
+    // v3.1.75: the conversation map, only when Conversation is one of the ways students may learn this. A failed map never stops the lesson.
+    if (L.styles && L.styles.conversation !== false && !L.map && L.goals.length) {
+      say(0.98, 'Planning the conversation (its map)…');
+      const m = await draftMap(false);
+      if (!m.ok) toast('The lesson is drafted, but its conversation map couldn\'t be made: ' + m.error + ' Use "Build the conversation map" on the lesson page.');
+    }
+  }
+
+  /* ---------- v3.1.75: the conversation map (LES-354..LES-356; recipe "conversation 1.0") ----------
+     lesson.json `map` = {recipe, opening, survey: [{question, chapters: [id, id?]}], chapters: [{id, goal, title, slides: [n],
+     terms: [{term, meaning}], points: [], tripUps: [], equation: null | {formula, purpose, parts: [{part, meaning}], reading}, edited}],
+     questionsEdited, drafted}. Drafted by lesson-ai?mode=draft action "map" from the slides' text and scripts, the notes and the
+     goals only. "Draft the map again" keeps chapters (and questions) the teacher edited unless they tick "also replace". */
+  const MAP_RECIPE = 'conversation 1.0';
+  const openCh = new Set();
+  let mapBusy = false;
+  const mapEst = () => 0.01 + L.slides.length * 0.0015;
+  const newCid = used => { let k = 1; while (used.has('c' + k)) k++; used.add('c' + k); return 'c' + k; };
+  async function draftMap(replaceEdited) {
+    const r = await draftAI({lesson: row.id, action: 'map', title: L.title, notes: L.teacherNotes || '', rules: L.rules || [],
+      slides: L.slides.map(s => ({n: s.n, title: s.title || '', text: (s.text || '').slice(0, 800), script: (s.script || '').slice(0, 1200), keyPoints: s.keyPoints || []})),
+      goals: L.goals.map(g => ({text: g.text, evidence: g.evidence}))});
+    addCost(r);
+    if (!r.ok || !r.map) { await saveNow(); return {ok: false, error: r.error || 'The AI returned no map.'}; }
+    // the server numbers goals g1..gN in the order sent; this lesson's own goal ids may differ
+    const gid = g => { const k = +String(g || '').slice(1) - 1; return (L.goals[k] || {}).id || ''; };
+    const old = L.map, keep = old && !replaceEdited ? old.chapters.filter(c => c.edited) : [];
+    const used = new Set(keep.map(c => c.id)), rename = {}, oldByGoal = {};
+    // a redrafted chapter takes the id of the unedited chapter it replaces (same goal), so kept quick questions still point at it
+    (old ? old.chapters : []).forEach(c => { if (c.goal && !used.has(c.id) && !oldByGoal[c.goal] && !keep.some(k => k.goal === c.goal)) oldByGoal[c.goal] = c.id; });
+    let chapters = r.map.chapters.map(c => { const g = gid(c.goal), reuse = g && oldByGoal[g] && !used.has(oldByGoal[g]) ? oldByGoal[g] : ''; if (reuse) used.add(reuse); const id = reuse || newCid(used); rename[c.id] = id; return Object.assign({}, c, {id, goal: g, edited: false}); });
+    keep.forEach(k => { const at = chapters.findIndex(c => c.goal && c.goal === k.goal && !c.kept); if (at >= 0) chapters[at] = Object.assign({}, k, {kept: true}); else chapters.push(Object.assign({}, k, {kept: true})); });
+    chapters = chapters.map(c => { const o = Object.assign({}, c); delete o.kept; return o; });
+    const ids = new Set(chapters.map(c => c.id));
+    const keepQ = old && old.questionsEdited && !replaceEdited;
+    L.map = {recipe: r.conversationRecipe || MAP_RECIPE, drafted: new Date().toISOString(), questionsEdited: !!keepQ,
+      opening: keepQ ? old.opening : r.map.opening,
+      survey: keepQ ? old.survey.map(q => ({question: q.question, chapters: q.chapters.filter(id => ids.has(id))})) : r.map.survey.map(q => ({question: q.question, chapters: q.chapters.map(id => rename[id]).filter(Boolean)})),
+      chapters};
+    L.conversationRecipe = L.map.recipe;
+    await saveNow();
+    return {ok: true, costUsd: r.costUsd || 0};
+  }
+  const chLabel = (c, k) => 'Chapter ' + (k + 1);
+  const thumbs = ns => (ns || []).map(n => L.slides.find(s => s.n === n)).filter(Boolean).map(s => `<img src="${FILES + row.id + '/' + esc(s.image)}" alt="Slide ${s.n}" title="Slide ${s.n}" loading="lazy">`).join('');
+  const pairs = (a, k1, k2) => (a || []).map(x => x[k1] + (x[k2] ? ': ' + x[k2] : '')).join('\n');
+  const unpairs = (t, k1, k2, n) => t.split('\n').map(x => x.trim()).filter(Boolean).slice(0, n).map(x => { const i = x.indexOf(':'); return i > 0 ? {[k1]: x.slice(0, i).trim(), [k2]: x.slice(i + 1).trim()} : {[k1]: x, [k2]: ''}; });
+  function chapterH(c, k) {
+    const goalSel = '<option value="">No goal</option>' + L.goals.map((g, j) => `<option value="${esc(g.id)}"${g.id === c.goal ? ' selected' : ''}>Goal ${j + 1}</option>`).join('');
+    const gk = L.goals.findIndex(g => g.id === c.goal), e = c.equation;
+    return `<li class="mp-ch" data-c="${k}"><details${openCh.has(c.id) ? ' open' : ''}><summary><span class="mp-n">${k + 1}</span><span class="mp-sum"><b class="mp-t">${esc(c.title)}</b><span class="muted small">${gk >= 0 ? 'Goal ' + (gk + 1) : 'No goal'} · ${(c.points || []).length} point${(c.points || []).length === 1 ? '' : 's'}${e ? ' · equation' : ''}${c.edited ? ' · edited by you' : ''}</span></span></summary>
+      ${c.slides && c.slides.length ? `<div class="sl-thumbs mp-thumbs">${thumbs(c.slides)}</div>` : ''}
+      <div class="mp-body">
+        <div class="sl-row2"><label><span>Title</span><input type="text" data-cf="title" maxlength="80" value="${esc(c.title)}"></label><label><span>Goal it serves</span><select data-cf="goal">${goalSel}</select></label></div>
+        <label><span>Slides it draws on <em>numbers, for example 3, 4, 5</em></span><input type="text" data-cf="slides" value="${esc((c.slides || []).join(', '))}" inputmode="numeric"></label>
+        <label><span>Main points the student should reach <em>one per line</em></span><textarea data-cf="points" rows="3">${esc(lines(c.points))}</textarea></label>
+        <label><span>Key terms <em>one per line, "term: what it means"</em></span><textarea data-cf="terms" rows="3">${esc(pairs(c.terms, 'term', 'meaning'))}</textarea></label>
+        <label><span>Where students trip <em>one per line</em></span><textarea data-cf="tripUps" rows="2">${esc(lines(c.tripUps))}</textarea></label>
+        <label class="sl-pick mp-eqck"><input type="checkbox" data-cf="haseq"${e ? ' checked' : ''}> This chapter has an equation</label>
+        ${e ? `<div class="mp-eq"><label><span>Equation</span><input type="text" data-ef="formula" maxlength="200" value="${esc(e.formula)}"></label>
+          <label><span>What it is for</span><input type="text" data-ef="purpose" maxlength="300" value="${esc(e.purpose)}"></label>
+          <label><span>Each part <em>one per line, "part: what it means"</em></span><textarea data-ef="parts" rows="3">${esc(pairs(e.parts, 'part', 'meaning'))}</textarea></label>
+          <label><span>What a higher or lower result tells you</span><input type="text" data-ef="reading" maxlength="300" value="${esc(e.reading)}"></label></div>` : ''}
+        <div class="sl-tools"><button type="button" class="sl-x" data-act="chup" aria-label="Move chapter ${k + 1} up"${k ? '' : ' disabled'}>↑</button><button type="button" class="sl-x" data-act="chdown" aria-label="Move chapter ${k + 1} down"${k < L.map.chapters.length - 1 ? '' : ' disabled'}>↓</button><span class="grow"></span><button type="button" class="linkbtn" data-act="chdel">Remove this chapter</button></div>
+      </div></details></li>`;
+  }
+  function surveyH(q, k) {
+    const opt = sel => '<option value="">None</option>' + L.map.chapters.map((c, j) => `<option value="${esc(c.id)}"${c.id === sel ? ' selected' : ''}>${esc(chLabel(c, j))}: ${esc(c.title.slice(0, 40))}</option>`).join('');
+    return `<div class="sl-q mp-sq" data-s="${k}"><div class="lab"><span>Quick question ${k + 1}</span><span class="grow"></span><button type="button" class="sl-x" data-act="sqdel" aria-label="Remove quick question ${k + 1}">✕</button></div>
+      <textarea data-sqf="question" rows="2" maxlength="400" aria-label="Quick question ${k + 1}">${esc(q.question)}</textarea>
+      <div class="mp-about"><span class="muted small">About</span><select data-sqf="c0" aria-label="First chapter it asks about">${opt(q.chapters[0])}</select><select data-sqf="c1" aria-label="Second chapter it asks about">${opt(q.chapters[1])}</select></div></div>`;
+  }
+  function renderMap() {
+    const box = $('#mapbox'); if (!box || !L) return;
+    const conv = !(L.styles && L.styles.conversation === false);
+    if (!L.map) {
+      box.innerHTML = !conv ? '<p class="muted">Conversation is turned off for this lesson, so it has no map. Turn Conversation on in the class calendar\'s lesson panel to build one.</p>'
+        : L.status === 'drafting' ? '<p class="muted">The map is planned after the slides, goals and check are drafted.</p>'
+        : !L.goals.length ? '<p class="muted">Add at least one goal first: the map has one chapter per goal.</p>'
+        : `<p>This lesson has no conversation map yet, so the Conversation is a simple one.</p><div class="row"><button type="button" class="btn small" data-act="mapbuild"${mapBusy ? ' disabled' : ''}>${mapBusy ? 'Planning…' : 'Build the conversation map'}</button><span class="muted small">About ${money(mapEst())}. Worldview still stops at $2 per presentation.</span></div>`;
+      return;
+    }
+    const M = L.map, ed = M.chapters.some(c => c.edited) || M.questionsEdited;
+    box.innerHTML = `${!conv ? '<p class="sl-ask">Conversation is turned off for this lesson, so students don\'t see this map. Turn it on in the class calendar\'s lesson panel.</p>' : ''}
+      <label class="sl-field"><span>Opening question <em>one broad question about the whole subject</em></span><textarea data-mf="opening" rows="2" maxlength="400">${esc(M.opening)}</textarea></label>
+      <div class="mp-survey"><b class="small">Quick questions <em class="muted">find out what the student already knows, at most two chapters each</em></b>${M.survey.map(surveyH).join('') || '<p class="muted small">None. The conversation goes straight to the chapters.</p>'}${M.survey.length < 4 ? '<button type="button" class="linkbtn" data-act="sqadd">Add a quick question</button>' : ''}</div>
+      <b class="small">Chapters, in order</b>
+      <ol class="mp-line">${M.chapters.map(chapterH).join('')}</ol>
+      <div class="sl-tools"><button type="button" class="btn ghost small" data-act="chadd"${M.chapters.length >= 12 ? ' disabled' : ''}>Add a chapter</button></div>
+      <div class="mp-again"><button type="button" class="btn ghost small" data-act="mapagain"${mapBusy ? ' disabled' : ''}>${mapBusy ? 'Planning…' : 'Draft the map again'}</button>${ed ? '<label class="sl-ck"><input type="checkbox" id="mapreplace"> Also replace the parts I edited</label>' : ''}<span class="muted small">About ${money(mapEst())}.${ed ? ' Parts you edited stay unless you tick the box.' : ''}</span></div>
+      <p class="muted small">${esc(M.recipe || MAP_RECIPE)} · made from the slides, your notes and the goals only.</p>`;
+    box.querySelectorAll('textarea').forEach(grow);
+  }
+  async function mapDraftClick(replace) {
+    if (mapBusy || busy) return;
+    mapBusy = true; renderMap();
+    const m = await draftMap(replace);
+    mapBusy = false; renderMap(); loadCost();
+    toast(m.ok ? 'The conversation map is ready (' + money(m.costUsd) + ').' : 'Stopped: ' + m.error);
+  }
+  const chOf = el => L.map.chapters[+el.closest('.mp-ch').dataset.c];
+  function chEdited(c, li) { if (!c.edited) { c.edited = true; const s = li && li.querySelector('.mp-sum .muted'); if (s && !/edited by you/.test(s.textContent)) s.textContent += ' · edited by you'; } }
+  function mapInput(t) {
+    if (t.dataset.mf === 'opening') { L.map.opening = t.value; L.map.questionsEdited = true; return saveSoon(); }
+    const sq = t.closest('.mp-sq');
+    if (sq && t.dataset.sqf === 'question') { L.map.survey[+sq.dataset.s].question = t.value; L.map.questionsEdited = true; return saveSoon(); }
+    const li = t.closest('.mp-ch'); if (!li) return;
+    const c = chOf(t), f = t.dataset.cf, ef = t.dataset.ef;
+    if (f === 'title') { c.title = t.value; li.querySelector('.mp-t').textContent = t.value; }
+    else if (f === 'points' || f === 'tripUps') c[f] = t.value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, f === 'points' ? 6 : 4);
+    else if (f === 'terms') c.terms = unpairs(t.value, 'term', 'meaning', 8);
+    else if (ef === 'parts') c.equation.parts = unpairs(t.value, 'part', 'meaning', 8);
+    else if (ef) c.equation[ef] = t.value;
+    else return;
+    chEdited(c, li); saveSoon();
+  }
+  function mapChange(t) {
+    const sq = t.closest('.mp-sq');
+    if (sq && (t.dataset.sqf === 'c0' || t.dataset.sqf === 'c1')) { const q = L.map.survey[+sq.dataset.s], a = sq.querySelector('[data-sqf=c0]').value, b = sq.querySelector('[data-sqf=c1]').value; q.chapters = [...new Set([a, b].filter(Boolean))]; L.map.questionsEdited = true; return saveSoon(); }
+    const li = t.closest('.mp-ch'); if (!li) return;
+    const c = chOf(t);
+    if (t.dataset.cf === 'goal') c.goal = t.value;
+    else if (t.dataset.cf === 'slides') c.slides = [...new Set(t.value.split(/[^0-9]+/).map(Number).filter(n => L.slides.some(s => s.n === n)))].sort((a, b) => a - b).slice(0, 12);
+    else if (t.dataset.cf === 'haseq') c.equation = t.checked ? (c.equation || {formula: '', purpose: '', parts: [], reading: ''}) : null;
+    else return;
+    chEdited(c, li); openCh.add(c.id); renderMap(); saveSoon();
+  }
+  function mapClick(b) {
+    const M = L.map, li = b.closest('.mp-ch'), k = li ? +li.dataset.c : -1;
+    switch (b.dataset.act) {
+      case 'mapbuild': return mapDraftClick(false);
+      case 'mapagain': return mapDraftClick(!!($('#mapreplace') && $('#mapreplace').checked));
+      case 'chup': case 'chdown': { const j = b.dataset.act === 'chup' ? k - 1 : k + 1; [M.chapters[k], M.chapters[j]] = [M.chapters[j], M.chapters[k]]; M.chapters[j].edited = true; renderMap(); return saveSoon(); }
+      case 'chdel': { const id = M.chapters[k].id; if (!confirm('Remove chapter ' + (k + 1) + ', "' + M.chapters[k].title + '"?')) return; M.chapters.splice(k, 1); M.survey.forEach(q => { q.chapters = q.chapters.filter(x => x !== id); }); renderMap(); return saveSoon(); }
+      case 'chadd': { const c = {id: newCid(new Set(M.chapters.map(x => x.id))), goal: '', title: 'New chapter', slides: [], terms: [], points: [], tripUps: [], equation: null, edited: true}; M.chapters.push(c); openCh.add(c.id); renderMap(); saveSoon(); const t = document.querySelector('.mp-ch:last-child [data-cf=title]'); if (t) { t.focus(); t.select(); } return; }
+      case 'sqadd': M.survey.push({question: '', chapters: []}); M.questionsEdited = true; renderMap(); saveSoon(); { const t = document.querySelector('.mp-sq:last-of-type textarea'); if (t) t.focus(); } return;
+      case 'sqdel': M.survey.splice(+b.closest('.mp-sq').dataset.s, 1); M.questionsEdited = true; renderMap(); return saveSoon();
+    }
   }
   async function resumeDraft() {
     if (busy) return; busy = true;
@@ -288,7 +426,7 @@
     $('#state').textContent = row.shared ? 'Published' : 'Draft · only you see it';
     $('#state').classList.toggle('ok', !!row.shared);
     reSlides(); renderUpgrade();
-    renderGoals(); renderCheck();
+    renderGoals(); renderCheck(); renderMap();
     $('#lnotes').value = L.teacherNotes || ''; $('#lrules').value = lines(L.rules);
     $('#recipe').textContent = L.recipe ? `Drafted with ${L.recipe}${L.cost.model ? ' (' + L.cost.model + ')' : ''} from ${L.source && L.source.file || 'a PDF'}.` : '';
     $('#studio').href = 'studio.html?from=places&l=' + row.id;
@@ -299,7 +437,12 @@
     document.title = L.title + ' · Lesson from slides';
     loadCost();
   }
-  function openLesson() { show('lessonview'); renderLesson(); }
+  function openLesson() {
+    show('lessonview'); renderLesson();
+    // the School day panel opens a part directly: #slides (Lecture with pauses), #map (Conversation), #goals
+    const h = /^#(slides|goals|check|map)$/.exec(location.hash); if (h) setTimeout(() => { const el = document.getElementById(h[1]); if (el) el.scrollIntoView(); }, 60);
+  }
+  $('#mapbox').addEventListener('toggle', e => { const li = e.target.closest && e.target.closest('.mp-ch'); if (!li || !L.map) return; const c = L.map.chapters[+li.dataset.c]; if (c) { if (e.target.open) openCh.add(c.id); else openCh.delete(c.id); } }, true);
 
   async function redo(i, art) {
     const s = L.slides[i]; if (busy) return;
@@ -376,7 +519,7 @@
   $('#other').addEventListener('click', () => $('#pdf').click());
   $('#queue').addEventListener('click', e => { const b = e.target.closest('[data-q=remove]'); if (!b) return; const id = +b.closest('[data-qid]').dataset.qid, i = Q.findIndex(x => x.id === id); if (i >= 0) { (Q[i].pages || []).forEach(p => URL.revokeObjectURL(p.url)); Q.splice(i, 1); renderQueue(); } });
   const WAYS_MSG = 'Keep at least one way on, so students have a way to start.', WAYS_OK = 'Students can use either one. You can change this later in each lesson.';
-  ['#w-conv', '#w-lecture'].forEach(id => $(id).addEventListener('change', e => { if (!$('#w-conv').checked && !$('#w-lecture').checked) { e.target.checked = true; $('#wmsg').textContent = WAYS_MSG; } else $('#wmsg').textContent = WAYS_OK; }));
+  ['#w-conv', '#w-lecture'].forEach(id => $(id).addEventListener('change', e => { if (!$('#w-conv').checked && !$('#w-lecture').checked) { e.target.checked = true; $('#wmsg').textContent = WAYS_MSG; } else $('#wmsg').textContent = WAYS_OK; renderQueue(); }));
   $('#title').addEventListener('change', async () => {
     const name = $('#title').value.trim(); if (!name) { $('#title').value = L.title; return; }
     L.title = name; saveSoon();
@@ -410,6 +553,7 @@
   });
   $('#lessonview').addEventListener('input', e => {
     const t = e.target; if (t.tagName === 'TEXTAREA') grow(t);
+    if (t.closest('#mapbox')) return L.map ? mapInput(t) : undefined;
     const art = t.closest('.sl-slide');
     if (art && t.dataset.sf) {
       const s = L.slides[+art.dataset.i], k = +t.closest('.sl-step').dataset.k; markEdited(s, art);
@@ -427,10 +571,12 @@
   });
   function markEdited(s, art) { if (!s.edited && s.script) { s.draft = {script: s.script, steps: s.steps ? JSON.parse(JSON.stringify(s.steps)) : undefined, keyPoints: s.keyPoints, tripUps: s.tripUps, pause: s.pause}; s.edited = true; const c = art.querySelector('.sl-tools .chip'); if (c) { c.textContent = 'Edited by you'; c.classList.remove('ok'); } } }
   $('#lessonview').addEventListener('change', e => {
+    if (e.target.closest('#mapbox')) return L.map ? mapChange(e.target) : undefined;
     if (e.target.matches('[data-pick]')) { const art = e.target.closest('.sl-slide'), n = L.slides[+art.dataset.i].n; if (e.target.checked) picked.add(n); else picked.delete(n); art.classList.toggle('picked', e.target.checked); return renderSel(); } const q = e.target.closest('.sl-q'); if (q && e.target.dataset.qf === 'goal') { L.check[+q.dataset.q].goal = e.target.value; saveSoon(); } });
   $('#lessonview').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset.f === 'ask') { e.preventDefault(); const art = e.target.closest('.sl-slide'); redo(+art.dataset.i, art); } });
   $('#lessonview').addEventListener('click', e => {
     const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
+    if (b.closest('#mapbox')) return mapClick(b);
     const art = b.closest('.sl-slide'), q = b.closest('.sl-q'), g = b.closest('.sl-goal'), k = q ? +q.dataset.q : -1;
     switch (b.dataset.act) {
       case 'resume': return resumeDraft();
