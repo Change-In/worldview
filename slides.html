@@ -7,7 +7,7 @@
 <title>Lesson from slides · Worldview</title>
 <link rel="icon" href="icon.png">
 <link rel="stylesheet" href="teacher.css?v=3.1.39">
-<link rel="stylesheet" href="slides.css?v=3.1.73">
+<link rel="stylesheet" href="slides.css?v=3.1.74">
 </head>
 <body>
 <div class="wrap sl-wrap">
@@ -49,9 +49,10 @@
       <div class="sl-meta"><select id="lfor" aria-label="Class"></select><span class="chip" id="state">Draft · only you see it</span></div>
       <p class="sl-cost" id="cost"></p>
       <div class="sl-resume" id="resume" hidden></div>
+      <div class="sl-upgrade" id="upgrade" hidden></div>
       <nav class="sl-nav" aria-label="Parts of this lesson"><a href="#slides">Slides</a><a href="#goals">Goals</a><a href="#check">Check</a><span class="grow"></span><span class="status" id="saved" role="status"></span></nav>
     </header>
-    <section id="slides" class="sl-sec"><h2>Slides</h2><p class="muted small">What the AI says on each slide. Edit anything; your words are what students hear.</p><div id="slidelist"></div></section>
+    <section id="slides" class="sl-sec"><h2>Slides</h2><p class="muted small">What the AI says on each slide. Edit anything; your words are what students hear. Tick <b>Select</b> on several slides to draft them again together, with an instruction.</p><div class="sl-selbar" id="selbar" hidden><b id="selcount"></b><input type="text" id="selask" maxlength="500" placeholder="What should change? Optional, for example: explain the concepts, not the numbers" aria-label="What should change"><button type="button" class="btn small" data-act="redosel">Draft these again</button><button type="button" class="linkbtn" data-act="selall">Select all</button><button type="button" class="linkbtn" data-act="selnone">Clear</button><span class="muted small" id="selcost"></span></div><div id="slidelist"></div></section>
     <section id="goals" class="sl-sec"><h2>Goals</h2><p class="muted small">What students should be able to do, and what they would say that shows it.</p><div id="goallist"></div><button type="button" class="btn ghost small" data-act="addgoal">Add a goal</button></section>
     <section id="check" class="sl-sec"><h2>Check</h2><p class="muted small">At the end, each student explains these in their own words. Add a picture, such as a photo of an equation, to any question.</p><div id="checklist"></div><button type="button" class="btn ghost small" data-act="addcheck">Add a question</button></section>
     <details class="sl-sec sl-told"><summary>What the AI was told</summary>
@@ -67,6 +68,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="places-classes.js?v=3.1.73"></script>
 <script src="lesson-publish.js?v=3.1.72"></script>
-<script src="slides.js?v=3.1.73"></script>
+<script src="slides.js?v=3.1.74"></script>
 </body>
 </html>

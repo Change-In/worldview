@@ -294,23 +294,23 @@
   }
   /* ---------- the teacher's panel for a real lesson (v3.1.72): ways to learn, try it as a student, publish ----------
      lesson.json holds the lesson and a small `styles` setting; publishing uses lesson-publish.js, the same code as Teacher Studio. */
-  const LX = {del: false, id: '', loading: false, L: null, styles: {conversation: true, lecture: true, voice: true}, msg: '', busy: '', sure: false};
+  const LX = {del: false, id: '', loading: false, L: null, styles: {conversation: true, lecture: true, voice: true, alwaysListen: false}, msg: '', busy: '', sure: false};
   const BUCKET = 'lesson-files';
   const readLesson = async (db, id) => { const {data, error} = await db.storage.from(BUCKET).download(id + '/lesson.json'); if (error || !data) return null; try { const j = JSON.parse(await data.text()); return j && j.format === 'slides-v1' ? j : null; } catch (e) { return null; } };
   async function loadLx(it) {
-    Object.assign(LX, {del: false, id: it.id, loading: !!it.slides, L: null, msg: '', busy: '', sure: false, styles: {conversation: true, lecture: true, voice: true}});
+    Object.assign(LX, {del: false, id: it.id, loading: !!it.slides, L: null, msg: '', busy: '', sure: false, styles: {conversation: true, lecture: true, voice: true, alwaysListen: false}});
     if (!it.slides) return;
     const db = deps.db(); let L = null; try { L = db ? await readLesson(db, it.id) : null; } catch (e) {}
     if (LX.id !== it.id) return;
     LX.loading = false; LX.L = L;
-    if (L) LX.styles = {conversation: !(L.styles && L.styles.conversation === false), lecture: !(L.styles && L.styles.lecture === false), voice: !(L.styles && L.styles.voice === false)};
+    if (L) LX.styles = {conversation: !(L.styles && L.styles.conversation === false), lecture: !(L.styles && L.styles.lecture === false), voice: !(L.styles && L.styles.voice === false), alwaysListen: !!(L.styles && L.styles.alwaysListen === true)};
     deps.render();
   }
   async function saveStyles(id, st) {
     const db = deps.db(); if (!db) return false;
     try {
       const L = await readLesson(db, id); if (!L) return false;
-      L.styles = {conversation: !!st.conversation, lecture: !!st.lecture, voice: !!st.voice}; L.updated = new Date().toISOString();
+      L.styles = {conversation: !!st.conversation, lecture: !!st.lecture, voice: !!st.voice, alwaysListen: !!st.voice && !!st.alwaysListen}; L.updated = new Date().toISOString();
       const {error} = await db.storage.from(BUCKET).upload(id + '/lesson.json', new Blob([JSON.stringify(L)], {type: 'application/json'}), {upsert: true, contentType: 'application/json', cacheControl: '10'});
       return !error;
     } catch (e) { return false; }
@@ -322,7 +322,7 @@
       <label class="sc-f" for="sc-mv">${it.d ? 'Move to' : 'Put on a day'}</label><div class="sc-row"><input type="date" id="sc-mv" value="${it.d ? key(it.d) : nextMeetKey(c)}"><button type="button" class="cv-pill ghost" data-pa="move" data-id="${id}"${busy ? ' disabled' : ''}>${it.d ? 'Move' : 'Put on this day'}</button></div>${it.d ? `<button type="button" class="sc-link" data-pa="todrafts" data-id="${id}"${busy ? ' disabled' : ''}>Move back to drafts</button>` : ''}`;
     if (it.slides) {
       const ck = (k, label) => `<label class="sc-ck"><input type="checkbox" data-pa="style" data-s="${k}"${st[k] ? ' checked' : ''}${busy ? ' disabled' : ''}> ${label}</label>`;
-      h += `<div class="sc-ways" role="group" aria-label="Ways students may learn this"><span class="sc-f">Ways students may learn this</span>${LX.loading ? '<p class="cv-muted">Loading…</p>' : !LX.L ? '<p class="cv-muted">This lesson\'s file couldn\'t be read. Reload and try again.</p>' : ck('conversation', 'Conversation') + ck('lecture', 'Lecture with pauses') + ck('voice', 'Voice: speaks and listens when the device allows; typing always works')}</div>`;
+      h += `<div class="sc-ways" role="group" aria-label="Ways students may learn this"><span class="sc-f">Ways students may learn this</span>${LX.loading ? '<p class="cv-muted">Loading…</p>' : !LX.L ? '<p class="cv-muted">This lesson\'s file couldn\'t be read. Reload and try again.</p>' : ck('conversation', 'Conversation') + ck('lecture', 'Lecture with pauses') + ck('voice', 'Voice: speaks, and students press Talk (or hold Space) to answer; typing always works') + (st.voice ? ck('alwaysListen', 'Always listening, adult classes only (the microphone stays on during the lesson)') : '')}</div>`;
     }
     h += `<div class="sc-acts">${it.slides ? `<a class="cv-pill" href="slides.html?l=${encodeURIComponent(it.id)}">Slides and scripts</a>` : `<a class="cv-pill" href="studio.html?from=places&l=${encodeURIComponent(it.id)}">Open in Teacher Studio</a>`}<button type="button" class="cv-pill ghost" data-pa="try" data-id="${id}"${off}>Try it as a student</button></div>
       <p class="cv-muted">Try it opens your latest draft. Nothing you do there is saved or shown to anyone.</p>

@@ -38,10 +38,10 @@
     "predict:function(id,q,u,o){return wait(id,'predict',Object.assign({question:q,unit:u||''},o||{}));},result:function(id,a,s){send('result',{id:id,actual:a,say:s||''});}," +
     "ask:function(id,q,o){return wait(id,'ask',Object.assign({question:q},o||{}));},human:function(id,r){return wait(id,'human',Object.assign({to:'teacher',kind:'question'},r||{}));}," +
     "evidence:function(o,t,d){send('evidence',{outcome:o,text:t,data:d||{}});},remember:function(k,v){send('remember',{key:k,value:v});},recall:function(){return wait('m'+(++aiN),'recall',{});},days:function(){return wait('d'+(++aiN),'days',{});}," +
-    "progress:function(v,n){send('progress',{value:v,note:n||''});},video:function(src,o){return wait('v'+(++aiN),'video',Object.assign({src:String(src||'')},o||{}));},ai:function(x,o){o=o||{};return wait('ai'+(++aiN),'ai',{messages:typeof x==='string'?[{role:'user',content:x}]:(x||[]),system:o.system||'',maxTokens:o.maxTokens||0,json:!!o.json,full:!!o.full});},record:function(o){o=o||{};return wait('r'+(++aiN),'record',{kind:o.kind||'video',maxSeconds:o.maxSeconds||0,title:o.title||'',folder:o.folder||'',name:o.name||''});},saveFile:function(p,c){return wait('f'+(++aiN),'savefile',{path:String(p||''),content:c});},readFile:function(p){return wait('g'+(++aiN),'readfile',{path:String(p||'')});},listen:function(o){o=o||{};return wait('l'+(++aiN),'listen',{prompt:o.prompt||'',maxSeconds:o.maxSeconds||0,lang:o.lang||'',full:!!o.full});},speak:function(t,o){o=o||{};return wait('sp'+(++aiN),'speak',{text:String(t==null?'':t).slice(0,4000),voice:String(o.voice||''),speed:+o.speed||0,play:o.play!==false,fallback:o.fallback!==false});},speakStop:function(){send('speakstop',{});},done:function(s){send('done',{summary:s||{}});}};" +
+    "progress:function(v,n){send('progress',{value:v,note:n||''});},video:function(src,o){return wait('v'+(++aiN),'video',Object.assign({src:String(src||'')},o||{}));},ai:function(x,o){o=o||{};return wait('ai'+(++aiN),'ai',{messages:typeof x==='string'?[{role:'user',content:x}]:(x||[]),system:o.system||'',maxTokens:o.maxTokens||0,json:!!o.json,full:!!o.full});},record:function(o){o=o||{};return wait('r'+(++aiN),'record',{kind:o.kind||'video',maxSeconds:o.maxSeconds||0,title:o.title||'',folder:o.folder||'',name:o.name||''});},saveFile:function(p,c){return wait('f'+(++aiN),'savefile',{path:String(p||''),content:c});},readFile:function(p){return wait('g'+(++aiN),'readfile',{path:String(p||'')});},listen:function(o){o=o||{};return wait('l'+(++aiN),'listen',{prompt:o.prompt||'',maxSeconds:o.maxSeconds||0,lang:o.lang||'',full:!!o.full,local:!!o.local,compact:!!o.compact});},speak:function(t,o){o=o||{};return wait('sp'+(++aiN),'speak',{text:String(t==null?'':t).slice(0,4000),voice:String(o.voice||''),speed:+o.speed||0,play:o.play!==false,fallback:o.fallback!==false});},speakStop:function(){send('speakstop',{});},done:function(s){send('done',{summary:s||{}});}};" +
     // NAV-199: wv.listen.start, continuous listening (wv.listen(...) still records one answer)
     "api.listen.start=function(o,cb){if(typeof o==='function'){cb=o;o={};}o=o||{};hearCb=cb||o.onEvent||null;return wait('h'+(++aiN),'hearstart',{opts:{lang:String(o.lang||''),maxMinutes:+o.maxMinutes||0,idleSeconds:+o.idleSeconds||0,keyterms:Array.isArray(o.keyterms)?o.keyterms.slice(0,50).map(function(t){return String(t).slice(0,60);}):[],stopSpeak:o.stopSpeak==='sound'?'sound':o.stopSpeak!==false,label:String(o.label||'').slice(0,40)}});};" +
-    "api.listen.stop=function(){send('hearstop',{});};api.listen.mute=function(on){send('hearmute',{on:on!==false});};return api;};})();" +
+    "api.listen.stop=function(){send('hearstop',{});};api.listen.finish=function(){send('listenfinish',{});};api.listen.cancel=function(){send('listencancel',{});};api.fullscreen=function(on){send('fullscreen',{on:on!==false});};api.listen.mute=function(on){send('hearmute',{on:on!==false});};return api;};})();" +
     "addEventListener('error',function(e){try{parent.postMessage({port:'worldview',v:1,type:'crash',message:String(e.message||'error').slice(0,200)},'*');}catch(x){}});" +
     // NAV-197 Point: only when Teacher Studio asks, the teacher taps a part of the page; a short description goes back for the helper chat.
     "(function(){var on=false,box=null,cur=null;function post(t,b){try{parent.postMessage(Object.assign({port:'worldview',v:1,type:t},b||{}),'*');}catch(x){}}" +
@@ -126,6 +126,7 @@
     this.o = opts; this.q = []; this.preds = {}; this.record = []; this.connected = false; this.done = false; this.manifest = null; this.aiCount = 0; HOSTS.push(this);
     var self = this, f = this.o.frame;
     this._sealedSandbox = f.getAttribute('sandbox') || 'allow-scripts allow-forms';
+    try { this._checkLocal(); } catch (e) {}
     this._runner = opts.runner !== undefined ? opts.runner : runnerUrl();
     try { this._runnerOrigin = this._runner ? new URL(this._runner, location.href).origin : ''; } catch (e) { this._runner = ''; }
     this._listener = function (e) {
@@ -274,46 +275,110 @@
       });
     };
   };
+  /* wv.listen records one answer. v3.1.74: {local: true} first tries the browser's own speech recognition, but ONLY when
+     the browser says it can run it on this device (SpeechRecognition.available with processLocally; nothing is downloaded);
+     otherwise the recording goes to Worldview's transcription service (o.transcribe). The reply says which: where 'device' | 'server'.
+     {compact: true} shows a small bar at the top instead of the bottom sheet, so the lesson's own button can send (wv.listen.finish). */
+  var SR = window.SpeechRecognition || null;
+  PortHost.prototype._checkLocal = function () {
+    var self = this; if (this._localChecked) return; this._localChecked = true;
+    if (!SR || typeof SR.available !== 'function') return;
+    var lang = navigator.language || 'en-US';
+    Promise.resolve(SR.available({langs: [lang], processLocally: true})).then(function (a) { if (a === 'available') { self._localSR = lang; self.refreshCapabilities(); } }).catch(function () {});
+  };
+  PortHost.prototype._listenSheet = function (m, compact) {
+    var box = this.o.frame.parentNode; if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
+    var sheet = document.createElement('div'); sheet.className = 'ph-video ph-listen';
+    sheet.style.cssText = compact ? 'position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:7;max-width:calc(100% - 20px);display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;background:rgba(20,16,12,.9);color:#fff;border-radius:999px;padding:6px 8px 6px 14px;font:600 14px system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.3)'
+      : 'position:absolute;left:0;right:0;bottom:0;z-index:5;background:rgba(20,16,12,.94);color:#fff;display:grid;gap:10px;padding:16px;border-radius:0 0 22px 22px;text-align:center';
+    var p = document.createElement('p'); p.style.cssText = 'margin:0;font-weight:700;font-size:15px'; p.textContent = clip(m.prompt, 160) || 'Speak now';
+    var st = document.createElement('p'); st.style.cssText = 'margin:0;font-size:14px;opacity:.85'; st.textContent = 'Starting the microphone…';
+    var row = document.createElement('div'); row.style.cssText = 'display:flex;gap:8px;justify-content:center';
+    var stop = document.createElement('button'); stop.type = 'button'; stop.className = 'btn'; stop.textContent = compact ? 'Send' : 'Done'; stop.disabled = true;
+    var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn ghost'; cancel.textContent = 'Cancel'; cancel.style.color = '#fff';
+    if (compact) { stop.style.cssText = cancel.style.cssText = 'padding:4px 12px;min-height:32px;font-size:13px'; cancel.style.color = '#fff'; p.style.fontSize = '14px'; }
+    row.appendChild(stop); row.appendChild(cancel);
+    if (!compact) sheet.appendChild(p); sheet.appendChild(st); sheet.appendChild(row); box.appendChild(sheet); this._sheet = sheet;
+    return {st: st, stop: stop, cancel: cancel};
+  };
   PortHost.prototype._listen = function (m) {
-    var self = this, id = clip(m.id, 40), full = !!m.full, gen = this.gen, finished = false;
+    var self = this, id = clip(m.id, 40), full = !!m.full, gen = this.gen, finished = false, compact = !!m.compact;
     var done = function (r) {
       if (finished) return; finished = true; self._stopRec = null; if (self._sheet) { self._sheet.remove(); self._sheet = null; }
       if (gen !== self.gen) return;
       if (r && r.ok && r.text) { self.record.push({kind: 'voice', question: clip(m.prompt, 300), answer: clip(r.text, 500), outcome: ''}); self._changed(); }
       self._send('answer', {id: id, value: full ? r : (r && r.ok ? r.text : null)});
     };
-    if (!this.o.transcribe || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) return done({ok: false, error: 'Voice isn\'t available in this browser.', type: 'unsupported'});
+    var lang = /^[a-z]{2}(-[A-Z]{2})?$/.test(m.lang || '') ? m.lang : '';
+    var max = Math.max(5, Math.min(120, +m.maxSeconds || 60));
+    var server = function () {
+      if (finished) return;
+      if (!self.o.transcribe || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) return done({ok: false, error: 'Voice isn\'t available in this browser.', type: 'unsupported'});
+      if (self._sheet) { self._sheet.remove(); self._sheet = null; }
+      var ui = self._listenSheet(m, compact), st = ui.st, stop = ui.stop, cancel = ui.cancel;
+      self._stopRec = function (c) { done({ok: false, error: 'Cancelled.', type: 'cancelled'}); };
+      cancel.onclick = function () { done({ok: false, error: 'Cancelled.', type: 'cancelled'}); };
+      navigator.mediaDevices.getUserMedia({audio: true}).then(function (stream) {
+        if (finished) { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
+        var types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'], type = '';
+        for (var i = 0; i < types.length; i++) if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(types[i])) { type = types[i]; break; }
+        var rec = new MediaRecorder(stream, type ? {mimeType: type} : undefined), chunks = [], t0 = Date.now(), cancelled = false;
+        var tick = setInterval(function () { var sec = Math.round((Date.now() - t0) / 1000); st.textContent = '● Listening… ' + Math.floor(sec / 60) + ':' + ('0' + sec % 60).slice(-2); if (sec >= max) stopNow(false); }, 250);
+        function stopNow(c) { cancelled = c; clearInterval(tick); if (rec.state !== 'inactive') rec.stop(); }
+        self._stopRec = stopNow;
+        rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+        rec.onstop = function () {
+          stream.getTracks().forEach(function (t) { t.stop(); });
+          if (cancelled) return done({ok: false, error: 'Cancelled.', type: 'cancelled'});
+          st.textContent = 'Turning it into text…'; stop.disabled = true;
+          Promise.resolve(self.o.transcribe(new Blob(chunks, {type: rec.mimeType || type || 'audio/webm'}), lang)).catch(function () { return null; }).then(function (r) { r = r || {ok: false, error: 'Worldview couldn\'t turn that recording into text.', type: 'network'}; r.where = 'server'; done(r); });
+        };
+        rec.start(250); stop.disabled = false;
+        stop.onclick = function () { stopNow(false); };
+        cancel.onclick = function () { stopNow(true); };
+      }).catch(function () { done({ok: false, error: 'Worldview needs the microphone. Allow it for this site and try again.', type: 'mic_denied'}); });
+    };
     this._closeVideo(); this._hearStop('replaced');
-    var box = this.o.frame.parentNode; if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
-    var sheet = document.createElement('div'); sheet.className = 'ph-video ph-listen';
-    sheet.style.cssText = 'position:absolute;left:0;right:0;bottom:0;z-index:5;background:rgba(20,16,12,.94);color:#fff;display:grid;gap:10px;padding:16px;border-radius:0 0 22px 22px;text-align:center';
-    var p = document.createElement('p'); p.style.cssText = 'margin:0;font-weight:700;font-size:15px'; p.textContent = clip(m.prompt, 160) || 'Speak now';
-    var st = document.createElement('p'); st.style.cssText = 'margin:0;font-size:14px;opacity:.85'; st.textContent = 'Starting the microphone…';
-    var row = document.createElement('div'); row.style.cssText = 'display:flex;gap:8px;justify-content:center';
-    var stop = document.createElement('button'); stop.type = 'button'; stop.className = 'btn'; stop.textContent = 'Done'; stop.disabled = true;
-    var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn ghost'; cancel.textContent = 'Cancel'; cancel.style.color = '#fff';
-    row.appendChild(stop); row.appendChild(cancel); sheet.appendChild(p); sheet.appendChild(st); sheet.appendChild(row); box.appendChild(sheet); this._sheet = sheet;
-    var max = Math.max(5, Math.min(120, +m.maxSeconds || 60)), lang = /^[a-z]{2}(-[A-Z]{2})?$/.test(m.lang || '') ? m.lang : '';
-    navigator.mediaDevices.getUserMedia({audio: true}).then(function (stream) {
-      if (finished) { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
-      var types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'], type = '';
-      for (var i = 0; i < types.length; i++) if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(types[i])) { type = types[i]; break; }
-      var rec = new MediaRecorder(stream, type ? {mimeType: type} : undefined), chunks = [], t0 = Date.now(), cancelled = false;
-      var tick = setInterval(function () { var sec = Math.round((Date.now() - t0) / 1000); st.textContent = '● Listening… ' + Math.floor(sec / 60) + ':' + ('0' + sec % 60).slice(-2); if (sec >= max) stopNow(false); }, 250);
-      function stopNow(cancel) { cancelled = cancel; clearInterval(tick); if (rec.state !== 'inactive') rec.stop(); }
-      self._stopRec = stopNow;
-      rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
-      rec.onstop = function () {
-        stream.getTracks().forEach(function (t) { t.stop(); });
-        if (cancelled) return done({ok: false, error: 'Cancelled.', type: 'cancelled'});
-        st.textContent = 'Turning it into text…'; stop.disabled = true;
-        Promise.resolve(self.o.transcribe(new Blob(chunks, {type: rec.mimeType || type || 'audio/webm'}), lang)).catch(function () { return null; }).then(function (r) { done(r || {ok: false, error: 'Worldview couldn\'t turn that recording into text.', type: 'network'}); });
-      };
-      rec.start(250); stop.disabled = false;
-      stop.onclick = function () { stopNow(false); };
-      cancel.onclick = function () { stopNow(true); };
-    }).catch(function () { done({ok: false, error: 'Worldview needs the microphone. Allow it for this site and try again.', type: 'mic_denied'}); });
-    cancel.onclick = function () { done({ok: false, error: 'Cancelled.', type: 'cancelled'}); };
+    if (!(m.local && this._localSR && SR)) return server();
+    // On this device: the browser's speech recognition with processLocally (checked as 'available' above).
+    var rec, heard = [], started = false, cancelled = false, t0 = Date.now(), tick = 0;
+    try { rec = new SR(); rec.processLocally = true; rec.lang = lang || this._localSR; rec.continuous = true; rec.interimResults = false; } catch (e) { return server(); }
+    var ui = this._listenSheet(m, compact);
+    var finish = function (c) { cancelled = c; clearInterval(tick); try { rec.stop(); } catch (e) { done({ok: false, error: 'Cancelled.', type: 'cancelled'}); } };
+    this._stopRec = finish;
+    ui.stop.onclick = function () { finish(false); };
+    ui.cancel.onclick = function () { finish(true); };
+    rec.onstart = function () { started = true; ui.stop.disabled = false; tick = setInterval(function () { var sec = Math.round((Date.now() - t0) / 1000); ui.st.textContent = '● Listening (on this device)… ' + Math.floor(sec / 60) + ':' + ('0' + sec % 60).slice(-2); if (sec >= max) finish(false); }, 250); };
+    rec.onresult = function (e) { for (var i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) heard.push(e.results[i][0].transcript); };
+    rec.onerror = function (e) {
+      clearInterval(tick);
+      var why = e && e.error;
+      if (why === 'not-allowed') return done({ok: false, error: 'Worldview needs the microphone. Allow it for this site and try again.', type: 'mic_denied'});
+      // could not run on this device after all: use Worldview's transcription service instead
+      if (!started && !cancelled && why !== 'aborted') { self._localSR = ''; self.refreshCapabilities(); try { rec.onend = null; rec.abort(); } catch (x) {} return server(); }
+    };
+    rec.onend = function () {
+      clearInterval(tick);
+      if (cancelled) return done({ok: false, error: 'Cancelled.', type: 'cancelled'});
+      var text = heard.join(' ').replace(/\s+/g, ' ').trim();
+      done(text ? {ok: true, text: text, where: 'device'} : {ok: false, error: 'Nothing was heard. Try again a little closer to the microphone.', type: 'empty', where: 'device'});
+    };
+    try { rec.start(); } catch (e) { return server(); }
+  };
+  PortHost.prototype._fullscreen = function (on) {
+    var box = this.o.frame.parentNode, self = this;
+    // The lesson fills its own frame either way; the browser's full screen is extra, and a refusal changes nothing in the lesson.
+    if (!document.fullscreenEnabled || !box.requestFullscreen) return;
+    if (!this._fsWired) {
+      this._fsWired = true;
+      document.addEventListener('fullscreenchange', function () {
+        var is = document.fullscreenElement === box;
+        self.o.frame.style.height = is ? '100%' : ''; box.style.background = is ? '#000' : '';
+        if (!is && self._fsOn) { self._fsOn = false; self._send('control', {key: 'fullscreen', value: false}); } else if (is) self._fsOn = true;
+      });
+    }
+    if (on && document.fullscreenElement !== box) box.requestFullscreen().catch(function () {});
+    else if (!on && document.fullscreenElement === box) { self._fsOn = false; document.exitFullscreen().catch(function () {}); }
   };
   PortHost.prototype._audioUI = function (a, text, tap) {
     var box = this.o.frame.parentNode; if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
@@ -761,6 +826,7 @@
       audio: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && (window.AudioContext || window.webkitAudioContext)),
       speak: !!(this.o.speak || window.speechSynthesis), aiVoice: !!(this.o.speak && this.o.aiVoice),
       record: !!this.o.saveFile, saveFile: !!this.o.saveFile, readFile: !!this.o.lessonId, state: true, persistentState: !!this.o.state, days: !!this.o.days, teacherTools: !!this.o.saveFile, direct: !!this._open,
+      listenLocal: !!this._localSR, fullscreen: !!(document.fullscreenEnabled && this.o.frame.parentNode && this.o.frame.parentNode.requestFullscreen),
       continuousListen: !!(this.o.stream && this.o.listenOn !== false && window.WebSocket && navigator.mediaDevices && navigator.mediaDevices.getUserMedia && (window.AudioContext || window.webkitAudioContext))};
   };
   // The page learned something after the lesson said hello (an AI voice or continuous listening turned on): tell the lesson.
@@ -863,6 +929,9 @@
         break;
       }
       case 'listen': this._listen(m); break;
+      case 'listenfinish': if (this._stopRec) this._stopRec(false); break;
+      case 'listencancel': if (this._stopRec) this._stopRec(true); break;
+      case 'fullscreen': this._fullscreen(!!m.on); break;
       case 'speak': this._speak(m); break;
       case 'speakstop': this._speakStop(); break;
       case 'record': this._record(m); break;

@@ -47,6 +47,8 @@
 
   /* ---------- state ---------- */
   let user = null, row = null, L = null, resumeRow = null, busy = false, saveTimer = 0, picFor = -1;
+  const picked = new Set(); // slide numbers ticked for 'Draft these again'
+  const RECIPE = 'lecture-pauses 1.1', isCurrent = r => /^lecture-pauses 1\.1\b/.test(r || '');
 
   /* ---------- 1. reading the PDFs into a queue ---------- */
   let pdfjsP = null;
@@ -81,10 +83,14 @@
       // 'print' draws without waiting for screen frames, so reading continues while the tab is in the background.
       await page.render({canvasContext: cx, canvas: cv, viewport: vp, intent: 'print'}).promise;
       const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.84));
-      let text = '';
-      try { const tc = await page.getTextContent(); text = tc.items.map(x => (x.str || '') + (x.hasEOL ? '\n' : ' ')).join('').replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim(); } catch (e) {}
+      let text = '', lines = null;
+      try {
+        const tc = await page.getTextContent(), lib = await pdfjs();
+        text = tc.items.map(x => (x.str || '') + (x.hasEOL ? '\n' : ' ')).join('').replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+        lines = lineBoxes(tc.items, v1, lib, text);
+      } catch (e) {}
       const title = (text.split('\n').find(x => x.trim()) || '').trim().slice(0, 120);
-      pages.push({n, blob, url: URL.createObjectURL(blob), text: text.slice(0, 3000), title});
+      pages.push({n, blob, url: URL.createObjectURL(blob), text: text.slice(0, 3000), title, lines: text.length <= 3000 ? lines : null});
       page.cleanup();
     }
     let meta = '';
@@ -95,6 +101,28 @@
     it.name = (meta && !/^(powerpoint|presentation|slide)/i.test(meta) && meta.length < 90 ? meta : fileName).slice(0, 90);
     it.empty = pages.filter(p => !p.text).length;
     renderQueue();
+  }
+  /* v3.1.74: where each line of the slide's text sits on the picture, as [left, top, right, bottom] from 0 to 1, one per
+     non-empty text line (the same lines the drafting AI numbers). The student page covers lines not reached yet only when
+     these agree with the steps; anything odd (rotated text, a line count that doesn't match) gives null: the whole slide shows. */
+  function lineBoxes(items, vp, lib, text) {
+    const out = []; let s = '', box = null;
+    const flush = () => { if (s.replace(/\s+/g, ' ').trim()) out.push(box); s = ''; box = null; };
+    for (const it of items) {
+      const str = it.str || '';
+      if (str.trim()) {
+        const tx = lib.Util.transform(vp.transform, it.transform), h = Math.hypot(tx[2], tx[3]);
+        if (Math.abs(tx[1]) > 0.01 * Math.abs(tx[0]) + 0.01) return null; // rotated text
+        const b = [tx[4] / vp.width, (tx[5] - h) / vp.height, (tx[4] + it.width * vp.scale) / vp.width, (tx[5] + h * 0.25) / vp.height];
+        box = box ? [Math.min(box[0], b[0]), Math.min(box[1], b[1]), Math.max(box[2], b[2]), Math.max(box[3], b[3])] : b;
+      }
+      s += str + ' ';
+      if (it.hasEOL) flush();
+    }
+    flush();
+    const want = text.split('\n').map(x => x.trim()).filter(Boolean).length;
+    if (!out.length || out.length !== want || out.some(b => !b)) return null;
+    return out.map(b => b.map(x => Math.round(Math.max(0, Math.min(1, x)) * 1000) / 1000));
   }
   const readSafe = (f, it) => readPdf(f, it).catch(() => itemFail(it, '<b>' + esc(f.name) + ' could not be read.</b> Save the presentation as a PDF again and choose the new file.'));
   const STATE = {reading: 'Reading…', ready: 'Ready', waiting: 'Waiting for its turn', drafting: 'Drafting…', done: 'Drafted', failed: 'Stopped', error: 'Can\'t use this file'};
@@ -133,9 +161,9 @@
   /* ---------- 2. drafting ---------- */
   const outlineOf = () => L.slides.map(s => ({n: s.n, title: s.title || (s.text || '').split('\n')[0].slice(0, 120)}));
   const ctx = () => ({lesson: row.id, title: L.title, notes: L.teacherNotes || '', rules: L.rules || [], outline: outlineOf()});
-  function addCost(r) { if (r && r.costUsd != null) { L.cost.draftUsd = Math.round(((L.cost.draftUsd || 0) + r.costUsd) * 10000) / 10000; L.cost.calls = (L.cost.calls || 0) + 1; L.cost.model = r.model || L.cost.model; } if (r && r.recipe) L.recipe = r.recipe; }
-  const SLIDE_KEYS = ['title', 'script', 'keyPoints', 'tripUps', 'pause', 'needsTeacher', 'needsTeacherWhy'];
-  function mergeSlide(s) { const t = L.slides.find(x => x.n === s.n); if (!t) return; SLIDE_KEYS.forEach(k => { if (k !== 'title' || s.title) t[k] = s[k]; }); t.edited = false; delete t.draft; }
+  function addCost(r) { if (r && r.costUsd != null) { L.cost.draftUsd = Math.round(((L.cost.draftUsd || 0) + r.costUsd) * 10000) / 10000; L.cost.calls = (L.cost.calls || 0) + 1; L.cost.model = r.model || L.cost.model; } }
+  const SLIDE_KEYS = ['title', 'script', 'steps', 'keyPoints', 'tripUps', 'pause', 'needsTeacher', 'needsTeacherWhy'];
+  function mergeSlide(s, recipe) { const t = L.slides.find(x => x.n === s.n); if (!t) return; SLIDE_KEYS.forEach(k => { if (k !== 'title' || s.title) t[k] = k === 'steps' ? (Array.isArray(s.steps) ? s.steps : []) : s[k]; }); if (!t.steps.length) delete t.steps; if (recipe) t.recipe = recipe; t.edited = false; delete t.draft; }
   function progress(frac, text) { if (curQ) { curQ.prog = frac == null ? null : [frac, text]; setProg(curQ, frac, text); } }
   const waysChosen = () => ({conversation: $('#w-conv').checked, lecture: $('#w-lecture').checked, voice: true});
 
@@ -174,7 +202,7 @@
     const jobs = it.pages.slice(), worker = async () => { for (let pg; (pg = jobs.shift());) { const {error} = await put('slides/' + pad(pg.n) + '.jpg', pg.blob, 'image/jpeg'); if (error) throw new Error('Slide ' + pg.n + '\'s picture couldn\'t be saved: ' + error.message); done++; progress(0.05 + 0.2 * done / it.pages.length, 'Saving slide pictures…'); } };
     await Promise.all([worker(), worker(), worker(), worker()]);
     L = {format: 'slides-v1', recipe: '', title: name, teacherNotes: notes, rules: [], styles: ways, source: {file: it.file, slides: it.pages.length, read: new Date().toISOString()},
-      goals: [], check: [], slides: it.pages.map(pg => ({n: pg.n, image: 'slides/' + pad(pg.n) + '.jpg', title: pg.title, text: pg.text, script: '', keyPoints: [], tripUps: [], pause: '', needsTeacher: false, needsTeacherWhy: '', edited: false})),
+      goals: [], check: [], slides: it.pages.map(pg => ({n: pg.n, image: 'slides/' + pad(pg.n) + '.jpg', title: pg.title, text: pg.text, lines: pg.lines || undefined, script: '', keyPoints: [], tripUps: [], pause: '', needsTeacher: false, needsTeacherWhy: '', edited: false})),
       cost: {draftUsd: 0, calls: 0, model: ''}, status: 'drafting'};
     it.L = L;
     await saveNow();
@@ -191,7 +219,7 @@
       const r = await draftAI(Object.assign(ctx(), {action: 'slides', slides: part.map(s => ({n: s.n, text: s.text || '', image: s.image}))}));
       addCost(r);
       if (!r.ok) { await saveNow(); throw new Error(r.error); }
-      r.slides.forEach(mergeSlide); await saveNow();
+      r.slides.forEach(x => mergeSlide(x, r.recipe)); if (r.recipe) L.recipe = r.recipe; await saveNow();
     }
     say(0.95, 'Writing the goals and the end-of-lesson check…');
     const r = await draftAI(Object.assign(ctx(), {action: 'lesson', slides: L.slides.filter(s => s.script).map(s => ({n: s.n, title: s.title, script: s.script, keyPoints: s.keyPoints}))}));
@@ -229,10 +257,11 @@
   const lines = a => (a || []).join('\n');
   function slideH(s, i) {
     return `<article class="sl-slide${s.needsTeacher ? ' flag' : ''}" data-i="${i}" id="s${s.n}">
-      <div class="sl-pic"><img src="${FILES + row.id + '/' + esc(s.image)}" alt="Slide ${s.n}" loading="lazy"><span>Slide ${s.n}${s.title ? ' · ' + esc(s.title) : ''}</span></div>
+      <div class="sl-pic"><img src="${FILES + row.id + '/' + esc(s.image)}" alt="Slide ${s.n}" loading="lazy"><span>Slide ${s.n}${s.title ? ' · ' + esc(s.title) : ''}</span><label class="sl-pick"><input type="checkbox" data-pick${picked.has(s.n) ? ' checked' : ''}> Select</label></div>
       <div class="sl-edit">
         ${s.needsTeacher ? `<div class="sl-flag"><b>Check this slide.</b><span>${esc(s.needsTeacherWhy || 'The AI wasn\'t sure it read everything here.')}</span><button type="button" class="linkbtn" data-act="okflag">It's right</button></div>` : ''}
-        <label>What the AI says<textarea class="script" data-f="script" rows="4">${esc(s.script)}</textarea></label>
+        ${Array.isArray(s.steps) && s.steps.length ? `<div class="sl-steps"><p>Taught one point at a time. Students hear a point, then the lesson waits until they follow.</p>${s.steps.map((st, k) => `<div class="sl-step" data-k="${k}"><div class="lab"><span>Point ${k + 1}</span><span class="grow"></span><button type="button" class="sl-x" data-act="delstep" aria-label="Remove point ${k + 1}">✕</button></div><textarea data-sf="text" rows="3" maxlength="600" aria-label="Point ${k + 1}">${esc(st.text)}</textarea><input type="text" data-sf="check" maxlength="200" value="${esc(st.check || '')}" placeholder="A short check question (optional)" aria-label="Check question for point ${k + 1}"></div>`).join('')}<div class="sl-tools"><button type="button" class="linkbtn" data-act="addstep"${s.steps.length >= 6 ? ' disabled' : ''}>Add a point</button><button type="button" class="linkbtn" data-act="onescript">Make it one script</button></div></div>`
+          : `<label>What the AI says<textarea class="script" data-f="script" rows="4">${esc(s.script)}</textarea></label><div class="sl-tools"><button type="button" class="linkbtn" data-act="tosteps">Teach it one point at a time</button></div>`}
         <div class="sl-row2"><label><span>Key points <em>one per line</em></span><textarea data-f="keyPoints" rows="2">${esc(lines(s.keyPoints))}</textarea></label><label><span>Where students trip <em>one per line</em></span><textarea data-f="tripUps" rows="2">${esc(lines(s.tripUps))}</textarea></label></div>
         <label><span>Pause to ask <em>optional</em></span><input type="text" data-f="pause" value="${esc(s.pause)}" maxlength="300" placeholder="A question before moving on"></label>
         <div class="sl-tools">${s.edited ? '<span class="chip">Edited by you</span>' : s.script ? '<span class="chip ok">AI draft</span>' : '<span class="chip">Not drafted yet</span>'}<span class="grow"></span><button type="button" class="linkbtn" data-act="redo">Draft this slide again</button></div>
@@ -258,7 +287,7 @@
     $('#lfor').innerHTML = '<option value="">No class</option>' + classOptions(); $('#lfor').value = (classOfRow() || {}).id || ''; setBack((classOfRow() || {}).id); renderBars();
     $('#state').textContent = row.shared ? 'Published' : 'Draft · only you see it';
     $('#state').classList.toggle('ok', !!row.shared);
-    $('#slidelist').innerHTML = L.slides.map(slideH).join('');
+    reSlides(); renderUpgrade();
     renderGoals(); renderCheck();
     $('#lnotes').value = L.teacherNotes || ''; $('#lrules').value = lines(L.rules);
     $('#recipe').textContent = L.recipe ? `Drafted with ${L.recipe}${L.cost.model ? ' (' + L.cost.model + ')' : ''} from ${L.source && L.source.file || 'a PDF'}.` : '';
@@ -280,10 +309,48 @@
     const r = await draftAI(Object.assign(ctx(), {action: 'redo', slides: [{n: s.n, text: s.text || '', image: s.image}], ask, previous: s.script, before: (L.slides[i - 1] || {}).script || '', after: (L.slides[i + 1] || {}).script || ''}));
     addCost(r); busy = false;
     if (!r.ok) { btn.disabled = false; btn.textContent = 'Draft again'; await saveNow(); loadCost(); return toast(r.error); }
-    mergeSlide(r.slides[0]); await saveNow();
-    const fresh = document.createElement('div'); fresh.innerHTML = slideH(L.slides[i], i); art.replaceWith(fresh.firstElementChild);
-    document.querySelectorAll('#s' + s.n + ' textarea').forEach(grow);
+    mergeSlide(r.slides[0], r.recipe); await saveNow();
+    reSlide(i);
     loadCost(); toast('Slide ' + s.n + ' drafted again (' + money(r.costUsd || 0) + ').');
+  }
+
+  /* v3.1.74: several slides drafted again at once (with the teacher's instruction), and "Draft again with the newer version". */
+  const reSlide = i => { const fresh = document.createElement('div'); fresh.innerHTML = slideH(L.slides[i], i); const art = document.getElementById('s' + L.slides[i].n); art.replaceWith(fresh.firstElementChild); document.querySelectorAll('#s' + L.slides[i].n + ' textarea').forEach(grow); };
+  function reSlides() { $('#slidelist').innerHTML = L.slides.map(slideH).join(''); document.querySelectorAll('.sl-edit textarea').forEach(grow); L.slides.forEach(s => { if (picked.has(s.n)) document.getElementById('s' + s.n).classList.add('picked'); }); renderSel(); }
+  const estUsd = n => n * 0.012 + 0.005 * Math.ceil(n / BATCH);
+  function renderSel() {
+    const n = picked.size; $('#selbar').hidden = !n || busy;
+    $('#selcount').textContent = n + ' slide' + (n === 1 ? '' : 's') + ' selected';
+    $('#selcost').textContent = n ? 'About ' + money(estUsd(n)) + '. Worldview still stops at $2 per presentation.' : '';
+  }
+  function renderUpgrade() {
+    const u = $('#upgrade'), old = L.status !== 'drafting' && L.slides.some(s => s.script) && !isCurrent(L.recipe);
+    u.hidden = !old || busy; if (!old) return;
+    const edited = L.slides.filter(s => s.edited).length;
+    u.innerHTML = `<p><b>A newer way of drafting is ready (${RECIPE}).</b> It explains each new term in plain words instead of reading the slide, says what a formula is for rather than the arithmetic, and takes busy slides one point at a time. This lesson keeps its scripts until you choose.</p>
+      <div class="row"><button type="button" class="btn small" data-act="upgrade">Draft again with the newer version</button>${edited ? `<label class="sl-ck"><input type="checkbox" id="upedited"> Also replace the ${edited} slide${edited === 1 ? '' : 's'} I edited</label>` : '<input type="checkbox" id="upedited" hidden>'}<span class="muted small">About ${money(estUsd(L.slides.length))}. Goals and check questions stay as they are.</span></div>`;
+  }
+  async function redraftMany(ns, ask, upgrade) {
+    if (busy || !ns.length) return;
+    const list = ns.map(n => L.slides.find(s => s.n === n)).filter(Boolean);
+    const edited = list.filter(s => s.edited).length;
+    if (!upgrade && edited && !confirm(`Draft ${list.length === 1 ? 'this slide' : 'these ' + list.length + ' slides'} again? Your edits on ${edited} of them will be replaced.`)) return;
+    busy = true; renderSel(); $('#upgrade').hidden = true;
+    const before = L.cost.draftUsd || 0, say = t => { $('#resume').hidden = false; $('#resume').innerHTML = `<span>${esc(t)}</span>`; };
+    let failed = '';
+    for (let i = 0; i < list.length; i += BATCH) {
+      const part = list.slice(i, i + BATCH);
+      say(`Drafting slide${part.length === 1 ? '' : 's'} ${part.map(s => s.n).join(', ')} again${L.cost.draftUsd > before ? ' · ' + money(L.cost.draftUsd - before) + ' so far' : ''}…`);
+      const r = await draftAI(Object.assign(ctx(), {action: 'slides', ask, slides: part.map(s => ({n: s.n, text: s.text || '', image: s.image, previous: (s.script || '').slice(0, 1500)}))}));
+      addCost(r);
+      if (!r.ok) { failed = r.error; break; }
+      r.slides.forEach(x => mergeSlide(x, r.recipe)); await saveNow();
+    }
+    if (upgrade && !failed) L.recipe = RECIPE;
+    await saveNow();
+    busy = false; $('#resume').hidden = true; if (!failed) picked.clear();
+    reSlides(); renderUpgrade(); loadCost();
+    toast(failed ? 'Stopped: ' + failed : (list.length === 1 ? 'Slide ' + list[0].n : list.length + ' slides') + ' drafted again (' + money((L.cost.draftUsd || 0) - before) + ').');
   }
 
   /* a picture for a check question: made at most 1,280 px wide, saved in the lesson's files (check/…) */
@@ -344,22 +411,36 @@
   $('#lessonview').addEventListener('input', e => {
     const t = e.target; if (t.tagName === 'TEXTAREA') grow(t);
     const art = t.closest('.sl-slide');
+    if (art && t.dataset.sf) {
+      const s = L.slides[+art.dataset.i], k = +t.closest('.sl-step').dataset.k; markEdited(s, art);
+      s.steps[k][t.dataset.sf] = t.value; s.script = s.steps.map(x => x.text.trim()).filter(Boolean).join(' ');
+      return saveSoon();
+    }
     if (art && t.dataset.f && t.dataset.f !== 'ask') {
       const s = L.slides[+art.dataset.i];
-      if (!s.edited && s.script) { s.draft = {script: s.script, keyPoints: s.keyPoints, tripUps: s.tripUps, pause: s.pause}; s.edited = true; const c = art.querySelector('.sl-tools .chip'); if (c) { c.textContent = 'Edited by you'; c.classList.remove('ok'); } }
+      markEdited(s, art);
       s[t.dataset.f] = t.dataset.f === 'keyPoints' || t.dataset.f === 'tripUps' ? t.value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 5) : t.value;
       return saveSoon();
     }
     const g = t.closest('.sl-goal'); if (g && t.dataset.gf) { L.goals[+g.dataset.g][t.dataset.gf] = t.value; return saveSoon(); }
     const q = t.closest('.sl-q'); if (q && t.dataset.qf) { L.check[+q.dataset.q][t.dataset.qf] = t.value; return saveSoon(); }
   });
-  $('#lessonview').addEventListener('change', e => { const q = e.target.closest('.sl-q'); if (q && e.target.dataset.qf === 'goal') { L.check[+q.dataset.q].goal = e.target.value; saveSoon(); } });
+  function markEdited(s, art) { if (!s.edited && s.script) { s.draft = {script: s.script, steps: s.steps ? JSON.parse(JSON.stringify(s.steps)) : undefined, keyPoints: s.keyPoints, tripUps: s.tripUps, pause: s.pause}; s.edited = true; const c = art.querySelector('.sl-tools .chip'); if (c) { c.textContent = 'Edited by you'; c.classList.remove('ok'); } } }
+  $('#lessonview').addEventListener('change', e => {
+    if (e.target.matches('[data-pick]')) { const art = e.target.closest('.sl-slide'), n = L.slides[+art.dataset.i].n; if (e.target.checked) picked.add(n); else picked.delete(n); art.classList.toggle('picked', e.target.checked); return renderSel(); } const q = e.target.closest('.sl-q'); if (q && e.target.dataset.qf === 'goal') { L.check[+q.dataset.q].goal = e.target.value; saveSoon(); } });
   $('#lessonview').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset.f === 'ask') { e.preventDefault(); const art = e.target.closest('.sl-slide'); redo(+art.dataset.i, art); } });
   $('#lessonview').addEventListener('click', e => {
     const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
     const art = b.closest('.sl-slide'), q = b.closest('.sl-q'), g = b.closest('.sl-goal'), k = q ? +q.dataset.q : -1;
     switch (b.dataset.act) {
       case 'resume': return resumeDraft();
+      case 'upgrade': return redraftMany(L.slides.filter(x => $('#upedited').checked || !x.edited).map(x => x.n), '', true);
+      case 'redosel': return redraftMany([...picked].sort((a, b) => a - b), $('#selask').value.trim(), false);
+      case 'selall': L.slides.forEach(x => picked.add(x.n)); return reSlides();
+      case 'selnone': picked.clear(); return reSlides();
+      case 'tosteps': { const s = L.slides[+art.dataset.i]; markEdited(s, art); s.steps = [{text: s.script || '', check: '', upTo: 0}, {text: '', check: '', upTo: 0}]; reSlide(+art.dataset.i); const ta = document.querySelectorAll('#s' + s.n + ' [data-sf=text]'); if (ta[1]) ta[1].focus(); return saveSoon(); }
+      case 'addstep': { const s = L.slides[+art.dataset.i]; markEdited(s, art); s.steps.push({text: '', check: '', upTo: 0}); reSlide(+art.dataset.i); const ta = document.querySelectorAll('#s' + s.n + ' [data-sf=text]'); ta[ta.length - 1].focus(); return saveSoon(); }
+      case 'delstep': case 'onescript': { const s = L.slides[+art.dataset.i]; markEdited(s, art); if (b.dataset.act === 'delstep') s.steps.splice(+b.closest('.sl-step').dataset.k, 1); const left = s.steps.filter(x => x.text.trim()); s.script = left.map(x => x.text.trim()).join(' '); if (b.dataset.act === 'onescript' || left.length < 2) delete s.steps; reSlide(+art.dataset.i); return saveSoon(); }
       case 'okflag': { const s = L.slides[+art.dataset.i]; s.needsTeacher = false; s.checked = true; art.classList.remove('flag'); b.closest('.sl-flag').remove(); return saveSoon(); }
       case 'redo': { const r = art.querySelector('[data-redo]'); r.hidden = !r.hidden; if (!r.hidden) r.querySelector('input').focus(); return; }
       case 'redogo': return redo(+art.dataset.i, art);
