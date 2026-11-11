@@ -4,7 +4,7 @@
       pictures to its files (slides/01.jpg …) and asks lesson-ai?mode=draft for scripts, 8 slides at a time, then for the
       goals and the end-of-lesson check. Worldview stops at $2 per presentation (checked on the server).
    3. Everything lives in the lesson's lesson.json ("slides-v1"); this page edits it and saves as you type.
-   Content (slides, goals, check) is kept apart from how students take it (styles come in v3.1.71, LES-340). */
+   Content (slides, goals, check) is kept apart from how students take it: slides-lesson.html (v3.1.72, LES-340) reads lesson.json. */
 (() => {
   const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT';
   const FILES = URL_ + '/storage/v1/object/public/lesson-files/', BUCKET = 'lesson-files', T = 'worldview_teacher_lessons';
@@ -51,26 +51,6 @@
     if (error || !data) return null;
     try { const j = JSON.parse(await data.text()); return j && j.format === 'slides-v1' ? j : null; } catch (e) { return null; }
   }
-
-  /* The lesson's own page until the styles arrive (v3.1.71): a plain read-along of the slides and their scripts. */
-  const READALONG = name => `<!-- WORLDVIEW-SLIDES-LESSON: made from slides on Worldview (lesson.json). -->
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(name)}</title>
-<style>body{margin:0;padding:18px;font:16px/1.55 -apple-system,"Segoe UI",Roboto,sans-serif;background:#f8f4ec;color:#2c241c}main{max-width:760px;margin:0 auto;display:grid;gap:14px}h1{font:400 26px Georgia,serif;margin:0}img{width:100%;border-radius:8px;border:1px solid #e4dccb;background:#fff}p{margin:0}.s{font-family:Georgia,serif}.row{display:flex;gap:10px;justify-content:space-between;align-items:center}button{border:0;border-radius:999px;padding:10px 20px;background:#bd5a30;color:#fff;font:inherit;font-weight:700;cursor:pointer}button[disabled]{opacity:.4}.m{color:#6f6355;font-size:14px}</style></head>
-<body><main id="m"><p class="m">Loading…</p></main>
-<script>
-const wv = WorldviewPort({title: ${JSON.stringify(String(name)).replace(/</g, '\\u003c')}});
-let L = null, i = 0;
-const e = s => String(s || '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
-function draw() {
-  const s = L.slides[i], last = i === L.slides.length - 1;
-  document.getElementById('m').innerHTML = '<h1>' + e(L.title) + '</h1><img src="' + e(s.image) + '" alt="Slide ' + s.n + '"><p class="s">' + e(s.script) + '</p>' + (s.pause ? '<p class="m">Pause: ' + e(s.pause) + '</p>' : '') + '<div class="row"><button id="b"' + (i ? '' : ' disabled') + '>Back</button><span class="m">' + (i + 1) + ' of ' + L.slides.length + '</span><button id="n">' + (last ? 'Finish' : 'Next') + '</button></div>';
-  document.getElementById('b').onclick = () => { i--; draw(); };
-  document.getElementById('n').onclick = () => { if (last) { document.getElementById('m').innerHTML = '<h1>Explain it back</h1>' + (L.check || []).map(q => '<p class="s">' + e(q.question) + '</p>' + (q.image ? '<img src="' + e(q.image) + '" alt="">' : '')).join('') + '<p class="m">The full lesson, with an AI that listens, comes in the next version.</p>'; wv.done(); return; } i++; wv.progress((i + 1) / L.slides.length); draw(); };
-}
-wv.readFile('lesson.json').then(t => { try { L = JSON.parse(t); } catch (x) {} if (!L || !L.slides || !L.slides.length) { document.getElementById('m').innerHTML = '<p>This lesson has no slides yet.</p>'; return; } draw(); });
-<\/script></body></html>
-`;
 
   /* ---------- state ---------- */
   let user = null, row = null, L = null, deck = null, busy = false, saveTimer = 0, picFor = -1;
@@ -150,9 +130,11 @@ wv.readFile('lesson.json').then(t => { try { L = JSON.parse(t); } catch (x) {} i
     try {
       if (!row) {
         progress(0.02, 'Making the lesson…');
-        const {data, error} = await db.from(T).insert({title: fullTitle(p, name), html: READALONG(name), note: {format: 'slides-v1'}}).select('id,title,shared').single();
+        const {data, error} = await db.from(T).insert({title: fullTitle(p, name), html: '<!doctype html><title>Lesson</title>', note: {format: 'slides-v1'}}).select('id,title,shared').single();
         if (error) throw new Error(/lesson_limit/.test(error.message) ? 'You have 50 lessons, the most for now. Delete one in Teacher Studio first.' : 'The lesson couldn\'t be made: ' + error.message);
         row = data;
+        // the student page (slides-lesson.html, v3.1.72) goes into the lesson; it reads lesson.json and holds no lesson content
+        try { await WorldviewPublish.ensureSlidesStyle(db, row.id, ''); } catch (e) { throw new Error(e.message || String(e)); }
       }
       let done = 0;
       const jobs = deck.pages.slice(), worker = async () => { for (let pg; (pg = jobs.shift());) { const {error} = await put('slides/' + pad(pg.n) + '.jpg', pg.blob, 'image/jpeg'); if (error) throw new Error('Slide ' + pg.n + '\'s picture couldn\'t be saved: ' + error.message); done++; progress(0.05 + 0.2 * done / deck.pages.length, `Saving slide pictures · ${done} of ${deck.pages.length}`); } };

@@ -700,7 +700,7 @@ function scrHome() {
     try { const {error} = await db.from('worldview_teacher_lessons').update({note}).eq('id', id); if (error) return false; } catch (e) { return false; }
     const l = MY.find(x => x.id === id); if (l) l.note = note; return true;
   }
-  WP().init({render, toast, real: () => REAL(), my: () => MY, startReal, playLink, saveNote});
+  WP().init({render, toast, real: () => REAL(), my: () => MY, startReal, playLink, saveNote, db: () => read(() => backendClient), reload: loadPublished});
 
   /* ---------------- visibility ---------------- */
   function blocked() {

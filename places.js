@@ -43,7 +43,7 @@
 
   /* ---------- state ---------- */
   const P = {scr: 'school', verified: load('verified', false), role: load('role', 'student') === 'teacher' ? 'teacher' : 'student', month: new Date(TODAY.getFullYear(), TODAY.getMonth(), 1), sel: null, code: false, query: '', enrolled: load('enrolled', {'MA 132': {2: ['maya']}}), stars: load('stars', {}), cur: 'MA 132', unit: 2, sort: 'rated', whole: false, others: false, done: load('done', {}), day: null, sheet: null, demo: null, ds: {}, demoW: ''};
-  let deps = {render() {}, toast() {}, real: () => [], my: () => [], startReal() {}, saveNote: async () => false, playLink: id => 'play.html?l=' + id};
+  let deps = {render() {}, toast() {}, real: () => [], my: () => [], startReal() {}, saveNote: async () => false, playLink: id => 'play.html?l=' + id, db: () => null, reload: async () => {}};
   const mine = (c, i) => ((P.enrolled[c.code] || {})[i] || []);
   const myTutors = (c, i) => mine(c, i).map(id => c.units[i].tutors.find(t => t.id === id)).filter(Boolean);
   const myDots = c => { const out = []; c.units.forEach(u => myTutors(c, u.i).forEach(t => lessonDates(u, t).forEach(l => out.push(l.d)))); return out; };
@@ -267,12 +267,85 @@
     } else if (!teacher) {
       h += `<div class="sc-acts"><a class="cv-pill" href="${esc(deps.playLink(it.id))}">Start</a></div>`;
     } else {
-      h += `<p><span class="sc-tag ${it.pub ? 'p' : 'd'}">${it.pub ? 'Published' : 'Draft'}</span></p>
-        <label class="sc-f" for="sc-mv">Move to</label><div class="sc-row"><input type="date" id="sc-mv" value="${key(it.d)}"><button type="button" class="cv-pill ghost" data-pa="move" data-id="${esc(it.id)}">Move</button></div>
-        <div class="sc-acts"><a class="cv-pill" href="${it.slides ? 'slides.html?l=' : 'studio.html?from=places&l='}${encodeURIComponent(it.id)}">${it.slides ? 'Slides and scripts' : 'Open in Teacher Studio'}</a>${it.pub ? `<a class="cv-pill ghost" href="${esc(deps.playLink(it.id))}">Try it as a student</a>` : ''}</div>
-        <p class="cv-muted"><a class="sc-link" href="studio.html?from=places&l=${encodeURIComponent(it.id)}">${it.pub ? 'Unpublish or update in Teacher Studio' : 'Publish in Teacher Studio'}</a></p>`;
+      h += teacherPanel(it);
     }
     return h + '</aside>';
+  }
+  /* ---------- the teacher's panel for a real lesson (v3.1.72): ways to learn, try it as a student, publish ----------
+     lesson.json holds the lesson and a small `styles` setting; publishing uses lesson-publish.js, the same code as Teacher Studio. */
+  const LX = {id: '', loading: false, L: null, styles: {conversation: true, lecture: true, voice: true}, msg: '', busy: '', sure: false};
+  const BUCKET = 'lesson-files';
+  const readLesson = async (db, id) => { const {data, error} = await db.storage.from(BUCKET).download(id + '/lesson.json'); if (error || !data) return null; try { const j = JSON.parse(await data.text()); return j && j.format === 'slides-v1' ? j : null; } catch (e) { return null; } };
+  async function loadLx(it) {
+    Object.assign(LX, {id: it.id, loading: !!it.slides, L: null, msg: '', busy: '', sure: false, styles: {conversation: true, lecture: true, voice: true}});
+    if (!it.slides) return;
+    const db = deps.db(); let L = null; try { L = db ? await readLesson(db, it.id) : null; } catch (e) {}
+    if (LX.id !== it.id) return;
+    LX.loading = false; LX.L = L;
+    if (L) LX.styles = {conversation: !(L.styles && L.styles.conversation === false), lecture: !(L.styles && L.styles.lecture === false), voice: !(L.styles && L.styles.voice === false)};
+    deps.render();
+  }
+  async function saveStyles(id, st) {
+    const db = deps.db(); if (!db) return false;
+    try {
+      const L = await readLesson(db, id); if (!L) return false;
+      L.styles = {conversation: !!st.conversation, lecture: !!st.lecture, voice: !!st.voice}; L.updated = new Date().toISOString();
+      const {error} = await db.storage.from(BUCKET).upload(id + '/lesson.json', new Blob([JSON.stringify(L)], {type: 'application/json'}), {upsert: true, contentType: 'application/json', cacheControl: '10'});
+      return !error;
+    } catch (e) { return false; }
+  }
+  function teacherPanel(it) {
+    const ready = !it.slides || !!(LX.L && LX.L.status !== 'drafting' && LX.L.slides && LX.L.slides.every(s => s.script));
+    const st = LX.styles, busy = LX.busy, id = esc(it.id), off = busy || LX.loading ? ' disabled' : '', pubOff = busy || LX.loading || !ready ? ' disabled' : '';
+    let h = `<p><span class="sc-tag ${it.pub ? 'p' : 'd'}">${it.pub ? 'Published' : 'Draft'}</span></p>
+      <label class="sc-f" for="sc-mv">Move to</label><div class="sc-row"><input type="date" id="sc-mv" value="${key(it.d)}"><button type="button" class="cv-pill ghost" data-pa="move" data-id="${id}">Move</button></div>`;
+    if (it.slides) {
+      const ck = (k, label) => `<label class="sc-ck"><input type="checkbox" data-pa="style" data-s="${k}"${st[k] ? ' checked' : ''}${busy ? ' disabled' : ''}> ${label}</label>`;
+      h += `<div class="sc-ways" role="group" aria-label="Ways students may learn this"><span class="sc-f">Ways students may learn this</span>${LX.loading ? '<p class="cv-muted">Loading…</p>' : !LX.L ? '<p class="cv-muted">This lesson\'s file couldn\'t be read. Reload and try again.</p>' : ck('conversation', 'Conversation') + ck('lecture', 'Lecture with pauses') + ck('voice', 'Voice: speaks and listens when the device allows; typing always works')}</div>`;
+    }
+    h += `<div class="sc-acts">${it.slides ? `<a class="cv-pill" href="slides.html?l=${encodeURIComponent(it.id)}">Slides and scripts</a>` : `<a class="cv-pill" href="studio.html?from=places&l=${encodeURIComponent(it.id)}">Open in Teacher Studio</a>`}<button type="button" class="cv-pill ghost" data-pa="try" data-id="${id}"${off}>Try it as a student</button></div>
+      <p class="cv-muted">Try it opens your latest draft. Nothing you do there is saved or shown to anyone.</p>
+      <div class="sc-acts">${it.pub ? `<button type="button" class="cv-pill ghost" data-pa="unpub" data-id="${id}"${busy ? ' disabled' : ''}>${LX.sure ? 'Press again: students lose access' : 'Unpublish'}</button><button type="button" class="cv-pill" data-pa="publish" data-id="${id}"${pubOff}>Publish changes</button>` : `<button type="button" class="cv-pill" data-pa="publish" data-id="${id}"${pubOff}>Publish to students</button>`}</div>
+      ${!ready && !LX.loading ? '<p class="cv-muted">Finish drafting every slide in Slides and scripts, then you can publish.</p>' : ''}
+      <p class="sc-note" role="status">${esc(busy || LX.msg)}</p>
+      <p class="cv-muted"><a class="sc-link" href="studio.html?from=places&l=${encodeURIComponent(it.id)}">More in Teacher Studio</a></p>`;
+    return h;
+  }
+  const mineItem = id => itemsFor(cls(P.cur)).find(x => x.kind === 'real' && x.id === id);
+  async function tryAsStudent(id) {
+    const db = deps.db(), it = mineItem(id); if (!db || !it) return;
+    LX.busy = 'Opening your draft…'; deps.render();
+    try { if (it.slides) await window.WorldviewPublish.ensureSlidesStyle(db, id); } catch (e) { LX.busy = ''; LX.msg = e.message || String(e); deps.render(); return; }
+    location.href = deps.playLink(id) + '&preview=1';
+  }
+  async function publishLx(id) {
+    const db = deps.db(), it = mineItem(id), PB = window.WorldviewPublish; if (!db || !it || !PB) return;
+    LX.busy = 'Publishing…'; LX.msg = ''; deps.render();
+    try {
+      const html = it.slides ? await PB.ensureSlidesStyle(db, id) : (await db.from('worldview_teacher_lessons').select('html').eq('id', id).single()).data.html;
+      const latest = await PB.latestRelease(db, id);
+      const r = await PB.publish({db, id, shared: it.pub, html, latest, setShared: v => PB.setShared(db, id, v), onProgress: t => { LX.busy = t; deps.render(); }});
+      if (r.cancelled) LX.msg = 'Couldn\'t publish it. Check the internet connection and try again.';
+      else LX.msg = (r.again ? 'v' + r.version + ' is published again. ' : 'v' + r.version + ' is live for students. ') + 'They can open it from this calendar.' + (r.missing && r.missing.length ? ' Warning: it uses ' + r.missing.length + ' file' + (r.missing.length === 1 ? '' : 's') + ' that aren\'t on Worldview (' + r.missing.slice(0, 4).join(', ') + ').' : '');
+    } catch (e) { LX.msg = (e.version ? 'v' + e.version + ' is published, but its files aren\'t locked in yet: ' : 'Couldn\'t publish it: ') + (e.message || e) + (e.version ? ' Press Publish changes to try again.' : ''); }
+    LX.busy = ''; await deps.reload(); deps.render();
+  }
+  async function unpublishLx(id) {
+    const db = deps.db(); if (!db) return;
+    if (!LX.sure) { LX.sure = true; clearTimeout(unpublishLx.t); unpublishLx.t = setTimeout(() => { LX.sure = false; deps.render(); }, 4000); deps.render(); return; }
+    LX.sure = false; LX.busy = 'Unpublishing…'; deps.render();
+    const ok = await window.WorldviewPublish.setShared(db, id, false);
+    LX.busy = ''; LX.msg = ok ? 'Unpublished. Students can\'t open it now; their results are kept. You can publish again any time.' : 'Couldn\'t unpublish it. Check the internet connection and try again.';
+    await deps.reload(); deps.render();
+  }
+  async function changeStyle(id, which, on) {
+    if (!id) return;
+    const next = Object.assign({}, LX.styles, {[which]: on});
+    if (!next.conversation && !next.lecture) { LX.msg = 'Keep at least one way on, so students have a way to start.'; deps.render(); return; }
+    LX.styles = next; LX.msg = 'Saving…'; deps.render();
+    const ok = await saveStyles(id, next), it = mineItem(id);
+    LX.msg = ok ? 'Saved. ' + (it && it.pub ? 'Students get this when you publish changes.' : 'Students get this when you publish.') : 'Couldn\'t save that. Check the internet connection and try again.';
+    deps.render();
   }
   function classCal() {
     const c = cls(P.cur), teacher = P.role === 'teacher', items = itemsFor(c), by = byDay(items);
@@ -332,7 +405,7 @@
     click(e) {
       const el = e.target.closest('[data-pa]'); if (!el || el.disabled) return false;
       if (el.classList.contains('cv-ov') && e.target !== el) return false;
-      act(el.dataset.pa, el.dataset); return true;
+      act(el.dataset.pa, el.type === 'checkbox' ? Object.assign({}, el.dataset, {checked: el.checked}) : el.dataset); return true;
     },
   };
   function openClass(code, u) {
@@ -354,7 +427,11 @@
       case 'school': P.scr = 'school'; P.sheet = null; P.sel = null; top(); break;
       case 'open': openClass(d.c); P.sel = null; P.month = monthOf(TODAY); top(); break;
       case 'role': if (d.r !== P.role) { P.role = d.r; save('role', d.r); } break;
-      case 'pick': P.sel = P.sel === d.k ? null : d.k; break;
+      case 'pick': { P.sel = P.sel === d.k ? null : d.k; const it = P.sel && itemsFor(c).find(x => x.key === P.sel); if (it && it.kind === 'real' && it.mine && P.role === 'teacher' && LX.id !== it.id) loadLx(it); break; }
+      case 'try': tryAsStudent(d.id); return;
+      case 'publish': publishLx(d.id); return;
+      case 'unpub': unpublishLx(d.id); return;
+      case 'style': changeStyle(P.sel && (itemsFor(c).find(x => x.key === P.sel) || {}).id, d.s, d.checked === true || d.checked === 'true'); return;
       case 'closeday': P.sel = null; break;
       case 'mon': P.month = new Date(P.month.getFullYear(), P.month.getMonth() + (+d.n), 1); break;
       case 'monnow': P.month = monthOf(TODAY); break;

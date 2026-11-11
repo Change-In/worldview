@@ -289,3 +289,10 @@
   .sc-layout:has(.sc-panel) { grid-template-columns:minmax(0,1fr); }
   .sc-panel { position:fixed; right:16px; top:64px; width:340px; max-height:calc(100vh - 150px); overflow-y:auto; z-index:5; box-shadow:0 10px 30px rgba(0,0,0,.28); }
 }
+
+/* v3.1.72: the teacher's panel for a real lesson: ways to learn, try it, publish */
+.sc-ways { display:grid; gap:6px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; background:var(--surface-soft,transparent); }
+.sc-ck { display:flex; gap:8px; align-items:flex-start; font-size:14px; line-height:1.35; cursor:pointer; }
+.sc-ck input { margin-top:3px; flex:none; accent-color:var(--accent); }
+.sc-note { min-height:1.2em; font-size:13px; color:var(--ink-soft); overflow-wrap:anywhere; }
+.sc-acts .cv-pill[disabled] { opacity:.45; cursor:default; }

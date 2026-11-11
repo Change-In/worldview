@@ -23,6 +23,11 @@
   .signin { display:grid; gap:8px; padding:12px; border-radius:14px; border:1.5px solid var(--line); }
   .signin input { width:100%; background:var(--paper); border:1px solid var(--line); border-radius:12px; padding:9px 11px; color:inherit; font:inherit; }
   details.small summary { cursor:pointer; font-weight:650; }
+  /* a lesson made from slides (v3.1.72) gets a wide, plain stage instead of the phone frame */
+  body.slides-lesson .wrap { max-width:1040px; }
+  body.slides-lesson .phone { padding:0; background:none; border-radius:0; }
+  body.slides-lesson .phone iframe { height:calc(100vh - 150px); height:calc(100dvh - 150px); min-height:460px; border:1px solid var(--line); border-radius:14px; }
+  body.slides-lesson .ph-panel:empty { display:none; }
 </style>
 </head>
 <body>
@@ -74,7 +79,7 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.60"></script>
+<script src="port-host.js?v=3.1.72"></script>
 <script src="lesson-days.js?v=3.1.59"></script>
 <script>
 (() => {
@@ -82,6 +87,9 @@
   const FILES = URL_ + '/storage/v1/object/public/lesson-files/';
   const $ = s => document.querySelector(s);
   const id = new URLSearchParams(location.search).get('l') || '';
+  /* v3.1.72: ?preview=1 is the teacher's own try-as-a-student: it plays their DRAFT, signed in as the owner, and saves nothing. */
+  const preview = new URLSearchParams(location.search).get('preview') === '1';
+  const rid = () => preview ? null : runId;
   // The same sign-in as the rest of Worldview (NAV-198: lessons over several days need it; one-day lessons don't).
   const db = window.supabase.createClient(URL_, KEY, {auth: {persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'worldview-alpha-auth'}});
   const newId = () => (crypto.randomUUID && crypto.randomUUID()) || ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
@@ -132,6 +140,7 @@
   const serverNow = () => Date.now() + clockSkew;
   const filesPrefix = () => lesson.version && lesson.files_frozen ? '_v/' + lesson.version + '/' : '';
   async function save() {
+    if (preview) { $('#saved').textContent = 'Preview: nothing is saved.'; return; }
     if (saving) { again = true; return; }
     saving = true; $('#saved').textContent = 'Saving your answers…';
     let error = null;
@@ -147,11 +156,16 @@
   }
   (async () => {
     if (!/^[0-9a-f-]{36}$/i.test(id)) { $('#loading').hidden = true; $('#missing').hidden = false; return; }
-    const {data, error} = await db.rpc('worldview_teacher_lesson_get', {p_lesson: id});
+    let data, error;
+    if (preview) { // the owner's own draft (only its owner can read it); no run, no save
+      const r = await db.from('worldview_teacher_lessons').select('id,title,html').eq('id', id).maybeSingle();
+      data = r.data ? [Object.assign({version: null}, r.data)] : []; error = r.error;
+    } else ({data, error} = await db.rpc('worldview_teacher_lesson_get', {p_lesson: id}));
     lesson = !error && Array.isArray(data) && data[0];
     if (!lesson) { $('#loading').hidden = true; $('#missing').hidden = false; return; }
-    course = window.WorldviewDays ? await WorldviewDays.load(FILES + encodeURIComponent(lesson.id) + '/' + filesPrefix()) : null;    $('#loading').hidden = true;
+    course = window.WorldviewDays && !preview ? await WorldviewDays.load(FILES + encodeURIComponent(lesson.id) + '/' + filesPrefix()) : null;    $('#loading').hidden = true;
     $('#ltitle').textContent = lesson.title; document.title = lesson.title + ' · Worldview'; $('#ready').hidden = false;
+    if (preview) { $('#madeby').textContent = 'Preview of your draft, as a student sees it. Nothing you do here is saved or shown to anyone.'; $('#namebox').hidden = true; $('#start').textContent = 'Start as a student'; return; }
     if (course) return showCourse();
     const prev = ls.get(runKey());
     // A name given once (or the signed-in account's name) is used for every lesson on this device.
@@ -284,25 +298,26 @@
   $('#leave').addEventListener('click', leave);
   $('#finishedback').addEventListener('click', leave);
   function openLesson(html, folder, o) {
-    $('#leave').hidden = false; $('#finished').hidden = true;
+    $('#leave').hidden = false; $('#finished').hidden = true; document.body.classList.toggle('slides-lesson', /name="worldview-style"/.test(html || ''));
     $('#intro').hidden = true; $('#lesson').hidden = false; $('#title').textContent = lesson.title;
     if (host) host.destroy();
-    host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), ai: req => askAI(req, lesson.id, runId), transcribe: (b, l) => hearAI(b, l, lesson.id, runId), speak: req => speakAI(req, lesson.id, runId),
-      live: {create: req => liveAI(Object.assign({action: 'create'}, req), lesson.id, runId), close: callId => liveAI({action: 'close', callId}, lesson.id, runId)},
-      stream: {create: req => streamAI(Object.assign({action: 'create'}, req), lesson.id, runId), close: callId => streamAI({action: 'close', callId}, lesson.id, runId)},
+    host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), ai: req => askAI(req, lesson.id, rid()), transcribe: (b, l) => hearAI(b, l, lesson.id, rid()), speak: req => speakAI(req, lesson.id, rid()),
+      live: {create: req => liveAI(Object.assign({action: 'create'}, req), lesson.id, rid()), close: callId => liveAI({action: 'close', callId}, lesson.id, rid())},
+      stream: {create: req => streamAI(Object.assign({action: 'create'}, req), lesson.id, rid()), close: callId => streamAI({action: 'close', callId}, lesson.id, rid())},
       state: o.state, days: o.days, initialRecord: o.initialRecord,
-      onChange: (record, done) => { latest = record; finished = finished || done; if (o.onRecord) o.onRecord(record); if (done) { if (o.onDone) o.onDone(); $('#finished').hidden = false; } clearTimeout(timer); timer = setTimeout(save, done ? 0 : 800); }});
+      onChange: (record, done) => { if (preview) { if (done) $('#finished').hidden = false; return; } latest = record; finished = finished || done; if (o.onRecord) o.onRecord(record); if (done) { if (o.onDone) o.onDone(); $('#finished').hidden = false; } clearTimeout(timer); timer = setTimeout(save, done ? 0 : 800); }});
     useServices(host);
     // a published version plays its own locked-in files; older versions use the lesson's files
     host.run(html, lesson.id, filesPrefix(), folder);
-    latest = host.record.slice(); save();
+    if (!preview) { latest = host.record.slice(); save(); }
   }
   function closeLesson() {
     if (host) { host.destroy(); host = null; }
-    $('#lesson').hidden = true; $('#intro').hidden = false; $('#leave').hidden = true; $('#title').textContent = 'Worldview';
+    $('#lesson').hidden = true; $('#intro').hidden = false; $('#leave').hidden = true; document.body.classList.remove('slides-lesson'); $('#title').textContent = 'Worldview';
     $('#panel').innerHTML = ''; $('#saved').textContent = '';
   }
   function begin(resume) {
+    if (preview) { let mem = null; openLesson(lesson.html, '', {state: {load: () => mem, save: v => { mem = v; }}, initialRecord: []}); return; }
     const prev = ls.get(runKey());
     if (resume && prev && prev.runId) runId = prev.runId; else { if (prev && prev.runId) { ls.del('wv-state-' + prev.runId); ls.del('wv-record-' + prev.runId); } runId = newId(); }
     ls.set(runKey(), {runId, version: lesson.version || null, name: $('#name').value.trim(), at: Date.now()});

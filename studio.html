@@ -318,7 +318,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="places-data.js?v=3.1.69"></script>
-<script src="port-host.js?v=3.1.60"></script>
+<script src="port-host.js?v=3.1.72"></script>
+<script src="lesson-publish.js?v=3.1.72"></script>
 <script src="studio-chat.js?v=3.1.58"></script>
 <script src="lesson-days.js?v=3.1.59"></script>
 <script src="studio-days.js?v=3.1.59"></script>
@@ -588,7 +589,7 @@ ${RULES}`;
     const {data, error} = await db.from(T).insert(row).select('id').single();
     if (error) return toast(/lesson_limit/.test(error.message) ? 'You have 50 lessons; delete one first.' : 'Couldn\'t copy it: ' + error.message);
     let files = [], missed = 0;
-    try { files = await listLessonFiles(id, id, 0); } catch (e) { missed = -1; }
+    try { files = await WorldviewPublish.listFiles(db, id); } catch (e) { missed = -1; }
     for (let i = 0; i < files.length; i++) {
       toast('Copying files (' + (i + 1) + ' of ' + files.length + ')…');
       const {error: err} = await db.storage.from('lesson-files').copy(id + '/' + files[i], data.id + '/' + files[i]);
@@ -634,59 +635,20 @@ ${RULES}`;
     else if (latest.html !== lastSaved) { $('#pubmsg').textContent = 'Students have v' + latest.version + '. This draft has changes since.'; $('#publish').textContent = 'Publish v' + (latest.version + 1); $('#publish').hidden = false; }
     else { $('#pubmsg').textContent = 'Students have this version (v' + latest.version + ').'; $('#publish').hidden = true; }
   }
-  /* NAV-179: a published version gets its own copy of the lesson's files (lesson-files/<id>/_v/<n>/),
-     so later recordings or map edits in the draft don't change what students have. */
-  const MEDIA_REF = /["'(\s]((?:[\w -]+\/)*[\w .-]+\.(?:mp4|webm|ogg|ogv|mov|m4v|mp3|m4a|wav|png|jpe?g|gif|webp|svg|json))(?=["')?#\s])/gi;
-  // A lesson's files on Worldview (paths inside the lesson), leaving out published versions' locked copies (_v).
-  async function listLessonFiles(id, prefix, depth) {
-    const out = [], {data, error} = await db.storage.from('lesson-files').list(prefix, {limit: 1000});
-    if (error) throw error;
-    for (const it of data || []) {
-      if (it.name.startsWith('.')) continue;
-      const p = prefix + '/' + it.name;
-      if (!it.id) { if (depth === 0 && it.name === '_v') continue; if (depth < 4) out.push(...await listLessonFiles(id, p, depth + 1)); }
-      else out.push(p.slice(id.length + 1));
-    }
-    return out;
-  }
-  async function removeFolder(prefix, depth) {
-    const {data} = await db.storage.from('lesson-files').list(prefix, {limit: 1000}); const files = [];
-    for (const it of data || []) { const p = prefix + '/' + it.name; if (!it.id) { if (depth < 5) await removeFolder(p, depth + 1); } else files.push(p); }
-    for (let i = 0; i < files.length; i += 100) await db.storage.from('lesson-files').remove(files.slice(i, i + 100));
-  }
-  async function lockInFiles(version) {
-    const files = await listLessonFiles(cur.id, cur.id, 0);
-    let copied = 0;
-    for (const f of files) {
-      $('#pubmsg').textContent = 'Locking files into v' + version + ' (' + (copied + 1) + ' of ' + files.length + ')…';
-      const {error} = await db.storage.from('lesson-files').copy(cur.id + '/' + f, cur.id + '/_v/' + version + '/' + f);
-      if (error && !/exist/i.test(error.message)) throw new Error('Couldn\'t lock in ' + f + ': ' + error.message);
-      copied++;
-    }
-    const {error} = await db.rpc('worldview_teacher_lesson_release_files_done', {p_lesson: cur.id, p_version: version});
-    if (error) throw error;
-    // keep the two newest versions' copies (students mid-lesson on the previous one keep working)
-    try { const {data} = await db.storage.from('lesson-files').list(cur.id + '/_v', {limit: 1000}); for (const it of data || []) if (!it.id && /^\d+$/.test(it.name) && +it.name < version - 1) await removeFolder(cur.id + '/_v/' + it.name, 0); } catch (e) {}
-    // anything the lesson uses that isn't on Worldview
-    let mapText = ''; try { const r = await fetch(FILES + cur.id + '/map.json?t=' + Date.now(), {cache: 'no-store'}); if (r.ok) mapText = await r.text(); } catch (e) {}
-    const used = new Set(); for (const m of ((lastSaved || '') + ' ' + mapText).matchAll(MEDIA_REF)) { const p = m[1].trim().replace(/^\.\//, ''); if (!/^https?:/i.test(p) && !p.includes('..')) used.add(p); }
-    const missing = [...used].filter(p => !files.includes(p) && p !== 'map.json');
-    return {files, missing};
-  }
+  /* NAV-179: a published version gets its own copy of the lesson's files (lesson-files/<id>/_v/<n>/). Since v3.1.72 the publishing rules
+     live in lesson-publish.js, shared with the Places day panel, so a lesson is locked the same way wherever it is published. */
   async function publish() {
-    const latest = RELS[0], relock = latest && !latest.files_frozen && latest.html === lastSaved;
-    // unpublished and the draft hasn't changed: open the same version again
-    if (latest && !cur.shared && latest.html === lastSaved) {
-      if (!(await save({shared: true}, true))) return;
-      renderPubBar(); renderShare(); if (!relock) return toast('v' + latest.version + ' is published again. The same link works.');
-    }
+    const latest = RELS[0], PB = window.WorldviewPublish;
+    if (cur.note && cur.note.format === 'slides-v1') { try { cur.html = lastSaved = await PB.ensureSlidesStyle(db, cur.id, lastSaved); } catch (e) { return toast(e.message || String(e)); } }
     $('#publish').disabled = $('#publish2').disabled = true;
-    let version = relock ? latest.version : null;
+    let version = null;
     try {
-      if (!relock) { const {data, error} = await db.rpc('worldview_teacher_lesson_publish', {p_lesson: cur.id}); if (error) throw error; version = data; cur.shared = true; }
-      const r = await lockInFiles(version);
-      await loadReleases(); showPublished(version, r);
+      const r = await PB.publish({db, id: cur.id, shared: !!cur.shared, html: lastSaved, latest, setShared: v => save({shared: v}, true), onVersion: v => { version = v; cur.shared = true; }, onProgress: t => { $('#pubmsg').textContent = t; }});
+      if (r.cancelled) return;
+      if (r.again) { renderPubBar(); renderShare(); return toast('v' + r.version + ' is published again. The same link works.'); }
+      await loadReleases(); showPublished(r.version, r);
     } catch (e) {
+      version = e.version || version;
       await loadReleases(); toast((version ? 'v' + version + ' is published, but its files aren\'t locked in yet: ' : 'Couldn\'t publish it: ') + (e.message || e) + (version ? ' Press Lock in to try again.' : ''));
     } finally { $('#publish').disabled = $('#publish2').disabled = false; }
   }

@@ -183,10 +183,11 @@
   PortHost.prototype._closeVideo = function () { if (this._stopRec) { var f = this._stopRec; this._stopRec = null; f(true); } if (this._sheet) { this._sheet.remove(); this._sheet = null; } };
   // Lesson file paths: relative, inside the lesson, never the files Worldview manages itself.
   var MEDIA = /\.(mp4|webm|ogg|ogv|mov|m4v|mp3|m4a|wav|oga|png|jpe?g|gif|webp|svg)$/i, DATA = /\.(json|txt|csv|md)$/i;
-  function cleanPath(p) {
+  // lesson.json can be READ by a lesson (a lesson made from slides reads it, v3.1.72) but never written (wv.saveFile / wv.record).
+  function cleanPath(p, read) {
     p = String(p || '').trim().replace(/^\.\//, '');
     if (!p || p.length > 160 || /(^|\/)\.|\.\.|\\|^\/|[^A-Za-z0-9._\/ -]/.test(p)) return '';
-    if (/^(index\.html?|lesson\.json|claude\.md|agents\.md|gemini\.md)$/i.test(p)) return '';
+    if (/^(index\.html?|claude\.md|agents\.md|gemini\.md)$/i.test(p) || (!read && /^lesson\.json$/i.test(p))) return '';
     return MEDIA.test(p) || DATA.test(p) ? p : '';
   }
   var FILES_BASE = FILES;
@@ -201,7 +202,7 @@
     Promise.resolve(this.o.saveFile(dayFolder(this.o.folder) + path, blob)).catch(function () { return null; }).then(function (r) { self._fileReply(id, r || {ok: false, error: 'Saving failed.', type: 'save_failed'}); });
   };
   PortHost.prototype._readFile = function (m) {
-    var self = this, id = clip(m.id, 40), path = cleanPath(m.path), lid = this.o.lessonId;
+    var self = this, id = clip(m.id, 40), path = cleanPath(m.path, true), lid = this.o.lessonId;
     if (!path || !lid) return this._fileReply(id, null);
     fetch(filesRoot(lid, this.o.filesPrefix, this.o.folder) + path.split('/').map(encodeURIComponent).join('/') + '?t=' + Date.now(), {cache: 'no-store'})
       .then(function (r) { return r.ok ? r.text() : null; }).catch(function () { return null; }).then(function (t) { self._fileReply(id, t); });
