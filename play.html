@@ -79,7 +79,7 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.75"></script>
+<script src="port-host.js?v=3.1.76"></script>
 <script src="lesson-days.js?v=3.1.59"></script>
 <script>
 (() => {
@@ -139,10 +139,22 @@
   let course = null, user = null, server = null, clockSkew = 0, today = null;
   const serverNow = () => Date.now() + clockSkew;
   const filesPrefix = () => lesson.version && lesson.files_frozen ? '_v/' + lesson.version + '/' : '';
+  /* v3.1.76: Worldview stores at most 64 KB of answers per run. A long lesson's record could pass that, and then nothing more
+     saved. Over 60 KB the oldest AI replies go first, then the oldest transcribed lines, then the oldest notes; the student's
+     place ("place") and the end-of-lesson understanding always stay. */
+  function fitRecord(rec) {
+    const out = (rec || []).slice(), size = () => JSON.stringify(out).length;
+    for (const kind of ['ai', 'voice', 'evidence']) {
+      while (size() > 60000) { const i = out.findIndex(a => a && a.kind === kind); if (i < 0) break; out.splice(i, 1); }
+    }
+    while (size() > 60000 && out.length > 1) { const i = out.findIndex(a => a && a.kind !== 'place' && a.kind !== 'understanding'); if (i < 0) break; out.splice(i, 1); }
+    return out;
+  }
   async function save() {
     if (preview) { $('#saved').textContent = 'Preview: nothing is saved.'; return; }
     if (saving) { again = true; return; }
     saving = true; $('#saved').textContent = 'Saving your answers…';
+    latest = fitRecord(latest);
     let error = null;
     if (today) {
       const r = await db.rpc('worldview_teacher_lesson_day_save', {p_run: runId, p_lesson: lesson.id, p_day: today.n, p_name: today.name, p_answers: latest, p_notes: today.notes, p_state: today.state == null ? null : today.state, p_finished: finished, p_version: lesson.version || null});
@@ -163,6 +175,7 @@
     } else ({data, error} = await db.rpc('worldview_teacher_lesson_get', {p_lesson: id}));
     lesson = !error && Array.isArray(data) && data[0];
     if (!lesson) { $('#loading').hidden = true; $('#missing').hidden = false; return; }
+    lesson.html = await freshStyle(lesson.html);
     course = window.WorldviewDays && !preview ? await WorldviewDays.load(FILES + encodeURIComponent(lesson.id) + '/' + filesPrefix()) : null;    $('#loading').hidden = true;
     $('#ltitle').textContent = lesson.title; document.title = lesson.title + ' · Worldview'; $('#ready').hidden = false;
     if (preview) { $('#madeby').textContent = 'Preview of your draft, as a student sees it. Nothing you do here is saved or shown to anyone.'; $('#namebox').hidden = true; $('#start').textContent = 'Start as a student'; return; }
@@ -243,6 +256,18 @@
   $('#signupbtn').addEventListener('click', () => signIn(true));
   $('#password').addEventListener('keydown', e => { if (e.key === 'Enter') signIn(false); });
 
+  /* v3.1.76: a lesson made from slides plays through Worldview's student page (slides-lesson.html), which holds no lesson
+     content: the slides, scripts and questions stay in the lesson's locked-in files. So a published lesson gets the newest
+     student page, with its fixes, without the teacher publishing again. Any other lesson plays exactly what was published. */
+  const styleNo = h => { const m = /name="worldview-style"\s+content="slides-v1 (\d+)"/.exec(h || ''); return m ? +m[1] : 0; };
+  async function freshStyle(html) {
+    const mine = styleNo(html); if (!mine) return html;
+    try {
+      const r = await fetch('slides-lesson.html?v=3.1.76', {cache: 'no-cache'});
+      const tpl = r.ok ? await r.text() : '';
+      return styleNo(tpl) > mine ? tpl : html;
+    } catch (e) { return html; }
+  }
   async function dayHtml(d) {
     if (d.n === 1) return lesson.html;
     const r = await fetch(FILES + encodeURIComponent(lesson.id) + '/' + filesPrefix() + d.folder + '/index.html?t=' + Date.now(), {cache: 'no-store'}).catch(() => null);

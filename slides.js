@@ -24,6 +24,12 @@
   /* Back goes to the class's calendar in Teacher view, never to the School home. */
   const classHref = id => './#places' + (id ? '/' + encodeURIComponent(id) : '');
   const setBack = id => { $('#backto').href = classHref(id); };
+  /* v3.1.76: coming back to the School tab was a full load of the 1 MB Worldview page and its sign-in and lesson lists.
+     When the teacher came here from that page, go back instead, so the browser can show it again from memory. */
+  $('#backto').addEventListener('click', e => {
+    let fromApp = false; try { const r = new URL(document.referrer); fromApp = r.origin === location.origin && /\/(index\.html)?$/.test(r.pathname); } catch (x) {}
+    if (fromApp && history.length > 1) { e.preventDefault(); history.back(); }
+  });
   /* Old lessons keep their "Class, Unit N: " title prefix when renamed; new ones are named just what the teacher typed. */
   const titleFor = name => { const m = row && /^(.*?,\s*unit\s*\d+\s*:\s*)/i.exec(row.title || ''); return ((m && classOfRow() ? m[1] : '') + name).slice(0, 120); };
 
@@ -238,10 +244,15 @@
 
   /* ---------- v3.1.75: the conversation map (LES-354..LES-356; recipe "conversation 1.0") ----------
      lesson.json `map` = {recipe, opening, survey: [{question, chapters: [id, id?]}], chapters: [{id, goal, title, slides: [n],
-     terms: [{term, meaning}], points: [], tripUps: [], equation: null | {formula, purpose, parts: [{part, meaning}], reading}, edited}],
-     questionsEdited, drafted}. Drafted by lesson-ai?mode=draft action "map" from the slides' text and scripts, the notes and the
+     terms: [{term, meaning}], points: [], tripUps: [], see, equation, edited}], questionsEdited, drafted}.
+     v3.1.76 (recipe "conversation 1.1"): see = the chapter's one optional thing to look at: null | {kind: 'formula', formula, purpose,
+     parts: [{part, meaning}], reading} | {kind: 'slide', slide: n, purpose} | {kind: 'example', example, purpose}. equation (the v3.1.75
+     field) is still written for a formula, so older student pages keep working; a map with only equation reads as a formula. Drafted by lesson-ai?mode=draft action "map" from the slides' text and scripts, the notes and the
      goals only. "Draft the map again" keeps chapters (and questions) the teacher edited unless they tick "also replace". */
-  const MAP_RECIPE = 'conversation 1.0';
+  const MAP_RECIPE = 'conversation 1.1';
+  const SEE_LABEL = {formula: 'formula', slide: 'slide to look at', example: 'worked example'};
+  const seeOf = c => c.see && c.see.kind ? c.see : c.equation ? Object.assign({kind: 'formula'}, c.equation) : null;
+  function setSee(c, s) { c.see = s; c.equation = s && s.kind === 'formula' ? {formula: s.formula || '', purpose: s.purpose || '', parts: s.parts || [], reading: s.reading || ''} : null; }
   const openCh = new Set();
   let mapBusy = false;
   const mapEst = () => 0.01 + L.slides.length * 0.0015;
@@ -277,8 +288,9 @@
   const unpairs = (t, k1, k2, n) => t.split('\n').map(x => x.trim()).filter(Boolean).slice(0, n).map(x => { const i = x.indexOf(':'); return i > 0 ? {[k1]: x.slice(0, i).trim(), [k2]: x.slice(i + 1).trim()} : {[k1]: x, [k2]: ''}; });
   function chapterH(c, k) {
     const goalSel = '<option value="">No goal</option>' + L.goals.map((g, j) => `<option value="${esc(g.id)}"${g.id === c.goal ? ' selected' : ''}>Goal ${j + 1}</option>`).join('');
-    const gk = L.goals.findIndex(g => g.id === c.goal), e = c.equation;
-    return `<li class="mp-ch" data-c="${k}"><details${openCh.has(c.id) ? ' open' : ''}><summary><span class="mp-n">${k + 1}</span><span class="mp-sum"><b class="mp-t">${esc(c.title)}</b><span class="muted small">${gk >= 0 ? 'Goal ' + (gk + 1) : 'No goal'} · ${(c.points || []).length} point${(c.points || []).length === 1 ? '' : 's'}${e ? ' · equation' : ''}${c.edited ? ' · edited by you' : ''}</span></span></summary>
+    const gk = L.goals.findIndex(g => g.id === c.goal), e = seeOf(c);
+    const kindSel = [['', 'Nothing'], ['formula', 'A formula'], ['slide', 'A slide picture to look at'], ['example', 'A worked example']].map(([v, l]) => `<option value="${v}"${(e ? e.kind : '') === v ? ' selected' : ''}>${l}</option>`).join('');
+    return `<li class="mp-ch" data-c="${k}"><details${openCh.has(c.id) ? ' open' : ''}><summary><span class="mp-n">${k + 1}</span><span class="mp-sum"><b class="mp-t">${esc(c.title)}</b><span class="muted small">${gk >= 0 ? 'Goal ' + (gk + 1) : 'No goal'} · ${(c.points || []).length} point${(c.points || []).length === 1 ? '' : 's'}${e ? ' · ' + SEE_LABEL[e.kind] : ''}${c.edited ? ' · edited by you' : ''}</span></span></summary>
       ${c.slides && c.slides.length ? `<div class="sl-thumbs mp-thumbs">${thumbs(c.slides)}</div>` : ''}
       <div class="mp-body">
         <div class="sl-row2"><label><span>Title</span><input type="text" data-cf="title" maxlength="80" value="${esc(c.title)}"></label><label><span>Goal it serves</span><select data-cf="goal">${goalSel}</select></label></div>
@@ -286,11 +298,15 @@
         <label><span>Main points the student should reach <em>one per line</em></span><textarea data-cf="points" rows="3">${esc(lines(c.points))}</textarea></label>
         <label><span>Key terms <em>one per line, "term: what it means"</em></span><textarea data-cf="terms" rows="3">${esc(pairs(c.terms, 'term', 'meaning'))}</textarea></label>
         <label><span>Where students trip <em>one per line</em></span><textarea data-cf="tripUps" rows="2">${esc(lines(c.tripUps))}</textarea></label>
-        <label class="sl-pick mp-eqck"><input type="checkbox" data-cf="haseq"${e ? ' checked' : ''}> This chapter has an equation</label>
-        ${e ? `<div class="mp-eq"><label><span>Equation</span><input type="text" data-ef="formula" maxlength="200" value="${esc(e.formula)}"></label>
+        <label><span>Something to see <em>optional: one thing the student looks at in this chapter</em></span><select data-cf="seekind">${kindSel}</select></label>
+        ${e && e.kind === 'formula' ? `<div class="mp-eq"><label><span>Formula</span><input type="text" data-ef="formula" maxlength="200" value="${esc(e.formula)}"></label>
           <label><span>What it is for</span><input type="text" data-ef="purpose" maxlength="300" value="${esc(e.purpose)}"></label>
           <label><span>Each part <em>one per line, "part: what it means"</em></span><textarea data-ef="parts" rows="3">${esc(pairs(e.parts, 'part', 'meaning'))}</textarea></label>
           <label><span>What a higher or lower result tells you</span><input type="text" data-ef="reading" maxlength="300" value="${esc(e.reading)}"></label></div>` : ''}
+        ${e && e.kind === 'slide' ? `<div class="mp-eq"><label><span>Slide number</span><input type="text" data-ef="slide" inputmode="numeric" maxlength="3" value="${esc(e.slide || '')}"></label>
+          <label><span>What to look at on it, and what it shows</span><input type="text" data-ef="purpose" maxlength="300" value="${esc(e.purpose)}"></label></div>` : ''}
+        ${e && e.kind === 'example' ? `<div class="mp-eq"><label><span>The worked example <em>only the material's own numbers and names</em></span><textarea data-ef="example" rows="3" maxlength="800">${esc(e.example)}</textarea></label>
+          <label><span>What it shows</span><input type="text" data-ef="purpose" maxlength="300" value="${esc(e.purpose)}"></label></div>` : ''}
         <div class="sl-tools"><button type="button" class="sl-x" data-act="chup" aria-label="Move chapter ${k + 1} up"${k ? '' : ' disabled'}>↑</button><button type="button" class="sl-x" data-act="chdown" aria-label="Move chapter ${k + 1} down"${k < L.map.chapters.length - 1 ? '' : ' disabled'}>↓</button><span class="grow"></span><button type="button" class="linkbtn" data-act="chdel">Remove this chapter</button></div>
       </div></details></li>`;
   }
@@ -339,8 +355,13 @@
     if (f === 'title') { c.title = t.value; li.querySelector('.mp-t').textContent = t.value; }
     else if (f === 'points' || f === 'tripUps') c[f] = t.value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, f === 'points' ? 6 : 4);
     else if (f === 'terms') c.terms = unpairs(t.value, 'term', 'meaning', 8);
-    else if (ef === 'parts') c.equation.parts = unpairs(t.value, 'part', 'meaning', 8);
-    else if (ef) c.equation[ef] = t.value;
+    else if (ef) {
+      const s = Object.assign({}, seeOf(c) || {kind: 'formula'});
+      if (ef === 'parts') s.parts = unpairs(t.value, 'part', 'meaning', 8);
+      else if (ef === 'slide') s.slide = +t.value.replace(/[^0-9]/g, '') || 0;
+      else s[ef] = t.value;
+      setSee(c, s);
+    }
     else return;
     chEdited(c, li); saveSoon();
   }
@@ -351,7 +372,10 @@
     const c = chOf(t);
     if (t.dataset.cf === 'goal') c.goal = t.value;
     else if (t.dataset.cf === 'slides') c.slides = [...new Set(t.value.split(/[^0-9]+/).map(Number).filter(n => L.slides.some(s => s.n === n)))].sort((a, b) => a - b).slice(0, 12);
-    else if (t.dataset.cf === 'haseq') c.equation = t.checked ? (c.equation || {formula: '', purpose: '', parts: [], reading: ''}) : null;
+    else if (t.dataset.cf === 'seekind') {
+      const k = t.value, old = seeOf(c);
+      setSee(c, !k ? null : old && old.kind === k ? old : k === 'formula' ? {kind: k, formula: '', purpose: '', parts: [], reading: ''} : k === 'slide' ? {kind: k, slide: (c.slides || [])[0] || 0, purpose: ''} : {kind: k, example: '', purpose: ''});
+    }
     else return;
     chEdited(c, li); openCh.add(c.id); renderMap(); saveSoon();
   }
@@ -362,7 +386,7 @@
       case 'mapagain': return mapDraftClick(!!($('#mapreplace') && $('#mapreplace').checked));
       case 'chup': case 'chdown': { const j = b.dataset.act === 'chup' ? k - 1 : k + 1; [M.chapters[k], M.chapters[j]] = [M.chapters[j], M.chapters[k]]; M.chapters[j].edited = true; renderMap(); return saveSoon(); }
       case 'chdel': { const id = M.chapters[k].id; if (!confirm('Remove chapter ' + (k + 1) + ', "' + M.chapters[k].title + '"?')) return; M.chapters.splice(k, 1); M.survey.forEach(q => { q.chapters = q.chapters.filter(x => x !== id); }); renderMap(); return saveSoon(); }
-      case 'chadd': { const c = {id: newCid(new Set(M.chapters.map(x => x.id))), goal: '', title: 'New chapter', slides: [], terms: [], points: [], tripUps: [], equation: null, edited: true}; M.chapters.push(c); openCh.add(c.id); renderMap(); saveSoon(); const t = document.querySelector('.mp-ch:last-child [data-cf=title]'); if (t) { t.focus(); t.select(); } return; }
+      case 'chadd': { const c = {id: newCid(new Set(M.chapters.map(x => x.id))), goal: '', title: 'New chapter', slides: [], terms: [], points: [], tripUps: [], see: null, equation: null, edited: true}; M.chapters.push(c); openCh.add(c.id); renderMap(); saveSoon(); const t = document.querySelector('.mp-ch:last-child [data-cf=title]'); if (t) { t.focus(); t.select(); } return; }
       case 'sqadd': M.survey.push({question: '', chapters: []}); M.questionsEdited = true; renderMap(); saveSoon(); { const t = document.querySelector('.mp-sq:last-of-type textarea'); if (t) t.focus(); } return;
       case 'sqdel': M.survey.splice(+b.closest('.mp-sq').dataset.s, 1); M.questionsEdited = true; renderMap(); return saveSoon();
     }

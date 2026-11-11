@@ -316,6 +316,8 @@
     try { const {data} = await db.from('worldview_teacher_lessons').select('id,title,shared,updated_at,kind,note').order('updated_at', {ascending: false}); MY = (data || []).filter(l => l.kind !== 'experiment'); } catch (e) { MY = []; }
     if (S.open && (S.area === 'places' || S.scr === 'home')) render();
   }
+  // v3.1.76: going back from the slides page restores this page from the browser's memory; refresh the lesson lists then.
+  window.addEventListener('pageshow', e => { if (e.persisted) loadPublished(); });
   const playLink = id => new URL('play.html?l=' + id, location.href).href;
   function catalogSection(label) {
     if (CAT === null) return '<div class="cv-lab">' + label + '</div><p class="cv-muted" style="margin:0">Loading…</p>';

@@ -38,7 +38,7 @@
     "predict:function(id,q,u,o){return wait(id,'predict',Object.assign({question:q,unit:u||''},o||{}));},result:function(id,a,s){send('result',{id:id,actual:a,say:s||''});}," +
     "ask:function(id,q,o){return wait(id,'ask',Object.assign({question:q},o||{}));},human:function(id,r){return wait(id,'human',Object.assign({to:'teacher',kind:'question'},r||{}));}," +
     "evidence:function(o,t,d){send('evidence',{outcome:o,text:t,data:d||{}});},remember:function(k,v){send('remember',{key:k,value:v});},recall:function(){return wait('m'+(++aiN),'recall',{});},days:function(){return wait('d'+(++aiN),'days',{});}," +
-    "progress:function(v,n){send('progress',{value:v,note:n||''});},video:function(src,o){return wait('v'+(++aiN),'video',Object.assign({src:String(src||'')},o||{}));},ai:function(x,o){o=o||{};return wait('ai'+(++aiN),'ai',{messages:typeof x==='string'?[{role:'user',content:x}]:(x||[]),system:o.system||'',maxTokens:o.maxTokens||0,json:!!o.json,full:!!o.full});},record:function(o){o=o||{};return wait('r'+(++aiN),'record',{kind:o.kind||'video',maxSeconds:o.maxSeconds||0,title:o.title||'',folder:o.folder||'',name:o.name||''});},saveFile:function(p,c){return wait('f'+(++aiN),'savefile',{path:String(p||''),content:c});},readFile:function(p){return wait('g'+(++aiN),'readfile',{path:String(p||'')});},listen:function(o){o=o||{};return wait('l'+(++aiN),'listen',{prompt:o.prompt||'',maxSeconds:o.maxSeconds||0,lang:o.lang||'',full:!!o.full,local:!!o.local,compact:!!o.compact});},speak:function(t,o){o=o||{};return wait('sp'+(++aiN),'speak',{text:String(t==null?'':t).slice(0,4000),voice:String(o.voice||''),speed:+o.speed||0,play:o.play!==false,fallback:o.fallback!==false});},speakStop:function(){send('speakstop',{});},done:function(s){send('done',{summary:s||{}});}};" +
+    "progress:function(v,n){send('progress',{value:v,note:n||''});},place:function(p){send('place',{place:p});},video:function(src,o){return wait('v'+(++aiN),'video',Object.assign({src:String(src||'')},o||{}));},ai:function(x,o){o=o||{};return wait('ai'+(++aiN),'ai',{messages:typeof x==='string'?[{role:'user',content:x}]:(x||[]),system:o.system||'',maxTokens:o.maxTokens||0,json:!!o.json,full:!!o.full});},record:function(o){o=o||{};return wait('r'+(++aiN),'record',{kind:o.kind||'video',maxSeconds:o.maxSeconds||0,title:o.title||'',folder:o.folder||'',name:o.name||''});},saveFile:function(p,c){return wait('f'+(++aiN),'savefile',{path:String(p||''),content:c});},readFile:function(p){return wait('g'+(++aiN),'readfile',{path:String(p||'')});},listen:function(o){o=o||{};return wait('l'+(++aiN),'listen',{prompt:o.prompt||'',maxSeconds:o.maxSeconds||0,lang:o.lang||'',full:!!o.full,local:!!o.local,compact:!!o.compact});},speak:function(t,o){o=o||{};return wait('sp'+(++aiN),'speak',{text:String(t==null?'':t).slice(0,4000),voice:String(o.voice||''),speed:+o.speed||0,play:o.play!==false,fallback:o.fallback!==false});},speakStop:function(){send('speakstop',{});},done:function(s){send('done',{summary:s||{}});}};" +
     // NAV-199: wv.listen.start, continuous listening (wv.listen(...) still records one answer)
     "api.listen.start=function(o,cb){if(typeof o==='function'){cb=o;o={};}o=o||{};hearCb=cb||o.onEvent||null;return wait('h'+(++aiN),'hearstart',{opts:{lang:String(o.lang||''),maxMinutes:+o.maxMinutes||0,idleSeconds:+o.idleSeconds||0,keyterms:Array.isArray(o.keyterms)?o.keyterms.slice(0,50).map(function(t){return String(t).slice(0,60);}):[],stopSpeak:o.stopSpeak==='sound'?'sound':o.stopSpeak!==false,label:String(o.label||'').slice(0,40)}});};" +
     "api.listen.stop=function(){send('hearstop',{});};api.listen.finish=function(){send('listenfinish',{});};api.listen.cancel=function(){send('listencancel',{});};api.fullscreen=function(on){send('fullscreen',{on:on!==false});};api.listen.mute=function(on){send('hearmute',{on:on!==false});};return api;};})();" +
@@ -805,9 +805,13 @@
     };
     if (!this.o.speak || this.o.aiVoice === false) return device(null);
     this._speaking = {stop: function (w) { done(stopped('', w)); }};
-    Promise.resolve(this.o.speak({text: text, voice: clip(m.voice, 100), speed: speed})).catch(function () { return null; }).then(function (r) {
+    // v3.1.76: the last few readings are kept in memory, so "Say it again" (or resuming) replays them without another call
+    var ck = text + '|' + clip(m.voice, 100) + '|' + speed, cache = this._audioCache = this._audioCache || [];
+    var hit = cache.filter(function (c) { return c.k === ck; })[0];
+    Promise.resolve(hit ? {ok: true, audio: hit.audio} : this.o.speak({text: text, voice: clip(m.voice, 100), speed: speed})).catch(function () { return null; }).then(function (r) {
       if (self._speakToken !== token || gen !== self.gen) return;
       if (!r || !r.ok || !r.audio) return device(r && r.type ? r : {ok: false, error: 'Worldview\'s AI voice couldn\'t be reached.', type: 'network'});
+      if (!hit) { cache.push({k: ck, audio: r.audio}); if (cache.length > 4) cache.shift(); }
       if (m.play === false) return done({ok: true, voice: 'ai', audio: r.audio});
       var url = URL.createObjectURL(r.audio), a = new Audio(url), t0 = Date.now(), ended = false;
       var end = function (v) { if (ended) return; ended = true; try { a.pause(); } catch (e) {} URL.revokeObjectURL(url); done(v); };
@@ -902,6 +906,17 @@
         break;
       }
       case 'evidence': { var lv = m.data && m.data.level != null ? Math.max(0, Math.min(3, Math.round(+m.data.level) || 0)) : null; this.record.push({kind: 'evidence', question: '', answer: clip(m.text, 400), outcome: clip(m.outcome, 20), level: lv}); this._changed(); break; }
+      // v3.1.76: wv.place, how far the student is (one entry, replaced each time), saved with the run so a teacher can see unfinished lessons
+      case 'place': {
+        var pl = m.place && typeof m.place === 'object' ? m.place : null; if (!pl) break;
+        var pj = ''; try { pj = JSON.stringify(pl); } catch (e) { break; }
+        while (pj.length > 12000 && Array.isArray(pl.said) && pl.said.length) { pl.said.shift(); pj = JSON.stringify(pl); }
+        if (pj.length > 12000) break;
+        var entry = {kind: 'place', question: 'How far the student got', answer: clip(pl.label, 200), outcome: '', place: JSON.parse(pj)};
+        var at = -1; this.record.forEach(function (r, i) { if (r && r.kind === 'place') at = i; });
+        if (at >= 0) this.record.splice(at, 1);
+        this.record.push(entry); this._changed(); break;
+      }
       case 'progress': if (this.o.progress) this.o.progress.style.width = Math.round(Math.max(0, Math.min(1, +m.value || 0)) * 100) + '%'; break;
       case 'done': this.done = true; if (m.summary && typeof m.summary === 'object' && m.summary.levels && typeof m.summary.levels === 'object') { var L = {}; Object.keys(m.summary.levels).slice(0, 8).forEach(function (k) { L[clip(k, 20)] = Math.max(0, Math.min(3, Math.round(+m.summary.levels[k]) || 0)); }); this.record.push({kind: 'understanding', question: '', answer: '', outcome: '', levels: L}); } if (this.o.progress) this.o.progress.style.width = '100%'; this._line('done', 'Finished. Nice work.'); this._changed(); break;
       case 'video': this._video(m); break;
@@ -947,7 +962,7 @@
         if (!this.o.ai || !msgs.length) { this._send('answer', {id: aid, value: null}); break; }
         var wait = this._line('note', 'Thinking…');
         var full = !!m.full, asJson = !!m.json;
-        Promise.resolve(this.o.ai({system: clip(m.system, 8000), messages: msgs, maxTokens: +m.maxTokens || 0, json: asJson})).catch(function () { return null; }).then(function (r) {
+        Promise.resolve(this.o.ai({system: clip(m.system, 16000), messages: msgs, maxTokens: +m.maxTokens || 0, json: asJson})).catch(function () { return null; }).then(function (r) {
           wait.remove(); if (gen !== self.gen) return;
           r = r || {ok: false, error: 'The AI couldn\'t answer just now.', type: 'network'};
           if (full) { if (r.ok && self.aiCount < 40) { self.aiCount++; self.record.push({kind: 'ai', question: clip(msgs[msgs.length - 1].content, 300), answer: clip(r.text, 500), outcome: ''}); self._changed(); } return self._send('answer', {id: aid, value: r}); }
