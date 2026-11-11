@@ -8,7 +8,7 @@
 (() => {
   const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT';
   const FILES = URL_ + '/storage/v1/object/public/lesson-files/', BUCKET = 'lesson-files', T = 'worldview_teacher_lessons';
-  const PDFJS = 'vendor/pdfjs-6.5.438/', MAX = 60, BATCH = 8, WIDTH = 1280;
+  const PDFJS = new URL('vendor/pdfjs-6.5.438/', document.currentScript ? document.currentScript.src : location.href).href, MAX = 60, BATCH = 8, WIDTH = 1280;
   const db = window.supabase.createClient(URL_, KEY, {auth: {persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'worldview-alpha-auth'}});
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -77,7 +77,7 @@ wv.readFile('lesson.json').then(t => { try { L = JSON.parse(t); } catch (x) {} i
 
   /* ---------- 1. reading the PDF ---------- */
   let pdfjsP = null;
-  const pdfjs = () => (pdfjsP = pdfjsP || import('./' + PDFJS + 'pdf.min.mjs').then(m => { m.GlobalWorkerOptions.workerSrc = new URL(PDFJS + 'pdf.worker.min.mjs', location.href).href; return m; }));
+  const pdfjs = () => (pdfjsP = pdfjsP || import(PDFJS + 'pdf.min.mjs').then(m => { m.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.mjs'; return m; }));
   const OTHER = /\.(pptx?|key|odp|docx?|pages|png|jpe?g|gif|heic)$/i;
   function askForPdf(file) {
     const n = file ? esc(file.name) : 'That file';
@@ -94,7 +94,7 @@ wv.readFile('lesson.json').then(t => { try { L = JSON.parse(t); } catch (x) {} i
     let doc, task;
     try {
       const lib = await pdfjs();
-      task = lib.getDocument({data: new Uint8Array(await file.arrayBuffer()), standardFontDataUrl: new URL(PDFJS + 'standard_fonts/', location.href).href, isEvalSupported: false}); doc = await task.promise;
+      task = lib.getDocument({data: new Uint8Array(await file.arrayBuffer()), standardFontDataUrl: PDFJS + 'standard_fonts/', isEvalSupported: false}); doc = await task.promise;
     } catch (e) {
       progress(null);
       $('#typeask').innerHTML = `<b>This PDF couldn't be opened.</b><p>${/password/i.test(String(e && e.name)) ? 'It is protected by a password. Save a copy without the password and choose that.' : 'Save the presentation as a PDF again and choose the new file.'}</p>`;
@@ -164,9 +164,10 @@ wv.readFile('lesson.json').then(t => { try { L = JSON.parse(t); } catch (x) {} i
       history.replaceState(null, '', 'slides.html?l=' + row.id);
       deck.pages.forEach(pg => URL.revokeObjectURL(pg.url)); deck = null;
       await runDraft(f => f, true);
-      openLesson();
+      busy = false; openLesson();
     } catch (e) {
-      progress(null); toast(e.message || String(e));
+      busy = false; progress(null); toast(e.message || String(e));
+      // A lesson that stopped part way opens with "Finish drafting"; one that never got its lesson file can start again.
       if (L && row) openLesson(); else { $('#go').disabled = false; $('#other').disabled = false; }
     } finally { busy = false; }
   }
@@ -222,8 +223,8 @@ wv.readFile('lesson.json').then(t => { try { L = JSON.parse(t); } catch (x) {} i
       <div class="sl-edit">
         ${s.needsTeacher ? `<div class="sl-flag"><b>Check this slide.</b><span>${esc(s.needsTeacherWhy || 'The AI wasn\'t sure it read everything here.')}</span><button type="button" class="linkbtn" data-act="okflag">It's right</button></div>` : ''}
         <label>What the AI says<textarea class="script" data-f="script" rows="4">${esc(s.script)}</textarea></label>
-        <div class="sl-row2"><label>Key points <span>one per line</span><textarea data-f="keyPoints" rows="2">${esc(lines(s.keyPoints))}</textarea></label><label>Where students trip <span>one per line</span><textarea data-f="tripUps" rows="2">${esc(lines(s.tripUps))}</textarea></label></div>
-        <label>Pause to ask <span>optional</span><input type="text" data-f="pause" value="${esc(s.pause)}" maxlength="300" placeholder="A question before moving on"></label>
+        <div class="sl-row2"><label><span>Key points <em>one per line</em></span><textarea data-f="keyPoints" rows="2">${esc(lines(s.keyPoints))}</textarea></label><label><span>Where students trip <em>one per line</em></span><textarea data-f="tripUps" rows="2">${esc(lines(s.tripUps))}</textarea></label></div>
+        <label><span>Pause to ask <em>optional</em></span><input type="text" data-f="pause" value="${esc(s.pause)}" maxlength="300" placeholder="A question before moving on"></label>
         <div class="sl-tools">${s.edited ? '<span class="chip">Edited by you</span>' : s.script ? '<span class="chip ok">AI draft</span>' : '<span class="chip">Not drafted yet</span>'}<span class="grow"></span><button type="button" class="linkbtn" data-act="redo">Draft this slide again</button></div>
         <div class="sl-redo" data-redo hidden><input type="text" data-f="ask" maxlength="500" placeholder="What should change? (optional)"><button type="button" class="btn small" data-act="redogo">Draft again</button></div>
       </div></article>`;
@@ -231,7 +232,7 @@ wv.readFile('lesson.json').then(t => { try { L = JSON.parse(t); } catch (x) {} i
   const goalOpts = sel => L.goals.map((g, k) => `<option value="${esc(g.id)}"${g.id === sel ? ' selected' : ''}>Goal ${k + 1}</option>`).join('') || '<option value="">No goals</option>';
   function goalH(g, k) {
     return `<div class="sl-goal" data-g="${k}"><div class="lab"><span>Goal ${k + 1}</span><span class="grow"></span><button type="button" class="sl-x" data-act="delgoal" aria-label="Remove goal ${k + 1}">✕</button></div>
-      <input type="text" data-gf="text" value="${esc(g.text)}" maxlength="300" placeholder="Students can …" aria-label="Goal ${k + 1}">
+      <textarea data-gf="text" rows="1" maxlength="300" placeholder="Students can …" aria-label="Goal ${k + 1}">${esc(g.text)}</textarea>
       <label class="lab" style="display:grid;gap:3px">What a student would say that shows it<textarea data-gf="evidence" rows="2" maxlength="400">${esc(g.evidence)}</textarea></label></div>`;
   }
   function checkH(q, k) {
@@ -330,7 +331,7 @@ wv.readFile('lesson.json').then(t => { try { L = JSON.parse(t); } catch (x) {} i
       case 'okflag': { const s = L.slides[+art.dataset.i]; s.needsTeacher = false; s.checked = true; art.classList.remove('flag'); b.closest('.sl-flag').remove(); return saveSoon(); }
       case 'redo': { const r = art.querySelector('[data-redo]'); r.hidden = !r.hidden; if (!r.hidden) r.querySelector('input').focus(); return; }
       case 'redogo': return redo(+art.dataset.i, art);
-      case 'addgoal': L.goals.push({id: 'g' + (Math.max(0, ...L.goals.map(x => +String(x.id).slice(1) || 0)) + 1), text: '', evidence: ''}); renderGoals(); renderCheck(); saveSoon(); $('#goallist').lastElementChild.querySelector('input').focus(); return;
+      case 'addgoal': L.goals.push({id: 'g' + (Math.max(0, ...L.goals.map(x => +String(x.id).slice(1) || 0)) + 1), text: '', evidence: ''}); renderGoals(); renderCheck(); saveSoon(); $('#goallist').lastElementChild.querySelector('textarea').focus(); return;
       case 'delgoal': { const id = L.goals[+g.dataset.g].id; L.goals.splice(+g.dataset.g, 1); L.check.forEach(c => { if (c.goal === id) c.goal = (L.goals[0] || {}).id || ''; }); renderGoals(); renderCheck(); return saveSoon(); }
       case 'addcheck': L.check.push({goal: (L.goals[0] || {}).id || '', question: ''}); renderCheck(); saveSoon(); $('#checklist').lastElementChild.querySelector('textarea').focus(); return;
       case 'delq': L.check.splice(k, 1); renderCheck(); return saveSoon();

@@ -81,3 +81,4 @@
   .sl-title { font-size:22px; }
   .sl-head { position:static; }
 }
+.sl-edit label em { font-style:normal; font-weight:500; }
