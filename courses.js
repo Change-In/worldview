@@ -258,9 +258,9 @@
   /* ---------------- DOM ---------------- */
   const bar = document.createElement('nav');
   bar.id = 'wv-tabbar'; bar.hidden = true; bar.setAttribute('aria-label', 'Main sections');
-  bar.innerHTML = `<div class="wv-tabbar-in"><button type="button" data-tabbar="home">${ICON.home}<span>Home</span></button><button type="button" data-tabbar="places">${ICON.places}<span>Places</span></button><button type="button" data-tabbar="explore">${ICON.search}<span>Explore</span></button></div>`;
+  bar.innerHTML = `<div class="wv-tabbar-in"><button type="button" data-tabbar="home">${ICON.home}<span>Home</span></button><button type="button" data-tabbar="places">${ICON.places}<span>School</span></button><button type="button" data-tabbar="explore">${ICON.search}<span>Explore</span></button></div>`;
   const view = document.createElement('section');
-  view.id = 'courses-view'; view.className = 'cv'; view.hidden = true; view.setAttribute('aria-label', 'Places and Explore');
+  view.id = 'courses-view'; view.className = 'cv'; view.hidden = true; view.setAttribute('aria-label', 'School and Explore');
   document.body.append(view, bar);
   const peek = document.createElement('div');
   peek.id = 'cv-peek'; peek.hidden = true; peek.setAttribute('role', 'dialog'); peek.setAttribute('aria-label', 'Course preview');
@@ -341,7 +341,8 @@
 
   /* ---------------- screens ---------------- */
 function scrHome() {
-    return `<div class="cv-head"><h1>Explore</h1><a class="cv-pill ghost" href="studio.html?from=explore" style="text-decoration:none">Teacher Studio</a></div>` + explore() + footnote;
+    S.cat = ''; S.sub = 'All';
+    return `<div class="ex-hero"><h1>Anyone can build a lesson</h1><p>Make a lesson once, and anyone can learn from it by talking with an AI.</p><a class="cv-pill" href="studio.html?from=explore" style="text-decoration:none">Build a lesson</a></div><label class="cv-search">${ICON.search}<input id="cv-q" type="search" placeholder="Search lessons" value="${esc(S.query)}" autocomplete="off"></label><div class="ex-grid" id="cv-results">${results()}</div>` + footnote;
   }
   const WP = () => window.WorldviewPlaces;
   function scrTeacher() {
@@ -694,7 +695,12 @@ function scrHome() {
     if (!ok) toast('The lesson did not start. Check that you are signed in, then try again.');
   }
 
-  WP().init({render, toast, real: () => REAL(), my: () => MY, startReal, playLink});
+  async function saveNote(id, note) {
+    const db = read(() => backendClient); if (!db) return false;
+    try { const {error} = await db.from('worldview_teacher_lessons').update({note}).eq('id', id); if (error) return false; } catch (e) { return false; }
+    const l = MY.find(x => x.id === id); if (l) l.note = note; return true;
+  }
+  WP().init({render, toast, real: () => REAL(), my: () => MY, startReal, playLink, saveNote});
 
   /* ---------------- visibility ---------------- */
   function blocked() {

@@ -42,8 +42,8 @@
   const initials = w => w.split(' ').slice(0, 2).map(x => x[0]).join('');
 
   /* ---------- state ---------- */
-  const P = {scr: 'school', verified: load('verified', false), code: false, query: '', enrolled: load('enrolled', {'MA 132': {2: ['maya']}}), stars: load('stars', {}), cur: 'MA 132', unit: 2, sort: 'rated', whole: false, others: false, done: load('done', {}), day: null, sheet: null, demo: null, ds: {}, demoW: ''};
-  let deps = {render() {}, toast() {}, real: () => [], my: () => [], startReal() {}, playLink: id => 'play.html?l=' + id};
+  const P = {scr: 'school', verified: load('verified', false), role: load('role', 'student') === 'teacher' ? 'teacher' : 'student', month: new Date(TODAY.getFullYear(), TODAY.getMonth(), 1), sel: null, code: false, query: '', enrolled: load('enrolled', {'MA 132': {2: ['maya']}}), stars: load('stars', {}), cur: 'MA 132', unit: 2, sort: 'rated', whole: false, others: false, done: load('done', {}), day: null, sheet: null, demo: null, ds: {}, demoW: ''};
+  let deps = {render() {}, toast() {}, real: () => [], my: () => [], startReal() {}, saveNote: async () => false, playLink: id => 'play.html?l=' + id};
   const mine = (c, i) => ((P.enrolled[c.code] || {})[i] || []);
   const myTutors = (c, i) => mine(c, i).map(id => c.units[i].tutors.find(t => t.id === id)).filter(Boolean);
   const myDots = c => { const out = []; c.units.forEach(u => myTutors(c, u.i).forEach(t => lessonDates(u, t).forEach(l => out.push(l.d)))); return out; };
@@ -218,10 +218,83 @@
     steps(d) { const i = P.ds.i, [a, b] = d.steps[i]; return `<p class="pl-q">${d.q}</p><div class="pl-bub you wide"><b>${a}</b></div><div class="pl-bub">${b}</div>${muted(d.note)}${i < d.steps.length - 1 ? '<button type="button" class="cv-pill wide" data-pa="stepn">Next</button>' : `<p style="margin:0;font-weight:600">${d.end}</p>`}`; },
   };
   function demoS() {
-    const d = DEMOS[P.demo]; if (!d) { P.scr = 'class'; return classS(); }
+    const d = DEMOS[P.demo]; if (!d) { P.scr = 'class'; return classCal(); }
     return `<div class="cv-head pl-dh">${back('closedemo')}<h1 class="sm">${esc(d.title)}</h1></div><span class="cv-muted">A sample lesson from ${esc(P.demoW)}. In this demo, one lesson per teacher is built.</span><div class="pl-demo">${BODY[d.k](d)}</div>`;
   }
-  const SCREENS = {find: findS, email: emailS, school: schoolS, class: classS, demo: demoS};
+
+  /* ---------- the simple school page (v3.1.71): classes, a month calendar per class, a Student | Teacher switch ----------
+     Calendar lessons are the class's sample lessons plus real Teacher Studio lessons whose title starts "Class name, Unit N".
+     A real lesson's date is stored in its own note (note.date, "YYYY-MM-DD"); a lesson with none sits on the next class meeting day. */
+  const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const DOWH = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const monthOf = d => new Date(d.getFullYear(), d.getMonth(), 1);
+  const validKey = v => /^\d{4}-\d\d-\d\d$/.test(v || '') && key(D(v)) === v;
+  const meetDays = c => { const t = myTutors(c, c.cur)[0] || c.units[c.cur].tutors[0]; return ((t && t.days) || [1, 3]).slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)); };
+  const meetText = c => meetDays(c).map(n => WD[n]).join(' and ');
+  const nextMeet = c => { const md = meetDays(c); for (let d = TODAY, i = 0; i < 14; d = add(d, 1), i++) if (md.includes(d.getDay())) return d; return TODAY; };
+  const realTitle = (c, t) => (t || '').replace(new RegExp('^' + escRe(c.name) + ',\\s*unit\\s*\\d+\\s*[:\\-]?\\s*', 'i'), '') || t;
+  function itemsFor(c) {
+    const out = [], teacher = P.role === 'teacher';
+    c.units.forEach(u => { const t = myTutors(c, u.i)[0] || u.tutors[0]; if (t) lessonDates(u, t).forEach(l => out.push({kind: 'sample', key: 's|' + c.code + '|' + u.i + '|' + t.id + '|' + l.t, title: l.t, d: l.d, pub: true, t, l})); });
+    const seen = new Set(), re = new RegExp('^' + escRe(c.name) + ',\\s*unit\\s*\\d+', 'i'), dflt = nextMeet(c);
+    const real = (l, mine) => {
+      if (seen.has(l.id) || !re.test(l.title || '')) return; seen.add(l.id);
+      const pub = mine ? !!l.shared : true; if (!teacher && !pub) return;
+      const n = l.note && typeof l.note === 'object' ? l.note : {};
+      out.push({kind: 'real', key: 'r|' + l.id, id: l.id, title: realTitle(c, l.title), d: validKey(n.date) ? D(n.date) : dflt, pub, mine, slides: n.format === 'slides-v1', row: l});
+    };
+    (deps.my() || []).forEach(l => real(l, true));
+    if (!teacher) (deps.real() || []).forEach(l => real(l, false));
+    return out;
+  }
+  const byDay = items => { const m = {}; items.forEach(it => (m[key(it.d)] = m[key(it.d)] || []).push(it)); return m; };
+  const scCard = (it, sel) => `<div class="sc-lc${sel === it.key ? ' on' : ''}" role="button" tabindex="0" data-pa="pick" data-k="${esc(it.key)}"${P.role === 'teacher' && it.kind === 'real' && it.mine ? ' draggable="true"' : ''}><b>${esc(it.title)}</b>${P.role === 'teacher' ? `<span class="sc-tag ${it.kind === 'sample' ? '' : it.pub ? 'p' : 'd'}">${it.kind === 'sample' ? 'Sample' : it.pub ? 'Published' : 'Draft'}</span>` : ''}</div>`;
+  const switchH = () => `<div class="sc-switch" role="group" aria-label="View as">${['student', 'teacher'].map(r => `<button type="button" data-pa="role" data-r="${r}" class="${P.role === r ? 'on' : ''}" aria-pressed="${P.role === r}">${r[0].toUpperCase() + r.slice(1)}</button>`).join('')}</div>`;
+  function schoolHome() {
+    const teacher = P.role === 'teacher';
+    return `${switchH()}<div class="sc-main"><h1 class="sc-h">Places</h1><p class="sc-sub">${teacher ? 'Your classes. Pick one to plan its days.' : 'Your classes. Pick one to see your lessons.'}</p>
+      <div class="sc-classes">${CLASSES.map(c => { const n = itemsFor(c).length; return `<button type="button" class="sc-class" data-pa="open" data-c="${esc(c.code)}"><b>${esc(c.name)}</b><span>${esc(c.code)} · meets ${meetText(c)}</span><span>${n} lesson${n === 1 ? '' : 's'} on the calendar</span></button>`; }).join('')}</div>
+      ${teacher ? '<a class="sc-link" href="studio.html?from=places">Build your own in Teacher Studio</a>' : ''}</div>`;
+  }
+  function panelH(c, items) {
+    const it = items.find(x => x.key === P.sel); if (!it) return '';
+    const teacher = P.role === 'teacher', close = '<button type="button" class="sc-x" data-pa="closeday">Close</button>';
+    let h = `<aside class="sc-panel" aria-label="Lesson">${close}<h2>${esc(it.title)}</h2><p class="sc-sub">${esc(c.name)} · ${fmt(it.d)}</p>`;
+    if (it.kind === 'sample') {
+      if (it.l.what) h += `<p>${esc(it.l.what)}</p>`;
+      h += `<div class="sc-acts">${startBtn(it.t, it.l)}</div>`;
+      if (teacher) h += '<p class="cv-muted">Sample lesson</p>';
+    } else if (!teacher) {
+      h += `<div class="sc-acts"><a class="cv-pill" href="${esc(deps.playLink(it.id))}">Start</a></div>`;
+    } else {
+      h += `<p><span class="sc-tag ${it.pub ? 'p' : 'd'}">${it.pub ? 'Published' : 'Draft'}</span></p>
+        <label class="sc-f" for="sc-mv">Move to</label><div class="sc-row"><input type="date" id="sc-mv" value="${key(it.d)}"><button type="button" class="cv-pill ghost" data-pa="move" data-id="${esc(it.id)}">Move</button></div>
+        <div class="sc-acts"><a class="cv-pill" href="${it.slides ? 'slides.html?l=' : 'studio.html?from=places&l='}${encodeURIComponent(it.id)}">${it.slides ? 'Slides and scripts' : 'Open in Teacher Studio'}</a>${it.pub ? `<a class="cv-pill ghost" href="${esc(deps.playLink(it.id))}">Try it as a student</a>` : ''}</div>
+        <p class="cv-muted"><a class="sc-link" href="studio.html?from=places&l=${encodeURIComponent(it.id)}">${it.pub ? 'Unpublish or update in Teacher Studio' : 'Publish in Teacher Studio'}</a></p>`;
+    }
+    return h + '</aside>';
+  }
+  function classCal() {
+    const c = cls(P.cur), teacher = P.role === 'teacher', items = itemsFor(c), by = byDay(items);
+    if (P.sel && !items.some(x => x.key === P.sel)) P.sel = null;
+    const y = P.month.getFullYear(), m = P.month.getMonth(), days = new Date(y, m + 1, 0).getDate(), lead = (new Date(y, m, 1).getDay() + 6) % 7, inNow = key(P.month) === key(monthOf(TODAY));
+    let grid = DOWH.map(d => `<div class="sc-dow">${d}</div>`).join('') + '<div class="sc-blank"></div>'.repeat(lead), list = '', n = 0;
+    for (let i = 1; i <= days; i++) {
+      const d = new Date(y, m, i), k = key(d), its = by[k] || [], isT = k === key(TODAY);
+      grid += `<div class="sc-cell${isT ? ' today' : ''}" data-dk="${k}"><div class="sc-dn">${isT ? `<span>${i}</span>` : i}</div>${its.map(x => scCard(x, P.sel)).join('')}</div>`;
+      if (its.length) { n += its.length; list += `<div class="sc-ld"><div class="sc-dh${isT ? ' today' : ''}">${isT ? 'Today · ' : ''}${fmt(d)}</div>${its.map(x => scCard(x, P.sel)).join('')}</div>`; }
+    }
+    const label = P.month.toLocaleDateString([], {month: 'long', year: 'numeric'});
+    return `${switchH()}<div class="sc-layout"><div class="sc-main"><button type="button" class="sc-link" data-pa="school">← All classes</button>
+      <div class="sc-top"><div><h1 class="sc-h">${esc(c.name)}</h1><p class="sc-sub">${esc(c.code)} · meets ${meetText(c)} · ${teacher ? 'Plan your days. Open a lesson to change it.' : 'Open a lesson to start it.'}</p></div>${teacher ? `<a class="cv-pill" href="${slidesLink(c, c.units[c.cur])}">Add presentations</a>` : ''}</div>
+      <div class="sc-mon"><button type="button" class="sc-nav" data-pa="mon" data-n="-1" aria-label="Previous month">‹</button><b>${label}</b><button type="button" class="sc-nav" data-pa="mon" data-n="1" aria-label="Next month">›</button>${inNow ? '' : '<button type="button" class="sc-link" data-pa="monnow">This month</button>'}</div>
+      <div class="sc-cal">${grid}</div><div class="sc-list">${list}</div>${n ? '' : '<p class="cv-muted sc-none">No lessons this month.</p>'}</div>${panelH(c, items)}</div>`;
+  }
+  function moveLesson(id, k) {
+    const l = (deps.my() || []).find(x => x.id === id); if (!l || !validKey(k)) { deps.toast('Pick a valid date.'); return; }
+    Promise.resolve(deps.saveNote(id, Object.assign({}, l.note || {}, {date: k}))).then(ok => { deps.toast(ok ? 'Moved to ' + fmt(D(k)) + '.' : 'Could not move it. Check your connection and try again.'); deps.render(); });
+  }
+  const SCREENS = {find: findS, email: emailS, school: schoolHome, class: classCal, demo: demoS};
 
   /* ---------- what Explore borrows ---------- */
   const allTutors = () => CLASSES.flatMap(c => c.units.flatMap(u => u.tutors.map(t => ({c, u, t}))));
@@ -236,10 +309,21 @@
     initials, teachers, allTutors,
     about: w => { const x = allTutors().find(a => a.t.w === w); return x ? x.t.about : ''; },
     html() { return (SCREENS[P.scr] || schoolS)() + sheetH(); },
-    afterRender() {},
+    afterRender(root) {
+      if (P.scr !== 'class') return;
+      root.querySelectorAll('.sc-lc').forEach(el => {
+        el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); } });
+        if (el.draggable) el.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', el.dataset.k); e.dataTransfer.effectAllowed = 'move'; });
+      });
+      root.querySelectorAll('.sc-cell[data-dk]').forEach(c => {
+        c.addEventListener('dragover', e => { e.preventDefault(); c.classList.add('over'); });
+        c.addEventListener('dragleave', () => c.classList.remove('over'));
+        c.addEventListener('drop', e => { e.preventDefault(); c.classList.remove('over'); const k = e.dataTransfer.getData('text/plain'); if (k.startsWith('r|')) moveLesson(k.slice(2), c.dataset.dk); });
+      });
+    },
     home() { if (P.scr === 'demo' || P.sheet) { P.sheet = null; P.demo = null; } P.scr = 'school'; deps.render(); },
     openTutor(code, u, id) { openClass(code, u); P.sheet = {u, id}; },
-    escape() { if (P.sheet) { P.sheet = null; deps.render(); return true; } if (P.scr === 'demo') { act('closedemo'); return true; } return false; },
+    escape() { if (P.sel && P.scr === 'class') { P.sel = null; deps.render(); return true; } if (P.sheet) { P.sheet = null; deps.render(); return true; } if (P.scr === 'demo') { act('closedemo'); return true; } return false; },
     input(e) {
       const id = e.target.id;
       if (id === 'pl-q') { P.query = e.target.value; const pos2 = e.target.selectionStart; deps.render(); const i = document.getElementById('pl-q'); if (i) { i.focus(); try { i.setSelectionRange(pos2, pos2); } catch (x) {} } return; }
@@ -267,8 +351,14 @@
       case 'sendcode': P.code = true; break;
       case 'verified': P.verified = true; save('verified', true); P.scr = 'school'; top(); break;
       case 'look': P.scr = 'school'; top(); break;
-      case 'school': P.scr = 'school'; P.sheet = null; top(); break;
-      case 'open': openClass(d.c); top(); break;
+      case 'school': P.scr = 'school'; P.sheet = null; P.sel = null; top(); break;
+      case 'open': openClass(d.c); P.sel = null; P.month = monthOf(TODAY); top(); break;
+      case 'role': if (d.r !== P.role) { P.role = d.r; save('role', d.r); } break;
+      case 'pick': P.sel = P.sel === d.k ? null : d.k; break;
+      case 'closeday': P.sel = null; break;
+      case 'mon': P.month = new Date(P.month.getFullYear(), P.month.getMonth() + (+d.n), 1); break;
+      case 'monnow': P.month = monthOf(TODAY); break;
+      case 'move': { const v = (document.getElementById('sc-mv') || {}).value; moveLesson(d.id, v); return; }
       case 'unit': { const u = +d.u; if (u < 0 || u >= c.units.length) return; P.unit = u; P.whole = false; P.others = false; pickDay(c); P.sheet = null; break; }
       case 'whole': P.whole = !P.whole; break;
       case 'others': P.others = !P.others; break;
