@@ -26,7 +26,8 @@
   /* a lesson made from slides (v3.1.72) gets a wide, plain stage instead of the phone frame */
   body.slides-lesson .wrap { max-width:1040px; }
   body.slides-lesson .phone { padding:0; background:none; border-radius:0; }
-  body.slides-lesson .phone iframe { height:calc(100vh - 150px); height:calc(100dvh - 150px); min-height:460px; border:1px solid var(--line); border-radius:14px; }
+  body.slides-lesson .phone iframe { height:calc(100vh - 96px); height:calc(100dvh - 96px); min-height:460px; border:0; border-radius:0; }
+  body.slides-lesson #lesson > .bar { display:none; } /* the lesson page has its own thin progress line */
   body.slides-lesson .ph-panel:empty { display:none; }
 </style>
 </head>
@@ -263,7 +264,7 @@
   async function freshStyle(html) {
     const mine = styleNo(html); if (!mine) return html;
     try {
-      const r = await fetch('slides-lesson.html?v=3.1.79', {cache: 'no-cache'});
+      const r = await fetch('slides-lesson.html?v=3.1.81', {cache: 'no-cache'});
       const tpl = r.ok ? await r.text() : '';
       return styleNo(tpl) > mine ? tpl : html;
     } catch (e) { return html; }

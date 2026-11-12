@@ -2223,7 +2223,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.80 · Nov 11";
+const BUILD = "v3.1.81 · Nov 11";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2231,6 +2231,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.81",date:"Nov 11",changes:["Lesson screen is calmer: one top line with the title and where you are, one thin progress line, and a single Talk button at the bottom.","Full screen, Audio only, Voice, Hands-free (18+) and How I like to learn now live in one Options menu. Hands-free also shows as one chip on the top line.","The slide is centred and the tutor's words sit beside it (or under it on a phone), fully readable. The welcome-back box is now one small line that fades."]},
   {tag:"v3.1.80",date:"Nov 11",changes:["AI requests: when a company takes your key but the key can't do the job, the card now says so and says what to change. Before, it said \"connected\" and stayed in Waiting with no reason.","Deepgram for hands-free listening needs a key with the Member role. The steps on the card now say that."]},
   {tag:"v3.1.79",date:"Nov 11",changes:["Slides lessons: new Hands-free (18+) switch on the start screen and in the top bar, in the lecture, the conversation and explain it back. Turn it on once and the microphone stays on: just talk, no Talk button.","Worldview stops talking the moment you start, and listens. A pause or a half sentence waits for the rest; an um, or talk to someone else in the room, gets no reply.","Say next, wait, go on, say that again or go back, and it happens at once. It never moves on by itself; after a point it may ask once if you want to go on. Note-taking silence is fine.","A small line shows Listening, Hearing you, Thinking or Speaking. Mute, Talk and typing still work, and listening stops while the tab is hidden.","Teachers: the old Always listening setting is now Students may turn on Hands-free (18+), on by default. Untick it for a class under 18."]},
   {tag:"v3.1.78",date:"Nov 11",changes:["School, teacher view, Results: no more page of bars. One line per way of learning (Lecture with pauses, Conversation) with a small V for each student at their place. Students at the same spot stack into one numbered V.","Hover a V to see the name, place and last active. Tap it to open that student in a side panel (full screen on a phone). \"All students\" opens a plain list.","Results also shows what the lesson has cost in AI so far."]},

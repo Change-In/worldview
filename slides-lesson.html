@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="worldview-style" content="slides-v1 5">
+<meta name="worldview-style" content="slides-v1 6">
 <title>Lesson</title>
 <!-- How a student takes a lesson made from slides (v3.1.72, LES-340, LES-341; v3.1.74 steps, talk button, audio only, full screen,
      resume). This page is STYLE ONLY: it reads lesson.json (format "slides-v1") with wv.readFile and knows nothing about any one
@@ -61,66 +61,110 @@
   .aopt { display:flex; gap:10px; align-items:flex-start; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 14px; cursor:pointer; }
   .aopt input { width:20px; height:20px; margin-top:2px; flex:none; accent-color:var(--accent2); }
   .back { border:1.5px solid var(--accent2); background:var(--tint2); border-radius:14px; padding:14px 16px; display:grid; gap:10px; }
-  /* top bar inside a lesson */
-  .bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:2px 0; }
-  .bar b { font-weight:650; }
-  .pill { font:inherit; font-size:13.5px; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:999px; padding:6px 12px; cursor:pointer; min-height:36px; }
+  /* v3.1.81: one calm surface. A single top line (title, where you are, hands-free, Options), one thin progress line, the stage,
+     and a bottom bar with one filled button (Talk). Everything else lives in the Options menu. */
+  .shell.run { height:100vh; height:100dvh; max-width:1100px; padding:0 18px; gap:0; display:flex; flex-direction:column; overflow:hidden; }
+  .bar { display:flex; gap:10px; align-items:center; min-height:56px; padding:6px 0; flex:none; }
+  .ttl { flex:1 1 auto; min-width:0; display:flex; align-items:baseline; gap:14px; }
+  .ttl b { font:400 18px Georgia,"Times New Roman",serif; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .ttl .lab { font-size:13.5px; color:var(--soft); white-space:nowrap; flex:none; }
+  @media (max-width:600px) { .ttl { flex-direction:column; gap:0; align-items:stretch; } .ttl b { font-size:16px; } .shell.run { padding:0 12px; } }
+  .tbtn { font:inherit; font-size:14px; font-weight:600; border:1px solid transparent; background:transparent; color:var(--ink); border-radius:999px; padding:0 14px; cursor:pointer; min-height:44px; flex:none; display:inline-flex; align-items:center; gap:7px; }
+  .tbtn:hover { background:var(--tint2); }
+  .tbtn.chip { border-color:var(--line); }
+  .tbtn.chip[aria-pressed=true] { background:var(--tint2); border-color:var(--accent2); }
+  .tbtn.chip .cd { width:9px; height:9px; border-radius:50%; background:var(--line); }
+  .tbtn.chip[aria-pressed=true] .cd { background:var(--accent2); }
+  .optwrap { position:relative; flex:none; }
+  .menu { position:absolute; right:0; top:calc(100% + 4px); width:min(350px,calc(100vw - 24px)); background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:0 10px 32px rgba(0,0,0,.2); padding:6px; z-index:30; display:grid; gap:2px; }
+  .mrow { font:inherit; color:var(--ink); background:transparent; border:0; border-radius:10px; width:100%; min-height:48px; padding:8px 12px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:2px 12px; text-align:left; cursor:pointer; }
+  .mrow:hover { background:var(--tint2); }
+  .mrow .ms { font-size:13.5px; color:var(--soft); }
+  .mrow[aria-checked=true] .ms { color:var(--accent2); font-weight:650; }
+  .mrow .mn { flex-basis:100%; font-size:13px; color:var(--soft); }
+  .mrow[aria-disabled=true] { opacity:.55; cursor:default; }
+  .mrow[aria-disabled=true]:hover { background:transparent; }
+  .menu .heard { padding:6px 12px 8px; border-top:1px solid var(--line); margin-top:4px; }
+  .tbtn:focus-visible, .mrow:focus-visible, .ibtn:focus-visible, .xbtn:focus-visible, .lnk:focus-visible { outline:3px solid var(--accent2); outline-offset:2px; }
+  .pill { font:inherit; font-size:14px; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:999px; padding:6px 14px; cursor:pointer; min-height:44px; }
   .pill[aria-pressed=true] { background:var(--tint2); border-color:var(--accent2); }
-  .resume { display:flex; flex-wrap:wrap; gap:8px; align-items:center; border:1px dashed var(--accent2); border-radius:12px; padding:8px 12px; font-size:14px; }
-  /* lecture: slide left, talk right on a wide screen */
-  .lec { display:grid; gap:14px; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); align-items:start; }
-  .lec.one { grid-template-columns:minmax(0,1fr); max-width:720px; width:100%; margin:0 auto; }
-  @media (max-width:860px) { .lec { grid-template-columns:minmax(0,1fr); } img.pic, .spic { max-height:40vh !important; } }
+  .resume { display:flex; gap:4px; align-items:center; justify-content:center; font-size:13.5px; color:var(--soft); min-height:44px; transition:opacity .6s; }
+  .resume.fade { opacity:0; }
+  .lnk { font:inherit; font-size:13.5px; color:var(--accent2); background:none; border:0; padding:0 4px; cursor:pointer; text-decoration:underline; min-height:44px; min-width:44px; }
+  .xbtn { font:inherit; color:var(--soft); background:none; border:0; cursor:pointer; min-width:44px; min-height:44px; border-radius:50%; }
+  #resumebox:empty { display:none; }
+  .shell.run #resumebox { flex:none; }
+  /* the stage: slide and the tutor's words. Phones stack them (the middle scrolls); wide screens put them side by side */
+  .main { flex:1 1 auto; min-height:0; overflow-y:auto; padding:6px 0 10px; }
+  .lec { display:grid; gap:18px; grid-template-columns:minmax(0,1fr); align-items:start; }
+  .lec.one { max-width:720px; width:100%; margin:0 auto; }
+  @media (min-width:1000px) {
+    .main:has(.lec:not(.one)) { overflow:hidden; padding:6px 0 14px; }
+    .lec:not(.one) { height:100%; grid-template-columns:minmax(0,1.6fr) minmax(0,1fr); gap:32px; align-items:start; }
+    .lec:not(.one) .stagecol { max-height:100%; }
+    .lec:not(.one) .words { height:100%; max-height:100%; overflow-y:auto; align-content:start; }
+    .shell:not(.fs) .spic { max-height:min(62vh,560px) !important; }
+  }
   .stage { text-align:center; min-width:0; }
   .picwrap { position:relative; display:inline-block; max-width:100%; line-height:0; vertical-align:top; }
-  .spic { display:block; width:auto; height:auto; max-width:100%; max-height:58vh; background:#fff; border:1px solid var(--line); border-radius:12px; }
+  .spic { display:block; width:auto; height:auto; max-width:100%; max-height:40vh; background:#fff; border:1px solid var(--line); border-radius:10px; margin:0 auto; }
   .cover { position:absolute; background:var(--cover); border:1px dashed rgba(0,0,0,.12); border-radius:4px; transition:opacity .35s; } /* slide pictures are white, so the cover is light in both themes */
-  .stepdots { display:flex; gap:5px; justify-content:center; align-items:center; margin-top:8px; font-size:13px; color:var(--soft); flex-wrap:wrap; }
+  .stepdots { display:flex; gap:5px; justify-content:center; align-items:center; margin-top:10px; font-size:13px; color:var(--soft); flex-wrap:wrap; }
   .stepdots i { width:8px; height:8px; border-radius:50%; background:var(--line); display:inline-block; }
   .stepdots i.on { background:var(--accent2); }
-  .cap { border-left:3px solid var(--accent2); background:var(--tint2); border-radius:0 10px 10px 0; padding:10px 14px; margin-top:10px; text-align:left; line-height:1.5; }
+  .words { display:grid; gap:14px; min-width:0; }
+  .cap { font-size:18px; line-height:1.55; text-align:left; margin:0; overflow-wrap:anywhere; }
+  .cap:empty { display:none; }
   .side { display:grid; gap:10px; min-width:0; }
   .side-h { display:none; }
-  .log { display:grid; gap:8px; max-height:34vh; overflow-y:auto; padding:2px; }
-  .lec.one .log { max-height:none; }
+  .log { display:grid; gap:8px; padding:2px; }
   .m { padding:9px 13px; border-radius:12px; max-width:92%; overflow-wrap:anywhere; white-space:pre-wrap; }
   .m.ai { background:var(--tint2); }
   .m.you { background:var(--tint); margin-left:auto; }
   .m.aside { opacity:.55; }
-  .m.note { background:transparent; border:1px dashed var(--line); color:var(--soft); font-size:14px; }
+  .m.note { background:transparent; color:var(--soft); font-size:14px; padding-left:2px; }
   .typer { display:flex; gap:8px; align-items:flex-end; }
   .typer textarea { flex:1; min-width:0; font:inherit; color:inherit; background:var(--card); border:1.5px solid var(--line); border-radius:12px; padding:9px 12px; resize:none; min-height:44px; max-height:120px; }
-  .ctl { position:sticky; bottom:0; background:var(--paper); padding:8px 0 12px; display:grid; gap:6px; border-top:1px solid var(--line); z-index:3; }
-  .ctl .row { justify-content:flex-start; }
-  .talk { display:inline-flex; gap:8px; align-items:center; }
+  .ctl { flex:none; background:var(--paper); padding:10px 0 max(12px,env(safe-area-inset-bottom)); display:grid; gap:8px; z-index:3; }
+  .ctl .row { flex-wrap:nowrap; gap:8px; }
+  .ctl .sp { flex:1; }
+  .talk { display:inline-flex; gap:8px; align-items:center; justify-content:center; min-width:132px; }
   .talk.on { background:var(--accent2); border-color:var(--accent2); }
-  .kbd { min-width:44px; padding:10px 12px; }
+  .btn.quiet { background:transparent; color:var(--ink); border:1.5px solid var(--soft); padding:10px 16px; }
+  .btn.quiet.emph { border-color:var(--accent); color:var(--accent); }
+  .btn.sm { padding:8px 14px; }
+  .ibtn { font:inherit; font-size:20px; line-height:1; color:var(--soft); background:transparent; border:1px solid transparent; border-radius:50%; width:44px; height:44px; flex:none; cursor:pointer; display:inline-grid; place-items:center; }
+  .ibtn:hover, .ibtn[aria-pressed=true] { background:var(--tint2); color:var(--ink); }
+  .ibtn .lbl { display:none; }
+  @media (max-width:420px) { .bar { gap:4px; } .tbtn { padding:0 10px; } .ctl .row { gap:4px; } .talk { min-width:0; padding:10px 14px; } .btn.quiet { padding:10px 12px; font-size:15px; } }
   .heard { font-size:12.5px; color:var(--soft); }
-  .qbox { border:1px solid var(--line); background:var(--card); border-radius:12px; padding:12px 14px; display:grid; gap:10px; }
-  .qbox h2 { font-size:19px; }
+  .qbox { display:grid; gap:10px; padding:4px 0; }
+  .qbox h2 { font-size:22px; line-height:1.3; }
   .end { text-align:center; padding:40px 8px; display:grid; gap:10px; justify-items:center; }
-  .prog { height:5px; border-radius:3px; background:var(--line); overflow:hidden; }
+  .prog { height:3px; border-radius:2px; background:var(--line); overflow:hidden; flex:none; }
   .prog i { display:block; height:100%; width:0; background:var(--accent2); transition:width .3s; }
   /* audio only: no slide, no chat; big controls */
   .aud { display:none; text-align:center; padding:24px 8px 8px; gap:8px; }
   .shell.audio .aud { display:grid; }
-  .shell.audio .stagecol, .shell.audio .side, .shell.audio .qbox, .shell.audio #fsbtn, .shell.audio .kbd, .shell.audio .heard { display:none !important; }
-  .shell.audio .ctl { position:static; border:0; }
-  .shell.audio .ctl .row { justify-content:center; }
-  .shell.audio .ctl .btn { font-size:19px; min-height:64px; padding:14px 26px; flex:1 1 160px; max-width:280px; }
+  .shell.audio .stagecol, .shell.audio .words, .shell.audio .side, .shell.audio .qbox, .shell.audio #fsbtn, .shell.audio .kbd { display:none !important; }
+  .shell.audio .ctl .row { justify-content:center; flex-wrap:wrap; }
+  .shell.audio .ctl .sp { display:none; }
+  .shell.audio .ctl .btn, .shell.audio .ctl .ibtn { font-size:19px; min-height:64px; padding:14px 26px; flex:1 1 160px; max-width:280px; width:auto; border-radius:999px; border:1px solid var(--line); color:var(--ink); }
+  .shell.audio .ctl .talk { color:var(--on); border-color:var(--accent); }
+  .shell.audio .ctl .ibtn .ic { display:none; }
+  .shell.audio .ctl .ibtn .lbl { display:inline; }
   .aud .now { font:400 22px/1.3 Georgia,serif; }
   /* full screen: the slide fills the screen, the chat opens over it */
-  .shell.fs { max-width:none; padding:6px 10px 0; }
+  .shell.fs { max-width:none; }
   .shell.fs .lec { grid-template-columns:minmax(0,1fr); }
-  .shell.fs .spic { max-height:calc(100vh - 210px) !important; max-height:calc(100dvh - 210px) !important; }
-  .shell.fs .cap { margin:8px auto 0; max-width:900px; }
+  .shell.fs .main:has(.lec) { overflow-y:auto; }
+  .shell.fs .lec:not(.one) { height:auto; }
+  .shell.fs .spic { max-height:calc(100vh - 300px) !important; max-height:calc(100dvh - 300px) !important; }
+  .shell.fs .cap { margin:0 auto; max-width:900px; }
+  .shell.fs .words { overflow:visible; height:auto; }
   .shell.fs .side { display:none; }
-  .shell.fs.chat .side { display:grid; position:fixed; top:0; right:0; bottom:0; width:min(420px,100%); background:var(--paper); border-left:1px solid var(--line); padding:12px; z-index:9; align-content:start; box-shadow:-8px 0 24px rgba(0,0,0,.18); overflow-y:auto; }
+  .shell.fs.chat .side { display:grid; position:fixed; top:0; right:0; bottom:0; width:min(420px,100%); background:var(--paper); border-left:1px solid var(--line); padding:12px; z-index:40; align-content:start; box-shadow:-8px 0 24px rgba(0,0,0,.18); overflow-y:auto; }
   .shell.fs.chat .side-h { display:flex; align-items:center; gap:8px; }
-  .shell.fs.chat .log { max-height:none; }
-  .shell.fs .ctl { position:fixed; left:0; right:0; bottom:0; padding:8px 12px 10px; }
-  .shell.fs .ctl .row { justify-content:center; }
-  .shell.fs .lec { padding-bottom:84px; }
   .chatbtn { display:none; }
   .shell.fs .chatbtn { display:inline-flex; }
   /* v3.1.75: the chapter strip, the slides drawer, "How I like to learn" */
@@ -135,7 +179,8 @@
   .sdi { flex:none; height:auto; width:min(360px,80vw); max-height:40vh; object-fit:contain; background:#fff; border:1px solid var(--line); border-radius:8px; }
   .pref { display:grid; gap:6px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 14px; }
   .pref textarea { font:inherit; color:inherit; background:var(--paper); border:1.5px solid var(--line); border-radius:10px; padding:8px 10px; resize:vertical; width:100%; min-width:0; }
-  .prefwrap { display:grid; gap:8px; }
+  .prefwrap { display:grid; gap:8px; flex:none; padding-bottom:6px; }
+  .prefwrap[hidden] { display:none; }
   /* v3.1.79: hands-free indicator and its one-time notice */
   .hfs { display:flex; gap:8px; align-items:center; font-size:14px; min-height:24px; min-width:0; }
   .hfs .dot { width:10px; height:10px; border-radius:50%; background:var(--accent2); flex:none; }
@@ -399,6 +444,7 @@
   document.addEventListener('keydown', function (e) {
     if (e.code !== 'Space' || e.repeat || !S.phase || S.phase === 'end') return;
     var t = e.target, tag = t && t.tagName; if (tag === 'TEXTAREA' || tag === 'INPUT' || (t && t.isContentEditable)) return;
+    if (t && t.closest && t.closest('.menu')) return; // Space on an Options row switches it, it does not start talking
     if (!canTalk() || always()) return;
     e.preventDefault(); if (S.talking) return; S.spaceHeld = true; talk();
   });
@@ -408,10 +454,36 @@
     var dev = S.where ? S.where === 'device' : wv.can('listenLocal');
     return (dev ? 'Your speech is turned into text on this device.' : 'Your speech is sent to Worldview\'s transcription service to be turned into text.') + (window.matchMedia && matchMedia('(pointer:fine)').matches ? ' You can also hold Space while you talk.' : '');
   }
+  // one row of the Options menu: a label, its on/off word, and aria-checked for screen readers
+  function setRow(el, on, word) { el.setAttribute('aria-checked', String(!!on)); var m = $('.ms', el); if (m) m.textContent = word; }
+  // the Options menu: closes on Escape, on a click outside it, and gives the focus back to its button
+  function menu(open, keepFocus) {
+    var m = $('#optmenu'), b = $('#optbtn'); if (!m || !b) return;
+    m.hidden = !open; b.setAttribute('aria-expanded', String(open));
+    if (open) { var first = m.querySelector('.mrow:not([hidden])'); if (first) first.focus(); }
+    else if (!keepFocus && m.contains(document.activeElement)) b.focus();
+  }
+  function menuKeys(e) {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return;
+    var rows = Array.prototype.slice.call($('#optmenu').querySelectorAll('.mrow:not([hidden])')); if (!rows.length) return;
+    var i = rows.indexOf(document.activeElement); e.preventDefault();
+    i = e.key === 'Home' ? 0 : e.key === 'End' ? rows.length - 1 : e.key === 'ArrowDown' ? (i + 1) % rows.length : (i - 1 + rows.length) % rows.length;
+    rows[i].focus();
+  }
+  document.addEventListener('keydown', function (e) { var m = $('#optmenu'); if (e.key === 'Escape' && m && !m.hidden) { e.preventDefault(); menu(false); } });
+  document.addEventListener('click', function (e) { var m = $('#optmenu'); if (m && !m.hidden && !e.target.closest('.optwrap')) menu(false, true); });
   function voiceUi() {
     var v = $('#vbtn'), m = $('#mbtn'), tk = $('#talk'), kb = $('#kbd'), f = $('#f'), h = $('#heard'), can = ST.voice && (wv.can('speak') || wv.can('listen') || wv.can('continuousListen'));
-    if (v) { v.hidden = !can; v.setAttribute('aria-pressed', String(voiceOn())); v.textContent = voiceOn() ? 'Voice on' : 'Voice off'; }
-    var hb = $('#hfbtn'); if (hb) { hb.hidden = !hfAllowed(); hb.setAttribute('aria-pressed', String(always())); hb.textContent = always() ? 'Hands-free on (18+)' : 'Hands-free (18+)'; }
+    if (v) { v.hidden = !can; setRow(v, voiceOn(), voiceOn() ? 'On' : 'Off'); }
+    // hands-free: one chip in the top bar when it is available; in Options it is a row, greyed (with the reason) when it is not
+    var hb = $('#hfbtn'), hc = $('#hfchip'), hrow = ST.voice && ST.handsFree;
+    if (hc) { hc.hidden = !hfAllowed(); hc.setAttribute('aria-pressed', String(always())); $('span', hc).textContent = always() ? 'Hands-free on' : 'Hands-free'; }
+    if (hb) {
+      hb.hidden = !hrow; setRow(hb, always(), hfAllowed() ? (always() ? 'On' : 'Off') : '');
+      hb.setAttribute('aria-disabled', String(!hfAllowed()));
+      var hn = $('.mn', hb); hn.hidden = hfAllowed(); hn.textContent = !voiceOn() ? 'Turn Voice on first' : 'Not turned on for this school yet';
+    }
+    var pst = $('#prefst'); if (pst) pst.textContent = S.pref ? 'On' : '';
     if (m) { m.hidden = !always() || (S.listening && HF.state === 'start'); m.textContent = !S.listening ? 'Listen again' : S.muted ? 'Unmute' : 'Mute'; m.setAttribute('aria-pressed', String(S.listening && S.muted)); m.setAttribute('aria-label', !S.listening ? 'Start listening again' : S.muted ? 'Unmute the microphone' : 'Mute the microphone'); }
     var talkable = canTalk() && !always();
     if (tk) { tk.hidden = !talkable; tk.classList.toggle('on', S.talking); tk.textContent = S.talking ? '● Send' : '🎤 Talk'; tk.setAttribute('aria-label', S.talking ? 'Stop and send what you said' : 'Talk: tap to start, tap again to send'); }
@@ -419,7 +491,7 @@
     if (kb) { kb.hidden = typeFirst; kb.setAttribute('aria-pressed', String(S.typing)); }
     if (f) f.hidden = !(typeFirst || S.typing);
     if (h) { h.textContent = whereText(); h.hidden = !h.textContent; }
-    var a = $('#audbtn'); if (a) { a.hidden = !audioPossible(); a.setAttribute('aria-pressed', String(S.audio)); a.textContent = S.audio ? 'Show the screen' : 'Audio only'; }
+    var a = $('#audbtn'); if (a) { a.hidden = !audioPossible(); setRow(a, S.audio, S.audio ? 'On' : 'Off'); }
     var p = $('#pausebtn'); if (p) p.textContent = S.paused ? 'Resume' : 'Pause';
     if (always() && S.phase && S.phase !== 'end' && !S.listening) listenStart();
     hfUi();
@@ -500,17 +572,30 @@
     if (who === 'ai') S.lastAi = text;
     var log = $('#log'); if (!log) return;
     var d = document.createElement('div'); d.className = 'm ' + who; d.textContent = text; log.appendChild(d); log.scrollTop = log.scrollHeight;
+    if (d.scrollIntoView && !S.resuming) { try { d.scrollIntoView({block: 'nearest'}); } catch (e) {} }
     while (log.children.length > 40) log.removeChild(log.firstChild);
   }
   function note(text) { msg('note', text); var n = $('#aunote'); if (n && S.audio) n.textContent = text; }
   function say(text) { msg('ai', text); speak(text); }
+  var IC_AGAIN = '<svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>';
+  var IC_KBD = '<svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>';
+  function mrow(id, label, extra) { return '<button type="button" class="mrow" role="menuitemcheckbox" id="' + id + '" aria-checked="false" hidden' + (extra || '') + '><span class="ml">' + label + '</span><span class="ms"></span><span class="mn" hidden></span></button>'; }
+  // v3.1.81: the buttons argument is the lesson style's one quiet button (Next slide, ready, That is all I can say); Say it again and the keyboard are small icons
   function layout(label, inner, buttons) {
-    return '<div class="bar"><b class="grow" id="lab">' + esc(label) + '</b><button type="button" class="pill" id="fsbtn" hidden aria-pressed="false">Full screen</button><button type="button" class="pill" id="audbtn" hidden aria-pressed="false">Audio only</button>' +
-      '<button type="button" class="pill" id="vbtn" hidden aria-pressed="true">Voice on</button><button type="button" class="pill" id="hfbtn" hidden aria-pressed="false">Hands-free (18+)</button><button type="button" class="pill" id="mbtn" hidden aria-pressed="false">Mute</button><button type="button" class="pill" id="prefbtn" aria-expanded="false">How I like to learn</button></div><div class="prefwrap" id="prefwrap" hidden></div><div class="prog"><i id="prog"></i></div><div id="resumebox"></div>' +
-      '<div class="aud" aria-live="polite"><p class="now" id="aunow"></p><p class="soft" id="aunote">Worldview is talking. Use the buttons or the Talk button.</p></div>' + inner +
+    app.classList.add('run');
+    return '<div class="bar"><div class="ttl"><b id="ttl">' + esc(L.title) + '</b><span class="lab" id="lab">' + esc(label) + '</span></div>' +
+      '<button type="button" class="tbtn chip" id="hfchip" hidden aria-pressed="false"><i class="cd" aria-hidden="true"></i><span>Hands-free</span></button>' +
+      '<div class="optwrap"><button type="button" class="tbtn" id="optbtn" aria-haspopup="menu" aria-expanded="false" aria-controls="optmenu">Options</button>' +
+      '<div class="menu" id="optmenu" role="menu" aria-label="Options" hidden>' + mrow('fsbtn', 'Full screen') + mrow('audbtn', 'Audio only') + mrow('vbtn', 'Voice') + mrow('hfbtn', 'Hands-free (18+)') +
+      '<button type="button" class="mrow" role="menuitem" id="prefbtn" aria-expanded="false"><span class="ml">How I like to learn</span><span class="ms" id="prefst"></span></button>' +
+      '<p class="heard" id="heard" hidden></p></div></div></div>' +
+      '<div class="prog"><i id="prog"></i></div><div class="prefwrap" id="prefwrap" hidden></div><div id="resumebox"></div>' +
+      '<div class="main" id="main"><div class="aud" aria-live="polite"><p class="now" id="aunow"></p><p class="soft" id="aunote">Worldview is talking. Use the buttons or the Talk button.</p></div>' + inner + '</div>' +
       '<div class="ctl"><div class="hfs" id="hfs" role="status" aria-live="polite" hidden><i class="dot" aria-hidden="true"></i><b id="hfw">Listening</b><span class="hfx"></span></div><p class="hfl" id="hfl" hidden></p><form id="f" class="typer" hidden><textarea id="t" rows="1" maxlength="800" placeholder="Type here" aria-label="Type here"></textarea><button type="submit" class="btn">Send</button></form>' +
-      '<div class="row"><button type="button" class="btn talk" id="talk" hidden>🎤 Talk</button><button type="button" class="btn ghost" id="pausebtn" hidden>Pause</button>' + buttons +
-      '<button type="button" class="btn ghost chatbtn" id="chatbtn" aria-pressed="false">Chat</button><button type="button" class="btn ghost kbd" id="kbd" aria-label="Type instead" aria-pressed="false" title="Type instead">⌨</button></div><p class="heard" id="heard" hidden></p></div>';
+      '<div class="row"><button type="button" class="btn talk" id="talk" hidden>🎤 Talk</button><button type="button" class="ibtn" id="again" aria-label="Say it again" title="Say it again">' + IC_AGAIN + '<span class="lbl">Say it again</span></button>' +
+      '<button type="button" class="ibtn kbd" id="kbd" aria-label="Type instead" aria-pressed="false" title="Type instead">' + IC_KBD + '</button>' +
+      '<button type="button" class="btn quiet sm" id="mbtn" hidden aria-pressed="false">Mute</button><button type="button" class="btn quiet sm" id="pausebtn" hidden>Pause</button><button type="button" class="btn quiet sm chatbtn" id="chatbtn" aria-pressed="false">Chat</button>' +
+      '<span class="sp"></span>' + buttons + '</div></div>';
   }
   function wire(ph) {
     var f = $('#f'), t = $('#t');
@@ -520,17 +605,22 @@
     t.placeholder = ph; t.setAttribute('aria-label', ph);
     $('#talk').onclick = talk;
     $('#kbd').onclick = function () { S.typing = !S.typing; voiceUi(); if (S.typing) t.focus(); };
-    $('#vbtn').onclick = toggleVoice; $('#mbtn').onclick = toggleMic; $('#hfbtn').onclick = function () { setHf(!always()); };
-    $('#audbtn').onclick = function () { setAudio(!S.audio); };
+    $('#vbtn').onclick = toggleVoice; $('#mbtn').onclick = toggleMic;
+    var hfToggle = function () { if (!hfAllowed()) return; setHf(!always()); };
+    $('#hfbtn').onclick = hfToggle; $('#hfchip').onclick = hfToggle;
+    $('#audbtn').onclick = function () { setAudio(!S.audio); menu(false); };
+    $('#optbtn').onclick = function () { menu($('#optmenu').hidden); };
+    $('#optmenu').onkeydown = menuKeys;
     $('#pausebtn').onclick = togglePause;
     $('#prefbtn').onclick = function () {
+      menu(false);
       var w = $('#prefwrap'), open = w.hidden; w.hidden = !open; $('#prefbtn').setAttribute('aria-expanded', String(open));
       if (!open) return;
       w.innerHTML = prefBox('prefin') + '<div class="row"><button type="button" class="pill" id="prefdone">Done</button></div>'; wirePref('prefin');
-      $('#prefdone').onclick = function () { var x = $('#prefin'); if (x && clean(x.value, 300) !== S.pref) setPref(x.value); w.hidden = true; $('#prefbtn').setAttribute('aria-expanded', 'false'); $('#prefbtn').focus(); };
+      $('#prefdone').onclick = function () { var x = $('#prefin'); if (x && clean(x.value, 300) !== S.pref) setPref(x.value); w.hidden = true; $('#prefbtn').setAttribute('aria-expanded', 'false'); $('#optbtn').focus(); };
       $('#prefin').focus();
     };
-    $('#fsbtn').onclick = function () { setFs(!S.fs); };
+    $('#fsbtn').onclick = function () { setFs(!S.fs); menu(false); };
     $('#chatbtn').onclick = function () { var on = !app.classList.contains('chat'); app.classList.toggle('chat', on); $('#chatbtn').setAttribute('aria-pressed', String(on)); };
     var cc = $('#closechat'); if (cc) cc.onclick = function () { app.classList.remove('chat'); $('#chatbtn').setAttribute('aria-pressed', 'false'); };
     S.log.forEach(function (m) { msg(m[0], m[1], true); });
@@ -574,7 +664,7 @@
   }
   function setFs(on, fromHost) {
     S.fs = !!on && S.phase === 'lecture' && !S.audio; app.classList.toggle('fs', S.fs); if (!S.fs) app.classList.remove('chat');
-    var b = $('#fsbtn'); if (b) { b.setAttribute('aria-pressed', String(S.fs)); b.textContent = S.fs ? 'Exit full screen' : 'Full screen'; }
+    var b = $('#fsbtn'); if (b) setRow(b, S.fs, S.fs ? 'On' : 'Off');
     if (!fromHost && wv.can('fullscreen')) { try { wv.fullscreen(S.fs); } catch (e) {} }
   }
   function audNow() {
@@ -589,14 +679,16 @@
   }
   function resumeBanner(text) {
     var b = $('#resumebox'); if (!b) return;
-    b.innerHTML = '<div class="resume"><span class="grow">' + esc(text) + '</span><button type="button" class="pill" id="overbtn">Start over from the beginning</button><button type="button" class="pill" id="okbtn">OK</button></div>';
-    $('#overbtn').onclick = function () { listenStop(); stopSpeak(); forget(); S.log = []; S.results = []; S.ev = 0; S.phase = ''; setFs(false, true); app.classList.remove('audio'); S.audio = false; startScreen(); };
-    $('#okbtn').onclick = function () { b.innerHTML = ''; };
+    clearTimeout(S.rt);
+    b.innerHTML = '<div class="resume" role="status"><span>' + esc(text) + ' ·</span><button type="button" class="lnk" id="overbtn">Start over</button><button type="button" class="xbtn" id="okbtn" aria-label="Dismiss" title="Dismiss">✕</button></div>';
+    S.rt = setTimeout(function () { var r = $('.resume', b); if (r) { r.classList.add('fade'); S.rt = setTimeout(function () { b.innerHTML = ''; }, 700); } }, 8000);
+    $('#overbtn').onclick = function () { clearTimeout(S.rt); app.classList.remove('run'); listenStop(); stopSpeak(); forget(); S.log = []; S.results = []; S.ev = 0; S.phase = ''; setFs(false, true); app.classList.remove('audio'); S.audio = false; startScreen(); };
+    $('#okbtn').onclick = function () { clearTimeout(S.rt); b.innerHTML = ''; };
   }
 
   /* ============ START ============ */
   function startScreen() {
-    S.phase = ''; listenStop(); stopSpeak(); app.classList.remove('audio', 'fs', 'chat');
+    S.phase = ''; listenStop(); stopSpeak(); app.classList.remove('audio', 'fs', 'chat', 'run');
     var s0 = L.slides[0], goals = L.goals.map(goalText).filter(Boolean).slice(0, 4), wasAudio = $('#aonly') ? $('#aonly').checked : false;
     var cards = '';
     if (ST.lecture) cards += '<button type="button" class="card" data-style="lecture"><b>Lecture with pauses</b><span class="soft">Go slide by slide, one point at a time. Ask a question or say you follow any time; some slides stop and ask you something.</span><span class="go">Start the lecture</span></button>';
@@ -621,9 +713,9 @@
     S.hist = Array.isArray(p.hist) ? p.hist : []; S.ans = Array.isArray(p.ans) ? p.ans : []; S.results = Array.isArray(p.results) ? p.results : []; S.log = Array.isArray(p.log) ? p.log : []; S.audio = !!p.audio;
     S.cv = p.cv && typeof p.cv === 'object' && p.phase === 'conv' && hasMap() ? p.cv : null;
     if (S.cv) { ['lv', 'fin'].forEach(function (k) { if (!S.cv[k] || typeof S.cv[k] !== 'object') S.cv[k] = {}; }); if (!Array.isArray(S.cv.sv)) S.cv.sv = []; if (S.cv.stage === 'chapter' && !(S.cv.ci >= 0 && S.cv.ci < L.map.chapters.length)) S.cv.stage = 'done'; }
-    if (p.phase === 'lecture') { lectureView(); var st = stepsOf(cur()); if (S.k >= st.length) S.k = st.length - 1; drawSlide(false); resumeBanner('Welcome back. You were on slide ' + (S.i + 1) + (st.length > 1 ? ', point ' + (S.k + 1) : '') + '.'); sayAgain(); }
-    else if (p.phase === 'conv') { convView(); resumeBanner(S.cv && S.cv.stage === 'chapter' ? 'Welcome back. You were on chapter ' + (S.cv.ci + 1) + ' of ' + L.map.chapters.length + ', ' + clip(chap(S.cv.ci).title, 60) + '.' : 'Welcome back. Here is where you were.'); if (S.lastAi) speak('Where we left off: ' + S.lastAi, true); }
-    else { checkView(); showQ(true); resumeBanner('Welcome back. You were on question ' + (S.qi + 1) + ' of ' + L.check.length + '.'); }
+    if (p.phase === 'lecture') { lectureView(); var st = stepsOf(cur()); if (S.k >= st.length) S.k = st.length - 1; drawSlide(false); resumeBanner('Picked up at slide ' + (S.i + 1) + (st.length > 1 ? ', point ' + (S.k + 1) : '')); sayAgain(); }
+    else if (p.phase === 'conv') { convView(); resumeBanner(S.cv && S.cv.stage === 'chapter' ? 'Picked up at chapter ' + (S.cv.ci + 1) + ' of ' + L.map.chapters.length : 'Picked up where you left off'); if (S.lastAi) speak('Where we left off: ' + S.lastAi, true); }
+    else { checkView(); showQ(true); resumeBanner('Picked up at question ' + (S.qi + 1) + ' of ' + L.check.length); }
     S.resuming = false;
   }
 
@@ -663,11 +755,11 @@
   function lectureView() {
     S.phase = 'lecture';
     app.innerHTML = layout('Slide 1 of ' + L.slides.length,
-      '<div class="lec"><div class="stagecol"><div class="stage" id="stage"></div><div class="stepdots" id="dots"></div><p class="cap" id="cap"></p></div>' +
-      '<div class="side"><div class="side-h"><b class="grow">Chat</b><button type="button" class="pill" id="closechat">Close</button></div><div class="log" id="log" role="log" aria-live="polite"></div></div></div>',
-      '<button type="button" class="btn ghost" id="again">Say it again</button><button type="button" class="btn" id="next">Next</button>');
+      '<div class="lec"><div class="stagecol"><div class="stage" id="stage"></div><div class="stepdots" id="dots"></div></div>' +
+      '<div class="words"><p class="cap" id="cap" tabindex="0"></p><div class="side"><div class="side-h"><b class="grow">Chat</b><button type="button" class="pill" id="closechat">Close</button></div><div class="log" id="log" role="log" aria-live="polite"></div></div></div></div>',
+      '<button type="button" class="btn quiet" id="next">Next</button>');
     wire('Ask a question, or type your answer');
-    $('#fsbtn').hidden = false;
+    $('#fsbtn').hidden = false; setRow($('#fsbtn'), false, 'Off');
     $('#again').onclick = sayAgain;
     $('#next').onclick = function () { if (S.paused) { S.paused = false; voiceUi(); } next(); save(); };
   }
@@ -883,7 +975,7 @@
     S.phase = 'conv';
     var strip = useMap() ? '<div class="chs" id="chs" aria-label="Chapters of this conversation"></div><details class="sdr" id="sdr" hidden><summary>Slides for this part</summary><div class="sdt" id="sdt"></div></details>' : '';
     app.innerHTML = layout('Conversation', '<div class="lec one">' + strip + '<div class="side"><div class="log" id="log" role="log" aria-live="polite"></div></div></div>',
-      '<button type="button" class="btn ghost" id="again">Say it again</button><button type="button" class="btn ghost" id="ready">I\'m ready to explain it back</button>');
+      '<button type="button" class="btn quiet" id="ready">I\'m ready to explain it back</button>');
     wire('Type what you think');
     $('#again').onclick = sayAgain;
     $('#ready').onclick = function () { stopSpeak(); checkStart(); };
@@ -891,7 +983,7 @@
     if (S.turns >= 12 || (L.goals.length && L.goals.every(function (g) { return S.covered[g.id]; }))) readyUp();
     progress(0.05 + 0.75 * Math.min(1, Math.max(S.turns / 12, Object.keys(S.covered).length / Math.max(1, L.goals.length))));
   }
-  function readyUp() { var rd = $('#ready'); if (rd) { rd.className = 'btn'; rd.textContent = 'Explain it back'; } }
+  function readyUp() { var rd = $('#ready'); if (rd) { rd.className = 'btn quiet emph'; rd.textContent = 'Explain it back'; } }
   /* The small strip of chapters (where the student is) and the collapsed drawer with the current chapter's slides. */
   function stripUi() {
     var el = $('#chs'); if (!el || !useMap()) return;
@@ -999,7 +1091,7 @@
   function checkView() {
     S.phase = 'check';
     app.innerHTML = layout('Explain it back', '<div class="lec one"><div class="qbox" id="qbox"></div><div class="side"><div class="log" id="log" role="log" aria-live="polite"></div></div></div>',
-      '<button type="button" class="btn ghost" id="again">Say it again</button><button type="button" class="btn ghost" id="nomore">That\'s all I can say</button>');
+      '<button type="button" class="btn quiet" id="nomore">That\'s all I can say</button>');
     wire('Explain it in your own words');
     $('#again').onclick = sayAgain;
     $('#nomore').onclick = function () { if (!S.busy) { S.busy = true; Promise.resolve(checkEnd(true)).catch(function () {}).then(function () { S.busy = false; save(); }); } };
@@ -1048,7 +1140,7 @@
     else setTimeout(finish, 600);
   }
   function finish() {
-    S.phase = 'end'; stopSpeak(); listenStop(); progress(1); app.classList.remove('audio', 'fs', 'chat');
+    S.phase = 'end'; stopSpeak(); listenStop(); progress(1); app.classList.remove('audio', 'fs', 'chat', 'run');
     var levels = {}; S.results.forEach(function (r) { if (r.goal) levels[r.goal] = Math.max(levels[r.goal] || 0, LEVEL[r.verdict]); });
     try { wv.done({levels: levels}); } catch (e) {}
     try { wv.state.set({v: 2, phase: 'end'}); } catch (e) {}
