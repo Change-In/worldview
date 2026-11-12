@@ -430,3 +430,5 @@
 .rs-sh h3 { margin:0; font-size:17px; overflow-wrap:anywhere; } .rs-sh p { margin:2px 0 0; }
 .rs-side .rs-det { border-top:0; padding:0; }
 @media (max-width:700px) { .rs-side { inset:0; width:auto; max-width:none; max-height:none; border:0; border-radius:0; padding:16px 16px calc(40px + env(safe-area-inset-bottom)); z-index:240; box-shadow:none; } }
+/* v3.1.83: a student's time in the lesson and their real AI cost, in the detail panel */
+.rs-sh .rs-use { margin:4px 0 0; font-size:14px; }

@@ -148,3 +148,8 @@
 .mp-eq { display:grid; gap:8px; padding:10px 12px; border-radius:12px; background:var(--soft); }
 .mp-eqck { color:var(--ink) !important; }
 .mp-again { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+/* v3.1.83: a published lesson opened from the School day panel with "View lesson": everything shows, nothing can be changed */
+.sl-viewnote { display:none; }
+.sl-view .sl-viewnote { display:block; background:var(--soft); border:1px solid var(--line); border-radius:12px; padding:10px 14px; margin:0; font-weight:600; }
+.sl-view #lessonview [data-act], .sl-view .sl-pick, .sl-view .sl-bar, .sl-view #selbar, .sl-view #upgrade, .sl-view #resume, .sl-view .sl-redo, .sl-view #saved { display:none !important; }
+.sl-view #lessonview textarea, .sl-view #lessonview input, .sl-view #lessonview select { background:transparent; }

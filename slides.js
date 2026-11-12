@@ -36,6 +36,7 @@
   /* ---------- talking to Worldview ---------- */
   const authHeaders = async () => { let token = KEY; try { const s = (await db.auth.getSession()).data.session; if (s) token = s.access_token; } catch (e) {} return {apikey: KEY, authorization: 'Bearer ' + token}; };
   async function draftAI(body) {
+    if (VIEW) return {ok: false, error: NOVIEW.error.message, type: 'view_only'};
     try {
       const r = await fetch(URL_ + '/functions/v1/lesson-ai?mode=draft', {method: 'POST', headers: Object.assign({'content-type': 'application/json'}, await authHeaders()), body: JSON.stringify(body)});
       const j = await r.json().catch(() => ({}));
@@ -44,7 +45,11 @@
       return Object.assign({}, j, {ok: false, error: (e && e.message) || (typeof e === 'string' && e) || 'The drafting AI couldn\'t answer just now.', type: (e && e.type) || 'http_' + r.status});
     } catch (e) { return {ok: false, error: 'Worldview couldn\'t be reached. Check the internet connection.', type: 'network'}; }
   }
-  const put = (path, blob, type) => db.storage.from(BUCKET).upload(row.id + '/' + path, blob, {upsert: true, contentType: type || blob.type || undefined, cacheControl: path === 'lesson.json' ? '10' : '3600'});
+  /* v3.1.83: "View lesson" (slides.html?l=…&view=1, from the School day panel of a published lesson) is read-only: every way of
+     saving refuses (storage, lesson.json, the lessons table, the drafting AI), not only the buttons, which are hidden or disabled. */
+  const VIEW = new URLSearchParams(location.search).get('view') === '1';
+  const NOVIEW = {error: {message: 'View only: move the lesson back to drafts to change it.'}};
+  const put = (path, blob, type) => VIEW ? Promise.resolve(NOVIEW) : db.storage.from(BUCKET).upload(row.id + '/' + path, blob, {upsert: true, contentType: type || blob.type || undefined, cacheControl: path === 'lesson.json' ? '10' : '3600'});
   async function readLessonFile(id) {
     const {data, error} = await db.storage.from(BUCKET).download(id + '/lesson.json');
     if (error || !data) return null;
@@ -401,12 +406,13 @@
   /* ---------- 3. saving ---------- */
   async function saveNow() {
     clearTimeout(saveTimer); saveTimer = 0;
+    if (VIEW) return false;
     L.updated = new Date().toISOString();
     const {error} = await put('lesson.json', new Blob([JSON.stringify(L)], {type: 'application/json'}), 'application/json');
     const el = $('#saved'); if (el) el.textContent = error ? 'Not saved: ' + error.message : 'Saved';
     return !error;
   }
-  const saveSoon = () => { $('#saved').textContent = 'Saving…'; clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 900); };
+  const saveSoon = () => { if (VIEW) return; $('#saved').textContent = 'Saving…'; clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 900); };
   window.addEventListener('beforeunload', e => { if (saveTimer || busy) { e.preventDefault(); e.returnValue = ''; } });
 
   /* ---------- the lesson page ---------- */
@@ -462,9 +468,25 @@
     loadCost();
   }
   function openLesson() {
-    show('lessonview'); renderLesson();
+    if (VIEW) viewOnly();
+    show('lessonview'); renderLesson(); lockView();
     // the School day panel opens a part directly: #slides (Lecture with pauses), #map (Conversation), #goals
     const h = /^#(slides|goals|check|map)$/.exec(location.hash); if (h) setTimeout(() => { const el = document.getElementById(h[1]); if (el) el.scrollIntoView(); }, 60);
+  }
+  /* view only: a note at the top, every field read-only, every button and choice disabled (again after each redraw), and any
+     edit, click or key on the lesson stopped before the editing code sees it */
+  function lockView() {
+    if (!VIEW) return;
+    document.querySelectorAll('#lessonview textarea, #lessonview input').forEach(el => { el.readOnly = true; if (/^(checkbox|radio|file|date)$/.test(el.type)) el.disabled = true; });
+    document.querySelectorAll('#lessonview select, #lessonview button').forEach(el => { el.disabled = true; });
+  }
+  function viewOnly() {
+    document.body.classList.add('sl-view');
+    const n = document.createElement('p'); n.className = 'sl-viewnote'; n.setAttribute('role', 'note'); n.textContent = 'Published: view only. Move it back to drafts to change it.';
+    $('.sl-head').prepend(n);
+    new MutationObserver(lockView).observe($('#lessonview'), {childList: true, subtree: true});
+    const stop = e => { if (!e.target.closest || !e.target.closest('#lessonview')) return; if (e.type === 'click' && !e.target.closest('[data-act], [data-bar-act], button, label, input, select')) return; e.stopPropagation(); if (e.type === 'click' || e.type === 'keydown' && e.key === 'Enter') e.preventDefault(); };
+    ['input', 'change', 'click', 'keydown', 'paste', 'drop'].forEach(t => document.addEventListener(t, stop, true));
   }
   $('#mapbox').addEventListener('toggle', e => { const li = e.target.closest && e.target.closest('.mp-ch'); if (!li || !L.map) return; const c = L.map.chapters[+li.dataset.c]; if (c) { if (e.target.open) openCh.add(c.id); else openCh.delete(c.id); } }, true);
 
@@ -545,11 +567,13 @@
   const WAYS_MSG = 'Keep at least one way on, so students have a way to start.', WAYS_OK = 'Students can use either one. You can change this later in each lesson.';
   ['#w-conv', '#w-lecture'].forEach(id => $(id).addEventListener('change', e => { if (!$('#w-conv').checked && !$('#w-lecture').checked) { e.target.checked = true; $('#wmsg').textContent = WAYS_MSG; } else $('#wmsg').textContent = WAYS_OK; renderQueue(); }));
   $('#title').addEventListener('change', async () => {
+    if (VIEW) return;
     const name = $('#title').value.trim(); if (!name) { $('#title').value = L.title; return; }
     L.title = name; saveSoon();
     const t = titleFor(name); if (t !== row.title) { const {error} = await db.from(T).update({title: t}).eq('id', row.id); if (!error) row.title = t; }
   });
   $('#lfor').addEventListener('change', async e => {
+    if (VIEW) return;
     const c = WC.get(e.target.value), note = Object.assign({}, row.note || {}); if (c) note.classId = c.id; else delete note.classId;
     const {error} = await db.from(T).update({note}).eq('id', row.id);
     if (error) { $('#lfor').value = (classOfRow() || {}).id || ''; return toast('Couldn\'t move it: ' + error.message); }
@@ -569,7 +593,7 @@
     });
   }
   document.addEventListener('click', async e => {
-    const b = e.target.closest('[data-bar-act=put]'); if (!b) return;
+    const b = e.target.closest('[data-bar-act=put]'); if (!b || VIEW) return;
     const k = b.closest('.sl-bar').querySelector('.bar-day').value; if (!/^\d{4}-\d\d-\d\d$/.test(k)) return toast('Pick a day first.');
     b.disabled = true; const note = Object.assign({}, row.note || {}, {date: k}), {error} = await db.from(T).update({note}).eq('id', row.id);
     if (error) { b.disabled = false; return toast('Couldn\'t save the day. Check the internet connection and try again.'); }

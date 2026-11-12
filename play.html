@@ -265,7 +265,7 @@
   async function freshStyle(html) {
     const mine = styleNo(html); if (!mine) return html;
     try {
-      const r = await fetch('slides-lesson.html?v=3.1.82', {cache: 'no-cache'});
+      const r = await fetch('slides-lesson.html?v=3.1.83', {cache: 'no-cache'});
       const tpl = r.ok ? await r.text() : '';
       return styleNo(tpl) > mine ? tpl : html;
     } catch (e) { return html; }

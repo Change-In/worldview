@@ -335,7 +335,7 @@
     }
     h += `<div class="sc-acts"><button type="button" class="cv-pill" data-pa="try" data-id="${id}"${off}>Try it as a student</button>${it.slides ? '' : `<a class="cv-pill ghost" href="studio.html?from=places&l=${encodeURIComponent(it.id)}">Open in Teacher Studio</a>`}</div>
       <p class="cv-muted">Try it opens your latest draft. Nothing you do there is saved or shown to anyone.</p>
-      <div class="sc-acts">${it.pub ? `<button type="button" class="cv-pill" data-pa="share" data-id="${id}">Share</button><button type="button" class="cv-pill ghost" data-pa="unpub" data-id="${id}"${busy ? ' disabled' : ''}>${LX.sure ? 'Press again: students lose access' : 'Unpublish'}</button><button type="button" class="cv-pill" data-pa="publish" data-id="${id}"${pubOff}>Publish changes</button>` : `<button type="button" class="cv-pill" data-pa="publish" data-id="${id}"${pubOff}>Publish to students</button>`}</div>
+      <div class="sc-acts">${it.pub ? `<button type="button" class="cv-pill" data-pa="share" data-id="${id}">Share</button>${it.slides ? `<a class="cv-pill ghost" href="slides.html?l=${encodeURIComponent(it.id)}&amp;view=1">View lesson</a>` : ''}<button type="button" class="cv-pill ghost" data-pa="unpub" data-id="${id}"${busy ? ' disabled' : ''}>${LX.sure ? 'Press again: students lose access' : 'Unpublish'}</button><button type="button" class="cv-pill" data-pa="publish" data-id="${id}"${pubOff}>Publish changes</button>` : `<button type="button" class="cv-pill" data-pa="publish" data-id="${id}"${pubOff}>Publish to students</button>`}</div>
       ${!ready && !LX.loading ? '<p class="cv-muted">Finish drafting every slide (Lecture with pauses › Open), then you can publish.</p>' : ''}
       <p class="sc-note" role="status">${esc(busy || LX.msg)}</p>
       <p class="cv-muted"><a class="sc-link" href="studio.html?from=places&l=${encodeURIComponent(it.id)}">More in Teacher Studio</a></p>
@@ -367,6 +367,8 @@
       style = STYLE[p.style] || '';
       if (done) { frac = 1; text = 'Finished'; }
       else if (p.phase === 'check') { frac = 0.95; text = 'In the check' + (p.question && p.questions ? ' · question ' + p.question + ' of ' + p.questions : ''); }
+      // v3.1.83: a lecture's place is the slides whose script the student HEARD, not the furthest slide opened
+      else if (p.phase === 'lecture' && typeof p.heard === 'number' && p.slides) { frac = Math.max(0.03, p.heard / p.slides); text = 'Heard ' + p.heard + ' of ' + p.slides + (p.slide ? ' · now on slide ' + p.slide : ''); }
       else if (p.phase === 'lecture' && p.slide && p.slides) { frac = Math.max(0.03, (p.slide - 1) / p.slides); text = 'Slide ' + p.slide + ' of ' + p.slides; }
       else if (p.phase === 'conv' && p.chapter && p.chapters) { frac = Math.max(0.03, (p.chapter - 1) / p.chapters); text = 'Chapter ' + p.chapter + ' of ' + p.chapters; }
       else if (p.phase === 'conv') { frac = 0.03; text = 'Getting started'; }
@@ -412,6 +414,7 @@
     const p = s.p; if (!p || !STYLE[p.style]) return null;
     if (s.done) return {k: 'end', x: 94};
     if (p.phase === 'check') { const q = p.question || 0, Q = Math.max(p.questions || 0, q); return {k: 'q' + q, x: ZL + (q && Q ? (q - 0.5) / Q * (ZC - ZL) : (ZC - ZL) / 2)}; }
+    if (p.phase === 'lecture' && typeof p.heard === 'number') return {k: 'h' + p.heard, x: Math.max(1, p.heard / Math.max(N, p.heard, 1) * ZL)};
     if (p.phase === 'lecture' && p.slide) return {k: 's' + p.slide, x: (p.slide - 0.5) / Math.max(N, p.slide) * ZL};
     if (p.phase === 'conv' && p.chapter) return {k: 'c' + p.chapter, x: (p.chapter - 0.5) / Math.max(C, p.chapter) * ZL};
     if (p.phase === 'conv') return {k: 'c0', x: 2};
@@ -455,8 +458,20 @@
     } else if (off.length) h += `<p class="cv-muted">${sayCount(off.length, 'student')} ${off.length === 1 ? 'has' : 'have'} no place on the line (see All students).</p>`;
     return h;
   }
+  /* v3.1.83: time in the lesson (saved by the lesson page: active seconds while visible and running, hands-free seconds) and the
+     real AI cost of this student's pass: Worldview logs every AI reply, reading aloud, transcription and listening stream with the
+     pass's id (worldview_teacher_lesson_ai_calls.run_id), and the lesson's owner can read those rows. */
+  const mins = sec => { const m = Math.round((+sec || 0) / 60); return sec > 0 && m < 1 ? 'under 1 min' : m + ' min'; };
+  function useH(s) {
+    const t = s.p && s.p.time, c = RES.cost && RES.cost.id === RES.id && RES.cost.runs ? RES.cost.runs[s.r.id] : null;
+    let h = '';
+    if (t && (t.active || t.handsFree)) h += `<p class="rs-use">Time ${esc(mins(t.active))}${t.handsFree ? ' · hands-free ' + esc(mins(t.handsFree)) : ''}</p>`;
+    if (c) h += `<p class="rs-use cv-muted">AI cost for this student: ${money(c.usd)} (${sayCount(c.n, 'call')}: replies, voice, transcription and listening, from Worldview's records)</p>`;
+    else if (RES.cost && RES.cost.id === RES.id) h += '<p class="rs-use cv-muted">AI cost for this student: $0 so far.</p>';
+    return h;
+  }
   function sideH(s, L) {
-    return `<aside class="rs-side" role="dialog" aria-modal="false" aria-label="${esc(s.name)}, progress"><div class="rs-sh"><div><h3>${esc(s.name)}</h3><p class="cv-muted">${esc([s.style, s.text, 'active ' + ago(s.at)].filter(Boolean).join(' · '))}</p></div><button type="button" class="cv-pill ghost rs-x" data-pa="resclose">Close</button></div>${detailH(s, L)}</aside>`;
+    return `<aside class="rs-side" role="dialog" aria-modal="false" aria-label="${esc(s.name)}, progress"><div class="rs-sh"><div><h3>${esc(s.name)}</h3><p class="cv-muted">${esc([s.style, s.text, 'active ' + ago(s.at)].filter(Boolean).join(' · '))}</p>${useH(s)}</div><button type="button" class="cv-pill ghost rs-x" data-pa="resclose">Close</button></div>${detailH(s, L)}</aside>`;
   }
   function resultsH(it) {
     const ready = RES.id === it.id && RES.rows, L = LX.id === it.id ? LX.L : null;
@@ -475,11 +490,11 @@
     if (open) h += sideH(open, L);
     if (rows.length >= 200) h += '<p class="cv-muted">Showing the 200 most recent.</p>';
     if (sums.some(s => s.anon)) h += '<p class="cv-muted">Students who gave no name are numbered in the order they started.</p>';
-    /* where the class got stuck: students' turns per slide (or chapter), counting real questions, not "next" or "okay" */
+    /* where students talked most (v3.1.83, renamed from "Where the class got stuck"): turns per slide (or chapter), not "next" or "okay" */
     const per = {};
     sums.forEach(s => ((s.p && Array.isArray(s.p.said) && s.p.said) || []).forEach(x => { const m = x && /^(slide|chapter) (\d+)/.exec(x.where || ''); if (!m || !x.text || SHORT.test(String(x.text).trim())) return; const k = m[1] + ' ' + m[2], e = per[k] = per[k] || {k, kind: m[1], n: +m[2], turns: 0, who: new Set()}; e.turns++; e.who.add(s.r.id); }));
     const list = Object.values(per).sort((a, b) => b.turns - a.turns || a.n - b.n);
-    h += '<h4>Where the class got stuck</h4>';
+    h += '<h4>Where students talked most</h4><p class="cv-muted">A count of turns, not a judgement. Lots of talk can mean curiosity or confusion.</p>';
     if (!list.length) h += '<p class="cv-muted">Nothing yet. This counts what students ask on each slide.</p>';
     else {
       const max = list[0].turns, top = new Set(list.slice(0, 3).map(x => x.k));
@@ -499,11 +514,13 @@
       else { RES.rows = data || []; RES.at = new Date(); RC.n[it.id] = {started: RES.rows.length, finished: RES.rows.filter(isDone).length}; }
     } catch (e) { if (RES.id === it.id) RES.err = 'Couldn\'t load results. Check the internet connection and press Refresh.'; }
     try { /* what this lesson has cost in AI so far, added up the way Teacher Studio's Published side does (counts only, no words) */
-      const {data, error} = await db.from('worldview_teacher_lesson_ai_calls').select('kind,by_owner,model,input_tokens,output_tokens,audio_seconds,cost_usd').eq('lesson_id', it.id).eq('state', 'ok').limit(5000);
+      const {data, error} = await db.from('worldview_teacher_lesson_ai_calls').select('kind,by_owner,model,input_tokens,output_tokens,audio_seconds,cost_usd,run_id').eq('lesson_id', it.id).eq('state', 'ok').limit(5000);
       if (!error && RES.id === it.id) {
         const c = r => { if (r.cost_usd != null) return +r.cost_usd || 0; if (PER_SEC[r.model]) return (+r.audio_seconds || 0) * PER_SEC[r.model]; const k = RATE[r.model] || [1, 5]; return ((r.input_tokens || 0) * k[0] + (r.output_tokens || 0) * k[1]) / 1e6; };
         const sum = f => (data || []).filter(f).reduce((t, r) => t + c(r), 0);
-        RES.cost = {id: it.id, students: sum(r => !r.by_owner && r.kind !== 'draft'), draft: sum(r => r.kind === 'draft'), testing: sum(r => r.by_owner && r.kind !== 'draft')};
+        // v3.1.83: the same rows added up per student pass (run_id = the run's id)
+        const runs = {}; (data || []).forEach(r => { if (!r.run_id || r.by_owner || r.kind === 'draft') return; const e = runs[r.run_id] = runs[r.run_id] || {usd: 0, n: 0}; e.usd += c(r); e.n++; });
+        RES.cost = {id: it.id, students: sum(r => !r.by_owner && r.kind !== 'draft'), draft: sum(r => r.kind === 'draft'), testing: sum(r => r.by_owner && r.kind !== 'draft'), runs};
       }
     } catch (e) {}
     RES.loading = false; deps.render();

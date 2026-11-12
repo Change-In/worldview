@@ -19,7 +19,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <script src="lesson-entry-popup.js?v=2.1.71"></script>
 <link rel="stylesheet" href="lesson-folders.css?v=2.1.77">
 <link rel="stylesheet" href="courses.css?v=3.1.68">
-<link rel="stylesheet" href="places.css?v=3.1.82">
+<link rel="stylesheet" href="places.css?v=3.1.83">
 <link rel="stylesheet" href="boot-splash.css?v=3.1.22">
 <link rel="stylesheet" href="map-tools.css?v=3.1.21">
 <script src="lesson-folders.js?v=3.1.13"></script>
@@ -2223,7 +2223,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.82 · Nov 11";
+const BUILD = "v3.1.83 · Nov 12";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2231,6 +2231,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.83",date:"Nov 12",changes:["Full screen: the tutor's words now sit in their own band below the slide, never on top of it. On a wide screen you can switch it to a column on the right (Below / Side); your choice is remembered.","The full-screen button now sits just under the slide's corner instead of on the slide.","Lecture: going to a slide because you asked something no longer replays its script. The tutor answers your question from that slide, then offers the full walkthrough or going back to where you were.","Lecture: coming back to a slide you already heard says one short line instead of reading it again. Say it again still replays it.","Coming back to a lesson shows your recent chat and asks: quick recap, or carry on? Nothing replays by itself.","After you answer a question at the end of a slide, the tutor responds and asks if you are ready for the next slide before moving on.","The line at the top of the lecture now has one small segment per slide, filled once you have heard it. Tap a segment to go there.","Teachers: a student's place on the Results line now shows slides heard, not the furthest slide opened (Heard 4 of 22 · now on slide 7).","Teachers: each student's detail shows their time in the lesson, their hands-free time and their real AI cost.","Teachers: \"Where the class got stuck\" is now \"Where students talked most\": a count of turns, not a judgement.","Teachers: View lesson opens a published slides lesson read-only, without unpublishing it."]},
   {tag:"v3.1.82",date:"Nov 11",changes:["Lecture with pauses: what the tutor says for each slide or point now appears in the chat, in order, marked Slide 3 · point 2. Answers stay as chat bubbles.","A full-screen button sits on the slide's top-right corner. In full screen the tutor's latest words run as captions along the bottom of the slide.","Hands-free is one chip on the top line that shows the time and a cost estimate (for example 0:54 · about 1¢). Tap it to turn hands-free off. Mute is in the bottom bar. The floating listening pill no longer covers the title.","After a quiet minute in hands-free, a soft tone and a warning. If nobody answers, hands-free turns off after 30 more seconds to save money.","Share a published lesson from the School tab or from the lesson's Options. A one-day lesson opens from the link with no account.","Owner only: AI requests link with a waiting count on the School tab (teacher view) and in Teacher Studio."]},
   {tag:"v3.1.81",date:"Nov 11",changes:["Lesson screen is calmer: one top line with the title and where you are, one thin progress line, and a single Talk button at the bottom.","Full screen, Audio only, Voice, Hands-free (18+) and How I like to learn now live in one Options menu. Hands-free also shows as one chip on the top line.","The slide is centred and the tutor's words sit beside it (or under it on a phone), fully readable. The welcome-back box is now one small line that fades."]},
   {tag:"v3.1.80",date:"Nov 11",changes:["AI requests: when a company takes your key but the key can't do the job, the card now says so and says what to change. Before, it said \"connected\" and stayed in Waiting with no reason.","Deepgram for hands-free listening needs a key with the Member role. The steps on the card now say that."]},
@@ -16578,7 +16579,7 @@ window.addEventListener("blur", () => {
 <script src="places-data.js?v=3.1.69"></script>
 <script src="places-classes.js?v=3.1.73"></script>
 <script src="lesson-publish.js?v=3.1.72"></script>
-<script src="places.js?v=3.1.82"></script>
+<script src="places.js?v=3.1.83"></script>
 <script src="courses.js?v=3.1.82"></script>
 <!-- NAV-157: lesson map tools; NAV-156: lift the loading screen when Home is ready. -->
 <script src="map-tools.js?v=3.1.21"></script>
