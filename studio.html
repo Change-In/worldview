@@ -45,6 +45,7 @@
   .coach::before { content:""; position:absolute; top:-7px; right:40px; border:7px solid transparent; border-top:0; border-bottom-color:var(--accent); }
   .coach button { justify-self:start; appearance:none; border:0; border-radius:999px; padding:5px 12px; background:var(--on-accent); color:var(--accent-700); font-weight:700; cursor:pointer; }
   .pulse { animation:pulse 1.4s ease-in-out infinite; }
+  .reqn { display:inline-grid; place-items:center; min-width:20px; height:20px; padding:0 6px; margin-left:6px; border-radius:999px; background:var(--accent); color:var(--on-accent); font-size:12px; font-weight:700; line-height:1; }
   @keyframes pulse { 50% { box-shadow:0 0 0 8px var(--accent-100); } }
   @media (prefers-reduced-motion:reduce) { .pulse { animation:none; } }
   .conn { display:flex; gap:8px; align-items:center; font-size:13.5px; }
@@ -318,7 +319,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="places-data.js?v=3.1.69"></script>
-<script src="port-host.js?v=3.1.79"></script>
+<script src="port-host.js?v=3.1.82"></script>
 <script src="lesson-publish.js?v=3.1.72"></script>
 <script src="studio-chat.js?v=3.1.58"></script>
 <script src="lesson-days.js?v=3.1.59"></script>
@@ -356,8 +357,8 @@
     catch (e) { return {ok: false, error: 'Worldview couldn\'t start listening. Check the internet connection.', type: 'network'}; }
   };
   // Which lesson services are on: the AI voice (speak) and continuous listening (continuouslisten). NAV-199: turned on by approving a request in the owner's inbox.
-  const servicesOn = fetch(URL_ + '/functions/v1/lesson-ai?mode=services', {method: 'POST', headers: {'content-type': 'application/json', apikey: KEY}, body: '{"action":"catalog"}'}).then(r => r.json()).then(j => new Set((j.on || []).map(x => x.service))).catch(() => null);
-  const useServices = h => servicesOn.then(on => { if (on) { h.o.aiVoice = on.has('speak'); h.o.listenOn = on.has('continuouslisten'); h.refreshCapabilities(); } });
+  const servicesOn = fetch(URL_ + '/functions/v1/lesson-ai?mode=services', {method: 'POST', headers: {'content-type': 'application/json', apikey: KEY}, body: '{"action":"catalog"}'}).then(r => r.json()).then(j => Array.isArray(j.on) ? j.on : null).catch(() => null);
+  const useServices = h => servicesOn.then(on => { if (on) { const has = s => on.some(x => x && x.service === s), cl = on.find(x => x && x.service === 'continuouslisten' && x.unit === 'minute'); h.o.aiVoice = has('speak'); h.o.listenOn = has('continuouslisten'); h.o.listenPrice = cl && +cl.usdPerUnit > 0 ? +cl.usdPerUnit : 0; h.refreshCapabilities(); } });
   const hearAI = async (blob, lang, lessonId, runId) => {
     try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai?mode=transcribe&lesson=' + lessonId + (runId ? '&run=' + runId : '') + (lang ? '&lang=' + lang : ''), {method: 'POST', headers: Object.assign({'content-type': blob.type || 'audio/webm'}, await authHeaders()), body: blob})); }
     catch (e) { return {ok: false, error: 'Worldview couldn\'t turn that recording into text. Check the internet connection.', type: 'network'}; }
@@ -904,7 +905,7 @@ ${RULES}`;
   addEventListener('popstate', () => { const l = new URLSearchParams(location.search).get('l'); if (l) location.reload(); else showGrid(); });
   addEventListener('focus', poll);
   // A page keeps the code it loaded with. When Teacher Studio is updated, offer a reload (or just reload on the lessons page).
-  const STUDIO_VERSION = '3.1.62';
+  const STUDIO_VERSION = '3.1.82';
   async function checkStudioUpdate() {
     try {
       const t = await fetch('studio.html?check=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '');
@@ -926,8 +927,10 @@ ${RULES}`;
     const a = $('#reqlink'); a.hidden = false;
     try {
       const j = await fetch(URL_ + '/functions/v1/lesson-ai?mode=services', {method: 'POST', headers: Object.assign({'content-type': 'application/json'}, await authHeaders()), body: '{"action":"inbox"}'}).then(r => r.json());
-      const n = (j.requests || []).filter(r => r.status === 'waiting' || r.status === 'needs_key').length;
-      a.textContent = n ? 'AI requests · ' + n : 'AI requests';
+      // v3.1.82: every request still waiting on the owner (waiting, needs a key, needs building) is counted on a small badge
+      const n = (j.requests || []).filter(r => ['waiting', 'needs_key', 'needs_connector'].includes(r.status)).length;
+      a.textContent = 'AI requests';
+      if (n) { const b = document.createElement('span'); b.className = 'reqn'; b.textContent = n; a.appendChild(b); a.setAttribute('aria-label', 'AI requests, ' + n + ' waiting'); } else a.removeAttribute('aria-label');
       a.classList.toggle('pulse', n > 0);
     } catch (e) {}
   }

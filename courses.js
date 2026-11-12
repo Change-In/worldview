@@ -702,7 +702,18 @@ function scrHome() {
     try { const {error} = await db.from('worldview_teacher_lessons').update({note}).eq('id', id); if (error) return false; } catch (e) { return false; }
     const l = MY.find(x => x.id === id); if (l) l.note = note; return true;
   }
-  WP().init({render, toast, real: () => REAL(), my: () => MY, startReal, playLink, saveNote, db: () => read(() => backendClient), reload: loadPublished});
+  /* v3.1.82: the owner's AI requests count for the School tab: requests still waiting on the owner (waiting, needs a key,
+     needs building). Same inbox call as Teacher Studio and requests.html; the server answers only for the owner. null = unknown. */
+  async function inboxWaiting() {
+    const db = read(() => backendClient), url = read(() => SUPABASE_URL), key = read(() => SUPABASE_PUBLISHABLE_KEY);
+    if (!db || !url || !key) return null;
+    const s = (await db.auth.getSession()).data.session; if (!s) return null;
+    const r = await fetch(url + '/functions/v1/lesson-ai?mode=services', {method: 'POST', headers: {'content-type': 'application/json', apikey: key, authorization: 'Bearer ' + s.access_token}, body: '{"action":"inbox"}'});
+    const j = await r.json().catch(() => null);
+    if (!r.ok || !j || !Array.isArray(j.requests)) return null;
+    return j.requests.filter(x => x && ['waiting', 'needs_key', 'needs_connector'].includes(x.status)).length;
+  }
+  WP().init({render, toast, real: () => REAL(), my: () => MY, startReal, playLink, saveNote, db: () => read(() => backendClient), reload: loadPublished, isOwner: verifiedOwner, inbox: inboxWaiting});
 
   /* ---------------- visibility ---------------- */
   function blocked() {

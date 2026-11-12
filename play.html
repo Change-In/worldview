@@ -26,7 +26,7 @@
   /* a lesson made from slides (v3.1.72) gets a wide, plain stage instead of the phone frame */
   body.slides-lesson .wrap { max-width:1040px; }
   body.slides-lesson .phone { padding:0; background:none; border-radius:0; }
-  body.slides-lesson .phone iframe { height:calc(100vh - 96px); height:calc(100dvh - 96px); min-height:460px; border:0; border-radius:0; }
+  body.slides-lesson .phone iframe { height:calc(100vh - 96px); height:calc(100dvh - 96px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)); min-height:460px; border:0; border-radius:0; } /* v3.1.82: the phone's notch and home bar are taken off, so the lesson's bottom bar stays on screen */
   body.slides-lesson #lesson > .bar { display:none; } /* the lesson page has its own thin progress line */
   body.slides-lesson .ph-panel:empty { display:none; }
 </style>
@@ -80,7 +80,7 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.79"></script>
+<script src="port-host.js?v=3.1.82"></script>
 <script src="lesson-days.js?v=3.1.59"></script>
 <script>
 (() => {
@@ -129,8 +129,9 @@
     catch (e) { return {ok: false, error: 'Worldview couldn\'t start listening. Check the internet connection.', type: 'network'}; }
   };
   // Which lesson services are on: the AI voice (speak) and continuous listening (continuouslisten). NAV-199: turned on by approving a request in the owner's inbox.
-  const servicesOn = fetch(URL_ + '/functions/v1/lesson-ai?mode=services', {method: 'POST', headers: {'content-type': 'application/json', apikey: KEY}, body: '{"action":"catalog"}'}).then(r => r.json()).then(j => new Set((j.on || []).map(x => x.service))).catch(() => null);
-  const useServices = h => servicesOn.then(on => { if (on) { h.o.aiVoice = on.has('speak'); h.o.listenOn = on.has('continuouslisten'); h.refreshCapabilities(); } });
+  const servicesOn = fetch(URL_ + '/functions/v1/lesson-ai?mode=services', {method: 'POST', headers: {'content-type': 'application/json', apikey: KEY}, body: '{"action":"catalog"}'}).then(r => r.json()).then(j => Array.isArray(j.on) ? j.on : null).catch(() => null);
+  // v3.1.82: also continuous listening's price per minute, so the lesson can show what hands-free costs
+  const useServices = h => servicesOn.then(on => { if (on) { const has = s => on.some(x => x && x.service === s), cl = on.find(x => x && x.service === 'continuouslisten' && x.unit === 'minute'); h.o.aiVoice = has('speak'); h.o.listenOn = has('continuouslisten'); h.o.listenPrice = cl && +cl.usdPerUnit > 0 ? +cl.usdPerUnit : 0; h.refreshCapabilities(); } });
   const hearAI = async (blob, lang, lessonId, runId) => {
     try { return await norm(await fetch(URL_ + '/functions/v1/lesson-ai?mode=transcribe&lesson=' + lessonId + (runId ? '&run=' + runId : '') + (lang ? '&lang=' + lang : ''), {method: 'POST', headers: Object.assign({'content-type': blob.type || 'audio/webm'}, await authHeaders()), body: blob})); }
     catch (e) { return {ok: false, error: 'Worldview couldn\'t turn that recording into text. Check the internet connection.', type: 'network'}; }
@@ -171,7 +172,7 @@
     if (!/^[0-9a-f-]{36}$/i.test(id)) { $('#loading').hidden = true; $('#missing').hidden = false; return; }
     let data, error;
     if (preview) { // the owner's own draft (only its owner can read it); no run, no save
-      const r = await db.from('worldview_teacher_lessons').select('id,title,html').eq('id', id).maybeSingle();
+      const r = await db.from('worldview_teacher_lessons').select('id,title,html,shared').eq('id', id).maybeSingle();
       data = r.data ? [Object.assign({version: null}, r.data)] : []; error = r.error;
     } else ({data, error} = await db.rpc('worldview_teacher_lesson_get', {p_lesson: id}));
     lesson = !error && Array.isArray(data) && data[0];
@@ -264,7 +265,7 @@
   async function freshStyle(html) {
     const mine = styleNo(html); if (!mine) return html;
     try {
-      const r = await fetch('slides-lesson.html?v=3.1.81', {cache: 'no-cache'});
+      const r = await fetch('slides-lesson.html?v=3.1.82', {cache: 'no-cache'});
       const tpl = r.ok ? await r.text() : '';
       return styleNo(tpl) > mine ? tpl : html;
     } catch (e) { return html; }
@@ -323,6 +324,14 @@
   }
   $('#leave').addEventListener('click', leave);
   $('#finishedback').addEventListener('click', leave);
+  /* v3.1.82: Share this lesson (wv.share in the lesson's Options): the student link, and in plain words what the person who
+     gets it needs. A one-day lesson opens with no account; a lesson over several days asks them to sign in. */
+  const shareInfo = () => {
+    const url = location.origin + location.pathname + '?l=' + lesson.id;
+    const need = course ? 'They need to sign in to Worldview (or make a free account), because this lesson runs over several days.' : 'They can open it on a phone or computer with no account: they press Start.';
+    const mine = preview ? ' Their AI replies, the voice and Hands-free are paid from your lesson budget, within Worldview\'s daily and monthly limits.' + (lesson.shared === false ? ' This lesson isn\'t published yet: publish it first, or the link won\'t open for them.' : '') : '';
+    return {url, title: lesson.title, text: 'A Worldview lesson: ' + lesson.title, note: need + mine};
+  };
   function openLesson(html, folder, o) {
     $('#leave').hidden = false; $('#finished').hidden = true; document.body.classList.toggle('slides-lesson', /name="worldview-style"/.test(html || ''));
     $('#intro').hidden = true; $('#lesson').hidden = false; $('#title').textContent = lesson.title;
@@ -330,7 +339,7 @@
     host = new WorldviewPortHost.PortHost({frame: $('#frame'), panel: $('#panel'), progress: $('#prog'), ai: req => askAI(req, lesson.id, rid()), transcribe: (b, l) => hearAI(b, l, lesson.id, rid()), speak: req => speakAI(req, lesson.id, rid()),
       live: {create: req => liveAI(Object.assign({action: 'create'}, req), lesson.id, rid()), close: callId => liveAI({action: 'close', callId}, lesson.id, rid())},
       stream: {create: req => streamAI(Object.assign({action: 'create'}, req), lesson.id, rid()), close: callId => streamAI({action: 'close', callId}, lesson.id, rid())},
-      state: o.state, days: o.days, initialRecord: o.initialRecord,
+      state: o.state, days: o.days, initialRecord: o.initialRecord, share: shareInfo(),
       onChange: (record, done) => { if (preview) { if (done) $('#finished').hidden = false; return; } latest = record; finished = finished || done; if (o.onRecord) o.onRecord(record); if (done) { if (o.onDone) o.onDone(); $('#finished').hidden = false; } clearTimeout(timer); timer = setTimeout(save, done ? 0 : 800); }});
     useServices(host);
     // a published version plays its own locked-in files; older versions use the lesson's files

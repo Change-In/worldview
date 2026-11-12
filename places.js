@@ -43,7 +43,7 @@
 
   /* ---------- state ---------- */
   const P = {scr: 'school', verified: load('verified', false), role: load('role', 'student') === 'teacher' ? 'teacher' : 'student', month: new Date(TODAY.getFullYear(), TODAY.getMonth(), 1), sel: null, code: false, query: '', enrolled: load('enrolled', {'MA 132': {2: ['maya']}}), stars: load('stars', {}), cur: 'MA 132', unit: 2, sort: 'rated', whole: false, others: false, done: load('done', {}), day: null, sheet: null, demo: null, ds: {}, demoW: ''};
-  let deps = {render() {}, toast() {}, real: () => [], my: () => [], startReal() {}, saveNote: async () => false, playLink: id => 'play.html?l=' + id, db: () => null, reload: async () => {}};
+  let deps = {render() {}, toast() {}, real: () => [], my: () => [], startReal() {}, saveNote: async () => false, playLink: id => 'play.html?l=' + id, db: () => null, reload: async () => {}, isOwner: () => false, inbox: async () => null};
   const mine = (c, i) => ((P.enrolled[c.code] || {})[i] || []);
   const myTutors = (c, i) => mine(c, i).map(id => c.units[i].tutors.find(t => t.id === id)).filter(Boolean);
   const myDots = c => { const out = []; c.units.forEach(u => myTutors(c, u.i).forEach(t => lessonDates(u, t).forEach(l => out.push(l.d)))); return out; };
@@ -273,7 +273,8 @@
   function schoolHome() {
     const teacher = P.role === 'teacher', all = UC();
     if (teacher) {
-      return `${switchH()}<div class="sc-main"><h1 class="sc-h">School</h1><p class="sc-sub">Your classes. Pick one to plan its days.</p>
+      const rq = reqH();
+      return `${switchH()}<div class="sc-main"><div class="sc-top"><div><h1 class="sc-h">School</h1><p class="sc-sub">Your classes. Pick one to plan its days.</p></div>${rq ? `<div class="sc-acts">${rq}</div>` : ''}</div>
         <div class="sc-classes">${all.map(c => { const its = itemsFor(c), dr = its.filter(x => !x.d).length, on = its.length - dr; return `<button type="button" class="sc-class" style="--cc:${ccolor(c)}" data-pa="open" data-c="${esc(c.id)}"><b>${esc(c.name)}</b><span>${esc(c.code)}${c.code ? ' · ' : ''}meets ${meetText(c)}</span><span>${on} on the calendar · ${dr} in drafts</span></button>`; }).join('')}</div>
         <a class="sc-link" href="studio.html?from=places">Build your own in Teacher Studio</a></div>`;
     }
@@ -334,7 +335,7 @@
     }
     h += `<div class="sc-acts"><button type="button" class="cv-pill" data-pa="try" data-id="${id}"${off}>Try it as a student</button>${it.slides ? '' : `<a class="cv-pill ghost" href="studio.html?from=places&l=${encodeURIComponent(it.id)}">Open in Teacher Studio</a>`}</div>
       <p class="cv-muted">Try it opens your latest draft. Nothing you do there is saved or shown to anyone.</p>
-      <div class="sc-acts">${it.pub ? `<button type="button" class="cv-pill ghost" data-pa="unpub" data-id="${id}"${busy ? ' disabled' : ''}>${LX.sure ? 'Press again: students lose access' : 'Unpublish'}</button><button type="button" class="cv-pill" data-pa="publish" data-id="${id}"${pubOff}>Publish changes</button>` : `<button type="button" class="cv-pill" data-pa="publish" data-id="${id}"${pubOff}>Publish to students</button>`}</div>
+      <div class="sc-acts">${it.pub ? `<button type="button" class="cv-pill" data-pa="share" data-id="${id}">Share</button><button type="button" class="cv-pill ghost" data-pa="unpub" data-id="${id}"${busy ? ' disabled' : ''}>${LX.sure ? 'Press again: students lose access' : 'Unpublish'}</button><button type="button" class="cv-pill" data-pa="publish" data-id="${id}"${pubOff}>Publish changes</button>` : `<button type="button" class="cv-pill" data-pa="publish" data-id="${id}"${pubOff}>Publish to students</button>`}</div>
       ${!ready && !LX.loading ? '<p class="cv-muted">Finish drafting every slide (Lecture with pauses › Open), then you can publish.</p>' : ''}
       <p class="sc-note" role="status">${esc(busy || LX.msg)}</p>
       <p class="cv-muted"><a class="sc-link" href="studio.html?from=places&l=${encodeURIComponent(it.id)}">More in Teacher Studio</a></p>
@@ -529,6 +530,35 @@
     if (sel && sel.mine && sel.pub) loadRuns(sel);
   }
   const mineItem = id => itemsFor(curClass()).find(x => x.kind === 'real' && x.id === id);
+  /* v3.1.82: Share a published lesson: the phone's share sheet where there is one, else the link is copied (or shown), with
+     what the person who gets it needs. Students open a one-day lesson with no account; the AI they use counts against this
+     teacher's lesson budget, inside Worldview's daily and monthly limits (no access rule changes here). */
+  async function shareLesson(id) {
+    const it = mineItem(id); if (!it || !it.pub) return;
+    const url = deps.playLink(id);
+    const need = it.slides ? 'They can open it on a phone or computer with no account: they press Start.' : 'They can open it with no account (a lesson over several days asks them to sign in).';
+    const tail = ' ' + need + ' Their AI replies, the voice and Hands-free are paid from your lesson budget, within Worldview\'s daily and monthly limits.';
+    let how = '';
+    if (navigator.share) { try { await navigator.share({title: it.title, text: 'A Worldview lesson: ' + it.title, url}); how = 'Shared.'; } catch (e) { if (e && e.name === 'AbortError') return; } }
+    if (!how) { try { await navigator.clipboard.writeText(url); how = 'Link copied: ' + url + '.'; } catch (e) { how = 'The link to send: ' + url; } }
+    LX.msg = how + tail; deps.render();
+  }
+  /* v3.1.82: for Worldview's owner only (the server-verified owner check), an always-visible link to the AI requests inbox with
+     a badge counting the requests waiting on the owner. Nothing shows for anyone else; a failed count shows the quiet link. */
+  const REQ = {n: null, at: 0, busy: false};
+  function reqH() {
+    let owner = false; try { owner = P.role === 'teacher' && !!deps.isOwner(); } catch (e) { owner = false; }
+    if (!owner) return '';
+    if (!REQ.busy && Date.now() - REQ.at > 120000) loadReq();
+    const n = REQ.n || 0;
+    return `<a class="sc-link sc-req" href="requests"${n ? ` aria-label="AI requests, ${n} waiting"` : ''}>AI requests${n ? `<span class="sc-badge">${n}</span>` : ''}</a>`;
+  }
+  async function loadReq() {
+    REQ.busy = true; REQ.at = Date.now(); let n = null;
+    try { n = await deps.inbox(); } catch (e) { n = null; }
+    REQ.busy = false;
+    if (typeof n === 'number' && n !== REQ.n) { REQ.n = n; deps.render(); }
+  }
   async function tryAsStudent(id) {
     const db = deps.db(), it = mineItem(id); if (!db || !it) return;
     LX.busy = 'Opening your draft…'; deps.render();
@@ -581,7 +611,7 @@
     const dr = `<section class="sc-drafts" aria-labelledby="sc-dh"><h2 class="sc-h2" id="sc-dh">Drafts <span>${drafts.length}</span></h2>
       ${drafts.length ? `<p class="cv-muted">Lessons with no day yet. Open one and choose a day. On a laptop you can also drag it onto a day.</p>${drafts.map(x => scCard(x, P.sel)).join('')}` : '<p class="cv-muted">Nothing waiting. A lesson you make from slides lands here until you give it a day.</p>'}</section>`;
     return `${switchH()}<div class="sc-layout two"><div class="sc-main"><button type="button" class="sc-link" data-pa="school">← All classes</button>
-      <div class="sc-top"><div><h1 class="sc-h"><i class="sc-dot" style="background:${ccolor(c)}"></i>${esc(c.name)}</h1><p class="sc-sub">${esc(c.code)}${c.code ? ' · ' : ''}meets ${meetText(c)}</p></div><div class="sc-acts"><a class="cv-pill" href="slides.html?class=${encodeURIComponent(c.id)}">Add presentations</a><button type="button" class="cv-pill ghost" data-pa="editclass">Edit class</button></div></div>
+      <div class="sc-top"><div><h1 class="sc-h"><i class="sc-dot" style="background:${ccolor(c)}"></i>${esc(c.name)}</h1><p class="sc-sub">${esc(c.code)}${c.code ? ' · ' : ''}meets ${meetText(c)}</p></div><div class="sc-acts"><a class="cv-pill" href="slides.html?class=${encodeURIComponent(c.id)}">Add presentations</a><button type="button" class="cv-pill ghost" data-pa="editclass">Edit class</button>${reqH()}</div></div>
       ${P.edit ? editForm(c) : ''}${cal.html}${items.length ? (cal.n || drafts.length ? '' : '<p class="cv-muted sc-none">No lessons this month.</p>') : '<p class="cv-muted sc-none">No lessons in this class yet. Press Add presentations to make one from your slides.</p>'}</div>
       <div class="sc-side">${dr}${panelH(items)}</div></div>`;
   }
@@ -684,6 +714,7 @@
       case 'role': if (d.r !== P.role) { P.role = d.r; save('role', d.r); } break;
       case 'pick': { P.sel = P.sel === d.k ? null : d.k; const it = P.sel && viewItems().find(x => x.key === P.sel); if (it && it.mine && P.role === 'teacher' && LX.id !== it.id) loadLx(it); break; }
       case 'try': tryAsStudent(d.id); return;
+      case 'share': shareLesson(d.id); return;
       case 'publish': publishLx(d.id); return;
       case 'unpub': unpublishLx(d.id); return;
       case 'style': changeStyle(P.sel && (viewItems().find(x => x.key === P.sel) || {}).id, d.s, d.checked === true || d.checked === 'true'); return;

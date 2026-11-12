@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="worldview-style" content="slides-v1 6">
+<meta name="worldview-style" content="slides-v1 7">
 <title>Lesson</title>
 <!-- How a student takes a lesson made from slides (v3.1.72, LES-340, LES-341; v3.1.74 steps, talk button, audio only, full screen,
      resume). This page is STYLE ONLY: it reads lesson.json (format "slides-v1") with wv.readFile and knows nothing about any one
@@ -27,7 +27,14 @@
      sentence waits for the rest; thinking noises are ignored), handles next / wait / say that again / go back itself, and sends
      the rest to the decider, which may also answer "wait" (muttering, talk not meant for the lesson). Words that arrive while a
      reply is being decided are joined to it and decided once. Nothing moves on by itself; after a point it may ask once whether
-     to go on, and a long quiet only shows a line. Listening stops while the tab is hidden or the lesson is paused. -->
+     to go on, and a long quiet only shows a line. Listening stops while the tab is hidden or the lesson is paused.
+     v3.1.82: each point's script is a tutor message in the chat log, marked "Slide 3 · point 2", added when it is spoken (resume
+     shows the saved log and speaks only the current point). A full-screen button sits on the slide; in full screen the tutor's
+     latest words run as a caption along the slide's bottom. The host's floating listening pill is not drawn (listen.start bar:
+     'lesson'); the top-bar chip shows the hands-free time and its cost (the open stream's minutes, muted ones too, because the
+     stream stays open while muted, times the service's price from wv.capabilities.listenPrice, else $0.0077 a minute). After 60 s
+     with no words from the student (and Worldview not speaking or thinking) a soft tone and a warning; 30 s later hands-free turns
+     off and the stream closes. Share this lesson (wv.share) asks the host to share or copy the lesson's link. -->
 <style>
   :root { --ink:#2c241c; --soft:#6f6355; --paper:#f8f4ec; --card:#fdfaf5; --line:#e4dccb; --accent:#bd5a30; --accent2:#3f6b5a; --tint:#f3e6dc; --tint2:#e3eee8; --on:#fff; --cover:#f1eee8; color-scheme:light; }
   @media (prefers-color-scheme: dark) { :root { --ink:#f4ece0; --soft:#b6a894; --paper:#241f1a; --card:#332c25; --line:rgba(244,236,224,.16); --accent:#e2895a; --accent2:#7db38e; --tint:rgba(226,137,90,.16); --tint2:rgba(125,179,142,.15); --on:#241f1a; color-scheme:dark; } }
@@ -160,7 +167,6 @@
   .shell.fs .main:has(.lec) { overflow-y:auto; }
   .shell.fs .lec:not(.one) { height:auto; }
   .shell.fs .spic { max-height:calc(100vh - 300px) !important; max-height:calc(100dvh - 300px) !important; }
-  .shell.fs .cap { margin:0 auto; max-width:900px; }
   .shell.fs .words { overflow:visible; height:auto; }
   .shell.fs .side { display:none; }
   .shell.fs.chat .side { display:grid; position:fixed; top:0; right:0; bottom:0; width:min(420px,100%); background:var(--paper); border-left:1px solid var(--line); padding:12px; z-index:40; align-content:start; box-shadow:-8px 0 24px rgba(0,0,0,.18); overflow-y:auto; }
@@ -195,6 +201,34 @@
   .hfl { font-size:13.5px; color:var(--soft); }
   .hfdlg { position:fixed; inset:0; background:rgba(0,0,0,.45); display:grid; place-items:center; z-index:20; padding:16px; }
   .hfdlg > div { background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:16px; padding:18px 20px; max-width:420px; width:100%; display:grid; gap:12px; box-shadow:0 12px 40px rgba(0,0,0,.3); }
+  /* v3.1.82: the script is part of the chat log (a quiet "Slide 3" mark, no bubble); the hands-free chip carries its time and cost;
+     a full-screen button on the slide; in full screen the tutor's latest words run as a caption along the bottom of the slide */
+  .m.script { background:transparent; border-left:3px solid var(--accent2); border-radius:0 10px 10px 0; padding:2px 12px 4px; max-width:100%; font-size:17px; line-height:1.55; }
+  .m .mlab { display:block; font-size:12px; font-weight:650; letter-spacing:.04em; text-transform:uppercase; color:var(--accent2); margin-bottom:2px; white-space:normal; }
+  .tbtn.chip .ct { font-weight:500; color:var(--soft); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .tbtn.chip[aria-pressed=true][data-muted=true] .cd { background:var(--soft); }
+  @media (max-width:420px) { .tbtn.chip[aria-pressed=true] .hfn, .tbtn.chip .ab { display:none; } }
+  .fsx { position:absolute; top:8px; right:8px; width:40px; height:40px; border-radius:10px; border:0; background:rgba(20,16,12,.55); color:#fff; display:grid; place-items:center; cursor:pointer; line-height:0; z-index:2; padding:0; }
+  .fsx:hover { background:rgba(20,16,12,.78); }
+  .fsx:focus-visible { outline:3px solid var(--accent2); outline-offset:2px; }
+  .shell.audio .fsx { display:none; }
+  .capstrip { display:none; }
+  .shell.fs .capstrip { display:block; position:absolute; left:0; right:0; bottom:0; z-index:1; padding:8px 16px 10px; background:rgba(20,16,12,.82); color:#fff; text-align:left; line-height:1.45; font-size:clamp(15px,2vw,20px); border-radius:0 0 10px 10px; }
+  .capstrip .capt { max-height:4.35em; overflow:hidden; display:flex; flex-direction:column; justify-content:flex-end; overflow-wrap:anywhere; }
+  .capstrip .capt.over { -webkit-mask-image:linear-gradient(to bottom, transparent 0, #000 1.6em); mask-image:linear-gradient(to bottom, transparent 0, #000 1.6em); }
+  .capstrip .capst { display:flex; gap:6px; align-items:center; font-size:12.5px; font-weight:650; opacity:.85; margin-bottom:2px; }
+  .capstrip .capst i { width:8px; height:8px; border-radius:50%; background:#7db38e; }
+  .capstrip .capst[data-s=off] i { background:#9a8f80; }
+  .capstrip .capst[data-s=speak] i { background:#e2895a; }
+  @media (max-width:700px) { .shell.fs .capstrip { position:static; border-radius:10px; margin-top:6px; } }
+  /* phones: the slide stays at the top and the chat log scrolls under it */
+  @media (max-width:999px) {
+    .main:has(.lec:not(.one)) { overflow:hidden; display:flex; flex-direction:column; }
+    .lec:not(.one) { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; gap:10px; }
+    .lec:not(.one) .stagecol { flex:none; }
+    .lec:not(.one) .words { flex:1 1 auto; min-height:0; overflow-y:auto; align-content:start; }
+    .shell.fs .main:has(.lec) { overflow-y:auto; display:block; }
+  }
 </style></head>
 <body>
 <div class="shell" id="app"><p class="soft" id="loading">Opening the lesson…</p></div>
@@ -208,7 +242,8 @@
   var app = document.getElementById('app');
   var L = null, ST = {conversation: true, lecture: true, voice: true, handsFree: true};
   // hands-free (v3.1.79): hf = the student's choice on this device, hfOk = the notice was accepted; the rest is this visit only
-  var HF = {hf: false, hfOk: false, stop: false, idle: false, starts: 0, buf: '', t: 0, held: '', heldAt: 0, heard: 0, spokeEnd: 0, speaking: false, spk: null, said: '', state: 'off', live: '', resume: false, asked: {}, askT: 0, quiet: false};
+  var HF = {hf: false, hfOk: false, stop: false, idle: false, starts: 0, buf: '', t: 0, held: '', heldAt: 0, heard: 0, spokeEnd: 0, speaking: false, spk: null, said: '', state: 'off', live: '', resume: false, asked: {}, askT: 0,
+    acc: 0, liveAt: 0, words: 0, tap: 0, act: 0, warn: 0, ac: null}; // v3.1.82: listened time (acc + the open stream since liveAt) and the quiet warning
   var S = {phase: '', voice: true, listening: false, muted: false, busy: false, queue: [], hist: [], ev: 0, i: 0, k: 0, asked: {}, pauseOpen: false, stepAsk: false, turns: 0, covered: {}, qi: 0, ans: [], fu: 0, results: [], lastAi: '', mode: '', log: [], audio: false, fs: false, typing: false, talking: false, where: '', paused: false, resuming: false, cv: null, pref: '', lastSaid: '', lastKind: '', moveAsk: false, offer: 0, limitSaid: false, said: [], startedAt: ''};
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]; }); };
@@ -234,7 +269,7 @@
     if (!S.phase) return;
     var p = {v: 2, phase: S.phase, mode: S.mode, i: S.i, k: S.k, asked: S.asked, pauseOpen: S.pauseOpen, stepAsk: S.stepAsk, hist: S.hist.slice(-10).map(function (h) { return {role: h.role, content: clip(h.content, 800)}; }),
       turns: S.turns, covered: S.covered, qi: S.qi, ans: S.ans.slice(-6).map(function (a) { return clip(a, 800); }), fu: S.fu, results: S.results, ev: S.ev, cv: S.cv, lastAi: clip(S.lastAi, 800), audio: S.audio,
-      log: S.log.slice(-24).map(function (m) { return [m[0], clip(m[1], 600)]; }), lastSaid: clip(S.lastSaid, 1500), lastKind: S.lastKind, moveAsk: S.moveAsk, offer: S.offer, limitSaid: S.limitSaid,
+      log: S.log.slice(-24).map(function (m) { return m[2] ? [m[0], clip(m[1], 1200), clip(m[2], 60)] : [m[0], clip(m[1], 600)]; }), lastSaid: clip(S.lastSaid, 1500), lastKind: S.lastKind, moveAsk: S.moveAsk, offer: S.offer, limitSaid: S.limitSaid,
       said: S.said.slice(-30), startedAt: S.startedAt};
     try { wv.state.set(p); } catch (e) {}
     place();
@@ -289,32 +324,46 @@
     if (!always() || S.listening || S.paused || HF.idle || document.visibilityState === 'hidden' || !S.phase || S.phase === 'end') return;
     if (++HF.starts > 8) { HF.stop = true; note('Hands-free stopped after restarting many times. Press Talk, or turn Hands-free on again.'); voiceUi(); return; }
     S.listening = true; S.muted = false; HF.state = 'start'; voiceUi();
-    Promise.resolve(wv.listen.start({stopSpeak: true, label: 'Hands-free', maxMinutes: 20, idleSeconds: 900, keyterms: keyterms()}, onHear)).then(function (r) {
+    // bar: 'lesson' = this page shows the listening state itself (the top-bar chip), so Worldview draws no pill over it
+    Promise.resolve(wv.listen.start({stopSpeak: true, label: 'Hands-free', maxMinutes: 20, idleSeconds: 900, keyterms: keyterms(), bar: 'lesson'}, onHear)).then(function (r) {
       if (r && r.ok === false) {
-        S.listening = false;
+        S.listening = false; liveEnd();
         if (r.type !== 'background' && r.type !== 'replaced' && r.type !== 'page_closed') { HF.stop = true; note('Hands-free couldn\'t start. ' + clean(r.error || '', 200) + ' Press Talk instead, or try Hands-free again later.'); }
         voiceUi(); return;
       }
+      if (S.listening) liveNow();
       if (S.listening && HF.state === 'start') { HF.state = 'listen'; voiceUi(); }
-    }, function () { S.listening = false; voiceUi(); });
+    }, function () { S.listening = false; liveEnd(); voiceUi(); });
   }
-  function listenStop() { if (S.listening) { try { wv.listen.stop(); } catch (e) {} } S.listening = false; S.muted = false; HF.state = 'off'; clearTimeout(HF.t); HF.buf = ''; HF.live = ''; hfUi(); }
+  function listenStop() { if (S.listening) { try { wv.listen.stop(); } catch (e) {} } S.listening = false; S.muted = false; HF.state = 'off'; clearTimeout(HF.t); HF.buf = ''; HF.live = ''; liveEnd(); hfWarnOff(); hfUi(); }
+  /* v3.1.82: how long the listening stream has been open this visit. Muted time counts: the stream stays open while muted
+     (the port only stops sending sound), and Worldview records a session's whole length. A hidden tab, a pause or turning
+     Hands-free off closes the stream, so that time does not count. */
+  function liveNow() { if (!HF.liveAt) { HF.liveAt = Date.now(); HF.words = 0; } }
+  function liveEnd() { if (HF.liveAt) { HF.acc += Math.max(0, Date.now() - HF.liveAt); HF.liveAt = 0; } }
+  var listenSecs = function () { return Math.floor((HF.acc + (HF.liveAt ? Math.max(0, Date.now() - HF.liveAt) : 0)) / 1000); };
+  // the service's price per minute (from Worldview's services list, through the port), else Deepgram nova-3's
+  var listenPrice = function () { var p = +((wv.capabilities || {}).listenPrice); return p > 0 && p < 1 ? p : 0.0077; };
+  function money(usd) { var c = usd * 100; return c < 0.5 ? 'under 1¢' : c < 99.5 ? 'about ' + Math.max(1, Math.round(c)) + '¢' : 'about $' + usd.toFixed(2); }
+  var clock = function (s) { return Math.floor(s / 60) + ':' + ('0' + s % 60).slice(-2); };
   function onHear(e) {
     if (!e) return;
     if (e.type === 'speechstart') { heardNow(); if (HF.buf) { clearTimeout(HF.t); HF.t = setTimeout(hfSend, 6000); } }
-    else if (e.type === 'transcript') { if (e.echo) return; heardNow(); HF.live = clean(e.soFar || e.text, 160); if (HF.buf) { clearTimeout(HF.t); HF.t = setTimeout(hfSend, 6000); } hfUi(); }
-    else if (e.type === 'interrupted') { HF.intAt = Date.now(); HF.speaking = false; HF.spk = null; HF.spokeEnd = Date.now(); heardNow(); }
-    else if (e.type === 'utterance' && e.text) hfUtter(e.text);
-    else if (e.type === 'state' && e.state === 'listening') { if (HF.state === 'start') { HF.state = 'listen'; voiceUi(); } else hfUi(); }
+    else if (e.type === 'transcript') { if (e.echo) return; heardNow(); spokeNow(); HF.live = clean(e.soFar || e.text, 160); if (HF.buf) { clearTimeout(HF.t); HF.t = setTimeout(hfSend, 6000); } hfUi(); }
+    else if (e.type === 'interrupted') { HF.intAt = Date.now(); HF.speaking = false; HF.spk = null; HF.spokeEnd = Date.now(); heardNow(); spokeNow(); }
+    else if (e.type === 'utterance' && e.text) { spokeNow(); hfUtter(e.text); }
+    else if (e.type === 'state' && e.state === 'listening') { liveNow(); if (HF.state === 'start') { HF.state = 'listen'; voiceUi(); } else hfUi(); }
     else if (e.type === 'muted') { S.muted = !!e.on || e.muted === true; voiceUi(); }
     else if (e.type === 'end') {
-      S.listening = false; HF.state = 'off';
+      S.listening = false; HF.state = 'off'; liveEnd(); hfWarnOff();
       if (e.reason === 'idle') { HF.idle = true; hfLine('Hands-free paused after a long quiet. Press Listen again when you want to talk.'); }
       else if (e.reason === 'stopped_by_user') HF.stop = true;
       voiceUi(); // starts again after a time limit, a dropped connection or a hidden tab (when it is visible again)
     }
   }
-  function heardNow() { HF.heard = Date.now(); HF.state = 'hear'; HF.quiet = false; clearTimeout(HF.askT); hfLine(''); hfUi(); }
+  function heardNow() { HF.heard = Date.now(); HF.state = 'hear'; clearTimeout(HF.askT); if (!HF.warn) hfLine(''); hfUi(); }
+  // words from the student (not a noise, not Worldview's own echo): the quiet clock starts again
+  function spokeNow() { HF.words = Date.now(); if (HF.warn) { hfWarnOff(); hfLine(''); } }
   var wordsOf = function (t) { return String(t || '').toLowerCase().replace(/[’]/g, '\'').replace(/[^a-z0-9'\s]/g, ' ').split(/\s+/).filter(Boolean); };
   // Worldview's own voice coming back from the speaker (the port already drops most of it; this catches what slips through)
   function echoish(t) {
@@ -393,17 +442,54 @@
   function hfUi() {
     var el = $('#hfs'); if (!el) return;
     var on = always() && S.phase && S.phase !== 'end';
-    el.hidden = !on; if (!on) return;
+    el.hidden = !on; chipUi(); if (!on) { var c0 = $('#capst'); if (c0) c0.hidden = true; return; }
     var st = !S.listening ? 'off' : HF.state === 'start' ? 'start' : S.muted ? 'off' : HF.buf || (HF.live && Date.now() - HF.heard < 2500) ? 'hear' : S.busy ? 'think' : HF.speaking ? 'speak' : HF.state === 'hear' && Date.now() - HF.heard < 1500 ? 'hear' : HF.state === 'wait' ? 'wait' : 'listen';
     var word = {off: S.muted ? 'Muted' : 'Hands-free paused', start: 'Starting to listen…', hear: 'Hearing you', think: 'Thinking…', speak: 'Speaking', wait: 'Waiting for you', listen: 'Listening'}[st];
     el.dataset.s = st; $('#hfw', el).textContent = word; $('.hfx', el).textContent = st === 'hear' && HF.live ? '“' + HF.live + '”' : '';
+    var cs = $('#capst'); if (cs) { cs.hidden = false; cs.dataset.s = st; cs.lastChild.textContent = word; }
   }
-  // once a second: the indicator, and after about three quiet minutes one quiet line (never a spoken "are you there?")
+  // v3.1.82: the top-bar chip is the one hands-free control: tap = on/off; while on it shows the time listened and its cost
+  function chipUi() {
+    var hc = $('#hfchip'); if (!hc) return;
+    var on = always(); hc.hidden = !hfAllowed(); hc.setAttribute('aria-pressed', String(on)); hc.dataset.muted = String(!!(S.listening && S.muted));
+    var s = listenSecs(), usd = s / 60 * listenPrice(), cost = money(usd);
+    $('.hfn', hc).textContent = 'Hands-free'; $('.ct', hc).hidden = !on;
+    $('.tm', hc).textContent = clock(s); $('.ab', hc).textContent = /^about /.test(cost) ? 'about ' : ''; $('.co', hc).textContent = cost.replace(/^about /, '');
+    hc.setAttribute('aria-label', on ? 'Hands-free is on' + (S.listening && S.muted ? ' and muted' : '') + ', ' + Math.floor(s / 60) + ' min ' + s % 60 + ' s listened, ' + cost + '. Tap to turn it off.' : 'Hands-free is off. Tap to turn it on.');
+    hc.title = on ? 'Hands-free listening so far: ' + clock(s) + ', ' + cost + '. Tap to turn it off.' : 'Turn on Hands-free (18+)';
+  }
+  // the warning sound: short, soft, made here (no file), and only after the student has used this page
+  function tone() {
+    try {
+      var A = window.AudioContext || window.webkitAudioContext; if (!A) return;
+      var c = HF.ac || (HF.ac = new A()); if (c.state === 'suspended' && c.resume) c.resume();
+      var t = c.currentTime + 0.02, o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(660, t); o.frequency.linearRampToValueAtTime(880, t + 0.18);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.05, t + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+      o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + 0.45);
+    } catch (e) {}
+  }
+  function hfWarnOff() { HF.warn = 0; }
+  // a minute with no words from the student and a warning nobody answered: hands-free off for this visit, the stream closed
+  function hfAutoOff() {
+    hfWarnOff(); HF.stop = true; listenStop();
+    hfLine('Hands-free turned off after a quiet minute. Tap Hands-free to turn it back on.');
+    voiceUi();
+  }
+  // any tap or key on the lesson keeps hands-free on
+  var touched = function () { HF.tap = Date.now(); if (HF.warn) { hfWarnOff(); hfLine(''); } };
+  document.addEventListener('pointerdown', touched, true); document.addEventListener('keydown', touched, true);
+  /* once a second: the indicator and the chip; the quiet clock. Quiet = no words from the student; Worldview speaking or
+     thinking is not quiet. 60 s of quiet: a soft tone and a warning; 30 s more: hands-free turns off. */
   setInterval(function () {
-    if (!always() || !S.listening) return;
-    hfUi();
-    var last = Math.max(HF.heard, HF.spokeEnd);
-    if (!HF.quiet && last && !HF.speaking && !S.busy && Date.now() - last > 180000) { HF.quiet = true; hfLine('Still listening whenever you\'re ready. Say "next" or ask a question.'); }
+    if (!always() || !S.listening) { HF.warn = 0; return; }
+    hfUi(); chipUi();
+    if (!HF.liveAt) return;
+    var now = Date.now();
+    if (HF.speaking || S.busy) { HF.act = now; if (HF.warn) { hfWarnOff(); hfLine(''); } return; }
+    var last = Math.max(HF.words, HF.liveAt, HF.tap, HF.act, HF.spokeEnd);
+    if (!HF.warn && now - last >= 60000) { HF.warn = now; tone(); hfLine('Still there? Hands-free turns off in 30 seconds to save money. Say anything or tap to keep it on.'); }
+    else if (HF.warn && now - HF.warn >= 30000) hfAutoOff();
   }, 1000);
   // the tab hidden: the port stops listening (no charge); visible again: listening starts again
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') { if (S.listening) listenStop(); } else if (S.phase) voiceUi(); });
@@ -476,13 +562,16 @@
     var v = $('#vbtn'), m = $('#mbtn'), tk = $('#talk'), kb = $('#kbd'), f = $('#f'), h = $('#heard'), can = ST.voice && (wv.can('speak') || wv.can('listen') || wv.can('continuousListen'));
     if (v) { v.hidden = !can; setRow(v, voiceOn(), voiceOn() ? 'On' : 'Off'); }
     // hands-free: one chip in the top bar when it is available; in Options it is a row, greyed (with the reason) when it is not
-    var hb = $('#hfbtn'), hc = $('#hfchip'), hrow = ST.voice && ST.handsFree;
-    if (hc) { hc.hidden = !hfAllowed(); hc.setAttribute('aria-pressed', String(always())); $('span', hc).textContent = always() ? 'Hands-free on' : 'Hands-free'; }
+    var hb = $('#hfbtn'), hrow = ST.voice && ST.handsFree;
+    chipUi();
     if (hb) {
       hb.hidden = !hrow; setRow(hb, always(), hfAllowed() ? (always() ? 'On' : 'Off') : '');
       hb.setAttribute('aria-disabled', String(!hfAllowed()));
       var hn = $('.mn', hb); hn.hidden = hfAllowed(); hn.textContent = !voiceOn() ? 'Turn Voice on first' : 'Not turned on for this school yet';
+      // v3.1.82: what listening costs, from the service's price (not a fixed number)
+      var hcost = $('.mc', hb); hcost.hidden = !hfAllowed(); hcost.textContent = 'Listening costs ' + money(listenPrice() * 60) + ' an hour while it\'s on, whether or not anyone is talking. Mute doesn\'t stop it; turning Hands-free off does. AI replies and the voice are counted separately.';
     }
+    var sh = $('#sharebtn'); if (sh) sh.hidden = !wv.can('share');
     var pst = $('#prefst'); if (pst) pst.textContent = S.pref ? 'On' : '';
     if (m) { m.hidden = !always() || (S.listening && HF.state === 'start'); m.textContent = !S.listening ? 'Listen again' : S.muted ? 'Unmute' : 'Mute'; m.setAttribute('aria-pressed', String(S.listening && S.muted)); m.setAttribute('aria-label', !S.listening ? 'Start listening again' : S.muted ? 'Unmute the microphone' : 'Mute the microphone'); }
     var talkable = canTalk() && !always();
@@ -561,19 +650,37 @@
   }
 
   /* ---------- the log and the typing box ---------- */
-  function msg(who, text, quiet) {
+  /* lab (v3.1.82): a script message, the pre-written words for a slide or point, carries a small mark ("Slide 3 · point 2") */
+  function msg(who, text, quiet, lab) {
     // v3.1.79: words joined to what the student just said replace that bubble instead of adding a second one
     if (who === 'you' && S.merging && !quiet) {
       var m0 = S.merging; S.merging = '';
       var last = S.log[S.log.length - 1], lg = $('#log'), el = lg && lg.lastElementChild;
       if (last && last[0] === 'you' && last[1] === m0) { last[1] = text; if (el && el.classList.contains('you')) el.textContent = text; return; }
     }
-    if (!quiet) { S.log.push([who, text]); if (S.log.length > 40) S.log.shift(); }
-    if (who === 'ai') S.lastAi = text;
+    if (!quiet) { S.log.push(lab ? [who, text, lab] : [who, text]); if (S.log.length > 40) S.log.shift(); }
+    if (who === 'ai') { S.lastAi = text; setCap(text); }
     var log = $('#log'); if (!log) return;
-    var d = document.createElement('div'); d.className = 'm ' + who; d.textContent = text; log.appendChild(d); log.scrollTop = log.scrollHeight;
-    if (d.scrollIntoView && !S.resuming) { try { d.scrollIntoView({block: 'nearest'}); } catch (e) {} }
+    var d = document.createElement('div'); d.className = 'm ' + who + (lab ? ' script' : '');
+    if (lab) { var b = document.createElement('span'); b.className = 'mlab'; b.textContent = lab; d.appendChild(b); d.appendChild(document.createTextNode(text)); } else d.textContent = text;
+    log.appendChild(d);
     while (log.children.length > 40) log.removeChild(log.firstChild);
+    if (!S.resuming) reveal(d);
+  }
+  // Scroll the box that holds the log (the right column, or the page middle) so a new message shows: its top when it is long
+  function reveal(d) {
+    var sc = d.parentElement;
+    while (sc && sc !== document.body) { var o = getComputedStyle(sc).overflowY; if ((o === 'auto' || o === 'scroll') && sc.scrollHeight > sc.clientHeight + 1) break; sc = sc.parentElement; }
+    if (!sc || sc === document.body) return;
+    var r = d.getBoundingClientRect(), c = sc.getBoundingClientRect(), top = sc.scrollTop + r.top - c.top - 8;
+    sc.scrollTop = r.height > c.height - 16 ? top : Math.max(sc.scrollTop, top + r.height + 16 - c.height);
+  }
+  // full screen: the tutor's latest words as a caption along the bottom of the slide (older lines fade at the top)
+  function setCap(text) {
+    if (text != null) S.capText = String(text);
+    var t = $('#capt'); if (!t) return;
+    t.textContent = S.capText || '';
+    t.classList.toggle('over', t.scrollHeight > t.clientHeight + 2);
   }
   function note(text) { msg('note', text); var n = $('#aunote'); if (n && S.audio) n.textContent = text; }
   function say(text) { msg('ai', text); speak(text); }
@@ -584,10 +691,11 @@
   function layout(label, inner, buttons) {
     app.classList.add('run');
     return '<div class="bar"><div class="ttl"><b id="ttl">' + esc(L.title) + '</b><span class="lab" id="lab">' + esc(label) + '</span></div>' +
-      '<button type="button" class="tbtn chip" id="hfchip" hidden aria-pressed="false"><i class="cd" aria-hidden="true"></i><span>Hands-free</span></button>' +
+      '<button type="button" class="tbtn chip" id="hfchip" hidden aria-pressed="false"><i class="cd" aria-hidden="true"></i><span class="hfn">Hands-free</span><span class="ct" hidden><span class="tm">0:00</span> · <span class="ab"></span><span class="co"></span></span></button>' +
       '<div class="optwrap"><button type="button" class="tbtn" id="optbtn" aria-haspopup="menu" aria-expanded="false" aria-controls="optmenu">Options</button>' +
-      '<div class="menu" id="optmenu" role="menu" aria-label="Options" hidden>' + mrow('fsbtn', 'Full screen') + mrow('audbtn', 'Audio only') + mrow('vbtn', 'Voice') + mrow('hfbtn', 'Hands-free (18+)') +
+      '<div class="menu" id="optmenu" role="menu" aria-label="Options" hidden>' + mrow('fsbtn', 'Full screen') + mrow('audbtn', 'Audio only') + mrow('vbtn', 'Voice') + mrow('hfbtn', 'Hands-free (18+)').replace('</button>', '<span class="mn mc" hidden></span></button>') +
       '<button type="button" class="mrow" role="menuitem" id="prefbtn" aria-expanded="false"><span class="ml">How I like to learn</span><span class="ms" id="prefst"></span></button>' +
+      '<button type="button" class="mrow" role="menuitem" id="sharebtn" hidden><span class="ml">Share this lesson</span><span class="ms">Send the link</span></button>' +
       '<p class="heard" id="heard" hidden></p></div></div></div>' +
       '<div class="prog"><i id="prog"></i></div><div class="prefwrap" id="prefwrap" hidden></div><div id="resumebox"></div>' +
       '<div class="main" id="main"><div class="aud" aria-live="polite"><p class="now" id="aunow"></p><p class="soft" id="aunote">Worldview is talking. Use the buttons or the Talk button.</p></div>' + inner + '</div>' +
@@ -623,8 +731,21 @@
     $('#fsbtn').onclick = function () { setFs(!S.fs); menu(false); };
     $('#chatbtn').onclick = function () { var on = !app.classList.contains('chat'); app.classList.toggle('chat', on); $('#chatbtn').setAttribute('aria-pressed', String(on)); };
     var cc = $('#closechat'); if (cc) cc.onclick = function () { app.classList.remove('chat'); $('#chatbtn').setAttribute('aria-pressed', 'false'); };
-    S.log.forEach(function (m) { msg(m[0], m[1], true); });
+    $('#sharebtn').onclick = function () { menu(false); share(); };
+    S.log.forEach(function (m) { msg(m[0], m[1], true, m[2]); });
+    var lastM = $('#log') && $('#log').lastElementChild; if (lastM) setTimeout(function () { reveal(lastM); }, 0);
     setAudio(S.audio, true); voiceUi();
+  }
+  /* v3.1.82: Share this lesson. Worldview's page shares or copies the lesson's link (this page has no address of its own to give)
+     and says in plain words what the person who gets it needs. */
+  function share() {
+    if (!wv.share) return;
+    Promise.resolve(wv.share()).catch(function () { return null; }).then(function (r) {
+      if (!r || r.type === 'cancelled') return;
+      if (r.ok === false) { note(clean(r.error, 200) || 'This lesson can\'t be shared from here.'); return; }
+      var tip = clean(r.note, 400);
+      note(r.how === 'shared' ? 'Shared. ' + tip : r.how === 'copied' ? 'Link copied: ' + r.url + '. ' + tip : 'The link to send: ' + r.url + ' ' + tip);
+    });
   }
   /* merged: the earlier words this text starts with (v3.1.79 hands-free), so the log shows one turn, not two. In hands-free, words
      that arrive while a reply is being decided make that reply stale: it is dropped and everything is decided once, together. */
@@ -665,8 +786,13 @@
   function setFs(on, fromHost) {
     S.fs = !!on && S.phase === 'lecture' && !S.audio; app.classList.toggle('fs', S.fs); if (!S.fs) app.classList.remove('chat');
     var b = $('#fsbtn'); if (b) setRow(b, S.fs, S.fs ? 'On' : 'Off');
+    fsIcon(); setCap();
     if (!fromHost && wv.can('fullscreen')) { try { wv.fullscreen(S.fs); } catch (e) {} }
   }
+  var IC_FS = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+  var IC_FSX = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>';
+  function fsIcon() { var x = $('#fsx'); if (!x) return; x.innerHTML = S.fs ? IC_FSX : IC_FS; x.setAttribute('aria-label', S.fs ? 'Leave full screen' : 'Full screen'); x.title = S.fs ? 'Leave full screen (Esc)' : 'Full screen'; x.setAttribute('aria-pressed', String(S.fs)); }
+  document.addEventListener('keydown', function (e) { var m = $('#optmenu'); if (e.key === 'Escape' && S.fs && !e.defaultPrevented && !(m && !m.hidden) && !document.querySelector('.hfdlg')) setFs(false); });
   function audNow() {
     var n = $('#aunow'); if (!n) return;
     n.textContent = S.phase === 'lecture' ? 'Slide ' + (S.i + 1) + ' of ' + L.slides.length + (stepsOf(cur()).length > 1 ? ' · point ' + (S.k + 1) + ' of ' + stepsOf(cur()).length : '') : S.phase === 'conv' ? (useMap() && S.cv.stage === 'chapter' ? 'Conversation · ' + clip(chap(S.cv.ci).title, 60) : 'Conversation') : S.phase === 'check' ? 'Explain it back · question ' + (S.qi + 1) + ' of ' + L.check.length : '';
@@ -703,7 +829,7 @@
       (cards ? '<p class="small soft">' + how + '</p>' + prefBox('prefstart') : '') + '</div>';
     wirePref('prefstart');
     var ho = $('#hfopt'); if (ho) ho.onchange = function () { if (ho.checked !== HF.hf) { var want = ho.checked; ho.checked = HF.hf; setHf(want); } };
-    app.querySelectorAll('[data-style]').forEach(function (b) { b.onclick = function () { var pt = $('#prefstart'); if (pt && clean(pt.value, 300) !== S.pref) setPref(pt.value); S.audio = !!($('#aonly') && $('#aonly').checked); S.log = []; S.results = []; S.ev = 0; S.said = []; S.lastSaid = ''; S.limitSaid = false; S.offer = 0; S.startedAt = new Date().toISOString(); b.dataset.style === 'lecture' ? lectureStart() : convStart(); }; });
+    app.querySelectorAll('[data-style]').forEach(function (b) { b.onclick = function () { var pt = $('#prefstart'); if (pt && clean(pt.value, 300) !== S.pref) setPref(pt.value); S.audio = !!($('#aonly') && $('#aonly').checked); S.log = []; S.capText = ''; S.results = []; S.ev = 0; S.said = []; S.lastSaid = ''; S.limitSaid = false; S.offer = 0; S.startedAt = new Date().toISOString(); b.dataset.style === 'lecture' ? lectureStart() : convStart(); }; });
     progress(0);
   }
   function resume(p) {
@@ -756,7 +882,7 @@
     S.phase = 'lecture';
     app.innerHTML = layout('Slide 1 of ' + L.slides.length,
       '<div class="lec"><div class="stagecol"><div class="stage" id="stage"></div><div class="stepdots" id="dots"></div></div>' +
-      '<div class="words"><p class="cap" id="cap" tabindex="0"></p><div class="side"><div class="side-h"><b class="grow">Chat</b><button type="button" class="pill" id="closechat">Close</button></div><div class="log" id="log" role="log" aria-live="polite"></div></div></div></div>',
+      '<div class="words"><div class="side"><div class="side-h"><b class="grow">Chat</b><button type="button" class="pill" id="closechat">Close</button></div><div class="log" id="log" role="log" aria-live="polite"></div></div></div></div>',
       '<button type="button" class="btn quiet" id="next">Next</button>');
     wire('Ask a question, or type your answer');
     $('#fsbtn').hidden = false; setRow($('#fsbtn'), false, 'Off');
@@ -765,15 +891,23 @@
   }
   function drawSlide(speakIt, keepPic, lead) {
     var s = cur(), st = stepsOf(s), lastSlide = S.i === L.slides.length - 1, lastStep = S.k >= st.length - 1;
-    if (!keepPic) $('#stage').innerHTML = '<div class="picwrap"><img class="spic" src="' + esc(s.image) + '" alt="' + esc('Slide ' + s.n + (s.title ? ': ' + s.title : '')) + '"><span id="covers"></span></div>';
+    if (!keepPic) {
+      var hadFocus = document.activeElement && document.activeElement.id === 'fsx';
+      $('#stage').innerHTML = '<div class="picwrap"><img class="spic" src="' + esc(s.image) + '" alt="' + esc('Slide ' + s.n + (s.title ? ': ' + s.title : '')) + '"><span id="covers"></span>' +
+        '<button type="button" class="fsx" id="fsx"></button><div class="capstrip" aria-hidden="true"><span class="capst" id="capst" hidden><i></i><span>Listening</span></span><div class="capt" id="capt"></div></div></div>';
+      $('#fsx').onclick = function () { setFs(!S.fs); }; fsIcon(); setCap(); hfUi();
+      if (hadFocus) $('#fsx').focus();
+    }
     var cv = $('#covers'); if (cv) cv.innerHTML = covers(s, S.k);
     var dots = $('#dots'); dots.innerHTML = st.length > 1 ? st.map(function (x, j) { return '<i class="' + (j <= S.k ? 'on' : '') + '"></i>'; }).join('') + '<span>&nbsp;Point ' + (S.k + 1) + ' of ' + st.length + '</span>' : '';
-    $('#cap').textContent = st[S.k].text || s.title || '';
     $('#lab').textContent = 'Slide ' + (S.i + 1) + ' of ' + L.slides.length;
     $('#next').textContent = !lastStep ? 'Next point' : lastSlide ? 'Finish the slides' : 'Next slide';
     progress((S.i + (S.k + 1) / st.length) / L.slides.length * 0.8);
     audNow();
     if (speakIt) {
+      // v3.1.82: the point's script goes into the chat log as a tutor message, in order, when it is spoken
+      var said = st[S.k].text || s.title || '';
+      if (said) msg('ai', said, false, 'Slide ' + (S.i + 1) + (st.length > 1 ? ' · point ' + (S.k + 1) + ' of ' + st.length : ''));
       // one reading: a short reply to what the student said (when there is one), then the point itself
       stopSpeak(); speak((lead ? lead + ' ' : '') + stepSpoken());
       S.lastKind = 'step'; S.moveAsk = false; S.offer = 0;

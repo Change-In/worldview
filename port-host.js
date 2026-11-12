@@ -40,8 +40,8 @@
     "evidence:function(o,t,d){send('evidence',{outcome:o,text:t,data:d||{}});},remember:function(k,v){send('remember',{key:k,value:v});},recall:function(){return wait('m'+(++aiN),'recall',{});},days:function(){return wait('d'+(++aiN),'days',{});}," +
     "progress:function(v,n){send('progress',{value:v,note:n||''});},place:function(p){send('place',{place:p});},video:function(src,o){return wait('v'+(++aiN),'video',Object.assign({src:String(src||'')},o||{}));},ai:function(x,o){o=o||{};return wait('ai'+(++aiN),'ai',{messages:typeof x==='string'?[{role:'user',content:x}]:(x||[]),system:o.system||'',maxTokens:o.maxTokens||0,json:!!o.json,full:!!o.full});},record:function(o){o=o||{};return wait('r'+(++aiN),'record',{kind:o.kind||'video',maxSeconds:o.maxSeconds||0,title:o.title||'',folder:o.folder||'',name:o.name||''});},saveFile:function(p,c){return wait('f'+(++aiN),'savefile',{path:String(p||''),content:c});},readFile:function(p){return wait('g'+(++aiN),'readfile',{path:String(p||'')});},listen:function(o){o=o||{};return wait('l'+(++aiN),'listen',{prompt:o.prompt||'',maxSeconds:o.maxSeconds||0,lang:o.lang||'',full:!!o.full,local:!!o.local,compact:!!o.compact});},speak:function(t,o){o=o||{};return wait('sp'+(++aiN),'speak',{text:String(t==null?'':t).slice(0,4000),voice:String(o.voice||''),speed:+o.speed||0,play:o.play!==false,fallback:o.fallback!==false});},speakStop:function(){send('speakstop',{});},done:function(s){send('done',{summary:s||{}});}};" +
     // NAV-199: wv.listen.start, continuous listening (wv.listen(...) still records one answer)
-    "api.listen.start=function(o,cb){if(typeof o==='function'){cb=o;o={};}o=o||{};hearCb=cb||o.onEvent||null;return wait('h'+(++aiN),'hearstart',{opts:{lang:String(o.lang||''),maxMinutes:+o.maxMinutes||0,idleSeconds:+o.idleSeconds||0,keyterms:Array.isArray(o.keyterms)?o.keyterms.slice(0,50).map(function(t){return String(t).slice(0,60);}):[],stopSpeak:o.stopSpeak==='sound'?'sound':o.stopSpeak!==false,label:String(o.label||'').slice(0,40)}});};" +
-    "api.listen.stop=function(){send('hearstop',{});};api.listen.finish=function(){send('listenfinish',{});};api.listen.cancel=function(){send('listencancel',{});};api.fullscreen=function(on){send('fullscreen',{on:on!==false});};api.listen.mute=function(on){send('hearmute',{on:on!==false});};return api;};})();" +
+    "api.listen.start=function(o,cb){if(typeof o==='function'){cb=o;o={};}o=o||{};hearCb=cb||o.onEvent||null;return wait('h'+(++aiN),'hearstart',{opts:{lang:String(o.lang||''),maxMinutes:+o.maxMinutes||0,idleSeconds:+o.idleSeconds||0,keyterms:Array.isArray(o.keyterms)?o.keyterms.slice(0,50).map(function(t){return String(t).slice(0,60);}):[],stopSpeak:o.stopSpeak==='sound'?'sound':o.stopSpeak!==false,label:String(o.label||'').slice(0,40),bar:o.bar==='lesson'?'lesson':''}});};" +
+    "api.listen.stop=function(){send('hearstop',{});};api.listen.finish=function(){send('listenfinish',{});};api.listen.cancel=function(){send('listencancel',{});};api.fullscreen=function(on){send('fullscreen',{on:on!==false});};api.listen.mute=function(on){send('hearmute',{on:on!==false});};api.share=function(){return wait('s'+(++aiN),'share',{});};return api;};})();" +
     "addEventListener('error',function(e){try{parent.postMessage({port:'worldview',v:1,type:'crash',message:String(e.message||'error').slice(0,200)},'*');}catch(x){}});" +
     // NAV-197 Point: only when Teacher Studio asks, the teacher taps a part of the page; a short description goes back for the helper chat.
     "(function(){var on=false,box=null,cur=null;function post(t,b){try{parent.postMessage(Object.assign({port:'worldview',v:1,type:t},b||{}),'*');}catch(x){}}" +
@@ -614,6 +614,8 @@
   }
   PortHost.prototype._hearEmit = function (H, ev) { if (H.gen === this.gen) this._send('hearevent', {event: ev}); };
   PortHost.prototype._hearUI = function (H) {
+    // v3.1.82: bar 'lesson' = the lesson shows listening, time, Mute and Stop itself; this page draws its pill only when a tap is needed to start
+    if (H.lessonBar && !H.needTap) { if (H.bar) { H.bar.remove(); H.bar = null; } return; }
     var box = this.o.frame.parentNode; if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
     if (!H.bar) {
       H.bar = document.createElement('div'); H.bar.className = 'ph-audio ph-hear'; H.bar.setAttribute('role', 'status');
@@ -665,7 +667,7 @@
     this._audioStop('replaced'); this._liveStop('replaced'); this._closeVideo();
     var maxMin = clamp(Math.round(+o.maxMinutes || 15), 1, 60), lang = /^[a-z]{2}(-[A-Z]{2})?$/.test(o.lang || '') ? o.lang : 'en';
     var terms = (Array.isArray(o.keyterms) ? o.keyterms : []).slice(0, 50).map(function (t) { return clip(t, 60); });
-    var H = this._hear = {id: id, gen: this.gen, label: clip(o.label, 40), maxSeconds: maxMin * 60, idle: clamp(Math.round(+o.idleSeconds || 300), 30, 3600) * 1000, stopSpeak: o.stopSpeak === 'sound' ? 'sound' : o.stopSpeak !== false, parts: [], saved: 0, last: Date.now()};
+    var H = this._hear = {id: id, gen: this.gen, label: clip(o.label, 40), maxSeconds: maxMin * 60, idle: clamp(Math.round(+o.idleSeconds || 300), 30, 3600) * 1000, stopSpeak: o.stopSpeak === 'sound' ? 'sound' : o.stopSpeak !== false, lessonBar: o.bar === 'lesson', parts: [], saved: 0, last: Date.now()};
     var fail = function (error, type) { if (self._hear === H) self._hearStop(type, error); };
     this._hearUI(H); this._hearEmit(H, {type: 'state', state: 'connecting'});
     // Ask Worldview for the session, then open the connection with its pass. Audio flows once the connection is open.
@@ -831,7 +833,28 @@
       speak: !!(this.o.speak || window.speechSynthesis), aiVoice: !!(this.o.speak && this.o.aiVoice),
       record: !!this.o.saveFile, saveFile: !!this.o.saveFile, readFile: !!this.o.lessonId, state: true, persistentState: !!this.o.state, days: !!this.o.days, teacherTools: !!this.o.saveFile, direct: !!this._open,
       listenLocal: !!this._localSR, fullscreen: !!(document.fullscreenEnabled && this.o.frame.parentNode && this.o.frame.parentNode.requestFullscreen),
-      continuousListen: !!(this.o.stream && this.o.listenOn !== false && window.WebSocket && navigator.mediaDevices && navigator.mediaDevices.getUserMedia && (window.AudioContext || window.webkitAudioContext))};
+      continuousListen: !!(this.o.stream && this.o.listenOn !== false && window.WebSocket && navigator.mediaDevices && navigator.mediaDevices.getUserMedia && (window.AudioContext || window.webkitAudioContext)),
+      // v3.1.82: continuous listening's price per minute in US dollars (from Worldview's services list; 0 = not known), and wv.share
+      listenPrice: +this.o.listenPrice > 0 ? +this.o.listenPrice : 0, share: !!(this.o.share && this.o.share.url)};
+  };
+  /* v3.1.82: wv.share. The lesson can't know its own address (it runs in a sealed frame or the lesson address), so this page
+     shares the link the page gave it (o.share: {url, title, text, note}): the device's share sheet where there is one, otherwise
+     the clipboard, otherwise the link is handed back for the lesson to show. note says what the person who gets it needs. */
+  PortHost.prototype._share = function (m) {
+    var self = this, id = clip(m.id, 40), gen = this.gen, s = this.o.share;
+    var answer = function (v) { if (gen === self.gen) self._send('answer', {id: id, value: v}); };
+    if (!s || !s.url) return answer({ok: false, error: 'This lesson can\'t be shared from here.', type: 'unsupported'});
+    var info = {url: String(s.url), note: clip(s.note, 400)};
+    var copy = function () { var c = navigator.clipboard; return c && c.writeText ? c.writeText(info.url) : Promise.reject(); };
+    var copied = function () { answer(Object.assign({ok: true, how: 'copied'}, info)); }, shown = function () { answer(Object.assign({ok: true, how: 'shown'}, info)); };
+    if (navigator.share) {
+      Promise.resolve().then(function () { return navigator.share({title: clip(s.title, 120), text: clip(s.text, 300), url: info.url}); }).then(function () { answer(Object.assign({ok: true, how: 'shared'}, info)); }, function (e) {
+        if (e && e.name === 'AbortError') return answer(Object.assign({ok: false, type: 'cancelled'}, info));
+        copy().then(copied, shown);
+      });
+      return;
+    }
+    copy().then(copied, shown);
   };
   // The page learned something after the lesson said hello (an AI voice or continuous listening turned on): tell the lesson.
   PortHost.prototype.refreshCapabilities = function () { if (this.connected) this._send('capabilities', {capabilities: this.capabilities()}); };
@@ -930,6 +953,7 @@
       case 'hearstart': this._hearStart(m); break;
       case 'hearstop': this._hearStop('stopped'); break;
       case 'hearmute': this._hearMute(!!m.on); break;
+      case 'share': this._share(m); break;
       /* v3.1.75: the student's own learning preferences ("How I like to learn"), kept on this device for every lesson.
          Only a short note (300 characters); a lesson reads it with wv.prefs.get() and changes it with wv.prefs.set({learn}). */
       /* v3.1.79: also the learner's Hands-free (18+) choice on this device: handsFree (on/off) and handsFreeOk (the one-time
