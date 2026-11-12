@@ -91,7 +91,9 @@
       act = hint + swap(r, current) + `<div class="row"><button type="button" class="btn" data-approve="${r.id}">Approve</button><button type="button" class="btn ghost" data-decline="${r.id}">Not now</button></div>`;
     } else if (r.status === 'needs_key' && C) {
       const page = (r.links && r.links.keys) || C.keyPage;
-      act = `<div class="connect"><b>Connect ${esc(label)}</b><ol><li><a href="${esc(page)}" target="_blank" rel="noopener">Open ${esc(label)}'s keys page ↗</a> and sign in.</li><li>Create a key and name it "Worldview".</li><li>Copy it, paste it here, and press Connect.</li></ol>
+      // a key that was accepted but can't do this job: say so in the card, not only in a passing message
+      const failed = /couldn't/.test(r.answer || '') ? `<p class="hint warn" style="margin:0"><b>The last key didn't work for this.</b> ${esc(r.answer.replace(/^Approved, but /, '').replace(/^./, c => c.toUpperCase()))}${r.provider === 'deepgram' ? ' In Deepgram, when you create the key, open the permission (role) choice and pick <b>Member</b>, not Default.' : ''}</p>` : '';
+      act = `<div class="connect"><b>Connect ${esc(label)}</b>${failed}<ol><li><a href="${esc(page)}" target="_blank" rel="noopener">Open ${esc(label)}'s keys page ↗</a> and sign in.</li><li>Create a key and name it "Worldview".${r.provider === 'deepgram' && r.service === 'continuouslisten' ? ' Set its permission (role) to <b>Member</b>.' : ''}</li><li>Copy it, paste it here, and press Connect.</li></ol>
         <input type="password" id="key-${r.id}" autocomplete="off" spellcheck="false" placeholder="Paste the key" aria-label="${esc(label)} key">
         <div class="row"><button type="button" class="btn" data-connect="${esc(r.provider)}" data-for="${r.id}">Connect</button><span class="status" id="cmsg-${r.id}"></span></div>
         <p class="small muted" style="margin:0">Worldview tries the key once, then keeps it in its locked store. Nobody sees it again: not lessons, not AIs, not this page.</p></div>`;
@@ -146,7 +148,7 @@ Add the connector in supabase/functions/lesson-ai/connectors.ts (and a lesson ca
       const j = await ask({action: 'connect', provider: b.dataset.connect, key});
       input.value = ''; b.disabled = false;
       if (!j.ok) { m.textContent = j.error; return; }
-      toast(j.label + ' is connected.' + (j.turnedOn ? ' It\'s on for lessons now.' : ''));
+      toast(j.turnedOn ? j.label + ' is connected. It\'s on for lessons now.' : j.label + ' took the key, but it can\'t run this yet. The card says why.');
       return load();
     }
     if (b.dataset.brief) {
