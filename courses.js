@@ -22,6 +22,8 @@
   };
   const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const BOOT = Date.now();
+  /* School-only mode (v3.1.86, NAV-223): the address had ?app=school once (index.html remembers it); the bar is School and Profile, and the app opens on School. */
+  const SCHOOL_ONLY = (() => { try { return localStorage.getItem('wv-app-mode') === 'school'; } catch (e) { return false; } })();
 
   /* ---------------- who may see it ----------------
      The real check is ownerToolsAvailable() (an admin row on the server). It
@@ -258,7 +260,7 @@
   /* ---------------- DOM ---------------- */
   const bar = document.createElement('nav');
   bar.id = 'wv-tabbar'; bar.hidden = true; bar.setAttribute('aria-label', 'Main sections');
-  bar.innerHTML = `<div class="wv-tabbar-in"><button type="button" data-tabbar="home">${ICON.home}<span>Home</span></button><button type="button" data-tabbar="places">${ICON.places}<span>School</span></button><button type="button" data-tabbar="explore">${ICON.search}<span>Explore</span></button></div>`;
+  bar.innerHTML = `<div class="wv-tabbar-in"><button type="button" data-tabbar="home">${ICON.home}<span>Home</span></button><button type="button" data-tabbar="places">${ICON.places}<span>School</span></button><button type="button" data-tabbar="explore">${ICON.search}<span>Explore</span></button><button type="button" data-tabbar="profile">${ICON.profile}<span>Profile</span></button></div>`;
   const view = document.createElement('section');
   view.id = 'courses-view'; view.className = 'cv'; view.hidden = true; view.setAttribute('aria-label', 'School and Explore');
   document.body.append(view, bar);
@@ -561,7 +563,7 @@ function scrHome() {
   function closeCourses() { hidePeek(); document.body.classList.remove('cv-sheet-open'); S.open = false; S.sheet = null; view.hidden = true; document.body.classList.remove('cv-open'); syncBar(); }
   let forcedTab = '', forcedAt = 0;
   function syncBar() {
-    let active = 'home';
+    let active = SCHOOL_ONLY ? 'profile' : 'home';
     if (S.open) active = S.area;
     else if (forcedTab && Date.now() - forcedAt < 800) active = forcedTab;
     bar.querySelectorAll('button').forEach(b => { const on = b.dataset.tabbar === active; b.classList.toggle('on', on); if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
@@ -723,9 +725,10 @@ function scrHome() {
     if (document.querySelector('#lesson-path-panel.open, #intro-demo.open, dialog[open]')) return true;
     return false;
   }
-  let hashDone = false;
+  let hashDone = false, modeDone = false;
   function tick() {
     const ok = allowed();
+    if (ok && SCHOOL_ONLY && !modeDone) { modeDone = true; if (!/^#(explore|places)/.test(location.hash)) { bar.querySelector('[data-tabbar=places]').click(); } }
     if (ok && !hashDone) { hashDone = true; const [h, hc] = location.hash.slice(1).split('/'); if (h === 'explore' || h === 'places') { history.replaceState(null, '', location.pathname + location.search); bar.querySelector('[data-tabbar=' + h + ']').click(); if (h === 'places' && hc) WP().goClass(decodeURIComponent(hc)); } }
     const home = document.getElementById('view-home')?.classList.contains('active');
     if (!ok && S.open) closeCourses();

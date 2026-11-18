@@ -251,7 +251,8 @@
     return out;
   }
   /* Everything the current view shows: the class (teacher) or every class not filtered out (student). */
-  const viewItems = () => P.role === 'teacher' ? itemsFor(curClass()) : UC().filter(c => !hidden().includes(c.id)).flatMap(c => itemsFor(c));
+  /* v3.1.86: the teacher's School home is one calendar of every class too; only a class page (P.scr 'class') shows one class. */
+  const viewItems = () => P.role === 'teacher' && P.scr === 'class' ? itemsFor(curClass()) : UC().filter(c => !hidden().includes(c.id)).flatMap(c => itemsFor(c));
   const byDay = items => { const m = {}; items.forEach(it => it.d && (m[key(it.d)] = m[key(it.d)] || []).push(it)); return m; };
   const scCard = (it, sel) => `<div class="sc-lc${sel === it.key ? ' on' : ''}" style="--cc:${ccolor(ucls(it.cid))}" role="button" tabindex="0" data-pa="pick" data-k="${esc(it.key)}"${P.role === 'teacher' && it.mine ? ' draggable="true"' : ''}><b>${esc(it.title)}</b>${P.role === 'teacher' ? `<span class="sc-tag ${it.pub ? 'p' : 'd'}">${it.pub ? 'Published' : 'Draft'}</span>` : ''}${countLine(it)}</div>`;
   const switchH = () => `<div class="sc-switch" role="group" aria-label="View as">${['student', 'teacher'].map(r => `<button type="button" data-pa="role" data-r="${r}" class="${P.role === r ? 'on' : ''}" aria-pressed="${P.role === r}">${r[0].toUpperCase() + r.slice(1)}</button>`).join('')}</div>`;
@@ -269,22 +270,97 @@
       <div class="sc-cal">${grid}</div><div class="sc-list">${list}</div>`};
   }
   const ensureSel = items => { if (P.sel && !items.some(x => x.key === P.sel)) P.sel = null; };
-  /* School home. Student: the one calendar for all classes. Teacher: class cards. */
-  function schoolHome() {
-    const teacher = P.role === 'teacher', all = UC();
-    if (teacher) {
-      const rq = reqH();
-      return `${switchH()}<div class="sc-main"><div class="sc-top"><div><h1 class="sc-h">School</h1><p class="sc-sub">Your classes. Pick one to plan its days.</p></div>${rq ? `<div class="sc-acts">${rq}</div>` : ''}</div>
-        <div class="sc-classes">${all.map(c => { const its = itemsFor(c), dr = its.filter(x => !x.d).length, on = its.length - dr; return `<button type="button" class="sc-class" style="--cc:${ccolor(c)}" data-pa="open" data-c="${esc(c.id)}"><b>${esc(c.name)}</b><span>${esc(c.code)}${c.code ? ' · ' : ''}meets ${meetText(c)}</span><span>${on} on the calendar · ${dr} in drafts</span></button>`; }).join('')}</div>
-        <a class="sc-link" href="studio.html?from=places">Build your own in Teacher Studio</a></div>`;
+  /* ---------- v3.1.86 (NAV-221, NAV-224): the calendar is the page ----------
+     Months stack and scroll (this month first, on to the last month with a lesson). A dot is a lesson in its class colour; a day whose
+     lessons are all done shows grey dots. Tap a day and a panel slides up. "Filter" picks classes. Missed lessons are never red:
+     a quiet "to catch up" chip lists them. A student's progress comes from this device (play.html keeps wv-run-<lesson> and wv-state-<run>). */
+  function progressOf(id) {
+    try {
+      const r = JSON.parse(localStorage.getItem('wv-run-' + id)); if (!r || !r.runId) return 'new';
+      const s = JSON.parse(localStorage.getItem('wv-state-' + r.runId)); if (!s || typeof s !== 'object') return 'new';
+      return s.phase === 'end' ? 'done' : 'started';
+    } catch (e) { return 'new'; }
+  }
+  const PWORD = {new: 'Not started', started: 'Started', done: 'Done'}, PBTN = {new: 'Start', started: 'Continue', done: 'Open again'};
+  const lateOf = items => items.filter(x => x.d && x.d < TODAY && progressOf(x.id) !== 'done').sort((a, b) => a.d - b.d);
+  const dueText = d => key(d) === key(TODAY) ? 'due today' : d < TODAY || d - TODAY > 6 * DAY ? 'due ' + fmt(d) : 'due ' + WD[d.getDay()];
+  /* "By the end you can" and the length come from the lesson's own file when it can be read; if not, they are left out. */
+  const GL = {};
+  function goalsOf(it) {
+    if (GL[it.id]) return GL[it.id];
+    if (it.slides && !GL['~' + it.id]) { GL['~' + it.id] = 1; loadGoals(it); }
+    return {goals: [], min: 0};
+  }
+  async function loadGoals(it) {
+    const db = deps.db(); let L = null; try { L = db ? await readLesson(db, it.id) : null; } catch (e) {}
+    GL[it.id] = {goals: L && Array.isArray(L.goals) ? L.goals.map(g => g && g.text).filter(t => typeof t === 'string' && t.trim()).slice(0, 3) : [], min: L && +L.minutes > 0 ? Math.round(+L.minutes) : 0};
+    if (P.sd) deps.render();
+  }
+  function monthsFor(items, teacher) {
+    const first = monthOf(TODAY), nx = m => new Date(m.getFullYear(), m.getMonth() + 1, 1);
+    let from = first, last = nx(first);
+    items.forEach(x => { if (!x.d) return; const m = monthOf(x.d); if (m > last) last = m; if (teacher && P.earlier && m < from) from = m; });
+    const out = []; for (let m = from; m <= last && out.length < 18; m = nx(m)) out.push(m);
+    return out;
+  }
+  function monthH(m, by, teacher, head) {
+    const y = m.getFullYear(), mo = m.getMonth(), days = new Date(y, mo + 1, 0).getDate(), lead = (new Date(y, mo, 1).getDay() + 6) % 7;
+    let g = (head ? DOWH.map(d => `<div class="sc-dow">${d[0]}</div>`).join('') : '') + '<div class="sc-blank"></div>'.repeat(lead);
+    for (let i = 1; i <= days; i++) {
+      const d = new Date(y, mo, i), k = key(d), its = by[k] || [], isT = k === key(TODAY);
+      if (!its.length) { g += `<div class="sc-d${isT ? ' now' : ''}"><span class="n">${i}</span></div>`; continue; }
+      const done = !teacher && its.every(x => progressOf(x.id) === 'done');
+      const dots = its.slice(0, 3).map(x => `<i${teacher && !x.pub ? ' class="dr"' : ''} style="--cc:${ccolor(ucls(x.cid))}"></i>`).join('');
+      g += `<button type="button" class="sc-d has${isT ? ' now' : ''}${done ? ' done' : ''}" data-pa="sday" data-k="${k}" aria-label="${esc(fmt(d) + ', ' + its.length + (its.length === 1 ? ' lesson' : ' lessons') + (done ? ', done' : ''))}"><span class="n">${i}</span><span class="ds">${dots}</span></button>`;
     }
-    const items = viewItems(); ensureSel(items);
-    const everything = all.flatMap(c => itemsFor(c)), cal = calHtml(items), anytime = items.filter(x => !x.d);
-    const chips = `<div class="sc-chips" role="group" aria-label="Show classes">${all.map(c => { const on = !hidden().includes(c.id); return `<button type="button" class="sc-chip${on ? ' on' : ''}" style="--cc:${ccolor(c)}" data-pa="filter" data-c="${esc(c.id)}" aria-pressed="${on}"><i></i>${esc(c.name)}</button>`; }).join('')}</div>`;
-    const empty = !everything.length ? 'No lessons yet. When a teacher publishes a lesson for your class, it shows up here.' : !items.length ? 'Every class is hidden. Turn one back on above.' : !cal.n && !anytime.length ? 'No lessons this month.' : '';
-    return `${switchH()}<div class="sc-layout"><div class="sc-main"><h1 class="sc-h">School</h1><p class="sc-sub">All your classes on one calendar. Open a lesson to start it.</p>${chips}
-      ${cal.html}${empty ? `<p class="cv-muted sc-none">${empty}</p>` : ''}
-      ${anytime.length ? `<div class="sc-any"><h2 class="sc-h2">Not on the calendar yet</h2><p class="cv-muted">Published, but the teacher hasn't picked a day. You can start these any time.</p>${anytime.map(x => scCard(x, P.sel)).join('')}</div>` : ''}</div>${panelH(items)}</div>`;
+    const label = m.toLocaleDateString([], {month: 'long'}) + (y !== TODAY.getFullYear() ? ' ' + y : '');
+    return `<section class="sc-m" aria-label="${esc(m.toLocaleDateString([], {month: 'long', year: 'numeric'}))}"><h2 class="sc-mh">${label}</h2><div class="sc-g">${g}</div></section>`;
+  }
+  const filterH = () => {
+    const all = UC(); if (all.length < 2) return '';
+    return `<div class="sc-fil"><button type="button" class="sc-fbtn" data-pa="fopen" aria-expanded="${!!P.fopen}" aria-haspopup="true">Filter ▾</button>${P.fopen ? `<div class="sc-fp" role="group" aria-label="Show classes">${all.map(c => { const on = !hidden().includes(c.id); return `<button type="button" class="sc-fi${on ? ' on' : ''}" style="--cc:${ccolor(c)}" data-pa="filter" data-c="${esc(c.id)}" aria-pressed="${on}"><i>${on ? '✓' : ''}</i>${esc(c.name)}</button>`; }).join('')}</div>` : ''}</div>`;
+  };
+  const sheetShell = body => `<div class="cv-ov" data-pa="closesd"><div class="cv-sheet sc-sheet" role="dialog" aria-modal="true" aria-label="Lessons" tabindex="-1"><button type="button" class="grab" data-pa="closesd" aria-label="Close"></button>${body}</div></div>`;
+  const countsText = it => { const c = it.pub && it.mine && RC.n[it.id]; if (!c) return ''; return c.started ? c.finished + ' done · ' + (c.started - c.finished) + ' started' : 'No one has started'; };
+  /* The student's slide-up panel: one block per lesson (a day's lessons, the catch-up list, or one lesson with no day). */
+  function daySheetH(items) {
+    const sd = P.sd; if (!sd) return '';
+    const list = sd.t === 'late' ? lateOf(items) : sd.t === 'day' ? (byDay(items)[sd.k] || []) : items.filter(x => x.key === sd.k);
+    if (!list.length) return '';
+    return sheetShell(list.map(it => {
+      const c = ucls(it.cid), pr = progressOf(it.id), g = goalsOf(it), min = g.min || (it.row && it.row.note && +it.row.note.minutes > 0 ? Math.round(+it.row.note.minutes) : 0);
+      const meta = [c.name, it.d ? dueText(it.d) : '', min ? 'about ' + min + ' min' : '', PWORD[pr]].filter(Boolean).join(' · ');
+      return `<article class="sc-sl" style="--cc:${ccolor(c)}"><span class="sc-meta">${esc(meta)}</span><h3>${esc(it.title)}</h3>${g.goals.length ? `<span class="sc-by">By the end you can:</span><ul>${g.goals.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}<a class="cv-pill" href="${esc(deps.playLink(it.id))}">${PBTN[pr]}</a></article>`;
+    }).join(''));
+  }
+  /* The teacher's slide-up panel for a day: each lesson with who has done it; Open shows the full lesson panel (Publish, Share, Results, Try it). */
+  function teacherSheetH(items) {
+    if (!P.td) return '';
+    const list = byDay(items)[P.td] || []; if (!list.length) return '';
+    return sheetShell(list.map(it => {
+      const c = ucls(it.cid), cn = countsText(it);
+      return `<article class="sc-sl" style="--cc:${ccolor(c)}"><span class="sc-meta">${esc(c.name)} · ${fmt(it.d)}</span><h3>${esc(it.title)}</h3><span class="sc-meta"><span class="sc-tag ${it.pub ? 'p' : 'd'}">${it.pub ? 'Published' : 'Draft'}</span>${cn ? ' ' + esc(cn) : ''}</span><button type="button" class="cv-pill" data-pa="pick" data-k="${esc(it.key)}">Open</button></article>`;
+    }).join(''));
+  }
+  /* School home. Student and teacher: the one calendar for all classes (stacked months, Filter, slide-up day panel). */
+  function schoolHome() {
+    const teacher = P.role === 'teacher', all = UC(), items = viewItems(); ensureSel(items);
+    const everything = all.flatMap(c => itemsFor(c)), by = byDay(items), months = monthsFor(items, teacher);
+    const late = teacher ? [] : lateOf(items), anytime = teacher ? [] : items.filter(x => !x.d), dated = items.some(x => x.d);
+    const earlier = teacher && !P.earlier && items.some(x => x.d && x.d < monthOf(TODAY));
+    const empty = !everything.length ? (teacher ? 'No lessons yet. Open a class and press Add presentations to make one from your slides.' : 'No lessons yet. When a teacher publishes a lesson for your class, it shows up here.') : !items.length ? 'Every class is hidden. Turn one back on in Filter.' : !dated && !anytime.length ? 'No lessons on the calendar yet.' : '';
+    /* the earlier teacher home (class cards) is kept here, unused, in case it comes back (v3.1.86) */
+    const classCards = () => `<div class="sc-classes">${all.map(c => { const its = itemsFor(c), dr = its.filter(x => !x.d).length, on = its.length - dr; return `<button type="button" class="sc-class" style="--cc:${ccolor(c)}" data-pa="open" data-c="${esc(c.id)}"><b>${esc(c.name)}</b><span>${esc(c.code)}${c.code ? ' · ' : ''}meets ${meetText(c)}</span><span>${on} on the calendar · ${dr} in drafts</span></button>`; }).join('')}</div>`;
+    void classCards;
+    const classes = teacher ? `<div class="sc-cb" role="group" aria-label="Your classes">${all.map(c => { const dr = itemsFor(c).filter(x => !x.d).length; return `<button type="button" class="sc-cbtn" style="--cc:${ccolor(c)}" data-pa="open" data-c="${esc(c.id)}"><i></i>${esc(c.name)}${dr ? `<span>${dr} draft${dr === 1 ? '' : 's'}</span>` : ''}</button>`; }).join('')}</div>` : '';
+    const rq = teacher ? reqH() : '';
+    return `<div class="sc-bar">${switchH()}${filterH()}</div><div class="sc-layout"><div class="sc-main sc-stk">${classes}
+      ${late.length ? `<button type="button" class="sc-catch" data-pa="slate">${late.length} to catch up when you're ready ›</button>` : ''}
+      ${earlier ? '<button type="button" class="sc-link" data-pa="earlier">Show earlier months</button>' : ''}
+      <div class="sc-months">${months.map((m, i) => monthH(m, by, teacher, i === 0)).join('')}</div>
+      ${empty ? `<p class="cv-muted sc-none">${empty}</p>` : ''}
+      ${anytime.length ? `<div class="sc-any"><h2 class="sc-h2">Any time</h2><p class="cv-muted">The teacher hasn't picked a day for these. You can start them whenever you like.</p>${anytime.map(x => scCard(x, P.sel)).join('')}</div>` : ''}
+      ${teacher ? `<div class="sc-ex">${rq}<a class="sc-link" href="studio.html?from=places">Build your own in Teacher Studio</a></div>` : ''}</div>${panelH(items)}</div>${teacher ? teacherSheetH(items) : daySheetH(items)}`;
   }
   function panelH(items) {
     const it = items.find(x => x.key === P.sel); if (!it) return '';
@@ -406,6 +482,9 @@
     if (groups.length) h += '<h4>What they said</h4>' + groups.map(g => `<div class="rs-g"><b>${esc(whereLabel(g.k))}</b>${g.t.map(t => `<q>${esc(t)}</q>`).join('')}</div>`).join('') + (((s.p && s.p.said) || []).length >= 30 ? '<p class="cv-muted">Shows their last 30 lines.</p>' : '');
     else if (s.p) h += '<p class="cv-muted">Nothing said yet.</p>';
     if (keys.length) h += '<h4>Explain it back</h4>' + keys.map(n => { const c = ck[n], v = VERDICT[c.v], q = L && L.check && L.check[n - 1] && L.check[n - 1].question; return `<div class="rs-g"><div class="rs-q"><b>Question ${n}${q ? ': ' + esc(q) : ''}</b><span class="rs-v ${v[1]}">${v[0]}</span></div>${c.said ? `<q>${esc(c.said)}</q>` : '<p class="cv-muted">Said nothing.</p>'}<p class="cv-muted">${c.unjudged ? 'The AI could not judge this one. Please read their words.' : esc(WHY[c.why] || '')}</p></div>`; }).join('');
+    /* v3.1.86 (NAV-229): what the student sent with Suggest or report (and any other note left "for the teacher"), newest first */
+    const sug = (Array.isArray(s.r.answers) ? s.r.answers : []).filter(a => a && a.kind === 'for the teacher' && typeof a.question === 'string' && a.question.trim()).reverse();
+    if (sug.length) h += '<h4>Suggestions and problems</h4>' + sug.map(a => `<div class="rs-g"><q>${esc(a.question)}</q></div>`).join('');
     return h + '<p class="rs-rule">Worldview shows evidence. You decide the grade.</p></div>';
   }
   /* v3.1.78: one lesson line instead of a bar per student. Each student is a small V above the track at their place;
@@ -541,13 +620,13 @@
   const countLine = it => { const c = P.role === 'teacher' && it.pub && it.mine && RC.n[it.id]; return c ? `<span class="sc-rs">${c.started ? c.started + ' started · ' + c.finished + ' finished' : 'No one has started'}</span>` : ''; };
   /* After each render: fetch what the teacher's view needs once (counts for the class, results for the open published lesson). */
   function syncResults() {
-    if (P.role !== 'teacher' || P.scr !== 'class') return;
-    const items = itemsFor(curClass()), pubs = items.filter(x => x.mine && x.pub);
+    if (P.role !== 'teacher') return;
+    const items = viewItems(), pubs = items.filter(x => x.mine && x.pub);
     loadCounts(pubs.map(x => x.id).sort());
     const sel = P.sel && items.find(x => x.key === P.sel);
     if (sel && sel.mine && sel.pub) loadRuns(sel);
   }
-  const mineItem = id => itemsFor(curClass()).find(x => x.kind === 'real' && x.id === id);
+  const mineItem = id => UC().flatMap(c => itemsFor(c)).find(x => x.kind === 'real' && x.id === id);
   /* v3.1.82: Share a published lesson: the phone's share sheet where there is one, else the link is copied (or shown), with
      what the person who gets it needs. Students open a one-day lesson with no account; the AI they use counts against this
      teacher's lesson budget, inside Worldview's daily and monthly limits (no access rule changes here). */
@@ -669,10 +748,11 @@
     initials, teachers, allTutors,
     about: w => { const x = allTutors().find(a => a.t.w === w); return x ? x.t.about : ''; },
     html() { if (P.scr === 'class' && P.role !== 'teacher') P.scr = 'school'; return (SCREENS[P.scr] || schoolHome)(); },
-    goClass(id) { if (!ucls(id)) return; P.role = 'teacher'; save('role', 'teacher'); P.cur = id; P.scr = 'class'; P.sel = null; P.edit = false; P.month = monthOf(TODAY); deps.render(); },
+    goClass(id) { if (!ucls(id)) return; P.role = 'teacher'; save('role', 'teacher'); P.cur = id; P.scr = 'class'; P.sel = null; P.sd = P.td = null; P.edit = false; P.month = monthOf(TODAY); deps.render(); },
     afterRender(root) {
       if (P.scr !== 'class' && P.scr !== 'school') return;
       syncResults();
+      if (P.focusSheet) { P.focusSheet = false; const sh = root.querySelector('.sc-sheet'); if (sh) try { sh.focus({preventScroll: true}); } catch (x) {} }
       root.querySelectorAll('.sc-lc').forEach(el => {
         el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); } });
         if (el.draggable) el.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', el.dataset.k); e.dataTransfer.effectAllowed = 'move'; });
@@ -683,16 +763,17 @@
         c.addEventListener('drop', e => { e.preventDefault(); c.classList.remove('over'); const k = e.dataTransfer.getData('text/plain'); if (k.startsWith('r|')) moveLesson(k.slice(2), c.dataset.dk); });
       });
     },
-    home() { P.scr = 'school'; P.sel = null; P.edit = false; deps.render(); },
+    home() { P.scr = 'school'; P.sel = null; P.sd = P.td = null; P.fopen = false; P.edit = false; deps.render(); },
     openTutor() { P.scr = 'school'; },
-    escape() { if (RES.open) { RES.open = ''; deps.render(); return true; } if (P.sel) { P.sel = null; deps.render(); return true; } return false; },
+    escape() { if (P.fopen) { P.fopen = false; deps.render(); return true; } if (P.sd || P.td) { P.sd = P.td = null; deps.render(); return true; } if (RES.open) { RES.open = ''; deps.render(); return true; } if (P.sel) { P.sel = null; deps.render(); return true; } return false; },
     input(e) {
       const id = e.target.id;
       if (id === 'pl-q') { P.query = e.target.value; const pos2 = e.target.selectionStart; deps.render(); const i = document.getElementById('pl-q'); if (i) { i.focus(); try { i.setSelectionRange(pos2, pos2); } catch (x) {} } return; }
       if (e.target.matches('[data-dv]')) { P.ds[e.target.dataset.dv] = +e.target.value; const b = document.querySelector('[data-live]'), k = (DEMOS[P.demo] || {}).k; if (b && LIVE[k]) b.innerHTML = LIVE[k](); }
     },
     click(e) {
-      const el = e.target.closest('[data-pa]'); if (!el || el.disabled) return false;
+      const shut = P.fopen && !e.target.closest('.sc-fil'); if (shut) P.fopen = false;
+      const el = e.target.closest('[data-pa]'); if (!el || el.disabled) { if (shut) deps.render(); return shut; }
       if (el.classList.contains('cv-ov') && e.target !== el) return false;
       act(el.dataset.pa, el.type === 'checkbox' ? Object.assign({}, el.dataset, {checked: el.checked}) : el.dataset); return true;
     },
@@ -713,8 +794,8 @@
       case 'sendcode': P.code = true; break;
       case 'verified': P.verified = true; save('verified', true); P.scr = 'school'; top(); break;
       case 'look': P.scr = 'school'; top(); break;
-      case 'school': P.scr = 'school'; P.sheet = null; P.sel = null; P.edit = false; top(); break;
-      case 'open': if (!ucls(d.c)) return; P.cur = d.c; P.scr = 'class'; P.edit = false; P.sel = null; P.month = monthOf(TODAY); top(); break;
+      case 'school': P.scr = 'school'; P.sheet = null; P.sel = null; P.sd = P.td = null; P.edit = false; top(); break;
+      case 'open': if (!ucls(d.c)) return; P.cur = d.c; P.scr = 'class'; P.edit = false; P.sel = null; P.sd = P.td = null; P.fopen = false; P.month = monthOf(TODAY); top(); break;
       case 'filter': { const h = hidden(), i = h.indexOf(d.c); if (i < 0) h.push(d.c); else h.splice(i, 1); save('hide', h); P.sel = null; break; }
       case 'editclass': P.edit = true; break;
       case 'cancelclass': P.edit = false; break;
@@ -729,8 +810,17 @@
       case 'del': LX.del = true; LX.msg = ''; break;
       case 'delno': LX.del = false; break;
       case 'delyes': deleteLesson(d.id); return;
-      case 'role': if (d.r !== P.role) { P.role = d.r; save('role', d.r); } break;
-      case 'pick': { P.sel = P.sel === d.k ? null : d.k; const it = P.sel && viewItems().find(x => x.key === P.sel); if (it && it.mine && P.role === 'teacher' && LX.id !== it.id) loadLx(it); break; }
+      case 'role': if (d.r !== P.role) { P.role = d.r; save('role', d.r); P.sel = null; P.sd = P.td = null; P.fopen = false; } break;
+      case 'fopen': P.fopen = !P.fopen; break;
+      case 'earlier': P.earlier = true; break;
+      case 'slate': P.sd = {t: 'late'}; P.focusSheet = true; break;
+      case 'closesd': P.sd = P.td = null; break;
+      case 'sday': {
+        if (P.role !== 'teacher') { P.sd = {t: 'day', k: d.k}; P.focusSheet = true; break; }
+        if ((byDay(viewItems())[d.k] || []).length) { P.td = d.k; P.focusSheet = true; }
+        break;
+      }
+      case 'pick': { P.td = null; if (P.role !== 'teacher') { P.sd = {t: 'it', k: d.k}; P.focusSheet = true; break; } P.sel = P.sel === d.k ? null : d.k; const it = P.sel && viewItems().find(x => x.key === P.sel); if (it && it.mine && P.role === 'teacher' && LX.id !== it.id) loadLx(it); break; }
       case 'try': tryAsStudent(d.id); return;
       case 'share': shareLesson(d.id); return;
       case 'publish': publishLx(d.id); return;

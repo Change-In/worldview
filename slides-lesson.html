@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="worldview-style" content="slides-v1 9">
+<meta name="worldview-style" content="slides-v1 10">
 <title>Lesson</title>
 <!-- How a student takes a lesson made from slides (v3.1.72, LES-340, LES-341; v3.1.74 steps, talk button, audio only, full screen,
      resume). This page is STYLE ONLY: it reads lesson.json (format "slides-v1") with wv.readFile and knows nothing about any one
@@ -789,11 +789,12 @@
       '<div class="optwrap"><button type="button" class="tbtn" id="optbtn" aria-haspopup="menu" aria-expanded="false" aria-controls="optmenu">Options</button>' +
       '<div class="menu" id="optmenu" role="menu" aria-label="Options" hidden>' + mrow('fsbtn', 'Full screen') + mrow('audbtn', 'Audio only') + mrow('vbtn', 'Voice') + mrow('hfbtn', 'Hands-free (18+)').replace('</button>', '<span class="mn mc" hidden></span></button>') +
       '<button type="button" class="mrow" role="menuitem" id="prefbtn" aria-expanded="false"><span class="ml">How I like to learn</span><span class="ms" id="prefst"></span></button>' +
+      '<button type="button" class="mrow" role="menuitem" id="sugbtn" aria-expanded="false"><span class="ml">Suggest or report</span><span class="ms" id="sugst"></span></button>' +
       '<button type="button" class="mrow" role="menuitem" id="nbbtn" aria-expanded="false" hidden><span class="ml">Notebook</span><span class="ms">What you have right</span></button>' +
       '<button type="button" class="mrow" role="menuitem" id="overmenu"><span class="ml">Start over</span><span class="ms" id="overst">Forget my place</span></button>' +
       '<button type="button" class="mrow" role="menuitem" id="sharebtn" hidden><span class="ml">Share this lesson</span><span class="ms">Send the link</span></button>' +
       '<p class="heard" id="heard" hidden></p></div></div></div>' +
-      '<div class="prog" id="progw"><i id="prog"></i></div><div class="segs" id="segs" role="group" aria-label="Slides" hidden></div><div class="prefwrap" id="prefwrap" hidden></div><div class="nbw" id="nbwrap" role="region" aria-label="Your notebook" hidden></div><div id="resumebox"></div>' +
+      '<div class="prog" id="progw"><i id="prog"></i></div><div class="segs" id="segs" role="group" aria-label="Slides" hidden></div><div class="prefwrap" id="prefwrap" hidden></div><div class="prefwrap" id="sugwrap" hidden></div><div class="nbw" id="nbwrap" role="region" aria-label="Your notebook" hidden></div><div id="resumebox"></div>' +
       '<div class="main" id="main"><div class="aud" aria-live="polite"><p class="now" id="aunow"></p><p class="soft" id="aunote">Worldview is talking. Use the buttons or the Talk button.</p></div>' + inner + '</div>' +
       '<div class="ctl"><div class="hfs" id="hfs" role="status" aria-live="polite" hidden><i class="dot" aria-hidden="true"></i><b id="hfw">Listening</b><span class="hfx"></span></div><p class="hfl" id="hfl" hidden></p><form id="f" class="typer" hidden><textarea id="t" rows="1" maxlength="800" placeholder="Type here" aria-label="Type here"></textarea><button type="submit" class="btn">Send</button></form>' +
       '<div class="row"><button type="button" class="btn talk" id="talk" hidden>🎤 Talk</button><button type="button" class="ibtn" id="again" aria-label="Say it again" title="Say it again">' + IC_AGAIN + '<span class="lbl">Say it again</span></button>' +
@@ -823,6 +824,22 @@
       w.innerHTML = prefBox('prefin') + '<div class="row"><button type="button" class="pill" id="prefdone">Done</button></div>'; wirePref('prefin');
       $('#prefdone').onclick = function () { var x = $('#prefin'); if (x && clean(x.value, 300) !== S.pref) setPref(x.value); w.hidden = true; $('#prefbtn').setAttribute('aria-expanded', 'false'); $('#optbtn').focus(); };
       $('#prefin').focus();
+    };
+    // v3.1.86 (NAV-229): Suggest or report. One short note goes to the teacher through wv.human (saved with this run as a "for the teacher" entry).
+    $('#sugbtn').onclick = function () {
+      menu(false);
+      var w = $('#sugwrap'), open = w.hidden; w.hidden = !open; $('#sugbtn').setAttribute('aria-expanded', String(open));
+      if (!open) return;
+      var close = function () { w.hidden = true; w.innerHTML = ''; $('#sugbtn').setAttribute('aria-expanded', 'false'); $('#optbtn').focus(); };
+      w.innerHTML = '<label class="pref" for="sugin"><b>What would you change, or what went wrong?</b><textarea id="sugin" rows="3" maxlength="600" placeholder="Write it in your own words"></textarea><span class="small soft" id="sugm" role="status"></span></label><div class="row"><button type="button" class="pill" id="sugsend">Send</button><button type="button" class="pill ghost" id="sugcancel">Cancel</button></div>';
+      $('#sugcancel').onclick = close;
+      $('#sugsend').onclick = function () {
+        var x = $('#sugin'), t = clean(x.value, 600); if (!t) { x.focus(); return; }
+        $('#sugsend').disabled = true;
+        try { wv.human('sug' + Date.now(), {text: t, outcome: 'suggest'}); } catch (e) {}
+        $('#sugm').textContent = 'Thanks, it\'s on its way.'; setTimeout(close, 1400);
+      };
+      $('#sugin').focus();
     };
     $('#fsbtn').onclick = function () { setFs(!S.fs); menu(false); };
     $('#chatbtn').onclick = function () { var on = !app.classList.contains('chat'); app.classList.toggle('chat', on); $('#chatbtn').setAttribute('aria-pressed', String(on)); };
