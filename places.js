@@ -295,16 +295,16 @@
   }
   /* ---------- the teacher's panel for a real lesson (v3.1.72): ways to learn, try it as a student, publish ----------
      lesson.json holds the lesson and a small `styles` setting; publishing uses lesson-publish.js, the same code as Teacher Studio. */
-  const LX = {del: false, id: '', loading: false, L: null, styles: {conversation: true, lecture: true, voice: true, handsFree: true}, msg: '', busy: '', sure: false};
+  const LX = {del: false, id: '', loading: false, L: null, styles: {conversation: true, lecture: true, voice: true, handsFree: true, jumpAhead: true}, msg: '', busy: '', sure: false};
   const BUCKET = 'lesson-files';
   const readLesson = async (db, id) => { const {data, error} = await db.storage.from(BUCKET).download(id + '/lesson.json'); if (error || !data) return null; try { const j = JSON.parse(await data.text()); return j && j.format === 'slides-v1' ? j : null; } catch (e) { return null; } };
   async function loadLx(it) {
-    Object.assign(LX, {del: false, id: it.id, loading: !!it.slides, L: null, msg: '', busy: '', sure: false, styles: {conversation: true, lecture: true, voice: true, handsFree: true}});
+    Object.assign(LX, {del: false, id: it.id, loading: !!it.slides, L: null, msg: '', busy: '', sure: false, styles: {conversation: true, lecture: true, voice: true, handsFree: true, jumpAhead: true}});
     if (!it.slides) return;
     const db = deps.db(); let L = null; try { L = db ? await readLesson(db, it.id) : null; } catch (e) {}
     if (LX.id !== it.id) return;
     LX.loading = false; LX.L = L;
-    if (L) LX.styles = {conversation: !(L.styles && L.styles.conversation === false), lecture: !(L.styles && L.styles.lecture === false), voice: !(L.styles && L.styles.voice === false), handsFree: !(L.styles && L.styles.handsFree === false)};
+    if (L) LX.styles = {conversation: !(L.styles && L.styles.conversation === false), lecture: !(L.styles && L.styles.lecture === false), voice: !(L.styles && L.styles.voice === false), handsFree: !(L.styles && L.styles.handsFree === false), jumpAhead: !(L.styles && L.styles.jumpAhead === false)};
     deps.render();
   }
   async function saveStyles(id, st) {
@@ -312,7 +312,7 @@
     try {
       const L = await readLesson(db, id); if (!L) return false;
       // v3.1.79: handsFree replaces alwaysListen. Students switch Hands-free (18+) on themselves; the teacher can only switch it off.
-      L.styles = {conversation: !!st.conversation, lecture: !!st.lecture, voice: !!st.voice, handsFree: !!st.voice && !!st.handsFree}; L.updated = new Date().toISOString();
+      L.styles = {conversation: !!st.conversation, lecture: !!st.lecture, voice: !!st.voice, handsFree: !!st.voice && !!st.handsFree, jumpAhead: st.jumpAhead !== false}; L.updated = new Date().toISOString();
       const {error} = await db.storage.from(BUCKET).upload(id + '/lesson.json', new Blob([JSON.stringify(L)], {type: 'application/json'}), {upsert: true, contentType: 'application/json', cacheControl: '10'});
       return !error;
     } catch (e) { return false; }
@@ -330,6 +330,7 @@
       h += `<div class="sc-ways" role="group" aria-label="Ways students may learn this"><span class="sc-f">Ways students may learn this</span>${LX.loading ? '<p class="cv-muted">Loading…</p>' : !LX.L ? '<p class="cv-muted">This lesson\'s file couldn\'t be read. Reload and try again.</p>' :
         way('lecture', 'Lecture with pauses', sp + '#slides', 'the slides and scripts', 'Slides and scripts') +
         way('conversation', 'Conversation', sp + '#map', 'the conversation map', nch ? 'Map: ' + nch + ' chapter' + (nch === 1 ? '' : 's') : st.conversation ? 'No map yet: open it to build one' : 'No map yet') +
+        (st.conversation ? ck('jumpAhead', 'Students can jump ahead to a later part when they ask about it (the skipped parts come back after)') : '') +
         `<a class="sc-link sc-goals" href="${sp}#goals">Goals and the check</a>` +
         ck('voice', 'Voice: speaks, and students press Talk (or hold Space) to answer; typing always works') + (st.voice ? ck('handsFree', 'Students may turn on Hands-free (18+): the microphone stays on, no buttons. Untick for a class under 18') : '')}</div>`;
     }
