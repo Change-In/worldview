@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="worldview-style" content="slides-v1 11">
+<meta name="worldview-style" content="slides-v1 12">
 <title>Lesson</title>
 <!-- How a student takes a lesson made from slides (v3.1.72, LES-340, LES-341; v3.1.74 steps, talk button, audio only, full screen,
      resume). This page is STYLE ONLY: it reads lesson.json (format "slides-v1") with wv.readFile and knows nothing about any one
@@ -267,8 +267,29 @@
   .tog small { color:var(--soft); }
   .tog:has(input:checked) { border-color:var(--accent2); }
   /* v3.1.88 (NAV-233): calm screen. The controls fade when nothing is touched for a few seconds and come back on the next touch. */
-  .shell.run .bar, .shell.run .prog, .shell.run .faces, .shell.run .chs, .shell.run .ctl .row, .shell.run .ctl .typer { transition:opacity .45s ease; }
-  .shell.run.calm .bar, .shell.run.calm .prog, .shell.run.calm .faces, .shell.run.calm .chs, .shell.run.calm .ctl .row { opacity:0; pointer-events:none; }
+  /* v3.1.89 (NAV-234): what fades also folds away, so nothing invisible sits over the text, and the words get the whole screen */
+  .shell.run .bar, .shell.run .prog, .shell.run .facebar, .shell.run .chs, .shell.run .ctl .row { transition:opacity .3s ease, max-height .3s ease, min-height .3s ease, padding .3s ease, margin .3s ease; max-height:120px; }
+  .shell.run.calm .bar, .shell.run.calm .prog, .shell.run.calm .facebar, .shell.run.calm .chs, .shell.run.calm .ctl .row { opacity:0; pointer-events:none; max-height:0; min-height:0; padding-top:0; padding-bottom:0; margin-top:0; margin-bottom:0; overflow:hidden; }
+  .shell.run.calm .ctl { padding-top:4px; gap:0; background:transparent; }
+  /* a phone: one short top line (Worldview's page already shows the lesson's name), no chapter strip (the line says which chapter) */
+  html.framed .ttl b { display:none; }
+  .ttl .lab { overflow:hidden; text-overflow:ellipsis; flex:0 1 auto; min-width:0; }
+  @media (max-width:700px) { .shell.run .chs { display:none; } }
+  /* the Slides face: the slide stays at the top while the conversation scrolls under it, and it slides in */
+  .facebar { position:sticky; top:0; z-index:3; background:var(--paper); padding:2px 0 6px; display:flex; width:100%; align-self:stretch; justify-self:stretch; box-sizing:border-box; box-shadow:0 -8px 0 var(--paper); }
+  .sface { position:sticky; top:46px; z-index:2; background:var(--paper); padding-bottom:6px; }
+  .shell.run.calm .sface { top:0; box-shadow:0 -8px 0 var(--paper); }
+  .sface.in { animation:sfin .28s ease-out; }
+  .sface.out { animation:sfout .2s ease-in forwards; }
+  .sface img.go { animation:sfnext .25s ease-out; }
+  .sface img.back { animation:sfprev .25s ease-out; }
+  .log.in { animation:lgin .25s ease-out; }
+  @keyframes sfin { from { transform:translateX(48px); opacity:0; } to { transform:none; opacity:1; } }
+  @keyframes sfout { from { transform:none; opacity:1; } to { transform:translateX(48px); opacity:0; } }
+  @keyframes sfnext { from { transform:translateX(36px); opacity:.2; } to { transform:none; opacity:1; } }
+  @keyframes sfprev { from { transform:translateX(-36px); opacity:.2; } to { transform:none; opacity:1; } }
+  @keyframes lgin { from { transform:translateX(-36px); opacity:.3; } to { transform:none; opacity:1; } }
+  @media (prefers-reduced-motion: reduce) { .sface.in, .sface.out, .sface img.go, .sface img.back, .log.in { animation:none !important; } }
   #qbtn[aria-pressed=true] { color:var(--accent); }
   .startgo .btn { font-size:18px; padding:12px 30px; }
   .more { border:1px solid var(--line); border-radius:12px; background:var(--card); padding:4px 14px; }
@@ -400,7 +421,7 @@
     try { Promise.resolve(wv.speak(String(text))).then(fin, fin); } catch (e) { fin(null); }
   }
   // v3.1.88 (BUG-532): how the tutor's voice went this visit (played, by which voice, or why not), saved with the place for the owner
-  function vNote(r) { var v = S.vres = S.vres || {played: 0, failed: 0, how: '', last: ''}; if (r && r.ok) { v.played++; v.how = clean(r.voice || '', 20); } else if (!(r && (r.type === 'interrupted' || r.type === 'stopped'))) { v.failed++; v.last = clean((r && (r.type || r.error)) || 'no answer', 60); } }
+  function vNote(r) { var v = S.vres = S.vres || {played: 0, failed: 0, how: '', last: ''}; if (r && r.ok) { v.played++; v.how = clean((r.voice || '') + (r.via ? ' ' + r.via : '') + (r.aiVoice ? ' after ' + r.aiVoice : ''), 40); } else if (!(r && (r.type === 'interrupted' || r.type === 'stopped'))) { v.failed++; v.last = clean((r && (r.type || r.error)) || 'no answer', 60); } }
   function stopSpeak() { if (HF.speaking) HF.spokeEnd = Date.now(); HF.spk = null; HF.speaking = false; clearTimeout(HF.askT); try { wv.speakStop(); } catch (e) {} }
 
   /* ---------- hands-free (18+), v3.1.79 ---------- */
@@ -825,6 +846,7 @@
       '<button type="button" class="mrow" role="menuitem" id="sugbtn" aria-expanded="false"><span class="ml">Suggest or report</span><span class="ms" id="sugst"></span></button>' +
       '<button type="button" class="mrow" role="menuitem" id="nbbtn" aria-expanded="false" hidden><span class="ml">Notebook</span><span class="ms">What you have right</span></button>' +
       '<button type="button" class="mrow" role="menuitem" id="overmenu"><span class="ml">Start over</span><span class="ms" id="overst">Forget my place</span></button>' +
+      '<button type="button" class="mrow" role="menuitem" id="leavebtn" hidden><span class="ml">Leave lesson</span><span class="ms">Your place is kept</span></button>' +
       '<button type="button" class="mrow" role="menuitem" id="sharebtn" hidden><span class="ml">Share this lesson</span><span class="ms">Send the link</span></button>' +
       '<p class="heard" id="heard" hidden></p></div></div></div>' +
       '<div class="prog" id="progw"><i id="prog"></i></div><div class="segs" id="segs" role="group" aria-label="Slides" hidden></div><div class="prefwrap" id="prefwrap" hidden></div><div class="prefwrap" id="sugwrap" hidden></div><div class="nbw" id="nbwrap" role="region" aria-label="Your notebook" hidden></div><div id="resumebox"></div>' +
@@ -878,6 +900,8 @@
     $('#chatbtn').onclick = function () { var on = !app.classList.contains('chat'); app.classList.toggle('chat', on); $('#chatbtn').setAttribute('aria-pressed', String(on)); };
     var cc = $('#closechat'); if (cc) cc.onclick = function () { app.classList.remove('chat'); $('#chatbtn').setAttribute('aria-pressed', 'false'); };
     $('#sharebtn').onclick = function () { menu(false); share(); };
+    // v3.1.89: on a phone Worldview's own top line is hidden, so Leave lesson is here
+    var lvb = $('#leavebtn'); lvb.hidden = !(wv.leave && document.documentElement.classList.contains('framed') && window.innerWidth <= 760); lvb.onclick = function () { menu(false); save(); try { wv.leave(); } catch (e) {} };
     // v3.1.85: the notebook (conversation with a map) and Start over (a second tap within 4 seconds confirms)
     var nbb = $('#nbbtn'); nbb.hidden = !(S.phase === 'conv' && useMap());
     nbb.onclick = function () { menu(false, true); var w = $('#nbwrap'), open = w.hidden; w.hidden = !open; nbb.setAttribute('aria-expanded', String(open)); if (open) { nbUi(); var d = $('#nbdone'); if (d) d.focus(); } else $('#optbtn').focus(); };
@@ -990,6 +1014,7 @@
     $('#okbtn').onclick = function () { clearTimeout(S.rt); b.innerHTML = ''; };
   }
 
+  try { if (window.parent !== window) document.documentElement.classList.add('framed'); } catch (e) { document.documentElement.classList.add('framed'); }
   /* v3.1.88 (NAV-233): during a lesson the controls fade after a few seconds without a touch, a mouse move or a key, and come
      back on the next one. Not while typing, while a menu or panel is open, or while hands-free says something to read. */
   var CALM_MS = 3500, calmT = 0;
@@ -1001,7 +1026,14 @@
     var hl = $('#hfl'); if (hl && !hl.hidden) return false;
     return true;
   }
-  function wake() { if (app.classList.contains('calm')) app.classList.remove('calm'); clearTimeout(calmT); calmT = setTimeout(function () { if (calmOk()) app.classList.add('calm'); else wake(); }, CALM_MS); }
+  // v3.1.89 (NAV-234): folding the controls changes the space the words have: keep the newest words in view, and let Worldview's page hide its top line too
+  function calmSet(on) {
+    if (app.classList.contains('calm') === on) return;
+    var m = $('#main'), low = m && m.scrollHeight - m.scrollTop - m.clientHeight < 60;
+    app.classList.toggle('calm', on); try { if (wv.calm) wv.calm(on); } catch (e) {}
+    if (low) { var t0 = Date.now(), keep = function () { if (m.isConnected) m.scrollTop = m.scrollHeight; if (Date.now() - t0 < 450) requestAnimationFrame(keep); }; requestAnimationFrame(keep); }
+  }
+  function wake() { calmSet(false); clearTimeout(calmT); calmT = setTimeout(function () { if (calmOk()) calmSet(true); else wake(); }, CALM_MS); }
   ['pointermove', 'pointerdown', 'keydown', 'touchstart', 'wheel'].forEach(function (n) { document.addEventListener(n, wake, {capture: true, passive: true}); });
   wake();
 
@@ -1303,7 +1335,7 @@
      decides when a chapter is done; code keeps only safety limits (turns per chapter and per lesson). A lesson without a map keeps
      the simple conversation below (convSystem). */
   var CH_CAP = 10, CH_CAP_KNOWN = 3, LESSON_CAP = 70;
-  var TURN = 'Each reply: at most three short sentences, one idea at a time, and exactly one question, as the last sentence. One short sentence of context may come right before the question. Plain words; say what any new term means. No metaphors, similes or analogies unless the student asks for one. Never lecture; build on what they just said, and if they are off track, ask a question that lets them notice. Never give homework or exam answers.';
+  var TURN = 'Each reply: at most three short sentences (about 50 words in all; it is read aloud), one idea at a time, and exactly one question, as the last sentence. One short sentence of context may come right before the question. Plain words; say what any new term means. No metaphors, similes or analogies unless the student asks for one. Never lecture; build on what they just said, and if they are off track, ask a question that lets them notice. Never give homework or exam answers. If they say they cannot hear you, say sorry in a few words, say your words are also on the screen, and carry on.';
   var hasMap = function () { return !!(L.map && Array.isArray(L.map.chapters) && L.map.chapters.length); };
   var useMap = function () { return hasMap() && S.cv && S.cv.stage; };
   var chap = function (i) { return L.map.chapters[i]; };
@@ -1473,24 +1505,30 @@
   function setFace(f, quiet) {
     if (S.phase !== 'conv' || !$('#sface')) return;
     var on = f === 'slides', was = S.face === 'slides'; S.face = on ? 'slides' : 'talk';
-    $('#sface').hidden = !on; $('#ftalk').setAttribute('aria-selected', String(!on)); $('#fslides').setAttribute('aria-selected', String(on));
-    if (!on || was) return;
+    var sf = $('#sface'); $('#ftalk').setAttribute('aria-selected', String(!on)); $('#fslides').setAttribute('aria-selected', String(on));
+    // v3.1.89 (NAV-234): the slide slides in and out
+    if (!on) { if (was && !sf.hidden) { sf.classList.remove('in'); sf.classList.add('out'); setTimeout(function () { if (S.face !== 'slides') { sf.hidden = true; sf.classList.remove('out'); } }, 200); var lg = $('#log'); if (lg) { lg.classList.remove('in'); void lg.offsetWidth; lg.classList.add('in'); } } else sf.hidden = true; return; }
+    sf.classList.remove('out'); sf.hidden = false; if (!was) { sf.classList.remove('in'); void sf.offsetWidth; sf.classList.add('in'); }
+    if (was) return;
     if (S.fsl < 0) S.fsl = faceSlide();
     drawFace(); var bd = $('#fbdg'); if (bd) bd.hidden = true;
     // v3.1.88 (BUG-530): no separate "We're on slide N" line: the tutor is told, and its next reply connects to the slide (lookLine)
     S.lookNew = S.fsl;
   }
+  function slideAnim(k) { var im = $('#simg'); if (!im) return; im.classList.remove('go', 'back'); void im.offsetWidth; im.classList.add(k); }
   function wireFaces() {
     var m = $('#main'); if (!m || !$('#sface')) return;
     $('#ftalk').onclick = function () { setFace('talk'); }; $('#fslides').onclick = function () { setFace('slides'); };
-    $('#sprev').onclick = function () { if (S.fsl > 0) { S.fsl--; S.lookNew = S.fsl; drawFace(); } };
-    $('#snext').onclick = function () { if (S.fsl < L.slides.length - 1) { S.fsl++; S.lookNew = S.fsl; drawFace(); } };
+    $('#sprev').onclick = function () { if (S.fsl > 0) { S.fsl--; S.lookNew = S.fsl; drawFace(); slideAnim('back'); } };
+    $('#snext').onclick = function () { if (S.fsl < L.slides.length - 1) { S.fsl++; S.lookNew = S.fsl; drawFace(); slideAnim('go'); } };
     var x0 = 0, y0 = 0, t0 = 0;
     m.addEventListener('touchstart', function (e) { var p = e.touches[0]; x0 = p.clientX; y0 = p.clientY; t0 = Date.now(); }, {passive: true});
     m.addEventListener('touchend', function (e) {
       var p = e.changedTouches[0], dx = p.clientX - x0, dy = p.clientY - y0;
       if (Date.now() - t0 > 800 || Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5 || S.phase !== 'conv') return;
       if (e.target.closest && e.target.closest('textarea, input, .chs')) return;
+      // v3.1.89 (NAV-234): on the slide itself, a swipe turns the slide; elsewhere it switches Talk and Slides
+      if (S.face === 'slides' && e.target.closest && e.target.closest('#sface')) { var b = dx < 0 ? $('#snext') : $('#sprev'); if (b && !b.disabled) b.click(); else if (dx > 0) setFace('talk'); return; }
       setFace(dx < 0 ? 'slides' : 'talk');
     }, {passive: true});
   }
@@ -1513,7 +1551,7 @@
   function convView() {
     S.phase = 'conv';
     var strip = useMap() ? '<div class="chs" id="chs" aria-label="Chapters of this conversation"></div>' : '';
-    var faces = '<div class="faces" role="tablist" aria-label="Talk or see the slides"><button type="button" role="tab" id="ftalk" aria-selected="true">Talk</button><button type="button" role="tab" id="fslides" aria-selected="false">Slides<span class="bdg" id="fbdg" hidden></span></button></div>';
+    var faces = '<div class="facebar"><div class="faces" role="tablist" aria-label="Talk or see the slides"><button type="button" role="tab" id="ftalk" aria-selected="true">Talk</button><button type="button" role="tab" id="fslides" aria-selected="false">Slides<span class="bdg" id="fbdg" hidden></span></button></div></div>';
     var sface = '<div class="sface" id="sface" hidden><img id="simg" alt=""><div class="snav"><button type="button" class="pill" id="sprev" aria-label="Previous slide">‹</button><span id="sno"></span><button type="button" class="pill" id="snext" aria-label="Next slide">›</button></div></div>';
     S.face = 'talk'; S.fch = '';
     app.innerHTML = layout('Conversation', '<div class="lec one">' + faces + strip + sface + '<div class="side"><div class="log" id="log" role="log" aria-live="polite"></div></div></div>',

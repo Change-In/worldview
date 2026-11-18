@@ -27,6 +27,8 @@
   body.slides-lesson .wrap { max-width:1040px; }
   body.slides-lesson .phone { padding:0; background:none; border-radius:0; }
   body.slides-lesson .phone iframe { height:calc(100vh - 96px); height:calc(100dvh - 96px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)); min-height:460px; border:0; border-radius:0; } /* v3.1.82: the phone's notch and home bar are taken off, so the lesson's bottom bar stays on screen */
+  /* v3.1.89 (NAV-234): on a phone, Worldview's top line goes during a slides lesson (one line, the lesson's own; Leave lesson is in its Options) */
+  @media (max-width:760px) { body.slides-lesson .top { display:none; } body.slides-lesson .phone iframe { height:100vh; height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)); } }
   body.slides-lesson #lesson > .bar { display:none; } /* the lesson page has its own thin progress line */
   body.slides-lesson .ph-panel:empty { display:none; }
 </style>
@@ -80,7 +82,7 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="port-host.js?v=3.1.84"></script>
+<script src="port-host.js?v=3.1.89"></script>
 <script src="lesson-days.js?v=3.1.59"></script>
 <script>
 (() => {
@@ -265,7 +267,7 @@
   async function freshStyle(html) {
     const mine = styleNo(html); if (!mine) return html;
     try {
-      const r = await fetch('slides-lesson.html?v=3.1.88', {cache: 'no-cache'});
+      const r = await fetch('slides-lesson.html?v=3.1.89', {cache: 'no-cache'});
       const tpl = r.ok ? await r.text() : '';
       return styleNo(tpl) > mine ? tpl : html;
     } catch (e) { return html; }

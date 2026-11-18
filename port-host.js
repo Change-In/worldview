@@ -41,7 +41,7 @@
     "progress:function(v,n){send('progress',{value:v,note:n||''});},place:function(p){send('place',{place:p});},video:function(src,o){return wait('v'+(++aiN),'video',Object.assign({src:String(src||'')},o||{}));},ai:function(x,o){o=o||{};return wait('ai'+(++aiN),'ai',{messages:typeof x==='string'?[{role:'user',content:x}]:(x||[]),system:o.system||'',maxTokens:o.maxTokens||0,json:!!o.json,full:!!o.full});},record:function(o){o=o||{};return wait('r'+(++aiN),'record',{kind:o.kind||'video',maxSeconds:o.maxSeconds||0,title:o.title||'',folder:o.folder||'',name:o.name||''});},saveFile:function(p,c){return wait('f'+(++aiN),'savefile',{path:String(p||''),content:c});},readFile:function(p){return wait('g'+(++aiN),'readfile',{path:String(p||'')});},listen:function(o){o=o||{};return wait('l'+(++aiN),'listen',{prompt:o.prompt||'',maxSeconds:o.maxSeconds||0,lang:o.lang||'',full:!!o.full,local:!!o.local,compact:!!o.compact});},speak:function(t,o){o=o||{};return wait('sp'+(++aiN),'speak',{text:String(t==null?'':t).slice(0,4000),voice:String(o.voice||''),speed:+o.speed||0,play:o.play!==false,fallback:o.fallback!==false});},speakStop:function(){send('speakstop',{});},done:function(s){send('done',{summary:s||{}});}};" +
     // NAV-199: wv.listen.start, continuous listening (wv.listen(...) still records one answer)
     "api.listen.start=function(o,cb){if(typeof o==='function'){cb=o;o={};}o=o||{};hearCb=cb||o.onEvent||null;return wait('h'+(++aiN),'hearstart',{opts:{lang:String(o.lang||''),maxMinutes:+o.maxMinutes||0,idleSeconds:+o.idleSeconds||0,keyterms:Array.isArray(o.keyterms)?o.keyterms.slice(0,50).map(function(t){return String(t).slice(0,60);}):[],stopSpeak:o.stopSpeak==='sound'?'sound':o.stopSpeak!==false,label:String(o.label||'').slice(0,40),bar:o.bar==='lesson'?'lesson':''}});};" +
-    "api.listen.stop=function(){send('hearstop',{});};api.listen.finish=function(){send('listenfinish',{});};api.listen.cancel=function(){send('listencancel',{});};api.fullscreen=function(on){send('fullscreen',{on:on!==false});};api.listen.mute=function(on){send('hearmute',{on:on!==false});};api.share=function(){return wait('s'+(++aiN),'share',{});};return api;};})();" +
+    "api.listen.stop=function(){send('hearstop',{});};api.listen.finish=function(){send('listenfinish',{});};api.listen.cancel=function(){send('listencancel',{});};api.fullscreen=function(on){send('fullscreen',{on:on!==false});};api.calm=function(on){send('calm',{on:on!==false});};api.leave=function(){send('leave',{});};api.listen.mute=function(on){send('hearmute',{on:on!==false});};api.share=function(){return wait('s'+(++aiN),'share',{});};return api;};})();" +
     "addEventListener('error',function(e){try{parent.postMessage({port:'worldview',v:1,type:'crash',message:String(e.message||'error').slice(0,200)},'*');}catch(x){}});" +
     // NAV-197 Point: only when Teacher Studio asks, the teacher taps a part of the page; a short description goes back for the helper chat.
     "(function(){var on=false,box=null,cur=null;function post(t,b){try{parent.postMessage(Object.assign({port:'worldview',v:1,type:t},b||{}),'*');}catch(x){}}" +
@@ -891,14 +891,42 @@
       if (!r || !r.ok || !r.audio) return device(r && r.type ? r : {ok: false, error: 'Worldview\'s AI voice couldn\'t be reached.', type: 'network'});
       if (!hit) { cache.push({k: ck, audio: r.audio}); if (cache.length > 4) cache.shift(); }
       if (m.play === false) return done({ok: true, voice: 'ai', audio: r.audio});
-      var url = URL.createObjectURL(r.audio), a = new Audio(url), t0 = Date.now(), ended = false;
-      var end = function (v) { if (ended) return; ended = true; try { a.pause(); } catch (e) {} URL.revokeObjectURL(url); done(v); };
-      self._speaking = {stop: function (w) { end(stopped('ai', w)); }};
-      a.onended = function () { end({ok: true, voice: 'ai', seconds: Math.round((Date.now() - t0) / 100) / 10}); };
-      a.onerror = function () { if (!ended) { ended = true; URL.revokeObjectURL(url); self._speaking = null; device({ok: false, error: 'The AI voice couldn\'t play.', type: 'play_failed'}); } };
-      playing();
-      var p = a.play(); if (p && p.catch) p.catch(function () { if (!ended) { ended = true; URL.revokeObjectURL(url); self._speaking = null; device({ok: false, error: 'The browser held the sound back until a button is pressed.', type: 'blocked'}); } });
+      // v3.1.89 (BUG-534): while continuous listening is on, play through its running audio engine. On an iPhone an <audio>
+      // element started while the microphone is open could stay silent with no end and no error (run eeac16aa: 4 readings,
+      // none played, none failed); the engine that is already processing the microphone can play sound.
+      var H = self._hear;
+      if (H && H.ctx && H.ctx.state === 'running' && !H.ended && r.audio.arrayBuffer) return viaEngine(H.ctx, r.audio);
+      viaElement(r.audio);
     });
+    function viaEngine(ctx, blob) {
+      var t0 = Date.now(), ended = false, src = null;
+      var end = function (v) { if (ended) return; ended = true; try { if (src) src.stop(); } catch (e) {} done(v); };
+      self._speaking = {stop: function (w) { end(stopped('ai', w)); }};
+      var dec = function (buf) { return new Promise(function (res, rej) { var p = ctx.decodeAudioData(buf, res, rej); if (p && p.then) p.then(res, rej); }); };
+      blob.arrayBuffer().then(dec).then(function (b) {
+        if (ended || self._speakToken !== token) return;
+        src = ctx.createBufferSource(); src.buffer = b; src.connect(ctx.destination);
+        src.onended = function () { end({ok: true, voice: 'ai', via: 'engine', seconds: Math.round((Date.now() - t0) / 100) / 10}); };
+        playing(); src.start(0);
+        // a safety end in case the engine is suspended mid-reading
+        setTimeout(function () { end({ok: true, voice: 'ai', via: 'engine', seconds: Math.round((Date.now() - t0) / 100) / 10, late: true}); }, (b.duration + 6) * 1000);
+      }).catch(function () { if (ended || self._speakToken !== token) return; ended = true; self._speaking = null; viaElement(blob); });
+    }
+    function viaElement(blob) {
+      var url = URL.createObjectURL(blob), a = new Audio(url), t0 = Date.now(), ended = false, started = false;
+      a.playsInline = true; a.setAttribute('playsinline', '');
+      var end = function (v) { if (ended) return; ended = true; clearTimeout(a._wd); try { a.pause(); } catch (e) {} URL.revokeObjectURL(url); done(v); };
+      var toDevice = function (why) { if (ended) return; ended = true; clearTimeout(a._wd); try { a.pause(); } catch (e) {} URL.revokeObjectURL(url); self._speaking = null; device(why); };
+      self._speaking = {stop: function (w) { end(stopped('ai', w)); }};
+      a.onplaying = function () { started = true; };
+      a.ontimeupdate = function () { if (a.currentTime > 0) started = true; };
+      a.onended = function () { end({ok: true, voice: 'ai', via: 'element', seconds: Math.round((Date.now() - t0) / 100) / 10}); };
+      a.onerror = function () { toDevice({ok: false, error: 'The AI voice couldn\'t play.', type: 'play_failed'}); };
+      playing();
+      var p = a.play(); if (p && p.catch) p.catch(function () { toDevice({ok: false, error: 'The browser held the sound back until a button is pressed.', type: 'blocked'}); });
+      // v3.1.89 (BUG-534): a reading that has not started after 4 s goes to the device's own voice instead of staying silent
+      a._wd = setTimeout(function () { if (!started) toDevice({ok: false, error: 'The AI voice did not start.', type: 'stalled'}); }, 4000);
+    }
   };
   PortHost.prototype._speakStop = function (why) { var s = this._speaking; this._speaking = null; if (s) s.stop(why); };
   // What Worldview's voice is saying now (or said in the last 1.5 seconds), or ''.
@@ -1060,6 +1088,8 @@
       case 'listenfinish': if (this._stopRec) this._stopRec(false); break;
       case 'listencancel': if (this._stopRec) this._stopRec(true); break;
       case 'fullscreen': this._fullscreen(!!m.on); break;
+      case 'leave': try { var lb = document.getElementById('leave'); if (lb && !lb.hidden) lb.click(); } catch (e) {} break; // v3.1.89: Leave lesson from the lesson's Options on a phone
+      case 'calm': try { document.body.classList.toggle('wv-calm', !!m.on); } catch (e) {} break; // v3.1.89 (NAV-234)
       case 'speak': this._speak(m); break;
       case 'speakstop': this._speakStop(); break;
       case 'record': this._record(m); break;
@@ -1091,7 +1121,7 @@
       case 'pointed': if (this.o.onPoint) this.o.onPoint({label: clip(m.label, 60), text: clip(m.text, 200), html: clip(m.html, 400), path: clip(m.path, 200)}); break;
       case 'pointcancel': if (this.o.onPoint) this.o.onPoint(null); break;
       // A request this player doesn't know (a newer lesson, an older page): answer it, so the lesson never waits forever.
-      default: if (m.id != null && ['evidence', 'remember', 'progress', 'done', 'say', 'event', 'result', 'hello', 'audiostop', 'stateset', 'prefset', 'videoclose', 'livestop', 'livemute', 'livecontext', 'hearstop', 'hearmute'].indexOf(m.type) < 0) this._send('answer', {id: clip(m.id, 40), value: {ok: false, error: 'This Worldview page doesn\'t support ' + clip(m.type, 30) + ' yet. Reload the page.', type: 'unsupported'}});
+      default: if (m.id != null && ['evidence', 'remember', 'progress', 'done', 'say', 'event', 'result', 'hello', 'audiostop', 'stateset', 'prefset', 'videoclose', 'livestop', 'livemute', 'livecontext', 'hearstop', 'hearmute', 'calm', 'leave'].indexOf(m.type) < 0) this._send('answer', {id: clip(m.id, 40), value: {ok: false, error: 'This Worldview page doesn\'t support ' + clip(m.type, 30) + ' yet. Reload the page.', type: 'unsupported'}});
     }
   };
 
