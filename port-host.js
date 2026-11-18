@@ -597,7 +597,7 @@
      records the session's length), so the lesson never holds a key. Nothing is stored except the learner's finished
      sentences in the teacher's record. The lesson gets events: state, speechstart, transcript (interim and final),
      utterance (the learner finished speaking), interrupted (Worldview stopped wv.speak because the learner spoke),
-     muted, error, end. */
+     muted, error, end; and state "reconnecting" (v3.1.84) while a dropped connection is opened again by itself. */
   function words(t) { return String(t || '').toLowerCase().replace(/[^\p{L}\p{N}']+/gu, ' ').trim().split(/\s+/).filter(Boolean); }
   // Is what the microphone heard only Worldview's own voice coming back from the speaker? (most of its words are in what the voice is saying)
   function isEcho(heard, said) { var h = words(heard), s = {}; if (!h.length || !said) return false; words(said).forEach(function (w) { s[w] = 1; }); return h.filter(function (w) { return s[w]; }).length / h.length >= 0.7; }
@@ -643,10 +643,30 @@
     if (H.saved < 60) { H.saved++; this.record.push({kind: 'voice', question: clip(this._lastVoice, 300), answer: clip(text, 500), outcome: ''}); this._changed(); }
     this._hearEmit(H, {type: 'utterance', text: text});
   };
+  // v3.1.84 (VOI-160, BUG-528): what happened to listening this visit, saved with the run for the owner. No words, no sound:
+  // how long each connection lasted, why it closed, whether a voice was playing, and the phone's kind.
+  function platformOf() { var u = navigator.userAgent || ''; return /iPhone|iPad|iPod/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1) ? 'ios' : /Android/.test(u) ? 'android' : /Mac/.test(u) ? 'mac' : /Windows/.test(u) ? 'windows' : 'other'; }
+  function micState(H) { var t = H.mic && H.mic.getAudioTracks()[0]; return !t ? 'none' : t.readyState === 'ended' ? 'ended' : t.muted ? 'muted' : 'live'; }
+  PortHost.prototype._hearDiag = function (H, ended) {
+    var d = H.diag; if (!d || H.gen !== this.gen || !d.sessions) return;
+    d.secs = H.startedAt ? Math.round((Date.now() - H.startedAt) / 1000) : 0; if (ended) d.ended = clip(ended, 30);
+    var entry = {kind: 'listen', question: '', answer: '', outcome: '', diag: JSON.parse(JSON.stringify(d))};
+    var at = -1; this.record.forEach(function (r, i) { if (r && r.kind === 'listen' && r.diag && r.diag.n === d.n) at = i; });
+    if (at >= 0) this.record.splice(at, 1);
+    else { var all = []; this.record.forEach(function (r, i) { if (r && r.kind === 'listen') all.push(i); }); if (all.length >= 6) this.record.splice(all[0], 1); }
+    this.record.push(entry); this._changed();
+  };
+  // Keep the screen awake while hands-free listens: a phone that dims and locks after 30 seconds hides the page, and a hidden page stops listening.
+  PortHost.prototype._wakeOn = function (H) {
+    var wl = navigator.wakeLock; if (!wl || !wl.request) { H.diag.wake = 'unsupported'; return; }
+    wl.request('screen').then(function (s) { if (H.ended) { s.release().catch(function () {}); return; } H.wake = s; H.diag.wake = 'on'; }).catch(function () { H.diag.wake = 'refused'; });
+  };
   PortHost.prototype._hearStop = function (reason, error) {
     var H = this._hear; if (!H || H.ended) return; H.ended = true; this._hear = null;
-    clearTimeout(H.wait); clearTimeout(H.startup); clearInterval(H.tick); clearInterval(H.keep);
+    clearTimeout(H.wait); clearTimeout(H.startup); clearTimeout(H.retry); clearInterval(H.tick); clearInterval(H.keep);
     if (H.answered) this._hearFlush(H);
+    if (H.wake) { try { H.wake.release().catch(function () {}); } catch (e) {} H.wake = null; }
+    if (H.live) this._hearDiag(H, reason || 'ended');
     if (H.ws) { var ws = H.ws; try { if (ws.readyState === 1) ws.send(JSON.stringify({type: 'CloseStream'})); } catch (e) {} setTimeout(function () { try { ws.close(); } catch (e) {} }, 1000); }
     if (H.proc) { H.proc.onaudioprocess = null; try { H.proc.disconnect(); } catch (e) {} }
     if (H.mic) H.mic.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
@@ -667,46 +687,102 @@
     this._audioStop('replaced'); this._liveStop('replaced'); this._closeVideo();
     var maxMin = clamp(Math.round(+o.maxMinutes || 15), 1, 60), lang = /^[a-z]{2}(-[A-Z]{2})?$/.test(o.lang || '') ? o.lang : 'en';
     var terms = (Array.isArray(o.keyterms) ? o.keyterms : []).slice(0, 50).map(function (t) { return clip(t, 60); });
-    var H = this._hear = {id: id, gen: this.gen, label: clip(o.label, 40), maxSeconds: maxMin * 60, idle: clamp(Math.round(+o.idleSeconds || 300), 30, 3600) * 1000, stopSpeak: o.stopSpeak === 'sound' ? 'sound' : o.stopSpeak !== false, lessonBar: o.bar === 'lesson', parts: [], saved: 0, last: Date.now()};
+    var H = this._hear = {id: id, gen: this.gen, label: clip(o.label, 40), maxSeconds: maxMin * 60, idle: clamp(Math.round(+o.idleSeconds || 300), 30, 3600) * 1000, stopSpeak: o.stopSpeak === 'sound' ? 'sound' : o.stopSpeak !== false, lessonBar: o.bar === 'lesson', parts: [], saved: 0, last: Date.now(), recon: 0, sent: 0, frameAt: 0,
+      diag: {v: 1, n: Date.now(), p: platformOf(), app: !!(window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true, sessions: 0, drops: [], stalls: 0, resumes: 0, remic: 0, wake: ''}};
     var fail = function (error, type) { if (self._hear === H) self._hearStop(type, error); };
+    var MIC = {audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1}};
     this._hearUI(H); this._hearEmit(H, {type: 'state', state: 'connecting'});
-    // Ask Worldview for the session, then open the connection with its pass. Audio flows once the connection is open.
     function connect() {
       if (self._hear !== H || H.connecting) return; H.connecting = true; H.needTap = false; clearTimeout(H.wait); self._hearUI(H);
+      open();
+    }
+    // Ask Worldview for a session, then open the connection with its pass. Audio flows once the connection is open.
+    // v3.1.84: a connection that drops after listening started is opened again quietly, with the same microphone and no
+    // tap, up to 4 times in a row (a connection that stayed up 2 minutes starts the count again).
+    function open() {
+      clearTimeout(H.startup);
       H.startup = setTimeout(function () { fail('Listening took too long to start. Try again.', 'timeout'); }, 30000);
       Promise.resolve(self.o.stream.create({maxMinutes: maxMin, lang: lang, keyterms: terms})).catch(function () { return null; }).then(function (r) {
         if (r && r.ok && r.callId && self._hear !== H) { Promise.resolve(self.o.stream.close(r.callId)).catch(function () {}); return; }
+        if (self._hear !== H) return;
         if (!r || !r.ok || !r.url || !r.token) return fail((r && r.error) || 'Worldview couldn\'t start listening. Check the internet and try again.', (r && r.type) || 'network');
-        H.callId = r.callId; H.maxSeconds = Math.min(H.maxSeconds, +r.maxSeconds || H.maxSeconds);
-        var ws; try { ws = H.ws = new WebSocket(r.url, [r.protocol || 'bearer', r.token]); } catch (e) { return fail('Listening couldn\'t connect.', 'stream_failed'); }
+        H.callId = r.callId; H.diag.sessions++;
+        if (!H.live) H.maxSeconds = Math.min(H.maxSeconds, +r.maxSeconds || H.maxSeconds);
+        var ws, openedAt = 0; try { ws = H.ws = new WebSocket(r.url, [r.protocol || 'bearer', r.token]); } catch (e) { return fail('Listening couldn\'t connect.', 'stream_failed'); }
         ws.binaryType = 'arraybuffer';
         ws.onopen = function () {
-          if (self._hear !== H) return;
-          clearTimeout(H.startup); H.live = true; H.startedAt = H.last = Date.now(); H.answered = true;
-          if (H.gen === self.gen) self._send('answer', {id: H.id, value: {ok: true, maxSeconds: H.maxSeconds, model: r.model || ''}});
+          if (self._hear !== H || H.ws !== ws) return;
+          clearTimeout(H.startup); openedAt = H.sent = H.frameAt = Date.now();
+          if (!H.live) {
+            H.live = true; H.startedAt = H.last = Date.now(); H.answered = true;
+            if (H.gen === self.gen) self._send('answer', {id: H.id, value: {ok: true, maxSeconds: H.maxSeconds, model: r.model || ''}});
+            H.tick = setInterval(tick, 1000);
+            // The listening service hangs up after about 10 seconds with no sound. Whenever none has gone out for 2.5 s
+            // (muted, or the phone paused the microphone while a voice played), tell it the connection is still wanted.
+            H.keep = setInterval(function () { var w = H.ws; if (w && w.readyState === 1 && (H.muted || Date.now() - H.sent > 2500)) { try { w.send('{"type":"KeepAlive"}'); } catch (e) {} } }, 2500);
+            self._wakeOn(H);
+          }
           self._hearEmit(H, {type: 'state', state: 'listening', maxSeconds: H.maxSeconds});
-          H.tick = setInterval(function () {
-            if (self._hear !== H) return;
-            if (H.muted) H.last = Date.now();
-            if ((Date.now() - H.startedAt) / 1000 >= H.maxSeconds) return self._hearStop('time_limit');
-            if (Date.now() - H.last > H.idle) return self._hearStop('idle');
-            self._hearUI(H);
-          }, 1000);
-          // while muted no sound is sent, so tell the company the connection is still wanted
-          H.keep = setInterval(function () { if (H.muted && ws.readyState === 1) { try { ws.send('{"type":"KeepAlive"}'); } catch (e) {} } }, 5000);
           self._hearUI(H);
         };
-        ws.onmessage = function (e) { if (self._hear !== H || typeof e.data !== 'string') return; var d; try { d = JSON.parse(e.data); } catch (er) { return; } self._hearEvent(H, d); };
-        ws.onclose = function () { if (self._hear === H && !H.ended) fail(H.live ? 'The listening connection dropped. Check the internet and start listening again.' : 'Listening couldn\'t connect.', H.live ? 'connection_lost' : 'stream_failed'); };
+        ws.onmessage = function (e) { if (self._hear !== H || H.ws !== ws || typeof e.data !== 'string') return; var d; try { d = JSON.parse(e.data); } catch (er) { return; } self._hearEvent(H, d); };
+        ws.onclose = function (e) {
+          if (self._hear !== H || H.ended || H.ws !== ws) return;
+          if (!H.live) return fail('Listening couldn\'t connect.', 'stream_failed');
+          H.diag.drops.push({after: openedAt ? Math.round((Date.now() - openedAt) / 1000) : 0, code: (e && e.code) || 0, why: clip(e && e.reason, 80), voice: !!self._speaking, quietMs: Date.now() - (H.frameAt || Date.now()), ctx: H.ctx ? H.ctx.state : '', mic: micState(H)});
+          if (H.diag.drops.length > 8) H.diag.drops.shift();
+          self._hearDiag(H);
+          if (H.callId) { Promise.resolve(self.o.stream.close(H.callId)).catch(function () {}); H.callId = null; }
+          H.ws = null;
+          if (openedAt && Date.now() - openedAt > 120000) H.recon = 0;
+          if (++H.recon > 4) return fail('The listening connection dropped. Check the internet and start listening again.', 'connection_lost');
+          self._hearEmit(H, {type: 'state', state: 'reconnecting'});
+          clearTimeout(H.retry); H.retry = setTimeout(function () { if (self._hear === H && !H.ended) open(); }, 400 * H.recon);
+        };
       });
     }
-    navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1}}).then(function (mic) {
+    function tick() {
+      if (self._hear !== H) return;
+      if (H.muted) H.last = Date.now();
+      if ((Date.now() - H.startedAt) / 1000 >= H.maxSeconds) return self._hearStop('time_limit');
+      if (Date.now() - H.last > H.idle) return self._hearStop('idle');
+      // v3.1.84: no sound from the microphone for 3 s (an iPhone can pause it while another sound plays, or after a call):
+      // wake the audio up; after 8 s, and not while Worldview's voice plays, ask for the microphone again (no tap once
+      // allowed), at most 3 times.
+      var quiet = Date.now() - H.frameAt;
+      if (H.ctx && quiet > 3000) {
+        if (!H.stalled) { H.stalled = true; H.diag.stalls++; }
+        if (H.ctx.state !== 'running' && H.ctx.state !== 'closed') H.ctx.resume().catch(function () {});
+        if (quiet > 8000 && !self._speaking && Date.now() - (H.remicAt || 0) > 15000 && H.diag.remic < 3) remic();
+      } else H.stalled = false;
+      self._hearUI(H);
+    }
+    function watchMic(mic) {
+      mic.getAudioTracks().forEach(function (t) { t.addEventListener('ended', function () {
+        if (self._hear !== H || H.mic !== mic) return;
+        if (H.live && H.diag.remic < 3) remic(); else fail('The microphone stopped (unplugged or taken by another app).', 'interrupted');
+      }); });
+    }
+    function remic() {
+      H.remicAt = Date.now(); H.diag.remic++;
+      navigator.mediaDevices.getUserMedia(MIC).then(function (mic) {
+        if (self._hear !== H || H.ended || !H.ctx) { mic.getTracks().forEach(function (t) { t.stop(); }); return; }
+        var old = H.mic; H.mic = mic; watchMic(mic);
+        if (H.muted) mic.getAudioTracks().forEach(function (t) { t.enabled = false; });
+        try { H.src.disconnect(); } catch (e) {}
+        H.src = H.ctx.createMediaStreamSource(mic); H.src.connect(H.proc);
+        if (old) old.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+        H.ctx.resume().catch(function () {});
+      }).catch(function () { if (self._hear === H && micState(H) === 'ended') fail('The microphone stopped (unplugged or taken by another app).', 'interrupted'); });
+    }
+    navigator.mediaDevices.getUserMedia(MIC).then(function (mic) {
       if (self._hear !== H) { mic.getTracks().forEach(function (t) { t.stop(); }); return; }
-      H.mic = mic;
-      mic.getAudioTracks().forEach(function (t) { t.addEventListener('ended', function () { fail('The microphone stopped (unplugged or taken by another app).', 'interrupted'); }); });
-      var ctx = H.ctx = new AC(), src = ctx.createMediaStreamSource(mic), proc = H.proc = ctx.createScriptProcessor(4096, 1, 1), sink = ctx.createGain();
+      H.mic = mic; watchMic(mic);
+      var ctx = H.ctx = new AC(), src = H.src = ctx.createMediaStreamSource(mic), proc = H.proc = ctx.createScriptProcessor(4096, 1, 1), sink = ctx.createGain();
       sink.gain.value = 0; src.connect(proc); proc.connect(sink); sink.connect(ctx.destination);
-      proc.onaudioprocess = function (e) { if (H.ws && H.ws.readyState === 1 && !H.muted) { try { H.ws.send(pcm16(e.inputBuffer.getChannelData(0), ctx.sampleRate)); } catch (er) {} } };
+      proc.onaudioprocess = function (e) { H.frameAt = Date.now(); var w = H.ws; if (w && w.readyState === 1 && !H.muted) { try { w.send(pcm16(e.inputBuffer.getChannelData(0), ctx.sampleRate)); H.sent = Date.now(); } catch (er) {} } };
+      // an iPhone suspends or interrupts the audio for other sounds and calls: once listening has started, start it again
+      ctx.onstatechange = function () { if (self._hear === H && H.live && ctx.state !== 'running' && ctx.state !== 'closed') { H.diag.resumes++; ctx.resume().catch(function () {}); } };
       // Starts by itself when the browser allows sound; otherwise (an iPhone before any tap) the bar offers Tap to start.
       H.tap = function () { ctx.resume().then(connect).catch(function () {}); };
       if (ctx.state === 'running') connect();
