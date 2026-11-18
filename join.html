@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Join a class · Worldview</title>
+<link rel="icon" href="icon.png"><link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest-school.json">
+<meta name="theme-color" content="#f8f4ec">
+<!-- v3.1.87 (NAV-226): a student opens the link their teacher sent (join.html?c=CODE), signs in or creates an account once,
+     joins the class (worldview_class_join), and goes on to School. Same sign-in as the rest of Worldview. -->
+<style>
+  :root { --ink:#2c241c; --soft:#6f6355; --paper:#f8f4ec; --card:#fdfaf5; --line:#e4dccb; --accent:#bd5a30; --accent2:#3f6b5a; color-scheme:light dark; }
+  @media (prefers-color-scheme: dark) { :root { --ink:#f4ece0; --soft:#b6a894; --paper:#241f1a; --card:#332c25; --line:rgba(244,236,224,.16); --accent:#e2895a; --accent2:#7db38e; } }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; background:var(--paper); color:var(--ink); font:17px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+  main { max-width:440px; margin:0 auto; padding:40px 20px; display:grid; gap:16px; }
+  h1 { font:400 30px/1.15 Georgia,serif; margin:0; }
+  .soft { color:var(--soft); margin:0; }
+  .box { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; display:grid; gap:10px; }
+  label { display:grid; gap:4px; font-size:15px; font-weight:600; }
+  input { font:inherit; padding:11px 12px; border:1.5px solid var(--line); border-radius:12px; background:var(--paper); color:inherit; min-height:46px; }
+  .btn { font:inherit; font-weight:650; border:1px solid var(--accent); background:var(--accent); color:#fff; border-radius:999px; padding:12px 20px; min-height:48px; cursor:pointer; text-align:center; text-decoration:none; display:block; }
+  .btn.ghost { background:transparent; color:var(--ink); border-color:var(--soft); }
+  .btn:disabled { opacity:.5; }
+  .row { display:grid; gap:8px; }
+  .msg { min-height:1.4em; font-size:15px; color:var(--soft); margin:0; }
+  [hidden] { display:none !important; }
+</style></head>
+<body><main>
+  <p class="soft" id="eyebrow">Worldview</p>
+  <h1 id="title">Join a class</h1>
+  <p class="soft" id="lead">Checking the link…</p>
+  <div class="box" id="signin" hidden>
+    <label>Email<input type="email" id="email" autocomplete="email" inputmode="email"></label>
+    <label>Password<input type="password" id="password" autocomplete="current-password"></label>
+    <div class="row"><button type="button" class="btn" id="inbtn">Sign in and join</button><button type="button" class="btn ghost" id="upbtn">New here? Create an account</button></div>
+    <p class="msg" id="msg" role="status"></p>
+  </div>
+  <div class="box" id="joinbox" hidden><button type="button" class="btn" id="joinbtn">Join this class</button><p class="msg" id="jmsg" role="status"></p></div>
+  <div class="box" id="done" hidden><p style="margin:0">You're in. Your lessons are on your School calendar.</p><a class="btn" id="go" href="./?app=school">Open School</a></div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+(() => {
+  const URL_ = 'https://eqppapoepynjvsfnoodj.supabase.co', KEY = 'sb_publishable_rfg0gznLhbAW07TlC4U6WQ_i8WqA3PT';
+  const $ = s => document.querySelector(s);
+  const code = (new URLSearchParams(location.search).get('c') || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+  const db = window.supabase.createClient(URL_, KEY, {auth: {persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'worldview-alpha-auth'}});
+  const show = (id, on) => { $('#' + id).hidden = !on; };
+  let className = '';
+  async function join() {
+    $('#joinbtn').disabled = true; $('#jmsg').textContent = 'Joining…';
+    const {data, error} = await db.rpc('worldview_class_join', {p_code: code});
+    $('#joinbtn').disabled = false;
+    if (error || !data) { $('#jmsg').textContent = 'That didn\'t work just now. Check the internet and try again.'; return; }
+    if (!data.ok) { $('#jmsg').textContent = data.reason === 'sign_in' ? 'Sign in first.' : data.reason === 'too_many' ? 'You are in too many classes. Ask your teacher.' : 'This link doesn\'t work any more. Ask your teacher for a new one.'; if (data.reason === 'sign_in') { show('joinbox', false); show('signin', true); } return; }
+    show('signin', false); show('joinbox', false); show('done', true);
+    $('#title').textContent = data.teacher ? 'This is your own class' : 'You joined ' + (data.name || className);
+    $('#lead').textContent = data.teacher ? 'Students who open this link join it.' : '';
+    try { localStorage.setItem('wv-app-mode', 'school'); } catch (e) {}
+  }
+  async function signIn(create) {
+    const email = $('#email').value.trim(), password = $('#password').value, msg = $('#msg');
+    if (!email || !password) { msg.textContent = 'Type your email and a password.'; return; }
+    $('#inbtn').disabled = $('#upbtn').disabled = true; msg.textContent = create ? 'Creating your account…' : 'Signing in…';
+    try {
+      if (create) {
+        const {data, error} = await db.auth.signUp({email, password, options: {emailRedirectTo: location.origin + location.pathname + '?c=' + code}});
+        if (error) msg.textContent = error.message;
+        else if (data.session) { msg.textContent = ''; await join(); }
+        else msg.textContent = 'Check your email and tap the link to confirm your account. It brings you back here to finish joining.';
+      } else {
+        const {error} = await db.auth.signInWithPassword({email, password});
+        if (error) msg.textContent = /confirm/i.test(error.message) ? 'Confirm your email first: tap the link Worldview sent you, then sign in here.' : error.message;
+        else { msg.textContent = ''; $('#password').value = ''; await join(); }
+      }
+    } catch (e) { msg.textContent = 'Couldn\'t reach Worldview. Check the internet connection.'; }
+    $('#inbtn').disabled = $('#upbtn').disabled = false;
+  }
+  $('#inbtn').onclick = () => signIn(false); $('#upbtn').onclick = () => signIn(true); $('#joinbtn').onclick = join;
+  $('#password').addEventListener('keydown', e => { if (e.key === 'Enter') signIn(false); });
+  (async () => {
+    if (!code) { $('#lead').textContent = 'This link is missing its class code. Ask your teacher to send it again.'; return; }
+    let p = null; try { const {data} = await db.rpc('worldview_class_preview', {p_code: code}); p = data && data[0]; } catch (e) {}
+    if (!p) { $('#lead').textContent = 'This link doesn\'t work any more. Ask your teacher for a new one.'; return; }
+    className = p.name;
+    $('#title').textContent = 'Join ' + p.name; $('#lead').textContent = (p.code ? p.code + ' · ' : '') + 'Sign in once and this class\'s lessons show up on your School calendar.';
+    const {data: s} = await db.auth.getSession();
+    if (s && s.session) { show('joinbox', true); } else show('signin', true);
+  })();
+})();
+</script>
+</body></html>

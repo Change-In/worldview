@@ -231,7 +231,9 @@
   const DOWH = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const monthOf = d => new Date(d.getFullYear(), d.getMonth(), 1);
   const validKey = v => /^\d{4}-\d\d-\d\d$/.test(v || '') && key(D(v)) === v;
-  const ucls = id => WC.get(id), UC = () => WC.list();
+  /* v3.1.87 (NAV-226): a student sees the classes they joined (the owner also sees their own); only the owner has the Teacher view. */
+  const ownerish = () => { try { return !!(deps.ownerish ? deps.ownerish() : deps.isOwner()); } catch (e) { return false; } };
+  const ucls = id => WC.get(id), UC = () => P.role === 'teacher' ? WC.list() : WC.studentList(ownerish());
   const ccolor = c => WC.COLORS[c.color] || WC.COLORS[0];
   const meetText = c => WC.meetText(c);
   const nextMeetKey = c => WC.nextMeetKey(c, TODAY);
@@ -255,7 +257,7 @@
   const viewItems = () => P.role === 'teacher' && P.scr === 'class' ? itemsFor(curClass()) : UC().filter(c => !hidden().includes(c.id)).flatMap(c => itemsFor(c));
   const byDay = items => { const m = {}; items.forEach(it => it.d && (m[key(it.d)] = m[key(it.d)] || []).push(it)); return m; };
   const scCard = (it, sel) => `<div class="sc-lc${sel === it.key ? ' on' : ''}" style="--cc:${ccolor(ucls(it.cid))}" role="button" tabindex="0" data-pa="pick" data-k="${esc(it.key)}"${P.role === 'teacher' && it.mine ? ' draggable="true"' : ''}><b>${esc(it.title)}</b>${P.role === 'teacher' ? `<span class="sc-tag ${it.pub ? 'p' : 'd'}">${it.pub ? 'Published' : 'Draft'}</span>` : ''}${countLine(it)}</div>`;
-  const switchH = () => `<div class="sc-switch" role="group" aria-label="View as">${['student', 'teacher'].map(r => `<button type="button" data-pa="role" data-r="${r}" class="${P.role === r ? 'on' : ''}" aria-pressed="${P.role === r}">${r[0].toUpperCase() + r.slice(1)}</button>`).join('')}</div>`;
+  const switchH = () => !ownerish() ? '' : `<div class="sc-switch" role="group" aria-label="View as">${['student', 'teacher'].map(r => `<button type="button" data-pa="role" data-r="${r}" class="${P.role === r ? 'on' : ''}" aria-pressed="${P.role === r}">${r[0].toUpperCase() + r.slice(1)}</button>`).join('')}</div>`;
   /* The month grid (laptop) and the day list (phone) for a set of items. */
   function calHtml(items) {
     const by = byDay(items), y = P.month.getFullYear(), m = P.month.getMonth(), days = new Date(y, m + 1, 0).getDate(), lead = (new Date(y, m, 1).getDay() + 6) % 7, inNow = key(P.month) === key(monthOf(TODAY));
@@ -344,11 +346,12 @@
   }
   /* School home. Student and teacher: the one calendar for all classes (stacked months, Filter, slide-up day panel). */
   function schoolHome() {
+    if (P.role === 'teacher' && !ownerish()) P.role = 'student';
     const teacher = P.role === 'teacher', all = UC(), items = viewItems(); ensureSel(items);
     const everything = all.flatMap(c => itemsFor(c)), by = byDay(items), months = monthsFor(items, teacher);
     const late = teacher ? [] : lateOf(items), anytime = teacher ? [] : items.filter(x => !x.d), dated = items.some(x => x.d);
     const earlier = teacher && !P.earlier && items.some(x => x.d && x.d < monthOf(TODAY));
-    const empty = !everything.length ? (teacher ? 'No lessons yet. Open a class and press Add presentations to make one from your slides.' : 'No lessons yet. When a teacher publishes a lesson for your class, it shows up here.') : !items.length ? 'Every class is hidden. Turn one back on in Filter.' : !dated && !anytime.length ? 'No lessons on the calendar yet.' : '';
+    const empty = !everything.length ? (teacher ? 'No lessons yet. Open a class and press Add presentations to make one from your slides.' : !all.length ? 'No classes yet. Open the join link your teacher sent you, and your class shows up here.' : 'No lessons yet. When your teacher publishes a lesson for your class, it shows up here.') : !items.length ? 'Every class is hidden. Turn one back on in Filter.' : !dated && !anytime.length ? 'No lessons on the calendar yet.' : '';
     /* the earlier teacher home (class cards) is kept here, unused, in case it comes back (v3.1.86) */
     const classCards = () => `<div class="sc-classes">${all.map(c => { const its = itemsFor(c), dr = its.filter(x => !x.d).length, on = its.length - dr; return `<button type="button" class="sc-class" style="--cc:${ccolor(c)}" data-pa="open" data-c="${esc(c.id)}"><b>${esc(c.name)}</b><span>${esc(c.code)}${c.code ? ' · ' : ''}meets ${meetText(c)}</span><span>${on} on the calendar · ${dr} in drafts</span></button>`; }).join('')}</div>`;
     void classCards;
@@ -702,6 +705,14 @@
       <div class="sc-acts"><button type="button" class="cv-pill" data-pa="saveclass">Save class</button><button type="button" class="cv-pill ghost" data-pa="cancelclass">Cancel</button></div>
       <p class="cv-muted">Class details are saved on this device only. Your lessons stay with the class if you rename it.</p></form>`;
   }
+  /* v3.1.87 (NAV-226): the class's join link. A student opens it, signs in once, and the class is on their calendar. */
+  function inviteH(c) {
+    const link = WC.joinLink(c.id), n = WC.memberCount(c.id);
+    const body = link
+      ? `<span class="cv-muted">Send this link. Students sign in once and the class is on their calendar.</span><div class="sc-row"><input type="text" readonly value="${esc(link)}" aria-label="Join link for ${esc(c.name)}" onclick="this.select()"><button type="button" class="cv-pill ghost" data-pa="copyjoin" data-c="${esc(c.id)}">${navigator.share ? 'Share' : 'Copy'}</button></div><span class="cv-muted">${n} student${n === 1 ? '' : 's'} joined</span>`
+      : '<span class="cv-muted">Getting the class link… (this needs the internet and your teacher sign-in)</span>';
+    return `<div class="sc-invite"><b>Invite students</b>${body}</div>`;
+  }
   function classCal() {
     const c = curClass(), items = itemsFor(c); ensureSel(items);
     const cal = calHtml(items), drafts = items.filter(x => !x.d);
@@ -709,7 +720,7 @@
       ${drafts.length ? `<p class="cv-muted">Lessons with no day yet. Open one and choose a day. On a laptop you can also drag it onto a day.</p>${drafts.map(x => scCard(x, P.sel)).join('')}` : '<p class="cv-muted">Nothing waiting. A lesson you make from slides lands here until you give it a day.</p>'}</section>`;
     return `${switchH()}<div class="sc-layout two"><div class="sc-main"><button type="button" class="sc-link" data-pa="school">← All classes</button>
       <div class="sc-top"><div><h1 class="sc-h"><i class="sc-dot" style="background:${ccolor(c)}"></i>${esc(c.name)}</h1><p class="sc-sub">${esc(c.code)}${c.code ? ' · ' : ''}meets ${meetText(c)}</p></div><div class="sc-acts"><a class="cv-pill" href="slides.html?class=${encodeURIComponent(c.id)}">Add presentations</a><button type="button" class="cv-pill ghost" data-pa="editclass">Edit class</button>${reqH()}</div></div>
-      ${P.edit ? editForm(c) : ''}${cal.html}${items.length ? (cal.n || drafts.length ? '' : '<p class="cv-muted sc-none">No lessons this month.</p>') : '<p class="cv-muted sc-none">No lessons in this class yet. Press Add presentations to make one from your slides.</p>'}</div>
+      ${inviteH(c)}${P.edit ? editForm(c) : ''}${cal.html}${items.length ? (cal.n || drafts.length ? '' : '<p class="cv-muted sc-none">No lessons this month.</p>') : '<p class="cv-muted sc-none">No lessons in this class yet. Press Add presentations to make one from your slides.</p>'}</div>
       <div class="sc-side">${dr}${panelH(items)}</div></div>`;
   }
   async function moveLesson(id, k) {
@@ -810,6 +821,12 @@
       case 'del': LX.del = true; LX.msg = ''; break;
       case 'delno': LX.del = false; break;
       case 'delyes': deleteLesson(d.id); return;
+      case 'copyjoin': {
+        const link = WC.joinLink(d.c), c = WC.get(d.c); if (!link) return;
+        if (navigator.share) { navigator.share({title: 'Join ' + (c ? c.name : 'my class') + ' on Worldview', url: link}).catch(() => {}); return; }
+        (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(() => deps.toast('Link copied. Send it to your students.'), () => deps.toast('Copy the link from the box.'));
+        return;
+      }
       case 'role': if (d.r !== P.role) { P.role = d.r; save('role', d.r); P.sel = null; P.sd = P.td = null; P.fopen = false; } break;
       case 'fopen': P.fopen = !P.fopen; break;
       case 'earlier': P.earlier = true; break;

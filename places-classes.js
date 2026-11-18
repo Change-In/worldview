@@ -18,7 +18,37 @@ window.WorldviewClasses = (() => {
     return cache;
   }
   const persist = () => { try { localStorage.setItem(K, JSON.stringify(cache)); } catch (e) {} };
-  const get = id => list().find(c => c.id === id) || null;
+  /* v3.1.87 (NAV-226): a teacher's classes are also kept on the server (worldview_classes), so students can join one with its
+     code. The device copy stays the working copy and every change is sent to the server. A student's joined classes come from
+     worldview_class_lessons() through setJoined and are kept apart. Only the owner's app calls attach. */
+  let db = null, uid = '', codes = {}, members = {}, joined = [], busy = null;
+  const row = c => ({owner_id: uid, local_id: c.id, name: c.name, code: c.code, days: c.days, color: c.color, aka: c.aka});
+  async function attach(client, userId) {
+    if (!client || !userId) return;
+    if (db === client && uid === userId && busy) return busy;
+    db = client; uid = userId;
+    busy = (async () => {
+      try {
+        let {data, error} = await db.from('worldview_classes').select('id,local_id,join_code').eq('owner_id', uid);
+        if (error) return;
+        const have = new Set((data || []).map(r => r.local_id)), missing = list().filter(c => !have.has(c.id));
+        if (missing.length) { const r = await db.from('worldview_classes').insert(missing.map(row)).select('id,local_id,join_code'); if (!r.error) data = (data || []).concat(r.data || []); }
+        const ids = {}; (data || []).forEach(r => { codes[r.local_id] = r.join_code; ids[r.id] = r.local_id; });
+        const ro = await db.rpc('worldview_class_roster'); (ro.data || []).forEach(r => { if (ids[r.class_id]) members[ids[r.class_id]] = r.members; });
+      } catch (e) {}
+    })();
+    return busy;
+  }
+  const push = c => { if (db && uid && c) db.from('worldview_classes').upsert(row(c), {onConflict: 'owner_id,local_id'}).then(() => {}, () => {}); };
+  const joinLink = id => codes[id] ? new URL('join.html?c=' + codes[id], location.href).href : '';
+  const memberCount = id => members[id] || 0;
+  function setJoined(rows) {
+    const m = new Map(); (rows || []).forEach(r => { if (r && r.class_id && !m.has(r.class_id)) m.set(r.class_id, clean({id: r.class_id, name: r.class_name, code: r.class_code || '', days: r.days || [], color: r.color || 0, aka: []})); });
+    joined = [...m.values()]; joined.forEach(c => { c.joined = true; if (!c.days.length) c.days = [1, 3]; });
+  }
+  /* The classes a student view shows: the owner sees their own (as before) and any they joined; anyone else only what they joined. */
+  const studentList = owner => owner ? list().concat(joined.filter(j => !list().some(c => c.id === j.id))) : joined.slice();
+  const get = id => list().find(c => c.id === id) || joined.find(c => c.id === id) || null;
   /* Save changes to a class. A new name keeps the old one in `aka` so lessons titled with it still find the class. */
   function update(id, patch) {
     const c = get(id); if (!c) return null;
@@ -27,7 +57,7 @@ window.WorldviewClasses = (() => {
     if (typeof patch.code === 'string') c.code = patch.code.trim().slice(0, 20);
     if (Array.isArray(patch.days) && patch.days.length) c.days = patch.days.map(Number).filter(n => n >= 0 && n <= 6).filter((n, i, a) => a.indexOf(n) === i);
     if (patch.color != null) c.color = Math.max(0, Math.min(COLORS.length - 1, +patch.color || 0));
-    persist(); return c;
+    persist(); push(c); return c;
   }
   const esc = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const prefixRe = c => new RegExp('^(?:' + [c.name].concat(c.aka).map(esc).join('|') + '),\\s*unit\\s*\\d+', 'i');
@@ -51,5 +81,5 @@ window.WorldviewClasses = (() => {
     for (let i = 0; i < 14; i++) { const d = new Date(t.getFullYear(), t.getMonth(), t.getDate() + i); if (c.days.includes(d.getDay())) return keyOf(d); }
     return keyOf(t);
   }
-  return {list, get, update, ofLesson, plainTitle, meetDays, meetText, nextMeetKey, keyOf, COLORS, COLOR_NAMES, WD};
+  return {list, studentList, setJoined, attach, joinLink, memberCount, get, update, ofLesson, plainTitle, meetDays, meetText, nextMeetKey, keyOf, COLORS, COLOR_NAMES, WD};
 })();

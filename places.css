@@ -484,3 +484,9 @@ button.sc-d.now:hover { background:var(--ink); }
   .sc-sheet { border-radius:22px; max-height:80dvh; }
 }
 @media (prefers-reduced-motion:reduce) { .sc-sheet { animation:none; } }
+
+/* v3.1.87 (NAV-226): the class's join link */
+.sc-invite { display:grid; gap:6px; background:var(--card, #fdfaf5); border:1px solid var(--line, #e4dccb); border-radius:14px; padding:12px 14px; margin:10px 0 14px; }
+.sc-invite b { font-size:15px; }
+.sc-invite .sc-row { display:flex; gap:8px; align-items:center; }
+.sc-invite input { flex:1 1 auto; min-width:0; font:inherit; font-size:14px; padding:8px 10px; border:1px solid var(--line, #e4dccb); border-radius:10px; background:transparent; color:inherit; }

@@ -304,7 +304,7 @@
 
   /* ---------------- real lessons published in Teacher Studio (NAV-180) ----------------
      Everything else on this page is a sample; these are the owner's real, published lessons. */
-  let PUB = null, CAT = null, MY = [];
+  let PUB = null, CAT = null, MY = [], JOINED = []; // v3.1.87: JOINED = worldview_class_lessons() rows (the classes this account joined)
   async function loadPublished() {
     const db = read(() => backendClient); if (!db) { PUB = []; CAT = []; return; }
     try {
@@ -316,6 +316,10 @@
     } catch (e) { PUB = []; }
     try { const {data} = await db.rpc('worldview_teacher_lessons_catalog'); CAT = data || []; } catch (e) { CAT = []; }
     try { const {data} = await db.from('worldview_teacher_lessons').select('id,title,shared,updated_at,kind,note').order('updated_at', {ascending: false}); MY = (data || []).filter(l => l.kind !== 'experiment'); } catch (e) { MY = []; }
+    // v3.1.87 (NAV-226, NAV-231): the classes this account joined, with their published lessons and days; the owner's classes go to the server so students can join them
+    try { const {data, error} = await db.rpc('worldview_class_lessons'); JOINED = error ? [] : (data || []); } catch (e) { JOINED = []; }
+    read(() => window.WorldviewClasses.setJoined(JOINED));
+    if (isOwner() && accountId()) { try { await window.WorldviewClasses.attach(db, accountId()); } catch (e) {} }
     if (S.open && (S.area === 'places' || S.scr === 'home')) render();
   }
   // v3.1.76: going back from the slides page restores this page from the browser's memory; refresh the lesson lists then.
@@ -334,7 +338,7 @@
       <div class="cv-row" style="flex-wrap:wrap"><a class="cv-pill" href="${playLink(p.id)}" target="_blank" rel="noopener" style="text-decoration:none">Open lesson</a><button type="button" class="cv-pill ghost" data-copylink="${p.id}">Copy link</button><a class="cv-pill ghost" href="studio.html?l=${p.id}&side=pub" style="text-decoration:none">Results</a><a class="cv-pill ghost" href="studio.html?l=${p.id}" style="text-decoration:none">Edit</a></div></div>`).join('');
   }
   // 2026-10-14: real lessons take The AI Race's places (My courses row, Happening now, Essentials); everything else is a faded sample.
-  const REAL = () => { const own = PUB || [], cat = (CAT || []).filter(c => !own.some(o => o.id === c.id)); return isOwner() ? own : [...cat, ...own]; };
+  const REAL = () => { const own = PUB || [], cat = (CAT || []).filter(c => !own.some(o => o.id === c.id)); const cls = JOINED.filter(r => !own.some(o => o.id === r.lesson_id)).map(r => ({id: r.lesson_id, title: r.title, version: r.version, published_at: r.published_at, shared: true, note: {date: r.on_day || '', classId: r.class_id, format: r.format || ''}})); const base = isOwner() ? own : [...cat, ...own]; return [...cls, ...base.filter(b => !cls.some(c => c.id === b.id))]; };
   const hasReal = () => REAL().length > 0;
   const realMeta = p => (p.version ? 'Published v' + p.version : 'Published') + (p.at || p.published_at ? ' · ' + new Date(p.at || p.published_at).toLocaleDateString([], {month: 'short', day: 'numeric'}) : '');
   const realActions = p => `<a class="cv-pill" href="${playLink(p.id)}" style="text-decoration:none">${isOwner() ? 'Open lesson' : 'Start lesson'}</a><button type="button" class="cv-pill ghost" data-copylink="${p.id}">Copy link</button>` + (isOwner() && (PUB || []).some(o => o.id === p.id) ? `<a class="cv-pill ghost" href="studio.html?l=${p.id}&side=pub" style="text-decoration:none">Results</a><a class="cv-pill ghost" href="studio.html?l=${p.id}" style="text-decoration:none">Edit</a>` : '');
@@ -715,7 +719,7 @@ function scrHome() {
     if (!r.ok || !j || !Array.isArray(j.requests)) return null;
     return j.requests.filter(x => x && ['waiting', 'needs_key', 'needs_connector'].includes(x.status)).length;
   }
-  WP().init({render, toast, real: () => REAL(), my: () => MY, startReal, playLink, saveNote, db: () => read(() => backendClient), reload: loadPublished, isOwner: verifiedOwner, inbox: inboxWaiting});
+  WP().init({render, toast, real: () => REAL(), my: () => MY, startReal, playLink, saveNote, db: () => read(() => backendClient), reload: loadPublished, isOwner: verifiedOwner, ownerish: isOwner, inbox: inboxWaiting});
 
   /* ---------------- visibility ---------------- */
   function blocked() {
