@@ -310,7 +310,7 @@
     let g = (head ? DOWH.map(d => `<div class="sc-dow">${d[0]}</div>`).join('') : '') + '<div class="sc-blank"></div>'.repeat(lead);
     for (let i = 1; i <= days; i++) {
       const d = new Date(y, mo, i), k = key(d), its = by[k] || [], isT = k === key(TODAY);
-      if (!its.length) { g += `<div class="sc-d${isT ? ' now' : ''}"><span class="n">${i}</span></div>`; continue; }
+      if (!its.length) { g += teacher && d >= TODAY ? `<button type="button" class="sc-d sc-free${isT ? ' now' : ''}" data-pa="newl" data-k="${k}" aria-label="${esc(fmt(d) + ', no lessons. Make one for this day')}"><span class="n">${i}</span></button>` : `<div class="sc-d${isT ? ' now' : ''}"><span class="n">${i}</span></div>`; continue; }
       const done = !teacher && its.every(x => progressOf(x.id) === 'done');
       const dots = its.slice(0, 3).map(x => `<i${teacher && !x.pub ? ' class="dr"' : ''} style="--cc:${ccolor(ucls(x.cid))}"></i>`).join('');
       g += `<button type="button" class="sc-d has${isT ? ' now' : ''}${done ? ' done' : ''}" data-pa="sday" data-k="${k}" aria-label="${esc(fmt(d) + ', ' + its.length + (its.length === 1 ? ' lesson' : ' lessons') + (done ? ', done' : ''))}"><span class="n">${i}</span><span class="ds">${dots}</span></button>`;
@@ -335,6 +335,18 @@
       return `<article class="sc-sl" style="--cc:${ccolor(c)}"><span class="sc-meta">${esc(meta)}</span><h3>${esc(it.title)}</h3>${g.goals.length ? `<span class="sc-by">By the end you can:</span><ul>${g.goals.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}<a class="cv-pill" href="${esc(deps.playLink(it.id))}">${PBTN[pr]}</a></article>`;
     }).join(''));
   }
+  /* v3.1.90 (NAV-235): the teacher's New lesson panel. From the New lesson button, or a tap on an empty day (the lesson goes on that day).
+     Two ways: from slides (slides.html, the PDF upload) or blank (Teacher Studio's New lesson box). */
+  const IC_SLD = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8M10 8.5l4 1.5-4 1.5z"/></svg>';
+  const IC_PEN = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>';
+  function newSheetH() {
+    if (!P.nl) return '';
+    const k = validKey(P.nl.k) ? P.nl.k : '', vis = UC().filter(c => !hidden().includes(c.id)), c = vis[0] || UC()[0];
+    const sl = 'slides.html?' + (c ? 'class=' + encodeURIComponent(c.id) : '') + (k ? '&day=' + k : '');
+    return sheetShell(`<div class="sc-nlh"><h3>${k ? 'New lesson for ' + esc(fmt(D(k))) : 'New lesson'}</h3><p class="cv-muted">${k ? 'Nothing is on this day yet.' : 'You pick its day after.'}</p></div>
+      <a class="sc-nl" href="${esc(sl)}"><span class="ic">${IC_SLD}</span><span><b>From my slides</b><em>Choose a PDF. Worldview writes what to say and ask.</em></span><i>›</i></a>
+      <a class="sc-nl" href="studio.html?from=places&amp;new=1${c ? '&amp;class=' + esc(encodeURIComponent(c.code)) + '&amp;cname=' + esc(encodeURIComponent(c.name)) : ''}"><span class="ic">${IC_PEN}</span><span><b>Start blank</b><em>Write it yourself in Teacher Studio.</em></span><i>›</i></a>`);
+  }
   /* The teacher's slide-up panel for a day: each lesson with who has done it; Open shows the full lesson panel (Publish, Share, Results, Try it). */
   function teacherSheetH(items) {
     if (!P.td) return '';
@@ -351,11 +363,11 @@
     const everything = all.flatMap(c => itemsFor(c)), by = byDay(items), months = monthsFor(items, teacher);
     const late = teacher ? [] : lateOf(items), anytime = teacher ? [] : items.filter(x => !x.d), dated = items.some(x => x.d);
     const earlier = teacher && !P.earlier && items.some(x => x.d && x.d < monthOf(TODAY));
-    const empty = !everything.length ? (teacher ? 'No lessons yet. Open a class and press Add presentations to make one from your slides.' : !all.length ? 'No classes yet. Open the join link your teacher sent you, and your class shows up here.' : 'No lessons yet. When your teacher publishes a lesson for your class, it shows up here.') : !items.length ? 'Every class is hidden. Turn one back on in Filter.' : !dated && !anytime.length ? 'No lessons on the calendar yet.' : '';
+    const empty = !everything.length ? (teacher ? 'No lessons yet. Press New lesson, or tap a day, to make one from your slides.' : !all.length ? 'No classes yet. Open the join link your teacher sent you, and your class shows up here.' : 'No lessons yet. When your teacher publishes a lesson for your class, it shows up here.') : !items.length ? 'Every class is hidden. Turn one back on in Filter.' : !dated && !anytime.length ? 'No lessons on the calendar yet.' : '';
     /* the earlier teacher home (class cards) is kept here, unused, in case it comes back (v3.1.86) */
     const classCards = () => `<div class="sc-classes">${all.map(c => { const its = itemsFor(c), dr = its.filter(x => !x.d).length, on = its.length - dr; return `<button type="button" class="sc-class" style="--cc:${ccolor(c)}" data-pa="open" data-c="${esc(c.id)}"><b>${esc(c.name)}</b><span>${esc(c.code)}${c.code ? ' · ' : ''}meets ${meetText(c)}</span><span>${on} on the calendar · ${dr} in drafts</span></button>`; }).join('')}</div>`;
     void classCards;
-    const classes = teacher ? `<div class="sc-cb" role="group" aria-label="Your classes">${all.map(c => { const dr = itemsFor(c).filter(x => !x.d).length; return `<button type="button" class="sc-cbtn" style="--cc:${ccolor(c)}" data-pa="open" data-c="${esc(c.id)}"><i></i>${esc(c.name)}${dr ? `<span>${dr} draft${dr === 1 ? '' : 's'}</span>` : ''}</button>`; }).join('')}</div>` : '';
+    const classes = teacher ? `<div class="sc-cb" role="group" aria-label="Your classes"><button type="button" class="sc-newl" data-pa="newl"><span aria-hidden="true">+</span> New lesson</button>${all.map(c => { const dr = itemsFor(c).filter(x => !x.d).length; return `<button type="button" class="sc-cbtn" style="--cc:${ccolor(c)}" data-pa="open" data-c="${esc(c.id)}"><i></i>${esc(c.name)}${dr ? `<span>${dr} draft${dr === 1 ? '' : 's'}</span>` : ''}</button>`; }).join('')}</div>` : '';
     const rq = teacher ? reqH() : '';
     return `<div class="sc-bar">${switchH()}${filterH()}</div><div class="sc-layout"><div class="sc-main sc-stk">${classes}
       ${late.length ? `<button type="button" class="sc-catch" data-pa="slate">${late.length} to catch up when you're ready ›</button>` : ''}
@@ -363,7 +375,7 @@
       <div class="sc-months">${months.map((m, i) => monthH(m, by, teacher, i === 0)).join('')}</div>
       ${empty ? `<p class="cv-muted sc-none">${empty}</p>` : ''}
       ${anytime.length ? `<div class="sc-any"><h2 class="sc-h2">Any time</h2><p class="cv-muted">The teacher hasn't picked a day for these. You can start them whenever you like.</p>${anytime.map(x => scCard(x, P.sel)).join('')}</div>` : ''}
-      ${teacher ? `<div class="sc-ex">${rq}<a class="sc-link" href="studio.html?from=places">Build your own in Teacher Studio</a></div>` : ''}</div>${panelH(items)}</div>${teacher ? teacherSheetH(items) : daySheetH(items)}`;
+      ${teacher ? `<div class="sc-ex">${rq}<a class="sc-link" href="studio.html?from=places">Build your own in Teacher Studio</a></div>` : ''}</div>${panelH(items)}</div>${teacher ? teacherSheetH(items) + newSheetH() : daySheetH(items)}`;
   }
   function panelH(items) {
     const it = items.find(x => x.key === P.sel); if (!it) return '';
@@ -776,7 +788,7 @@
     },
     home() { P.scr = 'school'; P.sel = null; P.sd = P.td = null; P.fopen = false; P.edit = false; deps.render(); },
     openTutor() { P.scr = 'school'; },
-    escape() { if (P.fopen) { P.fopen = false; deps.render(); return true; } if (P.sd || P.td) { P.sd = P.td = null; deps.render(); return true; } if (RES.open) { RES.open = ''; deps.render(); return true; } if (P.sel) { P.sel = null; deps.render(); return true; } return false; },
+    escape() { if (P.fopen) { P.fopen = false; deps.render(); return true; } if (P.sd || P.td || P.nl) { P.sd = P.td = null; P.nl = null; deps.render(); return true; } if (RES.open) { RES.open = ''; deps.render(); return true; } if (P.sel) { P.sel = null; deps.render(); return true; } return false; },
     input(e) {
       const id = e.target.id;
       if (id === 'pl-q') { P.query = e.target.value; const pos2 = e.target.selectionStart; deps.render(); const i = document.getElementById('pl-q'); if (i) { i.focus(); try { i.setSelectionRange(pos2, pos2); } catch (x) {} } return; }
@@ -827,11 +839,12 @@
         (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(() => deps.toast('Link copied. Send it to your students.'), () => deps.toast('Copy the link from the box.'));
         return;
       }
-      case 'role': if (d.r !== P.role) { P.role = d.r; save('role', d.r); P.sel = null; P.sd = P.td = null; P.fopen = false; } break;
+      case 'role': if (d.r !== P.role) { P.role = d.r; save('role', d.r); P.sel = null; P.sd = P.td = null; P.nl = null; P.fopen = false; } break;
       case 'fopen': P.fopen = !P.fopen; break;
       case 'earlier': P.earlier = true; break;
       case 'slate': P.sd = {t: 'late'}; P.focusSheet = true; break;
-      case 'closesd': P.sd = P.td = null; break;
+      case 'closesd': P.sd = P.td = null; P.nl = null; break;
+      case 'newl': P.td = null; P.sel = null; P.nl = {k: d.k || ''}; P.focusSheet = true; break;
       case 'sday': {
         if (P.role !== 'teacher') { P.sd = {t: 'day', k: d.k}; P.focusSheet = true; break; }
         if ((byDay(viewItems())[d.k] || []).length) { P.td = d.k; P.focusSheet = true; }

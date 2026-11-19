@@ -34,7 +34,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <script src="lesson-entry-popup.js?v=2.1.71"></script>
 <link rel="stylesheet" href="lesson-folders.css?v=2.1.77">
 <link rel="stylesheet" href="courses.css?v=3.1.86">
-<link rel="stylesheet" href="places.css?v=3.1.87">
+<link rel="stylesheet" href="places.css?v=3.1.90">
 <link rel="stylesheet" href="boot-splash.css?v=3.1.22">
 <link rel="stylesheet" href="map-tools.css?v=3.1.21">
 <script src="lesson-folders.js?v=3.1.13"></script>
@@ -2238,7 +2238,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.89 · Nov 18";
+const BUILD = "v3.1.90 · Nov 18";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2246,6 +2246,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.90",date:"Nov 18",changes:["School, Teacher view: a New lesson button at the top. Choose From my slides (upload a PDF) or Start blank (Teacher Studio).","Tap an empty day on the calendar to make a lesson for that day. A lesson made from slides goes straight onto that day.","Teacher Studio’s New lesson box starts on your class (Financial Management) instead of a sample class."]},
   {tag:"v3.1.89",date:"Nov 18",changes:["iPhone voice: with Hands-free on, the tutor’s voice now plays through the same sound channel as the microphone. Before, the voice was made but never played. If a reading still doesn’t start within 4 seconds, the phone’s own voice reads it.","Calm screen: when the buttons fade they also fold away, so nothing invisible sits over the words.","Phones: one top line during a lesson (Leave lesson is in Options), no chapter strip, no overlapping words.","Slides: the slide slides in, stays at the top while the conversation scrolls under it, and a swipe on the slide turns to the next one.","Shorter tutor replies (they are read aloud). If you say you can’t hear it, it says sorry and that its words are on the screen."]},
   {tag:"v3.1.88",date:"Nov 18",changes:["Lessons: the tutor answers what you actually said from the very first answer. Getting started is now a real conversation, not a list of fixed questions.","Hands-free: what you say is always sent within a few seconds. Background sound used to hold it back, so nothing answered.","Turning to the Slides tells the tutor, and its next reply talks about that slide. No more separate “We’re on slide 1” line.","Mute stays on when you switch windows and come back. A new speaker button turns the tutor’s voice off without stopping listening.","Calm screen: the buttons fade after a few seconds without a touch and come back when you tap or move the mouse.","The lesson start fits on one screen: Start and three small switches.","Explain it back only appears once the first part of the conversation is done, so it can’t be tapped by accident."]},
   {tag:"v3.1.87",date:"Nov 18",changes:["Invite students: each class page has a join link. Send it, and a student signs in once (or creates an account) and the class is on their School calendar, with each lesson on its day.","Your classes are now saved on Worldview, not only on this phone, so students can join them. You see how many students joined.","Students only see the classes they joined. The Student and Teacher switch is only for you.","A new join page opens from the link, shows the class name, and takes the student to School when they are in."]},
@@ -16600,7 +16601,7 @@ window.addEventListener("blur", () => {
 <script src="places-data.js?v=3.1.69"></script>
 <script src="places-classes.js?v=3.1.87"></script>
 <script src="lesson-publish.js?v=3.1.72"></script>
-<script src="places.js?v=3.1.87"></script>
+<script src="places.js?v=3.1.90"></script>
 <script src="courses.js?v=3.1.87"></script>
 <!-- NAV-157: lesson map tools; NAV-156: lift the loading screen when Home is ready. -->
 <script src="map-tools.js?v=3.1.21"></script>

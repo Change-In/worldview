@@ -318,7 +318,7 @@
 <dialog id="newdlg"><form id="newform"><h2 id="newhead">New lesson</h2><div id="newforwrap" style="display:grid;gap:4px"><label class="small" for="newfor">Which class is it for?</label><select class="forsel" id="newfor"></select></div><label class="small" for="newtitle" id="newlabel">What's it called? You can change it later.</label><input type="text" id="newtitle" maxlength="120" placeholder="e.g. Why the Moon has phases"><div class="row"><button type="submit" class="btn">Create</button><button type="button" class="btn ghost" data-close>Cancel</button></div></form></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="places-data.js?v=3.1.69"></script>
+<script src="places-data.js?v=3.1.90"></script>
 <script src="port-host.js?v=3.1.89"></script>
 <script src="lesson-publish.js?v=3.1.72"></script>
 <script src="studio-chat.js?v=3.1.58"></script>
@@ -941,7 +941,7 @@ ${RULES}`;
     $('#who').textContent = s.user.email || '';
     showRequests(s.user.id);
     const q = new URLSearchParams(location.search), l = q.get('l'), nw = q.get('new');
-    try { const fr = q.get('from'); if (fr) sessionStorage.setItem('wv-studio-from', fr); const b = sessionStorage.getItem('wv-studio-from') === 'places' ? 'places' : 'explore'; $('#backto').href = './#' + b; $('#backto').setAttribute('aria-label', 'Back to ' + (b === 'places' ? 'Places' : 'Explore')); } catch (x) {} if (l) showLesson(l, false, q.get('side') === 'pub' ? 'pub' : 'draft'); else { await showGrid(); if (nw) { const ci = CLS.findIndex(c => c.code === q.get('class')), un = q.get('unit'); openNew(ci < 0 ? 0 : ci, un == null ? null : +un); history.replaceState(null, '', location.pathname); } }
+    try { const fr = q.get('from'); if (fr) sessionStorage.setItem('wv-studio-from', fr); const b = sessionStorage.getItem('wv-studio-from') === 'places' ? 'places' : 'explore'; $('#backto').href = './#' + b; $('#backto').setAttribute('aria-label', 'Back to ' + (b === 'places' ? 'Places' : 'Explore')); } catch (x) {} if (l) showLesson(l, false, q.get('side') === 'pub' ? 'pub' : 'draft'); else { await showGrid(); if (nw) { let ci = CLS.findIndex(c => c.code === q.get('class')); const un = q.get('unit'), cn = (q.get('cname') || '').toLowerCase(); if (ci < 0 && cn) ci = CLS.findIndex(c => c.name.toLowerCase() === cn); /* v3.1.90 (NAV-235): from School's New lesson, by class name */ openNew(ci < 0 ? 0 : ci, un == null ? null : +un); history.replaceState(null, '', location.pathname); } }
   })();
 })();
 </script>

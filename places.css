@@ -464,6 +464,22 @@ button.sc-d.now:hover { background:var(--ink); }
 .sc-d.done .ds i { background:var(--ink-soft); opacity:.45; }
 .sc-d.now .ds i:not(.dr) { box-shadow:0 0 0 1.5px var(--paper); }
 .sc-cb { display:flex; flex-wrap:wrap; gap:8px; }
+/* v3.1.90 (NAV-235): New lesson */
+.sc-newl { all:unset; box-sizing:border-box; cursor:pointer; min-height:44px; display:inline-flex; align-items:center; gap:6px; padding:0 18px; border-radius:999px; background:var(--accent); color:#fff; font-size:15px; font-weight:600; }
+.sc-newl span { font-size:20px; line-height:1; font-weight:500; }
+.sc-newl:hover { filter:brightness(1.06); }
+.sc-newl:focus-visible, .sc-nl:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
+button.sc-d.sc-free { cursor:pointer; }
+button.sc-d.sc-free:hover::after { content:'+'; position:absolute; bottom:6px; left:0; right:0; text-align:center; font-size:14px; color:var(--ink-soft); }
+.sc-nlh h3 { margin:0 0 2px; }
+.sc-nlh p { margin:0 0 4px; }
+.sc-nl { display:flex; align-items:center; gap:14px; padding:14px; border:1px solid var(--line); border-radius:14px; background:var(--card); color:var(--ink); text-decoration:none; min-height:64px; box-sizing:border-box; }
+.sc-nl:hover { border-color:var(--accent); }
+.sc-nl .ic { flex:0 0 auto; width:46px; height:46px; border-radius:12px; display:grid; place-items:center; background:var(--surface-soft); color:var(--accent); }
+.sc-nl b { display:block; font-size:16px; }
+.sc-nl em { display:block; font-style:normal; font-size:13.5px; color:var(--ink-soft); margin-top:2px; line-height:1.35; }
+.sc-nl > span:nth-child(2) { flex:1 1 auto; min-width:0; }
+.sc-nl i { font-style:normal; font-size:22px; color:var(--ink-soft); }
 .sc-cbtn { all:unset; box-sizing:border-box; cursor:pointer; min-height:44px; display:inline-flex; align-items:center; gap:8px; padding:0 14px; border:1px solid var(--line); border-radius:999px; background:var(--card); font-size:14px; }
 .sc-cbtn:hover { border-color:var(--cc); }
 .sc-cbtn i { width:10px; height:10px; border-radius:50%; background:var(--cc); }

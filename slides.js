@@ -48,6 +48,8 @@
   /* v3.1.83: "View lesson" (slides.html?l=…&view=1, from the School day panel of a published lesson) is read-only: every way of
      saving refuses (storage, lesson.json, the lessons table, the drafting AI), not only the buttons, which are hidden or disabled. */
   const VIEW = new URLSearchParams(location.search).get('view') === '1';
+  // v3.1.90 (NAV-235): started from a day on the School calendar: the new lesson goes on that day
+  const DAY = (v => /^\d{4}-\d\d-\d\d$/.test(v) && !isNaN(new Date(v + 'T12:00:00')) ? v : '')(new URLSearchParams(location.search).get('day') || '');
   const NOVIEW = {error: {message: 'View only: move the lesson back to drafts to change it.'}};
   const put = (path, blob, type) => VIEW ? Promise.resolve(NOVIEW) : db.storage.from(BUCKET).upload(row.id + '/' + path, blob, {upsert: true, contentType: type || blob.type || undefined, cacheControl: path === 'lesson.json' ? '10' : '3600'});
   async function readLessonFile(id) {
@@ -202,7 +204,7 @@
     const name = it.name;
     if (!row) {
       progress(0.02, 'Making the lesson…');
-      const note = Object.assign({format: 'slides-v1'}, WC.get(cls) ? {classId: cls} : {});
+      const note = Object.assign({format: 'slides-v1'}, WC.get(cls) ? {classId: cls} : {}, DAY ? {date: DAY} : {});
       const {data, error} = await db.from(T).insert({title: name.slice(0, 120), html: '<!doctype html><title>Lesson</title>', note}).select('id,title,shared,note').single();
       if (error) throw new Error(/lesson_limit/.test(error.message) ? 'You have 50 lessons, the most for now. Delete one in Teacher Studio first.' : 'The lesson couldn\'t be made: ' + error.message);
       row = data; it.row = row;
@@ -667,6 +669,7 @@
     $('#for').innerHTML = classOptions();
     const want = WC.get(q.get('class')) || WC.list()[0]; $('#for').value = want.id; setBack(want.id);
     $('#for').addEventListener('change', () => setBack($('#for').value));
+    if (DAY) $('#nvp').textContent = 'It goes on ' + new Date(DAY + 'T12:00:00').toLocaleDateString([], {weekday: 'long', month: 'long', day: 'numeric'}) + '. Choose one or more presentations saved as PDFs. Worldview writes what the AI will say on each slide, the goals, and questions for the end. You can change all of it before students see anything.';
     show('newview');
   })();
 })();
