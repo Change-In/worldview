@@ -506,3 +506,66 @@ button.sc-d.sc-free:hover::after { content:'+'; position:absolute; bottom:6px; l
 .sc-invite b { font-size:15px; }
 .sc-invite .sc-row { display:flex; gap:8px; align-items:center; }
 .sc-invite input { flex:1 1 auto; min-width:0; font:inherit; font-size:14px; padding:8px 10px; border:1px solid var(--line, #e4dccb); border-radius:10px; background:transparent; color:inherit; }
+
+/* v3.1.92 (NAV-236 to NAV-239): one teacher page. Course buttons on top, weeks with names (a list on phones, a week grid wider),
+   Needs you, Not on a day yet; on a wide screen those two sit in a right-hand column, where an opened lesson shows too. */
+.cv-wrap:has(.tv) { max-width:1280px; }
+.tv-chips { display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; padding:2px 0 4px; margin-bottom:4px; }
+.tv-chips::-webkit-scrollbar { display:none; }
+.tv-chip { all:unset; box-sizing:border-box; cursor:pointer; flex:none; min-height:40px; display:inline-flex; align-items:center; gap:8px; padding:0 15px; border:1px solid var(--line); border-radius:999px; background:var(--card); font-size:14px; white-space:nowrap; }
+.tv-chip i { width:10px; height:10px; border-radius:50%; background:var(--cc); }
+.tv-chip.on { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+.tv-chip:focus-visible, .tv-seg button:focus-visible, .sc-gap:focus-visible, .sc-ni:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.tv { display:grid; grid-template-columns:minmax(0,1fr); gap:18px; align-items:start; }
+.tv-main { gap:14px; }
+.tv-side { display:none; }
+.tv-head { display:flex; flex-wrap:wrap; gap:10px 14px; align-items:flex-start; justify-content:space-between; }
+.tv-head .sc-acts { margin-top:0; }
+.tv-head .sc-dot { width:12px; height:12px; }
+.tv-bar { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+.tv-seg { display:inline-flex; border:1px solid var(--line); border-radius:999px; background:var(--card); padding:3px; }
+.tv-seg button { all:unset; cursor:pointer; padding:6px 16px; border-radius:999px; font-size:14px; color:var(--ink-soft); }
+.tv-seg button.on { background:var(--surface-soft); color:var(--ink); font-weight:600; }
+.sc-needs { display:grid; gap:2px; border:1px solid var(--line); border-radius:14px; padding:10px 12px; background:var(--card); }
+.sc-nh { font-size:11.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); }
+.sc-ni { all:unset; box-sizing:border-box; cursor:pointer; display:flex; align-items:center; gap:10px; min-height:40px; font-size:14.5px; line-height:1.3; }
+.sc-ni i { flex:none; width:8px; height:8px; border-radius:50%; background:var(--cc); }
+.sc-ni span { flex:1 1 auto; }
+.sc-ni::after { content:'›'; color:var(--ink-soft); font-size:18px; }
+.sc-ni:hover span { text-decoration:underline; }
+.sc-st { display:block; font-size:12px; margin-top:2px; color:var(--ink-soft); }
+.sc-st.p { color:var(--cv-ok); }
+.sc-st.r { color:var(--accent); font-weight:600; }
+.sc-cn { display:block; font-size:11.5px; color:var(--ink-soft); }
+.sc-gap { all:unset; box-sizing:border-box; cursor:pointer; display:block; width:100%; padding:7px 10px; border:1px dashed var(--line); border-left:3px dashed var(--cc); border-radius:8px; font-size:13px; color:var(--ink-soft); margin-bottom:5px; }
+.sc-gap:hover { color:var(--ink); border-color:var(--cc); }
+.tw { display:grid; gap:8px; }
+.tw-h { margin:6px 0 0; font:400 22px/1.15 Georgia,"Times New Roman",serif; display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+.tw-h small { font:400 13px/1 system-ui,sans-serif; color:var(--ink-soft); }
+.tw-none { margin:0; font-size:13px; color:var(--ink-soft); }
+.tw-d { display:grid; grid-template-columns:44px minmax(0,1fr); gap:10px; align-items:start; }
+.tw-dd { text-align:center; font-size:11.5px; color:var(--ink-soft); line-height:1.15; padding-top:4px; }
+.tw-dd b { display:block; font-size:18px; color:var(--ink); font-weight:600; }
+.tw-dd.now b { background:var(--ink); color:var(--paper); border-radius:9px; padding:2px 0; }
+.tw-l { display:grid; gap:6px; min-width:0; }
+.tw-l .sc-lc, .tw-l .sc-gap { margin:0; }
+.tw-l .sc-lc { font-size:14px; padding:9px 12px; }
+.tw-grid { display:none; gap:12px; }
+.tw-g { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; }
+.tw-dow { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); text-align:center; }
+.tw-c { border-style:solid; background:var(--card); min-height:104px; }
+.tw-c.we { background:transparent; border-style:dashed; }
+.tw-c.now { box-shadow:inset 0 0 0 2px var(--ink); }
+.tw-n { display:block; font-size:12px; color:var(--ink-soft); margin-bottom:5px; }
+.tw-c.now .tw-n { color:var(--ink); font-weight:700; }
+.tw-c .sc-lc { background:var(--paper); }
+.tw-c .sc-gap { font-size:12px; padding:5px 7px; }
+.tv-tray .sc-lc { margin:0; font-size:13.5px; padding:8px 10px; }
+@media (min-width:701px) { .tw-list { display:none; } .tw-grid { display:grid; } }
+@media (min-width:1101px) {
+  .tv { grid-template-columns:minmax(0,1fr) 320px; }
+  .tv-narrow { display:none; }
+  .tv-side { display:grid; gap:14px; align-content:start; position:sticky; top:12px; }
+  .tv:has(> .sc-panel) .tv-side { display:none; }
+  .tv > .sc-panel { grid-column:2; grid-row:1; }
+}
