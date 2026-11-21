@@ -34,7 +34,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 <script src="lesson-entry-popup.js?v=2.1.71"></script>
 <link rel="stylesheet" href="lesson-folders.css?v=2.1.77">
 <link rel="stylesheet" href="courses.css?v=3.1.86">
-<link rel="stylesheet" href="places.css?v=3.1.93">
+<link rel="stylesheet" href="places.css?v=3.1.94">
 <link rel="stylesheet" href="boot-splash.css?v=3.1.22">
 <link rel="stylesheet" href="map-tools.css?v=3.1.21">
 <script src="lesson-folders.js?v=3.1.13"></script>
@@ -2238,7 +2238,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.93 · Nov 21";
+const BUILD = "v3.1.94 · Nov 21";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2246,6 +2246,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.94",date:"Nov 21",changes:["School, Teacher view: + Course makes a new course. Usual days, first day and last day are all optional, for courses without a fixed schedule.","Each course has a ⋯ button: its join link, name, days, dates and colour, and Put away at the end of a term (bring it back from + Course).","Course tab: every lesson of the course in date order with its first slides, and its day to change right there.","In a lesson: Different day for some students. Give one student a later day after a missed deadline; their calendar shows it.","Moving a lesson can move the lessons after it by the same number of days. Rename a lesson or move it to another course under Name and course."]},
   {tag:"v3.1.93",date:"Nov 21",changes:["School, Teacher view: a lesson opens on its state and one main button for the next step: Finish checking, Publish to students, Publish changes, or See every student.","Changes not published: a lesson you edited after publishing says so, on the calendar and in the lesson, until you publish the changes.","Below that, short rows: Try it as a student, Slides and what the AI says, Goals and the check, How students can learn it, Day, Share link.","View, Teacher Studio, Unpublish and Delete moved under More."]},
   {tag:"v3.1.92",date:"Nov 21",changes:["School, Teacher view: one page. Your courses are buttons along the top: All, or one course. The separate class page and the Filter button are gone.","Weeks show every lesson by name with where it stands: Draft, Ready to publish, or Published with how many are done and started. Month is one tap away.","A day a course meets with no lesson shows + Add a lesson (the next four weeks).","Needs you, at the top: lessons ready to publish, class days with no lesson, and new suggestions from students.","Not on a day yet lists lessons with no day. On a laptop it sits on the right with Needs you, and you can drag a lesson onto a day.","Add lessons asks which course first, then From my slides or Something custom (Teacher Studio)."]},
   {tag:"v3.1.91",date:"Nov 21",changes:["School: going back from the slides page or Teacher Studio now returns to the same class, with the lesson you had open. Before, it could land on Home.","The back button on the slides page says where it goes, for example ‹ Financial Management.","Your classes now show the same on every device: rename one on your laptop and your phone shows the new name.","Teacher Studio lists your real classes (it showed old sample classes), and its back button returns to your class.","Clearer words: From my slides, and Not on a day yet instead of Drafts."]},
@@ -16602,9 +16603,9 @@ window.addEventListener("blur", () => {
 </script>
 <!-- NAV-152/154: owner-only Courses preview (bottom tabs Home · Courses · Profile). -->
 <script src="places-data.js?v=3.1.69"></script>
-<script src="places-classes.js?v=3.1.91"></script>
+<script src="places-classes.js?v=3.1.94"></script>
 <script src="lesson-publish.js?v=3.1.72"></script>
-<script src="places.js?v=3.1.93"></script>
+<script src="places.js?v=3.1.94"></script>
 <script src="courses.js?v=3.1.91"></script>
 <!-- NAV-157: lesson map tools; NAV-156: lift the loading screen when Home is ready. -->
 <script src="map-tools.js?v=3.1.21"></script>

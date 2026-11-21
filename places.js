@@ -233,7 +233,7 @@
   const validKey = v => /^\d{4}-\d\d-\d\d$/.test(v || '') && key(D(v)) === v;
   /* v3.1.87 (NAV-226): a student sees the classes they joined (the owner also sees their own); only the owner has the Teacher view. */
   const ownerish = () => { try { return !!(deps.ownerish ? deps.ownerish() : deps.isOwner()); } catch (e) { return false; } };
-  const ucls = id => WC.get(id), UC = () => P.role === 'teacher' ? WC.list() : WC.studentList(ownerish());
+  const ucls = id => WC.get(id), UC = () => P.role === 'teacher' ? WC.list().filter(c => !c.archived) : WC.studentList(ownerish());
   const ccolor = c => WC.COLORS[c.color] || WC.COLORS[0];
   const meetText = c => WC.meetText(c);
   const nextMeetKey = c => WC.nextMeetKey(c, TODAY);
@@ -352,7 +352,7 @@
     const k = validKey(P.nl.k) ? P.nl.k : '', c = ucls(P.nl.c) || selCls() || (UC().length === 1 ? UC()[0] : null);
     const title = `<div class="sc-nlh"><h3>${k ? 'New lesson for ' + esc(fmt(D(k))) : 'Add lessons'}</h3><p class="cv-muted">${c ? esc(c.name) + (k ? '' : ' · you pick the days after') : 'Which course is it for?'}</p></div>`;
     /* v3.1.92: from All, pick the course first */
-    if (!c) return sheetShell(title + UC().map(x => `<button type="button" class="sc-nl" style="--cc:${ccolor(x)}" data-pa="nlc" data-c="${esc(x.id)}"><span class="ic"><i class="sc-dot" style="background:${ccolor(x)};margin:0"></i></span><span><b>${esc(x.name)}</b><em>${esc(x.code)}${x.code ? ' · ' : ''}meets ${meetText(x)}</em></span><i>›</i></button>`).join(''));
+    if (!c) return sheetShell(title + UC().map(x => `<button type="button" class="sc-nl" style="--cc:${ccolor(x)}" data-pa="nlc" data-c="${esc(x.id)}"><span class="ic"><i class="sc-dot" style="background:${ccolor(x)};margin:0"></i></span><span><b>${esc(x.name)}</b><em>${esc(x.code)}${x.code ? ' · ' : ''}${meetLine(x)}</em></span><i>›</i></button>`).join(''));
     const sl = 'slides.html?class=' + encodeURIComponent(c.id) + (k ? '&day=' + k : '');
     return sheetShell(title + `<a class="sc-nl" href="${esc(sl)}"><span class="ic">${IC_SLD}</span><span><b>From my slides</b><em>${k ? 'Choose a PDF. Worldview writes what to say and ask.' : 'Choose one or more PDFs. Worldview writes what to say and ask.'}</em></span><i>›</i></a>
       <a class="sc-nl" href="studio.html?from=places&amp;new=1&amp;cid=${esc(encodeURIComponent(c.id))}&amp;cname=${esc(encodeURIComponent(c.name))}"><span class="ic">${IC_PEN}</span><span><b>Something custom</b><em>Build it yourself in Teacher Studio.</em></span><i>›</i></a>`);
@@ -365,6 +365,100 @@
       const c = ucls(it.cid), cn = countsText(it);
       return `<article class="sc-sl" style="--cc:${ccolor(c)}"><span class="sc-meta">${esc(c.name)} · ${fmt(it.d)}</span><h3>${esc(it.title)}</h3><span class="sc-meta"><span class="sc-tag ${it.pub ? 'p' : 'd'}">${it.pub ? 'Published' : 'Draft'}</span>${cn ? ' ' + esc(cn) : ''}</span><button type="button" class="cv-pill" data-pa="pick" data-k="${esc(it.key)}">Open</button></article>`;
     }).join(''));
+  }
+  /* ---------- v3.1.94: courses that bend to the real world ----------
+     A course may have no fixed days; a first and last day are optional; a course can be put away and brought back. Courses are
+     made and edited in one form (a slide-up panel, not buttons on the page). The Course tab lists every lesson in date order
+     with its first slides and a day you can change right there. */
+  const meetLine = c => c.days.length ? 'meets ' + meetText(c) : 'no set days';
+  function courseSheetH() {
+    if (!P.cf) return '';
+    const c = P.cf.id ? ucls(P.cf.id) : null, v = c || {name: '', code: '', days: [], start: '', end: '', color: (WC.list().length) % WC.COLORS.length};
+    const away = WC.list().filter(x => x.archived);
+    return sheetShell(`<form class="sc-edit sc-cf" data-form="course" novalidate><h3>${c ? esc(c.name) : 'New course'}</h3>${c ? inviteH(c) + '<span class="sc-f">Course details</span>' : ''}
+      <label class="sc-f" for="cf-name">Name</label><input id="cf-name" type="text" maxlength="60" value="${esc(v.name)}" placeholder="Corporate Finance" autocomplete="off">
+      <label class="sc-f" for="cf-code">Short code <span class="cv-muted">(optional)</span></label><input id="cf-code" type="text" maxlength="20" value="${esc(v.code)}" placeholder="FI 410" autocomplete="off">
+      <span class="sc-f" id="cf-dl">Days it usually meets <span class="cv-muted">(optional; leave all off if it changes)</span></span><div class="sc-days" role="group" aria-labelledby="cf-dl">${[1, 2, 3, 4, 5, 6, 0].map(n => `<label class="sc-day"><input type="checkbox" name="cf-day" value="${n}"${v.days.includes(n) ? ' checked' : ''}><span>${WC.WD[n]}</span></label>`).join('')}</div>
+      <div class="sc-two"><label class="sc-f">First day <span class="cv-muted">(optional)</span><input id="cf-start" type="date" value="${esc(v.start || '')}"></label><label class="sc-f">Last day <span class="cv-muted">(optional)</span><input id="cf-end" type="date" value="${esc(v.end || '')}"></label></div>
+      <span class="sc-f" id="cf-cl">Colour</span><div class="sc-sw" role="radiogroup" aria-labelledby="cf-cl">${WC.COLORS.map((h, i) => `<label class="sc-swl" title="${WC.COLOR_NAMES[i]}"><input type="radio" name="cf-color" value="${i}"${v.color === i ? ' checked' : ''} aria-label="${WC.COLOR_NAMES[i]}"><i style="background:${h}"></i></label>`).join('')}</div>
+      <p class="sc-note" id="cf-msg" role="status"></p>
+      <div class="sc-acts"><button type="button" class="cv-pill" data-pa="cfsave">${c ? 'Save' : 'Make the course'}</button></div>
+      ${c ? `<p class="cv-muted">Changing the usual days never moves a lesson. Lessons keep their own days.</p><div class="sc-danger"><button type="button" class="cv-pill ghost" data-pa="cfaway">Put this course away</button><p class="cv-muted">For the end of a term. It leaves your buttons; its lessons and students stay, and you can bring it back.</p></div>`
+        : away.length ? `<div class="sc-danger"><span class="sc-f">Put away</span>${away.map(x => `<div class="sc-row"><span style="flex:1">${esc(x.name)}</span><button type="button" class="cv-pill ghost" data-pa="cfback" data-c="${esc(x.id)}">Bring back</button></div>`).join('')}</div>` : ''}</form>`);
+  }
+  async function saveCourse() {
+    const f = document.querySelector('[data-form=course]'); if (!f) return;
+    const g = id => (f.querySelector('#' + id) || {}).value || '', msg = f.querySelector('#cf-msg');
+    const name = g('cf-name').trim(), start = g('cf-start'), end = g('cf-end'), days = [...f.querySelectorAll('[name=cf-day]:checked')].map(x => +x.value), col = f.querySelector('[name=cf-color]:checked');
+    if (!name) { msg.textContent = 'Give the course a name.'; return; }
+    if (start && end && end < start) { msg.textContent = 'The last day comes before the first day.'; return; }
+    const p = {name, code: g('cf-code'), days, start, end, color: col ? +col.value : 0};
+    if (P.cf.id) { WC.update(P.cf.id, p); P.cf = null; deps.toast('Course saved.'); deps.render(); return; }
+    msg.textContent = 'Making it…';
+    const c = await WC.add(p);
+    P.cur = c.id; P.scr = 'class'; P.ctab = 'cal'; P.sel = null; P.cf = {id: c.id};
+    deps.toast(c.name + ' is ready. Send students the link at the top, then add lessons.'); deps.render();
+  }
+  /* The Course tab: every lesson of the course in date order (no day last), its first slides, its state, and its day. */
+  const TH = {};
+  function courseMenuH(c, items) {
+    const ls = items.slice().sort((a, b) => (a.d ? a.d.getTime() : 9e15) - (b.d ? b.d.getTime() : 9e15) || a.title.localeCompare(b.title));
+    if (!ls.length) return '<p class="cv-muted sc-none">No lessons in this course yet. Press Add lessons.</p>';
+    return `<p class="cv-muted sc-cmh">Every lesson in ${esc(c.name)}, in date order. Change a day right here; tap a name for everything else.</p><div class="sc-cm">${ls.map((it, i) => `<div class="sc-cmr" style="--cc:${ccolor(c)}">
+      <span class="sc-cmn">${i + 1}</span>
+      <div class="sc-cmb"><button type="button" class="sc-cmt" data-pa="pick" data-k="${esc(it.key)}">${esc(it.title)}</button>${stH(it)}
+        <div class="sc-cmth" data-th="${it.slides ? esc(it.id) : ''}">${it.slides ? (TH[it.id] || '<span class="sc-cmph"></span><span class="sc-cmph"></span><span class="sc-cmph"></span>') : '<span class="cv-muted">Made in Teacher Studio</span>'}</div>
+        ${it.slides ? `<a class="sc-link" href="slides.html?l=${encodeURIComponent(it.id)}#slides">All slides and what the AI says</a>` : ''}</div>
+      <label class="sc-cmd"><span>${it.d ? 'Day' : 'No day yet'}</span><input type="date" data-cmday="${esc(it.id)}" value="${it.d ? key(it.d) : ''}" aria-label="Day for ${esc(it.title)}"></label>
+    </div>`).join('')}</div>`;
+  }
+  async function loadThumbs(root) {
+    const db = deps.db(); if (!db) return;
+    for (const el of root.querySelectorAll('.sc-cmth[data-th]')) {
+      const id = el.dataset.th; if (!id || TH[id] !== undefined) { if (id && TH[id]) el.innerHTML = TH[id]; continue; }
+      TH[id] = '';
+      try {
+        const {data} = await db.storage.from(BUCKET).createSignedUrls([1, 2, 3].map(n => id + '/slides/' + String(n).padStart(2, '0') + '.jpg'), 3600);
+        TH[id] = (data || []).filter(x => x && x.signedUrl && !x.error).map((x, n) => `<img src="${esc(x.signedUrl)}" alt="Slide ${n + 1}" loading="lazy" onerror="this.remove()">`).join('') || '<span class="cv-muted">No slide pictures</span>';
+      } catch (e) { TH[id] = '<span class="cv-muted">No slide pictures</span>'; }
+      const live = document.querySelector(`.sc-cmth[data-th="${CSS.escape(id)}"]`); if (live) live.innerHTML = TH[id];
+    }
+  }
+  /* A different day for some students (a missed deadline, an absence). Saved per student on the server; the student's calendar shows their day. */
+  async function loadPer(it) {
+    LX.per = {id: it.id, loading: true, people: null, due: null, msg: ''}; deps.render();
+    const [people, due] = await Promise.all([WC.people(it.cid, true), WC.dueFor(it.id)]);
+    if (!LX.per || LX.per.id !== it.id) return;
+    Object.assign(LX.per, {loading: false, people, due: due || {}, msg: due ? '' : 'Couldn\'t read the students\' days. Check the internet connection.'}); deps.render();
+  }
+  function perH(it) {
+    const p = LX.per; if (!p || p.id !== it.id) return '';
+    if (p.loading) return '<p class="cv-muted">Loading students…</p>';
+    if (!p.people || !p.people.length) return '<p class="cv-muted">No students have joined this course yet. Invite students from the course, then you can give one of them a different day.</p>';
+    return `<div class="sc-per"><p class="cv-muted">Everyone else keeps ${it.d ? esc(fmt(it.d)) : 'no day'}. Clear a day to put a student back.</p>${p.people.map(s => `<div class="sc-perr"><span>${esc(s.name)}</span><input type="date" data-due="${esc(s.id)}" data-lid="${esc(it.id)}" value="${esc(p.due[s.id] || '')}" aria-label="Day for ${esc(s.name)}">${p.due[s.id] ? `<button type="button" class="sc-link" data-pa="dueclear" data-u="${esc(s.id)}" data-id="${esc(it.id)}">Clear</button>` : '<span class="sc-perph"></span>'}</div>`).join('')}<p class="sc-note" role="status">${esc(p.msg || '')}</p></div>`;
+  }
+  async function setDueFor(lid, uid, k) {
+    const it = mineItem(lid), p = LX.per; if (!it || !p || p.id !== lid) return;
+    const c = ucls(it.cid); if (!c) return;
+    p.msg = 'Saving…'; deps.render();
+    const ok = await WC.setDue(c.id, lid, uid, validKey(k) ? k : '');
+    if (ok) { if (validKey(k)) p.due[uid] = k; else delete p.due[uid]; }
+    p.msg = ok ? (validKey(k) ? 'Saved. That student sees ' + fmt(D(k)) + '.' : 'Back to the course day.') : 'Couldn\'t save that. Check the internet connection and try again.';
+    deps.render();
+  }
+  async function renameLesson(id) {
+    const it = mineItem(id), v = ((document.getElementById('sc-name') || {}).value || '').trim().slice(0, 120); if (!it || !v || v === it.title) return;
+    const db = deps.db(); if (!db) return;
+    LX.busy = 'Saving the name…'; deps.render();
+    let ok = false; try { const {error} = await db.from('worldview_teacher_lessons').update({title: v}).eq('id', id); ok = !error; } catch (e) {}
+    LX.busy = ''; LX.msg = ok ? (it.pub ? 'Renamed. Students see the new name after you publish changes.' : 'Renamed.') : 'Couldn\'t rename it. Check the internet connection and try again.';
+    if (ok) await deps.reload(); deps.render();
+  }
+  async function moveToCourse(id, cid) {
+    const l = (deps.my() || []).find(x => x.id === id), c = ucls(cid); if (!l || !c) return;
+    const ok = await deps.saveNote(id, Object.assign({}, l.note || {}, {classId: cid}));
+    if (ok) { P.sel = 'r|' + id; if (P.scr === 'class') P.cur = cid; }
+    deps.toast(ok ? 'Moved to ' + c.name + '.' : 'Couldn\'t move it. Check the internet connection and try again.'); deps.render();
   }
   /* ---------- v3.1.92 (NAV-236 to NAV-239): one teacher page ----------
      The course buttons along the top decide what the page shows (All, or one course; this replaces Filter and the separate class page).
@@ -398,12 +492,13 @@
   const tcard = it => `<div class="sc-lc tc${P.sel === it.key ? ' on' : ''}" style="--cc:${ccolor(ucls(it.cid))}" role="button" tabindex="0" data-pa="pick" data-k="${esc(it.key)}"${it.mine ? ' draggable="true"' : ''}><b>${esc(it.title)}</b>${selCls() || UC().length < 2 ? '' : `<span class="sc-cn">${esc(ucls(it.cid).name)}</span>`}${stH(it)}</div>`;
   const gapB = (c, k, short) => `<button type="button" class="sc-gap" style="--cc:${ccolor(c)}" data-pa="newl" data-k="${k}" data-c="${esc(c.id)}" aria-label="Add a lesson for ${esc(c.name)} on ${esc(fmt(D(k)))}">${short ? '+ ' + (selCls() || UC().length < 2 ? 'Add a lesson' : esc(c.name)) : '+ Add a lesson' + (selCls() || UC().length < 2 ? '' : ' · ' + esc(c.name))}</button>`;
   function gapsFor(items, cl, k) {
-    const d = D(k); if (d < TODAY || d > add(TODAY, 27)) return [];
-    return cl.filter(c => c.days.includes(d.getDay()) && !items.some(x => x.cid === c.id && x.d && key(x.d) === k));
+    const d = D(k); if (d < TODAY) return [];
+    // v3.1.94: only courses with usual days, from their first day to their last day (the next four weeks when there is no last day), not days marked No class
+    return cl.filter(c => c.days.length && c.days.includes(d.getDay()) && (!c.start || k >= c.start) && (c.end ? k <= c.end : d <= add(TODAY, 27)) && !items.some(x => x.cid === c.id && x.d && key(x.d) === k));
   }
   function weeksH(items, cl) {
     const m0 = monday(TODAY), from = P.earlier ? add(m0, -28) : m0, by = byDay(items);
-    let last = add(m0, 21); items.forEach(x => { if (x.d && x.d > last) last = x.d; });
+    let last = add(m0, 21); items.forEach(x => { if (x.d && x.d > last) last = x.d; }); cl.forEach(c => { if (c.end && c.days.length && D(c.end) > last) last = D(c.end); }); if (last > add(m0, 7 * 40)) last = add(m0, 7 * 40);
     let list = '', grid = '';
     for (let w = from; w <= last; w = add(w, 7)) {
       const k0 = key(w), label = k0 === key(m0) ? 'This week' : k0 === key(add(m0, 7)) ? 'Next week' : k0 === key(add(m0, -7)) ? 'Last week' : 'Week of ' + fmtS(w);
@@ -418,7 +513,7 @@
       grid += `<section class="tw">${head}<div class="tw-g">${cells}</div></section>`;
     }
     const dows = `<div class="tw-g tw-dow">${DOWH.map(x => `<span>${x}</span>`).join('')}</div>`;
-    return `${P.earlier ? '' : '<button type="button" class="sc-link" data-pa="earlier">Show earlier weeks</button>'}<div class="tw-list">${list}</div><div class="tw-grid">${dows}${grid}</div><p class="tw-none">Empty class days show for the next four weeks.</p>`;
+    return `${P.earlier ? '' : '<button type="button" class="sc-link" data-pa="earlier">Show earlier weeks</button>'}<div class="tw-list">${list}</div><div class="tw-grid">${dows}${grid}</div>${cl.some(c => c.days.length) ? '<p class="tw-none">Empty class days show up to the course\x27s last day (the next four weeks if it has none).</p>' : ''}`;
   }
   function needsH(items, cl) {
     const out = [];
@@ -433,17 +528,19 @@
   const trayH = items => { const t = items.filter(x => !x.d); return `<div class="sc-drafts tv-tray"><h2 class="sc-h2">Not on a day yet <span>${t.length}</span></h2>${t.length ? `<p class="cv-muted">Open one and choose its day. On a laptop you can drag it onto a day.</p>${t.map(tcard).join('')}` : '<p class="cv-muted">Nothing waiting. A lesson with no day lands here.</p>'}</div>`; };
   function teacherHome() {
     const c = selCls(), cl = c ? [c] : UC(), items = c ? itemsFor(c) : UC().flatMap(x => itemsFor(x)); wantSel(items); ensureSel(items);
-    const chips = `<div class="tv-chips" role="group" aria-label="Your courses"><button type="button" class="tv-chip${c ? '' : ' on'}" data-pa="school" aria-pressed="${!c}">All</button>${UC().map(x => `<button type="button" class="tv-chip${c === x ? ' on' : ''}" style="--cc:${ccolor(x)}" data-pa="open" data-c="${esc(x.id)}" aria-pressed="${c === x}"><i></i>${esc(x.name)}</button>`).join('')}</div>`;
-    const head = c ? `<div class="tv-head" style="--cc:${ccolor(c)}"><div><h1 class="sc-h"><i class="sc-dot" style="background:${ccolor(c)}"></i>${esc(c.name)}</h1><p class="sc-sub">${esc(c.code)}${c.code ? ' · ' : ''}meets ${meetText(c)} · ${WC.memberCount(c.id)} student${WC.memberCount(c.id) === 1 ? '' : 's'} joined</p></div><div class="sc-acts"><button type="button" class="cv-pill ghost" data-pa="inv" aria-expanded="${!!P.inv}">Invite students</button><button type="button" class="cv-pill ghost" data-pa="editclass">Edit course</button></div></div>${P.inv ? inviteH(c) : ''}${P.edit ? editForm(c) : ''}` : '';
+    const chips = `<div class="tv-chips" role="group" aria-label="Your courses"><button type="button" class="tv-chip${c ? '' : ' on'}" data-pa="school" aria-pressed="${!c}">All</button>${UC().map(x => `<button type="button" class="tv-chip${c === x ? ' on' : ''}" style="--cc:${ccolor(x)}" data-pa="open" data-c="${esc(x.id)}" aria-pressed="${c === x}"><i></i>${esc(x.name)}</button>`).join('')}<button type="button" class="tv-chip tv-add" data-pa="newcourse">+ Course</button></div>`;
+    const head = c ? `<div class="tv-head" style="--cc:${ccolor(c)}"><div><h1 class="sc-h"><i class="sc-dot" style="background:${ccolor(c)}"></i>${esc(c.name)}</h1><p class="sc-sub">${esc(c.code)}${c.code ? ' · ' : ''}${meetLine(c)} · ${WC.memberCount(c.id)} student${WC.memberCount(c.id) === 1 ? '' : 's'} joined</p></div><button type="button" class="tv-more" data-pa="editcourse" data-c="${esc(c.id)}" aria-label="Course settings and invite link">⋯</button></div><div class="tv-seg tv-tabs" role="tablist"><button type="button" role="tab" class="${P.ctab === 'course' ? '' : 'on'}" data-pa="ctab" data-v="cal" aria-selected="${P.ctab !== 'course'}">Calendar</button><button type="button" role="tab" class="${P.ctab === 'course' ? 'on' : ''}" data-pa="ctab" data-v="course" aria-selected="${P.ctab === 'course'}">Course</button></div>` : '';
     const bar = `<div class="tv-bar"><span class="tv-seg" role="group" aria-label="Calendar view"><button type="button" class="${tvMode() === 'weeks' ? 'on' : ''}" data-pa="tv" data-v="weeks" aria-pressed="${tvMode() === 'weeks'}">Weeks</button><button type="button" class="${tvMode() === 'month' ? 'on' : ''}" data-pa="tv" data-v="month" aria-pressed="${tvMode() === 'month'}">Month</button></span><button type="button" class="sc-newl" data-pa="newl"${c ? ` data-c="${esc(c.id)}"` : ''}><span aria-hidden="true">+</span> Add lessons</button></div>`;
-    const cal = !UC().length ? '<p class="cv-muted sc-none">No courses yet.</p>' : tvMode() === 'month'
+    const menu = c && P.ctab === 'course';
+    const barMenu = `<div class="tv-bar"><span></span><button type="button" class="sc-newl" data-pa="newl"${c ? ` data-c="${esc(c.id)}"` : ''}><span aria-hidden="true">+</span> Add lessons</button></div>`;
+    const cal = !UC().length ? '<p class="cv-muted sc-none">No courses yet. Press + Course to make one.</p>' : menu ? courseMenuH(c, items) : tvMode() === 'month'
       ? `${!P.earlier && items.some(x => x.d && x.d < monthOf(TODAY)) ? '<button type="button" class="sc-link" data-pa="earlier">Show earlier months</button>' : ''}<div class="sc-months">${monthsFor(items, true).map((m, i) => monthH(m, byDay(items), true, i === 0)).join('')}</div>`
       : weeksH(items, cl);
     const needs = needsH(items, cl), tray = trayH(items), rq = reqH();
     return `<div class="sc-bar">${switchH()}</div>${chips}<div class="tv"><div class="sc-main tv-main">${head}
-      ${needs ? `<div class="tv-narrow">${needs}</div>` : ''}${bar}${cal}${!items.length ? `<p class="cv-muted sc-none">No lessons ${c ? 'in this course ' : ''}yet. Press Add lessons, or tap "+ Add a lesson" on a class day.</p>` : ''}
+      ${needs ? `<div class="tv-narrow">${needs}</div>` : ''}${menu ? barMenu : bar}${cal}${!items.length && !menu ? `<p class="cv-muted sc-none">No lessons ${c ? 'in this course ' : ''}yet. Press Add lessons, or tap "+ Add a lesson" on a class day.</p>` : ''}
       <div class="tv-narrow">${tray}</div>${rq ? `<div class="sc-ex">${rq}</div>` : ''}</div>
-      <div class="tv-side">${needs}${tray}</div>${panelH(items)}</div>${teacherSheetH(items)}${newSheetH()}`;
+      <div class="tv-side">${needs}${tray}</div>${panelH(items)}</div>${teacherSheetH(items)}${newSheetH()}${courseSheetH()}`;
   }
   /* School home. Student and teacher: the one calendar for all classes (stacked months, Filter, slide-up day panel). */
   function schoolHome() {
@@ -455,7 +552,7 @@
     const earlier = teacher && !P.earlier && items.some(x => x.d && x.d < monthOf(TODAY));
     const empty = !everything.length ? (teacher ? 'No lessons yet. Press New lesson, or tap a day, to make one from your slides.' : !all.length ? 'No classes yet. Open the join link your teacher sent you, and your class shows up here.' : 'No lessons yet. When your teacher publishes a lesson for your class, it shows up here.') : !items.length ? 'Every class is hidden. Turn one back on in Filter.' : !dated && !anytime.length ? 'No lessons on the calendar yet.' : '';
     /* the earlier teacher home (class cards) is kept here, unused, in case it comes back (v3.1.86) */
-    const classCards = () => `<div class="sc-classes">${all.map(c => { const its = itemsFor(c), dr = its.filter(x => !x.d).length, on = its.length - dr; return `<button type="button" class="sc-class" style="--cc:${ccolor(c)}" data-pa="open" data-c="${esc(c.id)}"><b>${esc(c.name)}</b><span>${esc(c.code)}${c.code ? ' · ' : ''}meets ${meetText(c)}</span><span>${on} on the calendar · ${dr} in drafts</span></button>`; }).join('')}</div>`;
+    const classCards = () => `<div class="sc-classes">${all.map(c => { const its = itemsFor(c), dr = its.filter(x => !x.d).length, on = its.length - dr; return `<button type="button" class="sc-class" style="--cc:${ccolor(c)}" data-pa="open" data-c="${esc(c.id)}"><b>${esc(c.name)}</b><span>${esc(c.code)}${c.code ? ' · ' : ''}${meetLine(c)}</span><span>${on} on the calendar · ${dr} in drafts</span></button>`; }).join('')}</div>`;
     void classCards;
     const classes = teacher ? `<div class="sc-cb" role="group" aria-label="Your classes"><button type="button" class="sc-newl" data-pa="newl"><span aria-hidden="true">+</span> New lesson</button>${all.map(c => { const dr = itemsFor(c).filter(x => !x.d).length; return `<button type="button" class="sc-cbtn" style="--cc:${ccolor(c)}" data-pa="open" data-c="${esc(c.id)}"><i></i>${esc(c.name)}${dr ? `<span>${dr} draft${dr === 1 ? '' : 's'}</span>` : ''}</button>`; }).join('')}</div>` : '';
     const rq = teacher ? reqH() : '';
@@ -480,7 +577,7 @@
   const BUCKET = 'lesson-files';
   const readLesson = async (db, id) => { const {data, error} = await db.storage.from(BUCKET).download(id + '/lesson.json'); if (error || !data) return null; try { const j = JSON.parse(await data.text()); return j && j.format === 'slides-v1' ? j : null; } catch (e) { return null; } };
   async function loadLx(it) {
-    Object.assign(LX, {del: false, id: it.id, loading: !!it.slides, L: null, rel: null, ways: false, more: false, msg: '', busy: '', sure: false, styles: {conversation: true, lecture: true, voice: true, handsFree: true, jumpAhead: true}});
+    Object.assign(LX, {del: false, id: it.id, loading: !!it.slides, L: null, rel: null, ways: false, more: false, per: null, name: false, msg: '', busy: '', sure: false, styles: {conversation: true, lecture: true, voice: true, handsFree: true, jumpAhead: true}});
     const db = deps.db();
     // v3.1.93: the latest release, for its version and for "Changes not published"
     if (it.pub && db) { try { const {data} = await db.from('worldview_teacher_lesson_releases').select('version,published_at').eq('lesson_id', it.id).order('version', {ascending: false}).limit(1); if (LX.id === it.id) LX.rel = (data || [])[0] || null; } catch (e) {} }
@@ -548,7 +645,13 @@
       }
     }
     h += `<div class="sc-r sc-rday"><span>Day</span><span class="sc-row"><input type="date" id="sc-mv" value="${it.d ? key(it.d) : nextMeetKey(c)}" aria-label="Day for ${esc(it.title)}"><button type="button" class="cv-pill ghost" data-pa="move" data-id="${id}"${busy ? ' disabled' : ''}>${it.d ? 'Move' : 'Put on this day'}</button></span></div>`;
-    if (it.d) h += `<button type="button" class="sc-link sc-rlink" data-pa="todrafts" data-id="${id}"${busy ? ' disabled' : ''}>Take it off the calendar</button>`;
+    if (it.d) h += `<label class="sc-ck sc-shift"><input type="checkbox" id="sc-shift"> Move the lessons after it by the same number of days</label><button type="button" class="sc-link sc-rlink" data-pa="todrafts" data-id="${id}"${busy ? ' disabled' : ''}>Take it off the calendar</button>`;
+    /* v3.1.94: a different day for some students, the lesson's name and its course */
+    const nOther = LX.per && LX.per.id === it.id && LX.per.due ? Object.keys(LX.per.due).length : 0;
+    h += row(`<span>Different day for some students</span><em>${nOther ? nOther + ' on other days' : ''}</em>`, `data-pa="lxper" data-id="${id}" aria-expanded="${!!(LX.per && LX.per.id === it.id)}"`);
+    h += perH(it);
+    h += row('<span>Name and course</span>', `data-pa="lxname" aria-expanded="${!!LX.name}"`);
+    if (LX.name) h += `<div class="sc-per"><label class="sc-f" for="sc-name">Name</label><div class="sc-row"><input type="text" id="sc-name" maxlength="120" value="${esc(it.title)}"><button type="button" class="cv-pill ghost" data-pa="rename" data-id="${id}"${busy ? ' disabled' : ''}>Save</button></div><label class="sc-f" for="sc-mvc">Course</label><select id="sc-mvc" data-mvc="${id}">${WC.list().filter(x => !x.archived || x.id === c.id).map(x => `<option value="${esc(x.id)}"${x.id === c.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>`;
     if (it.pub) h += row('<span>Share link</span><em>no account needed</em>', `data-pa="share" data-id="${id}"`);
     h += row(`<span>More</span><em>${LX.more ? '' : (it.pub ? 'View, Teacher Studio, Unpublish' : 'Teacher Studio, Delete')}</em>`, `data-pa="lxmore" aria-expanded="${!!LX.more}"`);
     h += '</div>';
@@ -857,10 +960,17 @@
       : '<span class="cv-muted">Getting the class link… (this needs the internet and your teacher sign-in)</span>';
     return `<div class="sc-invite"><b>Invite students</b>${body}</div>`;
   }
-  async function moveLesson(id, k) {
+  async function moveLesson(id, k, shift) {
     const l = (deps.my() || []).find(x => x.id === id); if (!l || !validKey(k)) { deps.toast('Pick a valid date.'); return; }
-    const had = !!(l.note && validKey(l.note.date)), ok = await deps.saveNote(id, Object.assign({}, l.note || {}, {date: k}));
-    deps.toast(ok ? (had ? 'Moved to ' : 'Put on ') + fmt(D(k)) + '.' : 'Could not save the day. Check your connection and try again.'); deps.render();
+    const old = l.note && validKey(l.note.date) ? l.note.date : '', had = !!old, ok = await deps.saveNote(id, Object.assign({}, l.note || {}, {date: k}));
+    /* v3.1.94: move the lessons after it in the same course by the same number of days (the class fell behind, or a holiday) */
+    let moved = 0;
+    if (ok && shift && old && old !== k) {
+      const it = mineItem(id), delta = Math.round((D(k) - D(old)) / DAY);
+      const later = it ? itemsFor(ucls(it.cid)).filter(x => x.mine && x.id !== id && x.d && key(x.d) > old) : [];
+      for (const x of later) { const row0 = (deps.my() || []).find(y => y.id === x.id); if (row0 && await deps.saveNote(x.id, Object.assign({}, row0.note || {}, {date: key(add(x.d, delta))}))) moved++; }
+    }
+    deps.toast(ok ? (had ? 'Moved to ' : 'Put on ') + fmt(D(k)) + (moved ? ', and ' + moved + ' later lesson' + (moved === 1 ? '' : 's') + ' with it' : '') + '.' : 'Could not save the day. Check your connection and try again.'); deps.render();
   }
   async function backToDrafts(id) {
     const l = (deps.my() || []).find(x => x.id === id); if (!l) return;
@@ -897,6 +1007,7 @@
     afterRender(root) {
       if (P.scr !== 'class' && P.scr !== 'school') return;
       syncResults();
+      if (root.querySelector('.sc-cmth[data-th]')) loadThumbs(root);
       if (P.focusSheet) { P.focusSheet = false; const sh = root.querySelector('.sc-sheet'); if (sh) try { sh.focus({preventScroll: true}); } catch (x) {} }
       root.querySelectorAll('.sc-lc').forEach(el => {
         el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); } });
@@ -924,10 +1035,13 @@
     },
     home() { P.scr = 'school'; P.sel = null; P.sd = P.td = null; P.fopen = false; P.edit = false; deps.render(); },
     openTutor() { P.scr = 'school'; },
-    escape() { if (P.fopen) { P.fopen = false; deps.render(); return true; } if (P.sd || P.td || P.nl) { P.sd = P.td = null; P.nl = null; deps.render(); return true; } if (RES.open) { RES.open = ''; deps.render(); return true; } if (P.sel) { P.sel = null; deps.render(); return true; } return false; },
+    escape() { if (P.fopen) { P.fopen = false; deps.render(); return true; } if (P.sd || P.td || P.nl || P.cf) { P.sd = P.td = null; P.nl = null; P.cf = null; deps.render(); return true; } if (RES.open) { RES.open = ''; deps.render(); return true; } if (P.sel) { P.sel = null; deps.render(); return true; } return false; },
     input(e) {
       const id = e.target.id;
       if (id === 'pl-q') { P.query = e.target.value; const pos2 = e.target.selectionStart; deps.render(); const i = document.getElementById('pl-q'); if (i) { i.focus(); try { i.setSelectionRange(pos2, pos2); } catch (x) {} } return; }
+      if (e.target.matches('[data-cmday]')) { if (validKey(e.target.value)) moveLesson(e.target.dataset.cmday, e.target.value); return; }
+      if (e.target.matches('[data-due]')) { setDueFor(e.target.dataset.lid, e.target.dataset.due, e.target.value); return; }
+      if (e.target.matches('[data-mvc]')) { moveToCourse(e.target.dataset.mvc, e.target.value); return; }
       if (e.target.matches('[data-dv]')) { P.ds[e.target.dataset.dv] = +e.target.value; const b = document.querySelector('[data-live]'), k = (DEMOS[P.demo] || {}).k; if (b && LIVE[k]) b.innerHTML = LIVE[k](); }
     },
     click(e) {
@@ -980,7 +1094,7 @@
       case 'fopen': P.fopen = !P.fopen; break;
       case 'earlier': P.earlier = true; break;
       case 'slate': P.sd = {t: 'late'}; P.focusSheet = true; break;
-      case 'closesd': P.sd = P.td = null; P.nl = null; break;
+      case 'closesd': P.sd = P.td = null; P.nl = null; P.cf = null; break;
       case 'newl': P.td = null; P.sel = null; P.nl = {k: d.k || '', c: d.c || ''}; P.focusSheet = true; break;
       case 'nlc': if (P.nl && ucls(d.c)) P.nl.c = d.c; P.focusSheet = true; break;
       case 'tv': P.tv = d.v === 'month' ? 'month' : 'weeks'; save('tv', P.tv); P.td = null; break;
@@ -1006,7 +1120,17 @@
       case 'closeday': P.sel = null; break;
       case 'mon': P.month = new Date(P.month.getFullYear(), P.month.getMonth() + (+d.n), 1); break;
       case 'monnow': P.month = monthOf(TODAY); break;
-      case 'move': { const v = (document.getElementById('sc-mv') || {}).value; moveLesson(d.id, v); return; }
+      case 'move': { const v = (document.getElementById('sc-mv') || {}).value, sh = !!(document.getElementById('sc-shift') || {}).checked; moveLesson(d.id, v, sh); return; }
+      case 'newcourse': P.cf = {id: ''}; P.nl = null; P.td = null; P.focusSheet = true; break;
+      case 'editcourse': P.cf = {id: d.c}; P.focusSheet = true; break;
+      case 'cfsave': saveCourse(); return;
+      case 'cfaway': { const c0 = ucls(P.cf && P.cf.id); if (c0) { WC.update(c0.id, {archived: true}); deps.toast(c0.name + ' is put away. Bring it back from + Course.'); } P.cf = null; P.scr = 'school'; P.sel = null; break; }
+      case 'cfback': { const c0 = ucls(d.c); if (c0) { WC.update(c0.id, {archived: false}); P.cf = null; P.cur = c0.id; P.scr = 'class'; deps.toast(c0.name + ' is back.'); } break; }
+      case 'ctab': P.ctab = d.v === 'course' ? 'course' : 'cal'; P.sel = null; break;
+      case 'lxper': { if (LX.per && LX.per.id === d.id) { LX.per = null; break; } const it = mineItem(d.id); if (it) loadPer(it); return; }
+      case 'dueclear': setDueFor(d.id, d.u, ''); return;
+      case 'lxname': LX.name = !LX.name; break;
+      case 'rename': renameLesson(d.id); return;
       case 'unit': { const u = +d.u; if (u < 0 || u >= c.units.length) return; P.unit = u; P.whole = false; P.others = false; pickDay(c); P.sheet = null; break; }
       case 'whole': P.whole = !P.whole; break;
       case 'others': P.others = !P.others; break;
