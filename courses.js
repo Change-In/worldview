@@ -550,9 +550,17 @@ function scrHome() {
     }
     return `<div class="cv-ov" data-close="1"><div class="cv-sheet" role="dialog" aria-modal="true"><span class="grab"></span><button type="button" class="cv-x" data-close="1" aria-label="Close">✕</button>${h}</div></div>`;
   }
+  /* v3.1.91 (BUG-536): the address says which tab is open (#places, #places/<class>, #places/<class>/<lesson>, #explore), so going back
+     from the slides page or Teacher Studio, or a phone reloading the page, comes back to the same place instead of Home. */
+  function setHash(h) {
+    const want = h ? '#' + h : '';
+    if (location.hash === want || (!h && !location.hash)) return;
+    try { history.replaceState(history.state, '', location.pathname + location.search + want); } catch (e) {}
+  }
   function render() {
     hidePeek();
-    if (S.area === 'places') { view.innerHTML = `<div class="cv-wrap">${WP().html()}</div>`; document.body.classList.toggle('cv-sheet-open', !!view.querySelector('.cv-ov')); WP().afterRender(view); syncBar(); return; }
+    if (S.area === 'places') { view.innerHTML = `<div class="cv-wrap">${WP().html()}</div>`; document.body.classList.toggle('cv-sheet-open', !!view.querySelector('.cv-ov')); WP().afterRender(view); syncBar(); if (S.open) setHash(WP().where()); return; }
+    if (S.open) setHash('explore');
     const html = {teacher:scrTeacher, course:scrCourse, quiz:scrQuiz, make:scrMake, sample:scrSample, cls:scrClass, school:scrSchool}[S.scr]?.() ?? scrHome();
     view.innerHTML = `<div class="cv-wrap">${html}</div>${sheetHTML()}`;
     document.body.classList.toggle('cv-sheet-open', !!S.sheet);
@@ -564,7 +572,7 @@ function scrHome() {
 
   /* ---------------- open / close and the bar ---------------- */
   function openCourses() { loadPublished(); S.open = true; view.hidden = false; document.body.classList.add('cv-open'); render(); }
-  function closeCourses() { hidePeek(); document.body.classList.remove('cv-sheet-open'); S.open = false; S.sheet = null; view.hidden = true; document.body.classList.remove('cv-open'); syncBar(); }
+  function closeCourses() { if (S.open) setHash(''); hidePeek(); document.body.classList.remove('cv-sheet-open'); S.open = false; S.sheet = null; view.hidden = true; document.body.classList.remove('cv-open'); syncBar(); }
   let forcedTab = '', forcedAt = 0;
   function syncBar() {
     let active = SCHOOL_ONLY ? 'profile' : 'home';
@@ -733,7 +741,7 @@ function scrHome() {
   function tick() {
     const ok = allowed();
     if (ok && SCHOOL_ONLY && !modeDone) { modeDone = true; if (!/^#(explore|places)/.test(location.hash)) { bar.querySelector('[data-tabbar=places]').click(); } }
-    if (ok && !hashDone) { hashDone = true; const [h, hc] = location.hash.slice(1).split('/'); if (h === 'explore' || h === 'places') { history.replaceState(null, '', location.pathname + location.search); bar.querySelector('[data-tabbar=' + h + ']').click(); if (h === 'places' && hc) WP().goClass(decodeURIComponent(hc)); } }
+    if (ok && !hashDone) { hashDone = true; const [h, hc, hl] = location.hash.slice(1).split('/').map(x => { try { return decodeURIComponent(x || ''); } catch (e) { return ''; } }); if (h === 'explore' || h === 'places') { bar.querySelector('[data-tabbar=' + h + ']').click(); if (h === 'places' && (hc || hl)) WP().restore(hc, hl); } }
     const home = document.getElementById('view-home')?.classList.contains('active');
     if (!ok && S.open) closeCourses();
     const show = ok && (home || S.open) && !blocked();

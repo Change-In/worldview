@@ -318,7 +318,7 @@
 <dialog id="newdlg"><form id="newform"><h2 id="newhead">New lesson</h2><div id="newforwrap" style="display:grid;gap:4px"><label class="small" for="newfor">Which class is it for?</label><select class="forsel" id="newfor"></select></div><label class="small" for="newtitle" id="newlabel">What's it called? You can change it later.</label><input type="text" id="newtitle" maxlength="120" placeholder="e.g. Why the Moon has phases"><div class="row"><button type="submit" class="btn">Create</button><button type="button" class="btn ghost" data-close>Cancel</button></div></form></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="places-data.js?v=3.1.90"></script>
+<script src="places-classes.js?v=3.1.91"></script>
 <script src="port-host.js?v=3.1.89"></script>
 <script src="lesson-publish.js?v=3.1.72"></script>
 <script src="studio-chat.js?v=3.1.58"></script>
@@ -485,37 +485,36 @@ ${RULES}`;
   document.addEventListener('mouseout', e => { const t = e.target.closest('.tile'); if (t && !t.contains(e.relatedTarget)) thumbPlay(t, false); });
   /* ---------- lessons ---------- */
   async function readFileHtml(input) { const file = input.files && input.files[0]; input.value = ''; if (!file) return null; if (file.size > 400000) { toast('That file is over 400 KB.'); return null; } return file.text(); }
-  /* ---------- lessons are built for a class (NAV-209) ----------
-     The class and unit are kept at the start of the title ("Calculus II, Unit 3: ..."), which is how Places finds a lesson.
-     Teachers pick them from a list and only ever type the short name. */
-  const PD = window.WorldviewPlacesData || {classes: [], currentUnit: () => 0}, CLS = PD.classes;
-  function classOf(title) {
-    const t = title || '';
-    for (const c of CLS) {
-      const pre = c.name + ', unit ';
-      if (t.slice(0, pre.length).toLowerCase() !== pre.toLowerCase()) continue;
-      const m = t.slice(pre.length).match(/^(\d+)(?!\d)\s*:?\s*/);
-      if (m && c.units[+m[1] - 1]) return {c, u: +m[1] - 1, name: t.slice(pre.length + m[0].length) || 'Untitled'};
-    }
-    return null;
-  }
-  const shortOf = title => { const k = classOf(title); return k ? k.name : title; };
-  const fullTitle = (c, u, name) => (c.name + ', Unit ' + (u + 1) + ': ' + name).slice(0, 120);
-  const classOptions = none => '<option value="">' + none + '</option>' + CLS.map((c, ci) => '<optgroup label="' + esc(c.name) + '">' + c.units.map((u, ui) => '<option value="' + ci + '|' + ui + '">' + esc(c.name) + ', Unit ' + (ui + 1) + ': ' + esc(u[0]) + '</option>').join('') + '</optgroup>').join('');
-  const pickValue = v => { const [ci, ui] = (v || '').split('|'); return v && CLS[+ci] ? {c: CLS[+ci], u: +ui} : null; };
-  function openNew(ci, ui) {
+  /* ---------- lessons are built for a class (NAV-209; your real classes since v3.1.91, BUG-538) ----------
+     A lesson belongs to one of the teacher's classes (places-classes.js, the same list as the School tab) through note.classId.
+     Older lessons named "Class, Unit N: ..." still find their class by that start of the title. */
+  const WC = window.WorldviewClasses || null, CLS = () => WC ? WC.list() : [];
+  const classOf = l => WC && l && l.kind !== 'experiment' ? WC.ofLesson(l) : null;
+  const shortOf = l => { const c = classOf(l); return c ? WC.plainTitle(c, l.title) : ((l && l.title) || ''); };
+  const classOptions = none => '<option value="">' + none + '</option>' + CLS().map(c => '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>').join('');
+  const noteWithClass = (l, cid) => { const n = Object.assign({}, l && l.note && typeof l.note === 'object' ? l.note : {}); if (cid) n.classId = cid; else delete n.classId; return n; };
+  function openNew(cid) {
     $('#newform').dataset.kind = 'lesson'; $('#newhead').textContent = 'New lesson'; $('#newforwrap').hidden = false;
     $('#newfor').innerHTML = classOptions('No class');
-    $('#newfor').value = ci == null || !CLS[ci] ? '' : ci + '|' + (ui == null || !CLS[ci].units[ui] ? PD.currentUnit(CLS[ci]) : ui);
+    $('#newfor').value = cid && WC && WC.get(cid) ? cid : '';
     $('#newtitle').placeholder = 'Give your lesson a name'; $('#newtitle').value = ''; $('#newdlg').showModal();
   }
   function syncClass() {
     if (!cur) return;
-    const f = $('#forclass'), k = classOf(cur.title); f.hidden = cur.kind === 'experiment' || !CLS.length;
+    const f = $('#forclass'), c = classOf(cur); f.hidden = cur.kind === 'experiment' || !CLS().length;
     if (f.hidden) return;
-    if (!f.options.length) f.innerHTML = classOptions('No class');
-    f.value = k ? CLS.indexOf(k.c) + '|' + k.u : '';
-    if (document.activeElement !== $('#title')) $('#title').value = shortOf(cur.title);
+    f.innerHTML = classOptions('No class'); f.value = c ? c.id : '';
+    if (document.activeElement !== $('#title')) $('#title').value = shortOf(cur);
+  }
+  /* Back goes to the School tab on the same class and lesson (#places/<class>/<lesson>), or to Explore when Studio was opened from there. */
+  let BACKCLS = '';
+  function setBackLink() {
+    let fr = 'explore'; try { fr = sessionStorage.getItem('wv-studio-from') === 'places' ? 'places' : 'explore'; } catch (x) {}
+    const b = $('#backto'), m = document.querySelector('.top .mark');
+    if (fr !== 'places') { b.href = './#explore'; b.setAttribute('aria-label', 'Back to Explore'); return; }
+    const c = cur ? classOf(cur) : (BACKCLS && WC ? WC.get(BACKCLS) : null), lid = cur && cur.kind !== 'experiment' ? cur.id : '';
+    const href = './#places' + (c || lid ? '/' + encodeURIComponent(c ? c.id : '-') : '') + (lid ? '/' + encodeURIComponent(lid) : '');
+    b.href = href; b.setAttribute('aria-label', 'Back to ' + (c ? c.name : 'School')); if (m) { m.href = href; m.setAttribute('aria-label', 'Back to ' + (c ? c.name : 'School')); }
   }
   async function showGrid() {
     cur = null; if (live) { db.removeChannel(live); live = null; liveInfo = null; } $('#workview').hidden = true; $('#gridview').hidden = false; document.title = 'Teacher Studio · Worldview';
@@ -524,9 +523,9 @@ ${RULES}`;
     const V = {}; ((rels && rels.data) || []).forEach(r => { V[r.lesson_id] = Math.max(V[r.lesson_id] || 0, r.version); });
     const list = (data || []).map(l => Object.assign(l, {pub: l.shared ? (V[l.id] || -1) : 0})).sort((a, b) => (b.pub !== 0) - (a.pub !== 0));
     const lessons = list.filter(l => l.kind !== 'experiment'), exps = list.filter(l => l.kind === 'experiment').sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-    const tile = l => `<div class="tile" role="button" tabindex="0" data-open="${l.id}" data-kind="${l.kind === 'experiment' ? 'experiment' : 'lesson'}"><div class="thumb"><iframe sandbox="" scrolling="no" tabindex="-1" title="" data-thumb="${l.id}"></iframe></div>${l.pub ? `<span class="ribbon" data-results="${l.id}" title="See students' results"><span class="a">Published${l.pub > 0 ? ' v' + l.pub : ''}</span><span class="b">See results →</span></span><button type="button" class="tilelink" data-copylink="${l.id}">Copy link</button>` : ''}<div class="info"><b>${esc(l.kind === 'experiment' ? l.title : shortOf(l.title))}</b><span class="small muted">${l.kind === 'experiment' ? resultLine(l.note) + ' · ' : ''}${classOf(l.title) && l.kind !== 'experiment' ? 'Unit ' + (classOf(l.title).u + 1) + ' · ' : ''}${ago(l.updated_at)}</span></div><button type="button" class="tilemore" data-tilemenu="${l.id}" aria-label="More">⋯</button></div>`;
-    const forClass = c => lessons.filter(l => { const k = classOf(l.title); return k && k.c === c; }), others = lessons.filter(l => !classOf(l.title));
-    $('#grid').innerHTML = CLS.map((c, ci) => '<section class="shelf"><div class="shelfhead"><h2>' + esc(c.name) + '</h2><span class="small muted">' + esc(c.code) + '</span></div><div class="grid"><button type="button" class="new small2" data-newfor="' + ci + '">+ New lesson</button>' + forClass(c).map(tile).join('') + '</div></section>').join('')
+    const tile = l => `<div class="tile" role="button" tabindex="0" data-open="${l.id}" data-kind="${l.kind === 'experiment' ? 'experiment' : 'lesson'}"><div class="thumb"><iframe sandbox="" scrolling="no" tabindex="-1" title="" data-thumb="${l.id}"></iframe></div>${l.pub ? `<span class="ribbon" data-results="${l.id}" title="See students' results"><span class="a">Published${l.pub > 0 ? ' v' + l.pub : ''}</span><span class="b">See results →</span></span><button type="button" class="tilelink" data-copylink="${l.id}">Copy link</button>` : ''}<div class="info"><b>${esc(l.kind === 'experiment' ? l.title : shortOf(l))}</b><span class="small muted">${l.kind === 'experiment' ? resultLine(l.note) + ' · ' : ''}${ago(l.updated_at)}</span></div><button type="button" class="tilemore" data-tilemenu="${l.id}" aria-label="More">⋯</button></div>`;
+    const forClass = c => lessons.filter(l => { const k = classOf(l); return k && k.id === c.id; }), others = lessons.filter(l => !classOf(l));
+    $('#grid').innerHTML = CLS().map(c => '<section class="shelf"><div class="shelfhead"><h2>' + esc(c.name) + '</h2><span class="small muted">' + esc(c.code) + '</span></div><div class="grid"><button type="button" class="new small2" data-newfor="' + esc(c.id) + '">+ New lesson</button>' + forClass(c).map(tile).join('') + '</div></section>').join('')
       + '<section class="shelf"><div class="shelfhead"><h2>Other lessons</h2></div><div class="grid"><div style="display:grid;gap:10px"><button type="button" class="new small2" id="new">+ New lesson</button><label class="new" for="upnew" style="min-height:46px;font-size:15px;cursor:pointer">Upload a lesson file</label><input type="file" id="upnew" accept=".html,.htm,text/html" hidden></div>' + others.map(tile).join('') + '</div></section>'
       + '<section class="shelf" aria-labelledby="exphead"><div class="shelfhead"><h2 id="exphead">Experiments</h2><span class="small muted">Tries at new ways to teach, kept apart from your lessons. Only you see them.</span></div><div class="grid"><button type="button" class="new" id="newexp" style="min-height:236px">+ New experiment</button>' + exps.map(tile).join('') + '</div></section>';
     THUMBS = {}; list.forEach(l => { THUMBS[l.id] = l.html; const f = document.querySelector(`[data-thumb="${l.id}"]`); if (f) f.srcdoc = WorldviewPortHost.compose(l.html, l.id); });
@@ -612,7 +611,7 @@ ${RULES}`;
     if (error || !data) { toast('Couldn\'t open that lesson.'); return showGrid(); }
     if (push) history.pushState({l: id}, '', '?l=' + id);
     cur = data; lastSaved = data.html; RELS = []; RUNS = []; $('#gridview').hidden = true; $('#workview').hidden = false; document.title = data.title + ' · Teacher Studio';
-    $('#title').value = data.kind === 'experiment' ? data.title : shortOf(data.title); $('#html').value = ''; host.o.lessonId = data.id; host.run(data.html); noteDirty = false; renderNote(); syncClass();
+    $('#title').value = data.kind === 'experiment' ? data.title : shortOf(data); $('#html').value = ''; host.o.lessonId = data.id; host.run(data.html); noteDirty = false; renderNote(); syncClass(); setBackLink();
     showSide(want === 'pub' ? 'pub' : 'draft'); renderShare(); loadReleases(); loadRuns(); loadAiUse();
     joinLive(data.id); if (helper) helper.lessonChanged();
   }
@@ -718,7 +717,7 @@ ${RULES}`;
     const {data} = await db.from(T).select('html,updated_at,title,kind,note').eq('id', cur.id).single();
     if (data && data.html !== lastSaved) { lastSaved = data.html; cur.html = data.html; host.run(data.html); renderPubBar(); lastSaveAt = lastSaveAt || Date.now(); renderLive(); if (helper) helper.previewChanged(); }
     if (data && (data.kind !== cur.kind || JSON.stringify(data.note) !== JSON.stringify(cur.note)) && !noteFocused() && !noteDirty) { cur.kind = data.kind; cur.note = data.note; renderNote(); }
-    if (data && data.title !== cur.title && document.activeElement !== $('#title')) { cur.title = data.title; $('#title').value = cur.kind === 'experiment' ? data.title : shortOf(data.title); document.title = data.title + ' · Teacher Studio'; syncClass(); }
+    if (data && data.title !== cur.title && document.activeElement !== $('#title')) { cur.title = data.title; $('#title').value = cur.kind === 'experiment' ? data.title : shortOf(cur); document.title = data.title + ' · Teacher Studio'; syncClass(); }
   }
   setInterval(poll, 3000);
   /* ---------- which AI edits: chosen from the Edit button's menu ---------- */
@@ -844,7 +843,7 @@ ${RULES}`;
     if (b.dataset.view) { setView(b.dataset.view); host.run(lastSaved || cur.html); return; }
     if (b.dataset.dev) return setDev(b.dataset.dev);
     if (b.dataset.result) { if (cur && cur.kind === 'experiment') saveNote((cur.note || {}).result === b.dataset.result ? '' : b.dataset.result); return; }
-    if (b.dataset.newfor != null) return openNew(+b.dataset.newfor);
+    if (b.dataset.newfor != null) return openNew(b.dataset.newfor);
     switch (b.id) {
       case 'new': return openNew();
       case 'newexp': {
@@ -889,8 +888,8 @@ ${RULES}`;
     }
   });
   $('#newform').addEventListener('submit', async e => {
-    e.preventDefault(); const exp = $('#newform').dataset.kind === 'experiment', t = ($('#newtitle').value.trim() || (exp ? 'New experiment' : 'New lesson')).replace(/[<>`'"\\]/g, '').slice(0, 120), pick = exp ? null : pickValue($('#newfor').value);
-    const {data, error} = await db.from(T).insert(exp ? {title: t, html: STARTER(t, true), kind: 'experiment', note: {idea: '', triedOn: '', learned: [], result: ''}} : {title: pick ? fullTitle(pick.c, pick.u, t) : t, html: STARTER(t)}).select('id').single();
+    e.preventDefault(); const exp = $('#newform').dataset.kind === 'experiment', t = ($('#newtitle').value.trim() || (exp ? 'New experiment' : 'New lesson')).replace(/[<>`'"\\]/g, '').slice(0, 120), cid = exp ? '' : $('#newfor').value;
+    const {data, error} = await db.from(T).insert(exp ? {title: t, html: STARTER(t, true), kind: 'experiment', note: {idea: '', triedOn: '', learned: [], result: ''}} : Object.assign({title: t, html: STARTER(t)}, cid ? {note: {classId: cid}} : {})).select('id').single();
     $('#newdlg').close(); if (error) return toast(/lesson_limit/.test(error.message) ? 'You have 50 lessons; delete one first.' : 'Couldn\'t create it: ' + error.message);
     await showLesson(data.id, 'stay'); editOnComputer();
   });
@@ -898,8 +897,8 @@ ${RULES}`;
   document.addEventListener('keydown', e => { const t = e.target.closest && e.target.closest('.tile[data-open]'); if (t && (e.key === 'Enter' || e.key === ' ') && e.target === t) { e.preventDefault(); showLesson(t.dataset.open, true); } });
   document.addEventListener('change', async e => { if (e.target.id !== 'upnew') return; const name = (e.target.files && e.target.files[0] && e.target.files[0].name || 'Uploaded lesson').replace(/\.html?$/i, ''); const h = await readFileHtml(e.target); if (!h) return; const t = (titleFromHtml(h) || name).slice(0, 120); const {data, error} = await db.from(T).insert({title: t, html: h}).select('id').single(); if (error) return toast('Couldn\'t upload it: ' + error.message); showLesson(data.id, true); });
   const titleFromHtml = h => { const m = String(h).match(/\btitle\s*:\s*(['"`])((?:\\.|(?!\1).){2,120}?)\1/) || String(h).match(/<title>([^<]{2,120})<\/title>/i); return m ? (m[2] || m[1]).trim() : ''; };
-  $('#title').addEventListener('change', async () => { const t = $('#title').value.trim(); if (!t || !cur) return; const k = cur.kind === 'experiment' ? null : classOf(cur.title), full = k && !classOf(t) ? fullTitle(k.c, k.u, t) : t.slice(0, 120); if (full !== cur.title && await save({title: full})) { cur.title = full; syncClass(); } });
-  $('#forclass').addEventListener('change', async e => { if (!cur) return; const p = pickValue(e.target.value), name = shortOf(cur.title), full = p ? fullTitle(p.c, p.u, name) : name; if (full !== cur.title && await save({title: full})) { cur.title = full; document.title = full + ' · Teacher Studio'; toast(p ? 'This lesson now shows in ' + p.c.name + ', Unit ' + (p.u + 1) + '.' : 'This lesson no longer belongs to a class.'); } syncClass(); });
+  $('#title').addEventListener('change', async () => { const t = $('#title').value.trim().slice(0, 120); if (!t || !cur) return; const c = classOf(cur), f = c && !(cur.note && cur.note.classId) ? {title: t, note: noteWithClass(cur, c.id)} : {title: t}; if (t !== cur.title && await save(f)) { Object.assign(cur, f); document.title = t + ' · Teacher Studio'; syncClass(); } });
+  $('#forclass').addEventListener('change', async e => { if (!cur) return; const cid = e.target.value, c = cid && WC ? WC.get(cid) : null, f = {title: shortOf(cur).slice(0, 120), note: noteWithClass(cur, c ? c.id : '')}; if (await save(f)) { Object.assign(cur, f); document.title = f.title + ' · Teacher Studio'; toast(c ? 'This lesson now belongs to ' + c.name + '.' : 'This lesson no longer belongs to a class.'); setBackLink(); } syncClass(); });
   $('#listed').addEventListener('change', async e => { if (!(await save({listed: e.target.checked}, true))) e.target.checked = !e.target.checked; else toast(e.target.checked ? 'Listed: it shows on the Courses page for everyone signed in.' : 'Not listed: only people with the link can open it.'); });
   $('#shared').addEventListener('change', async e => { if (!(await save({shared: e.target.checked}, true))) e.target.checked = !e.target.checked; renderShare(); renderPubBar(); toast(e.target.checked ? 'Open: the link works again.' : 'Closed: the link stops working until you open it again.'); });
   addEventListener('popstate', () => { const l = new URLSearchParams(location.search).get('l'); if (l) location.reload(); else showGrid(); });
@@ -941,7 +940,13 @@ ${RULES}`;
     $('#who').textContent = s.user.email || '';
     showRequests(s.user.id);
     const q = new URLSearchParams(location.search), l = q.get('l'), nw = q.get('new');
-    try { const fr = q.get('from'); if (fr) sessionStorage.setItem('wv-studio-from', fr); const b = sessionStorage.getItem('wv-studio-from') === 'places' ? 'places' : 'explore'; $('#backto').href = './#' + b; $('#backto').setAttribute('aria-label', 'Back to ' + (b === 'places' ? 'Places' : 'Explore')); } catch (x) {} if (l) showLesson(l, false, q.get('side') === 'pub' ? 'pub' : 'draft'); else { await showGrid(); if (nw) { let ci = CLS.findIndex(c => c.code === q.get('class')); const un = q.get('unit'), cn = (q.get('cname') || '').toLowerCase(); if (ci < 0 && cn) ci = CLS.findIndex(c => c.name.toLowerCase() === cn); /* v3.1.90 (NAV-235): from School's New lesson, by class name */ openNew(ci < 0 ? 0 : ci, un == null ? null : +un); history.replaceState(null, '', location.pathname); } }
+    try { const fr = q.get('from'); if (fr) sessionStorage.setItem('wv-studio-from', fr); } catch (x) {}
+    // v3.1.91 (BUG-537, BUG-538): this account's classes from the server, the same list the School tab shows
+    if (WC) { try { await Promise.race([WC.pull(db, s.user.id), new Promise(r => setTimeout(r, 4000))]); } catch (x) {} }
+    // From School's New lesson: the class by id (v3.1.91), else by short code or name (v3.1.90)
+    const want = (() => { if (!WC) return null; const id = q.get('cid'), code = q.get('class'), cn = (q.get('cname') || '').toLowerCase(); return (id && WC.get(id)) || CLS().find(c => code && c.code === code) || CLS().find(c => cn && c.name.toLowerCase() === cn) || null; })();
+    BACKCLS = want ? want.id : ''; setBackLink();
+    if (l) showLesson(l, false, q.get('side') === 'pub' ? 'pub' : 'draft'); else { await showGrid(); setBackLink(); if (nw) { openNew(want ? want.id : ''); history.replaceState(null, '', location.pathname); } }
   })();
 })();
 </script>

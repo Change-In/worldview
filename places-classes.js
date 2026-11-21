@@ -1,5 +1,5 @@
-/* The teacher's classes for the School tab and the slides page (v3.1.73).
-   Classes are sample data for now, so a teacher's edits (name, short code, meeting days, colour) stay on this device (localStorage).
+/* The teacher's classes for the School tab, the slides page and Teacher Studio (v3.1.73; on the server since v3.1.87, read back on every device since v3.1.91).
+   This device keeps a working copy (localStorage); the server copy (worldview_classes) is what every device shows.
    A lesson is linked to its class by an id in the lesson's note (note.classId). Older lessons carry the class name in their title
    ("Financial Management, Unit 1: ..."); that still works, and a renamed class remembers its old names (aka) so nothing is orphaned. */
 window.WorldviewClasses = (() => {
@@ -21,25 +21,77 @@ window.WorldviewClasses = (() => {
   /* v3.1.87 (NAV-226): a teacher's classes are also kept on the server (worldview_classes), so students can join one with its
      code. The device copy stays the working copy and every change is sent to the server. A student's joined classes come from
      worldview_class_lessons() through setJoined and are kept apart. Only the owner's app calls attach. */
-  let db = null, uid = '', codes = {}, members = {}, joined = [], busy = null;
+  let db = null, uid = '', codes = {}, members = {}, joined = [], busy = null, pulled = null;
   const row = c => ({owner_id: uid, local_id: c.id, name: c.name, code: c.code, days: c.days, color: c.color, aka: c.aka});
+  /* v3.1.91 (BUG-537): the server copy is what every device shows. A change made on this device is remembered as "not sent yet"
+     (wv-places-myclasses-dirty) until the server has it, so a change made offline is sent before the server copy is read back. */
+  const DK = K + '-dirty';
+  const dirty = () => { try { const v = JSON.parse(localStorage.getItem(DK)); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
+  const setDirty = v => { try { if (v.length) localStorage.setItem(DK, JSON.stringify(v)); else localStorage.removeItem(DK); } catch (e) {} };
+  const COLS = 'id,local_id,name,code,days,color,aka,join_code';
+  /* Take the server's classes as this device's list (names, days, colours). Classes only on this device stay. */
+  function adopt(rows) {
+    if (!rows || !rows.length) return false;
+    const cur = list(), byId = new Map(cur.map(c => [c.id, c])), wait = new Set(dirty());
+    let changed = false;
+    rows.forEach(r => {
+      if (wait.has(r.local_id)) return;
+      const s = clean({id: r.local_id, name: r.name, code: r.code, days: r.days, color: r.color, aka: r.aka});
+      if (!s.days.length) s.days = [1, 3];
+      const c = byId.get(s.id);
+      if (!c) { cur.push(s); byId.set(s.id, s); changed = true; return; }
+      if (JSON.stringify(c) !== JSON.stringify(s)) { Object.assign(c, s); changed = true; }
+    });
+    if (changed) persist();
+    return changed;
+  }
+  /* Read only: bring this account's classes from the server (Teacher Studio and the slides page). Never creates a class. */
+  async function pull(client, userId) {
+    if (!client || !userId) return false;
+    if (pulled && db === client && uid === userId) return pulled;
+    db = client; uid = userId;
+    pulled = (async () => {
+      try {
+        await sendDirty();
+        const {data, error} = await db.from('worldview_classes').select(COLS).eq('owner_id', uid);
+        if (error) return false;
+        (data || []).forEach(r => { codes[r.local_id] = r.join_code; });
+        return adopt(data || []);
+      } catch (e) { return false; }
+    })();
+    return pulled;
+  }
+  async function sendDirty() {
+    const ids = dirty(); if (!ids.length || !db || !uid) return;
+    const rows = list().filter(c => ids.includes(c.id)).map(row);
+    if (!rows.length) { setDirty([]); return; }
+    const {error} = await db.from('worldview_classes').upsert(rows, {onConflict: 'owner_id,local_id'});
+    if (!error) setDirty([]);
+  }
+  /* The owner's School page: send waiting changes, read the server's classes, then put any class that is only on this device on the server. */
   async function attach(client, userId) {
     if (!client || !userId) return;
     if (db === client && uid === userId && busy) return busy;
     db = client; uid = userId;
     busy = (async () => {
       try {
-        let {data, error} = await db.from('worldview_classes').select('id,local_id,join_code').eq('owner_id', uid);
+        await sendDirty();
+        let {data, error} = await db.from('worldview_classes').select(COLS).eq('owner_id', uid);
         if (error) return;
+        adopt(data || []);
         const have = new Set((data || []).map(r => r.local_id)), missing = list().filter(c => !have.has(c.id));
-        if (missing.length) { const r = await db.from('worldview_classes').insert(missing.map(row)).select('id,local_id,join_code'); if (!r.error) data = (data || []).concat(r.data || []); }
+        if (missing.length) { const r = await db.from('worldview_classes').insert(missing.map(row)).select(COLS); if (!r.error) data = (data || []).concat(r.data || []); }
         const ids = {}; (data || []).forEach(r => { codes[r.local_id] = r.join_code; ids[r.id] = r.local_id; });
         const ro = await db.rpc('worldview_class_roster'); (ro.data || []).forEach(r => { if (ids[r.class_id]) members[ids[r.class_id]] = r.members; });
       } catch (e) {}
     })();
     return busy;
   }
-  const push = c => { if (db && uid && c) db.from('worldview_classes').upsert(row(c), {onConflict: 'owner_id,local_id'}).then(() => {}, () => {}); };
+  const push = c => {
+    if (!c) return;
+    const d = dirty(); if (!d.includes(c.id)) setDirty(d.concat(c.id));
+    if (db && uid) db.from('worldview_classes').upsert(row(c), {onConflict: 'owner_id,local_id'}).then(r => { if (r && !r.error) setDirty(dirty().filter(x => x !== c.id)); }, () => {});
+  };
   const joinLink = id => codes[id] ? new URL('join.html?c=' + codes[id], location.href).href : '';
   const memberCount = id => members[id] || 0;
   function setJoined(rows) {
@@ -81,5 +133,5 @@ window.WorldviewClasses = (() => {
     for (let i = 0; i < 14; i++) { const d = new Date(t.getFullYear(), t.getMonth(), t.getDate() + i); if (c.days.includes(d.getDay())) return keyOf(d); }
     return keyOf(t);
   }
-  return {list, studentList, setJoined, attach, joinLink, memberCount, get, update, ofLesson, plainTitle, meetDays, meetText, nextMeetKey, keyOf, COLORS, COLOR_NAMES, WD};
+  return {list, studentList, setJoined, attach, pull, joinLink, memberCount, get, update, ofLesson, plainTitle, meetDays, meetText, nextMeetKey, keyOf, COLORS, COLOR_NAMES, WD};
 })();

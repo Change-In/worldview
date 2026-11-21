@@ -153,3 +153,10 @@
 .sl-view .sl-viewnote { display:block; background:var(--soft); border:1px solid var(--line); border-radius:12px; padding:10px 14px; margin:0; font-weight:600; }
 .sl-view #lessonview [data-act], .sl-view .sl-pick, .sl-view .sl-bar, .sl-view #selbar, .sl-view #upgrade, .sl-view #resume, .sl-view .sl-redo, .sl-view #saved { display:none !important; }
 .sl-view #lessonview textarea, .sl-view #lessonview input, .sl-view #lessonview select { background:transparent; }
+/* v3.1.91 (BUG-536): the back button names where it goes ("‹ Financial Management") and returns to the same class and lesson. */
+.top .backto { display:inline-flex; align-items:center; gap:6px; max-width:min(320px, 52vw); height:34px; padding:0 12px 2px 10px; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--ink); text-decoration:none; font-size:14px; font-weight:600; flex:none; margin-right:8px; }
+.top .backto .ar { font-size:20px; line-height:1; }
+.top .backto .bt { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* The W went to Home; the named back button replaces it. On phones the signed-in address makes room for the page name. */
+.top .mark { display:none; }
+@media (max-width: 560px) { .top #who { display:none; } .top > b.grow { font-size:15px; line-height:1.25; } }

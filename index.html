@@ -2238,7 +2238,7 @@ catch (error) { document.documentElement.dataset.theme = "system"; }
 "use strict";
 
 /* ================= state ================= */
-const BUILD = "v3.1.90 · Nov 18";
+const BUILD = "v3.1.91 · Nov 21";
 
 // one card per version in the "What's New" page — newest first. Add an entry
 // here whenever BUILD changes so the app can always explain itself.
@@ -2246,6 +2246,7 @@ const SOURCES_PLACEHOLDER = true;
 const SOURCES_PLACEHOLDER_MESSAGE = "Sources is a placeholder and isn’t available yet.";
 
 const VERSIONS = [
+  {tag:"v3.1.91",date:"Nov 21",changes:["School: going back from the slides page or Teacher Studio now returns to the same class, with the lesson you had open. Before, it could land on Home.","The back button on the slides page says where it goes, for example ‹ Financial Management.","Your classes now show the same on every device: rename one on your laptop and your phone shows the new name.","Teacher Studio lists your real classes (it showed old sample classes), and its back button returns to your class.","Clearer words: From my slides, and Not on a day yet instead of Drafts."]},
   {tag:"v3.1.90",date:"Nov 18",changes:["School, Teacher view: a New lesson button at the top. Choose From my slides (upload a PDF) or Start blank (Teacher Studio).","Tap an empty day on the calendar to make a lesson for that day. A lesson made from slides goes straight onto that day.","Teacher Studio’s New lesson box starts on your class (Financial Management) instead of a sample class."]},
   {tag:"v3.1.89",date:"Nov 18",changes:["iPhone voice: with Hands-free on, the tutor’s voice now plays through the same sound channel as the microphone. Before, the voice was made but never played. If a reading still doesn’t start within 4 seconds, the phone’s own voice reads it.","Calm screen: when the buttons fade they also fold away, so nothing invisible sits over the words.","Phones: one top line during a lesson (Leave lesson is in Options), no chapter strip, no overlapping words.","Slides: the slide slides in, stays at the top while the conversation scrolls under it, and a swipe on the slide turns to the next one.","Shorter tutor replies (they are read aloud). If you say you can’t hear it, it says sorry and that its words are on the screen."]},
   {tag:"v3.1.88",date:"Nov 18",changes:["Lessons: the tutor answers what you actually said from the very first answer. Getting started is now a real conversation, not a list of fixed questions.","Hands-free: what you say is always sent within a few seconds. Background sound used to hold it back, so nothing answered.","Turning to the Slides tells the tutor, and its next reply talks about that slide. No more separate “We’re on slide 1” line.","Mute stays on when you switch windows and come back. A new speaker button turns the tutor’s voice off without stopping listening.","Calm screen: the buttons fade after a few seconds without a touch and come back when you tap or move the mouse.","The lesson start fits on one screen: Start and three small switches.","Explain it back only appears once the first part of the conversation is done, so it can’t be tapped by accident."]},
@@ -16599,10 +16600,10 @@ window.addEventListener("blur", () => {
 </script>
 <!-- NAV-152/154: owner-only Courses preview (bottom tabs Home · Courses · Profile). -->
 <script src="places-data.js?v=3.1.69"></script>
-<script src="places-classes.js?v=3.1.87"></script>
+<script src="places-classes.js?v=3.1.91"></script>
 <script src="lesson-publish.js?v=3.1.72"></script>
-<script src="places.js?v=3.1.90"></script>
-<script src="courses.js?v=3.1.87"></script>
+<script src="places.js?v=3.1.91"></script>
+<script src="courses.js?v=3.1.91"></script>
 <!-- NAV-157: lesson map tools; NAV-156: lift the loading screen when Home is ready. -->
 <script src="map-tools.js?v=3.1.21"></script>
 <script src="boot-splash.js?v=3.1.22"></script>

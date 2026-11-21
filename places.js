@@ -271,6 +271,14 @@
     return {n, html: `<div class="sc-mon"><button type="button" class="sc-nav" data-pa="mon" data-n="-1" aria-label="Previous month">‹</button><b>${label}</b><button type="button" class="sc-nav" data-pa="mon" data-n="1" aria-label="Next month">›</button>${inNow ? '' : '<button type="button" class="sc-link" data-pa="monnow">This month</button>'}</div>
       <div class="sc-cal">${grid}</div><div class="sc-list">${list}</div>`};
   }
+  /* v3.1.91 (BUG-536): a lesson named in the address (#places/<class>/<lesson>) opens once the lesson lists have loaded. */
+  function wantSel(items) {
+    if (!P.want) return;
+    const it = items.find(x => x.id === P.want); if (!it) return;
+    P.want = null;
+    if (P.role === 'teacher') { P.sel = it.key; if (it.mine && LX.id !== it.id) loadLx(it); }
+    else { P.sd = {t: 'it', k: it.key}; }
+  }
   const ensureSel = items => { if (P.sel && !items.some(x => x.key === P.sel)) P.sel = null; };
   /* ---------- v3.1.86 (NAV-221, NAV-224): the calendar is the page ----------
      Months stack and scroll (this month first, on to the last month with a lesson). A dot is a lesson in its class colour; a day whose
@@ -345,7 +353,7 @@
     const sl = 'slides.html?' + (c ? 'class=' + encodeURIComponent(c.id) : '') + (k ? '&day=' + k : '');
     return sheetShell(`<div class="sc-nlh"><h3>${k ? 'New lesson for ' + esc(fmt(D(k))) : 'New lesson'}</h3><p class="cv-muted">${k ? 'Nothing is on this day yet.' : 'You pick its day after.'}</p></div>
       <a class="sc-nl" href="${esc(sl)}"><span class="ic">${IC_SLD}</span><span><b>From my slides</b><em>Choose a PDF. Worldview writes what to say and ask.</em></span><i>›</i></a>
-      <a class="sc-nl" href="studio.html?from=places&amp;new=1${c ? '&amp;class=' + esc(encodeURIComponent(c.code)) + '&amp;cname=' + esc(encodeURIComponent(c.name)) : ''}"><span class="ic">${IC_PEN}</span><span><b>Start blank</b><em>Write it yourself in Teacher Studio.</em></span><i>›</i></a>`);
+      <a class="sc-nl" href="studio.html?from=places&amp;new=1${c ? '&amp;cid=' + esc(encodeURIComponent(c.id)) + '&amp;cname=' + esc(encodeURIComponent(c.name)) : ''}"><span class="ic">${IC_PEN}</span><span><b>Start blank</b><em>Write it yourself in Teacher Studio.</em></span><i>›</i></a>`);
   }
   /* The teacher's slide-up panel for a day: each lesson with who has done it; Open shows the full lesson panel (Publish, Share, Results, Try it). */
   function teacherSheetH(items) {
@@ -359,7 +367,7 @@
   /* School home. Student and teacher: the one calendar for all classes (stacked months, Filter, slide-up day panel). */
   function schoolHome() {
     if (P.role === 'teacher' && !ownerish()) P.role = 'student';
-    const teacher = P.role === 'teacher', all = UC(), items = viewItems(); ensureSel(items);
+    const teacher = P.role === 'teacher', all = UC(), items = viewItems(); wantSel(items); ensureSel(items);
     const everything = all.flatMap(c => itemsFor(c)), by = byDay(items), months = monthsFor(items, teacher);
     const late = teacher ? [] : lateOf(items), anytime = teacher ? [] : items.filter(x => !x.d), dated = items.some(x => x.d);
     const earlier = teacher && !P.earlier && items.some(x => x.d && x.d < monthOf(TODAY));
@@ -715,7 +723,7 @@
       <span class="sc-f" id="ce-cl">Colour</span><div class="sc-sw" role="radiogroup" aria-labelledby="ce-cl">${WC.COLORS.map((h, i) => `<label class="sc-swl" title="${WC.COLOR_NAMES[i]}"><input type="radio" name="ce-color" value="${i}"${c.color === i ? ' checked' : ''} aria-label="${WC.COLOR_NAMES[i]}"><i style="background:${h}"></i></label>`).join('')}</div>
       <p class="sc-note" id="ce-msg" role="status"></p>
       <div class="sc-acts"><button type="button" class="cv-pill" data-pa="saveclass">Save class</button><button type="button" class="cv-pill ghost" data-pa="cancelclass">Cancel</button></div>
-      <p class="cv-muted">Class details are saved on this device only. Your lessons stay with the class if you rename it.</p></form>`;
+      <p class="cv-muted">Saved to your account, so your other devices show it too. Your lessons stay with the class if you rename it.</p></form>`;
   }
   /* v3.1.87 (NAV-226): the class's join link. A student opens it, signs in once, and the class is on their calendar. */
   function inviteH(c) {
@@ -726,13 +734,13 @@
     return `<div class="sc-invite"><b>Invite students</b>${body}</div>`;
   }
   function classCal() {
-    const c = curClass(), items = itemsFor(c); ensureSel(items);
+    const c = curClass(), items = itemsFor(c); wantSel(items); ensureSel(items);
     const cal = calHtml(items), drafts = items.filter(x => !x.d);
-    const dr = `<section class="sc-drafts" aria-labelledby="sc-dh"><h2 class="sc-h2" id="sc-dh">Drafts <span>${drafts.length}</span></h2>
+    const dr = `<section class="sc-drafts" aria-labelledby="sc-dh"><h2 class="sc-h2" id="sc-dh">Not on a day yet <span>${drafts.length}</span></h2>
       ${drafts.length ? `<p class="cv-muted">Lessons with no day yet. Open one and choose a day. On a laptop you can also drag it onto a day.</p>${drafts.map(x => scCard(x, P.sel)).join('')}` : '<p class="cv-muted">Nothing waiting. A lesson you make from slides lands here until you give it a day.</p>'}</section>`;
     return `${switchH()}<div class="sc-layout two"><div class="sc-main"><button type="button" class="sc-link" data-pa="school">← All classes</button>
-      <div class="sc-top"><div><h1 class="sc-h"><i class="sc-dot" style="background:${ccolor(c)}"></i>${esc(c.name)}</h1><p class="sc-sub">${esc(c.code)}${c.code ? ' · ' : ''}meets ${meetText(c)}</p></div><div class="sc-acts"><a class="cv-pill" href="slides.html?class=${encodeURIComponent(c.id)}">Add presentations</a><button type="button" class="cv-pill ghost" data-pa="editclass">Edit class</button>${reqH()}</div></div>
-      ${inviteH(c)}${P.edit ? editForm(c) : ''}${cal.html}${items.length ? (cal.n || drafts.length ? '' : '<p class="cv-muted sc-none">No lessons this month.</p>') : '<p class="cv-muted sc-none">No lessons in this class yet. Press Add presentations to make one from your slides.</p>'}</div>
+      <div class="sc-top"><div><h1 class="sc-h"><i class="sc-dot" style="background:${ccolor(c)}"></i>${esc(c.name)}</h1><p class="sc-sub">${esc(c.code)}${c.code ? ' · ' : ''}meets ${meetText(c)}</p></div><div class="sc-acts"><a class="cv-pill" href="slides.html?class=${encodeURIComponent(c.id)}">From my slides</a><button type="button" class="cv-pill ghost" data-pa="editclass">Edit class</button>${reqH()}</div></div>
+      ${inviteH(c)}${P.edit ? editForm(c) : ''}${cal.html}${items.length ? (cal.n || drafts.length ? '' : '<p class="cv-muted sc-none">No lessons this month.</p>') : '<p class="cv-muted sc-none">No lessons in this class yet. Press From my slides to make one.</p>'}</div>
       <div class="sc-side">${dr}${panelH(items)}</div></div>`;
   }
   async function moveLesson(id, k) {
@@ -786,6 +794,20 @@
         c.addEventListener('drop', e => { e.preventDefault(); c.classList.remove('over'); const k = e.dataTransfer.getData('text/plain'); if (k.startsWith('r|')) moveLesson(k.slice(2), c.dataset.dk); });
       });
     },
+    /* v3.1.91 (BUG-536): where the School page is, for the app's address, so going back from the slides page or Teacher Studio
+       (or a phone reloading the page) opens the same class and lesson: places, places/<class>, places/<class or ->/<lesson>. */
+    where() {
+      if (P.scr !== 'class' && P.scr !== 'school') return 'places';
+      const sk = P.sel || (P.sd && P.sd.t === 'it' ? P.sd.k : ''), id = typeof sk === 'string' && sk.startsWith('r|') ? sk.slice(2) : '';
+      const c = P.scr === 'class' && P.cur ? P.cur : '';
+      return 'places' + (c || id ? '/' + encodeURIComponent(c || '-') : '') + (id ? '/' + encodeURIComponent(id) : '');
+    },
+    restore(c, id) {
+      P.sel = null; P.sd = P.td = null; P.nl = null; P.edit = false; P.fopen = false; P.month = monthOf(TODAY);
+      if (c && c !== '-') { P.cur = c; P.scr = 'class'; } else P.scr = 'school';
+      P.want = /^[0-9a-f-]{36}$/i.test(id || '') ? id : null;
+      deps.render();
+    },
     home() { P.scr = 'school'; P.sel = null; P.sd = P.td = null; P.fopen = false; P.edit = false; deps.render(); },
     openTutor() { P.scr = 'school'; },
     escape() { if (P.fopen) { P.fopen = false; deps.render(); return true; } if (P.sd || P.td || P.nl) { P.sd = P.td = null; P.nl = null; deps.render(); return true; } if (RES.open) { RES.open = ''; deps.render(); return true; } if (P.sel) { P.sel = null; deps.render(); return true; } return false; },
@@ -809,6 +831,7 @@
     const next = all.find(x => x.d >= TODAY && !P.done[x.k]) || all[all.length - 1]; P.day = next ? next.k : null;
   }
   function act(a, d = {}) {
+    P.want = null;
     const c = curClass();
     const top = () => { const v = document.getElementById('courses-view'); if (v) v.scrollTop = 0; };
     switch (a) {
@@ -827,7 +850,7 @@
         const name = f.querySelector('#ce-name').value.trim(), days = [...f.querySelectorAll('[name=ce-day]:checked')].map(x => +x.value), col = f.querySelector('[name=ce-color]:checked'), msg = f.querySelector('#ce-msg');
         if (!name) { msg.textContent = 'Give the class a name.'; return; }
         if (!days.length) { msg.textContent = 'Pick at least one meeting day.'; return; }
-        WC.update(c.id, {name, code: f.querySelector('#ce-code').value, days, color: col ? +col.value : c.color}); P.edit = false; deps.toast('Class saved on this device.'); break;
+        WC.update(c.id, {name, code: f.querySelector('#ce-code').value, days, color: col ? +col.value : c.color}); P.edit = false; deps.toast('Class saved.'); break;
       }
       case 'todrafts': backToDrafts(d.id); return;
       case 'del': LX.del = true; LX.msg = ''; break;

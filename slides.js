@@ -22,8 +22,13 @@
   const classOptions = () => WC.list().map(c => '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>').join('');
   const classOfRow = () => (row && WC.ofLesson(row)) || null;
   /* Back goes to the class's calendar in Teacher view, never to the School home. */
-  const classHref = id => './#places' + (id ? '/' + encodeURIComponent(id) : '');
-  const setBack = id => { $('#backto').href = classHref(id); };
+  /* v3.1.91 (BUG-536): back opens the same class, and the lesson's panel when there is a lesson (#places/<class>/<lesson>). */
+  const classHref = (id, lid) => './#places' + (id || lid ? '/' + encodeURIComponent(id || '-') : '') + (lid ? '/' + encodeURIComponent(lid) : '');
+  const setBack = id => {
+    const c = id && WC.get(id), href = classHref(c ? c.id : '', row && row.id), name = c ? c.name : 'School', b = $('#backto');
+    b.href = href; b.innerHTML = '<span class="ar" aria-hidden="true">‹</span><span class="bt">' + esc(name) + '</span>'; b.setAttribute('aria-label', 'Back to ' + name);
+    const m = document.querySelector('.top .mark'); if (m) { m.href = href; m.setAttribute('aria-label', 'Back to ' + name); }
+  };
   /* v3.1.76: coming back to the School tab was a full load of the 1 MB Worldview page and its sign-in and lesson lists.
      When the teacher came here from that page, go back instead, so the browser can show it again from memory. */
   $('#backto').addEventListener('click', e => {
@@ -591,7 +596,7 @@
       bar.innerHTML = `<span class="sl-barmsg">${has ? 'On the calendar for <b>' + esc(dayText(has)) + '</b>.' : 'Not on the calendar yet. Pick a day.'}</span>
         <label class="sl-barday">Day <input type="date" class="bar-day" value="${dflt}" aria-label="Day for this lesson"></label>
         <button type="button" class="btn small" data-bar-act="put">${has ? 'Move it' : 'Put it on the calendar'}</button>
-        <a class="btn ghost small" href="${classHref(c && c.id)}">${c ? 'Back to class' : 'Back to School'}</a>`;
+        <a class="btn ghost small" href="${classHref(c && c.id, row && row.id)}">Back to ${esc(c ? c.name : 'School')}</a>`;
     });
   }
   document.addEventListener('click', async e => {
@@ -656,6 +661,8 @@
     const {data} = await db.auth.getSession(); const s = data && data.session;
     if (!s || !s.user || s.user.is_anonymous) return show('signedout');
     user = s.user; $('#who').textContent = user.email || '';
+    // v3.1.91 (BUG-537): this account's classes from the server, so a second device lists the same classes
+    try { await Promise.race([WC.pull(db, user.id), new Promise(r => setTimeout(r, 4000))]); } catch (e) {}
     const q = new URLSearchParams(location.search), id = q.get('l');
     if (id) {
       const {data: r} = await db.from(T).select('id,title,shared,note').eq('id', id).maybeSingle();
