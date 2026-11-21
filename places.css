@@ -569,3 +569,27 @@ button.sc-d.sc-free:hover::after { content:'+'; position:absolute; bottom:6px; l
   .tv:has(> .sc-panel) .tv-side { display:none; }
   .tv > .sc-panel { grid-column:2; grid-row:1; }
 }
+
+/* v3.1.93 (NAV-240): the lesson panel in order: state, one main button, students, short rows, More */
+.sc-stl { margin:0; }
+.sc-tag.r { background:var(--accent-100, var(--surface-soft)); color:var(--accent); font-weight:600; }
+.sc-mainrow { display:flex; }
+.sc-main1 { min-height:46px; padding:0 24px; font-size:15.5px; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
+.sc-hint { margin:-2px 0 0; font-size:13.5px; }
+.sc-panel .sc-note:empty { display:none; }
+.sc-rows { display:grid; border-top:1px solid var(--line); }
+.sc-r { all:unset; box-sizing:border-box; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:48px; padding:6px 2px; border-bottom:1px solid var(--line); font-size:15px; color:var(--ink); text-decoration:none; }
+a.sc-r::after, button.sc-r::after { content:'›'; color:var(--ink-soft); font-size:18px; margin-left:4px; }
+button.sc-r[aria-expanded="true"]::after { content:'⌄'; }
+.sc-r > span:first-child { flex:1 1 auto; }
+.sc-r em { font-style:normal; font-size:12.5px; color:var(--ink-soft); text-align:right; }
+.sc-r:hover > span:first-child { text-decoration:underline; }
+.sc-r:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.sc-r[disabled] { opacity:.5; cursor:default; }
+.sc-rday { cursor:default; flex-wrap:wrap; }
+.sc-rday:hover > span:first-child { text-decoration:none; }
+.sc-rday .sc-row { flex-wrap:nowrap; }
+.sc-rlink { margin:6px 0 0; font-size:13.5px; }
+.sc-rows .sc-ways { margin:8px 0; }
+.sc-more { display:grid; gap:10px; padding:8px 2px 2px; justify-items:start; }
+.sc-more .sc-danger { width:100%; }

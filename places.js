@@ -391,6 +391,7 @@
   const seenSug = () => P.seen || (P.seen = load('seen', {}));
   const newSug = it => { const c = RC.n[it.id]; return c && c.sug ? Math.max(0, c.sug - (seenSug()[it.id] || 0)) : 0; };
   function stH(it) {
+    if (it.pub && CH[it.id]) return '<span class="sc-st r">Changes not published</span>';
     if (it.pub) { const c = it.mine && RC.n[it.id]; return `<span class="sc-st p">Published${c ? (c.started ? ' · ' + c.finished + ' done · ' + (c.started - c.finished) + ' started' : ' · no one yet') : ''}</span>`; }
     return readyOf(it) === 'ready' ? '<span class="sc-st r">Ready to publish</span>' : '<span class="sc-st d">Draft</span>';
   }
@@ -475,13 +476,16 @@
   }
   /* ---------- the teacher's panel for a real lesson (v3.1.72): ways to learn, try it as a student, publish ----------
      lesson.json holds the lesson and a small `styles` setting; publishing uses lesson-publish.js, the same code as Teacher Studio. */
-  const LX = {del: false, id: '', loading: false, L: null, styles: {conversation: true, lecture: true, voice: true, handsFree: true, jumpAhead: true}, msg: '', busy: '', sure: false};
+  const LX = {del: false, id: '', loading: false, L: null, rel: null, ways: false, more: false, styles: {conversation: true, lecture: true, voice: true, handsFree: true, jumpAhead: true}, msg: '', busy: '', sure: false};
   const BUCKET = 'lesson-files';
   const readLesson = async (db, id) => { const {data, error} = await db.storage.from(BUCKET).download(id + '/lesson.json'); if (error || !data) return null; try { const j = JSON.parse(await data.text()); return j && j.format === 'slides-v1' ? j : null; } catch (e) { return null; } };
   async function loadLx(it) {
-    Object.assign(LX, {del: false, id: it.id, loading: !!it.slides, L: null, msg: '', busy: '', sure: false, styles: {conversation: true, lecture: true, voice: true, handsFree: true, jumpAhead: true}});
-    if (!it.slides) return;
-    const db = deps.db(); let L = null; try { L = db ? await readLesson(db, it.id) : null; } catch (e) {}
+    Object.assign(LX, {del: false, id: it.id, loading: !!it.slides, L: null, rel: null, ways: false, more: false, msg: '', busy: '', sure: false, styles: {conversation: true, lecture: true, voice: true, handsFree: true, jumpAhead: true}});
+    const db = deps.db();
+    // v3.1.93: the latest release, for its version and for "Changes not published"
+    if (it.pub && db) { try { const {data} = await db.from('worldview_teacher_lesson_releases').select('version,published_at').eq('lesson_id', it.id).order('version', {ascending: false}).limit(1); if (LX.id === it.id) LX.rel = (data || [])[0] || null; } catch (e) {} }
+    if (!it.slides) { if (LX.id === it.id) deps.render(); return; }
+    let L = null; try { L = db ? await readLesson(db, it.id) : null; } catch (e) {}
     if (LX.id !== it.id) return;
     LX.loading = false; LX.L = L;
     if (L) LX.styles = {conversation: !(L.styles && L.styles.conversation === false), lecture: !(L.styles && L.styles.lecture === false), voice: !(L.styles && L.styles.voice === false), handsFree: !(L.styles && L.styles.handsFree === false), jumpAhead: !(L.styles && L.styles.jumpAhead === false)};
@@ -497,30 +501,66 @@
       return !error;
     } catch (e) { return false; }
   }
+  /* v3.1.93 (NAV-240): the lesson panel in the order a teacher needs it. One main button for the next step (Finish checking,
+     Publish to students, Publish changes, See every student), then the students, then short rows; settings and the rare or
+     risky actions (View, Teacher Studio, Unpublish, Delete) fold away. "Changes not published": a published slides lesson whose
+     lesson.json was saved after its latest release. */
+  const CH = {};
+  function changedOf(it) {
+    if (!it.pub || !it.slides || LX.id !== it.id || !LX.L || !LX.rel) return false;
+    const u = Date.parse(LX.L.updated || ''), p = Date.parse(LX.rel.published_at || '');
+    const v = !!(u && p && u > p + 2000); CH[it.id] = v; return v;
+  }
   function teacherPanel(it, c) {
-    const ready = !it.slides || !!(LX.L && LX.L.status !== 'drafting' && LX.L.slides && LX.L.slides.every(s => s.script));
-    const st = LX.styles, busy = LX.busy, id = esc(it.id), off = busy || LX.loading ? ' disabled' : '', pubOff = busy || LX.loading || !ready ? ' disabled' : '';
-    let h = `<p><span class="sc-tag ${it.pub ? 'p' : 'd'}">${it.pub ? 'Published' : 'Draft'}</span></p>
-      ${it.pub && it.mine ? resultsH(it) : ''}<label class="sc-f" for="sc-mv">${it.d ? 'Move to' : 'Put on a day'}</label><div class="sc-row"><input type="date" id="sc-mv" value="${it.d ? key(it.d) : nextMeetKey(c)}"><button type="button" class="cv-pill ghost" data-pa="move" data-id="${id}"${busy ? ' disabled' : ''}>${it.d ? 'Move' : 'Put on this day'}</button></div>${it.d ? `<button type="button" class="sc-link" data-pa="todrafts" data-id="${id}"${busy ? ' disabled' : ''}>Move back to drafts</button>` : ''}`;
+    const L = LX.id === it.id ? LX.L : null, loading = LX.loading && LX.id === it.id;
+    const drafting = !!(it.slides && L && L.status === 'drafting'), ready = !it.slides || !!(L && !drafting && Array.isArray(L.slides) && L.slides.every(s => s.script));
+    const changed = changedOf(it), st = LX.styles, busy = LX.busy, id = esc(it.id), dis = busy || loading ? ' disabled' : '';
+    const sp = 'slides.html?l=' + encodeURIComponent(it.id), studio = 'studio.html?from=places&l=' + encodeURIComponent(it.id);
+    const word = it.pub ? (changed ? 'Changes not published' : 'Published' + (LX.rel && LX.id === it.id ? ' · v' + LX.rel.version : '')) : loading ? 'Draft' : ready ? 'Ready to publish' : drafting ? 'Drafting' : 'Draft';
+    const tag = it.pub && !changed ? 'p' : ready && !loading ? 'r' : 'd';
+    /* the main button and the one line under it */
+    let main = '', hint = '';
+    if (loading) main = '<button type="button" class="cv-pill sc-main1" disabled>Loading…</button>';
+    else if (!ready) { main = `<a class="cv-pill sc-main1" href="${sp}#slides">${drafting ? 'Finish drafting' : 'Finish checking'}</a>`; hint = drafting ? 'Drafting stopped before every slide was written. Open it to finish.' : 'Every slide needs what the AI says before students can see it.'; }
+    else if (!it.pub) { main = `<button type="button" class="cv-pill sc-main1" data-pa="publish" data-id="${id}"${dis}>Publish to students</button>`; hint = it.d ? 'Students see it on ' + fmt(it.d) + '.' : 'It has no day yet. Students can start it any time.'; }
+    else if (changed) { main = `<button type="button" class="cv-pill sc-main1" data-pa="publish" data-id="${id}"${dis}>Publish changes</button>`; hint = 'You changed it after publishing. Students still get the earlier version until you publish.'; }
+    else main = `<button type="button" class="cv-pill sc-main1" data-pa="resall" data-open="1">See every student</button>`;
+    let h = `<p class="sc-stl"><span class="sc-tag ${tag}">${esc(word)}</span></p><div class="sc-mainrow">${main}</div>${hint ? `<p class="cv-muted sc-hint">${esc(hint)}</p>` : ''}<p class="sc-note" role="status">${esc(busy || LX.msg)}</p>`;
+    if (it.pub && it.mine) h += resultsH(it);
+    /* short rows */
+    const row = (inner, attrs, tagName) => `<${tagName || 'button'} ${tagName === 'a' ? '' : 'type="button" '}class="sc-r" ${attrs}>${inner}</${tagName || 'button'}>`;
+    const waysText = !it.slides ? '' : !L ? (loading ? 'Loading…' : '') : [st.conversation ? 'Conversation' : '', st.lecture ? 'Lecture with pauses' : ''].filter(Boolean).join(' · ') + (st.voice ? '' : ' · no voice');
+    h += '<div class="sc-rows">';
+    h += row('<span>Try it as a student</span>', `data-pa="try" data-id="${id}"${dis}`);
+    h += it.slides ? row('<span>Slides and what the AI says</span><em>' + (L && L.slides ? L.slides.length + ' slides' : '') + '</em>', `href="${sp}#slides"`, 'a') + row('<span>Goals and the check</span>', `href="${sp}#goals"`, 'a')
+      : row('<span>Open in Teacher Studio</span>', `href="${studio}"`, 'a');
     if (it.slides) {
-      const ck = (k, label) => `<label class="sc-ck"><input type="checkbox" data-pa="style" data-s="${k}"${st[k] ? ' checked' : ''}${busy ? ' disabled' : ''}> ${label}</label>`;
-      /* v3.1.75: each way of learning opens what is behind it: Lecture with pauses its slides and scripts, Conversation its map. */
-      const sp = 'slides.html?l=' + encodeURIComponent(it.id), M = LX.L && LX.L.map, nch = M && Array.isArray(M.chapters) ? M.chapters.length : 0;
-      const way = (k, label, href, what, sub) => `<div class="sc-way">${ck(k, label)}<a class="sc-open" href="${href}" aria-label="Open ${what}">Open</a>${sub ? `<span class="cv-muted sc-wsub">${sub}</span>` : ''}</div>`;
-      h += `<div class="sc-ways" role="group" aria-label="Ways students may learn this"><span class="sc-f">Ways students may learn this</span>${LX.loading ? '<p class="cv-muted">Loading…</p>' : !LX.L ? '<p class="cv-muted">This lesson\'s file couldn\'t be read. Reload and try again.</p>' :
-        way('lecture', 'Lecture with pauses', sp + '#slides', 'the slides and scripts', 'Slides and scripts') +
-        way('conversation', 'Conversation', sp + '#map', 'the conversation map', nch ? 'Map: ' + nch + ' chapter' + (nch === 1 ? '' : 's') : st.conversation ? 'No map yet: open it to build one' : 'No map yet') +
-        (st.conversation ? ck('jumpAhead', 'Students can jump ahead to a later part when they ask about it (the skipped parts come back after)') : '') +
-        `<a class="sc-link sc-goals" href="${sp}#goals">Goals and the check</a>` +
-        ck('voice', 'Voice: speaks, and students press Talk (or hold Space) to answer; typing always works') + (st.voice ? ck('handsFree', 'Students may turn on Hands-free (18+): the microphone stays on, no buttons. Untick for a class under 18') : '')}</div>`;
+      h += row(`<span>How students can learn it</span><em>${esc(LX.ways ? '' : waysText)}</em>`, `data-pa="lxways" aria-expanded="${!!LX.ways}"`);
+      if (LX.ways) {
+        const ck = (k, label) => `<label class="sc-ck"><input type="checkbox" data-pa="style" data-s="${k}"${st[k] ? ' checked' : ''}${busy ? ' disabled' : ''}> ${label}</label>`;
+        const M = L && L.map, nch = M && Array.isArray(M.chapters) ? M.chapters.length : 0;
+        const way = (k, label, href, what, sub) => `<div class="sc-way">${ck(k, label)}<a class="sc-open" href="${href}" aria-label="Open ${what}">Open</a>${sub ? `<span class="cv-muted sc-wsub">${sub}</span>` : ''}</div>`;
+        h += `<div class="sc-ways" role="group" aria-label="Ways students may learn this">${!L ? '<p class="cv-muted">This lesson\'s file couldn\'t be read. Reload and try again.</p>' :
+          way('conversation', 'Conversation', sp + '#map', 'the conversation map', nch ? 'Map: ' + nch + ' chapter' + (nch === 1 ? '' : 's') : st.conversation ? 'No map yet: open it to build one' : 'No map yet') +
+          (st.conversation ? ck('jumpAhead', 'Students can jump ahead to a later part when they ask about it (the skipped parts come back after)') : '') +
+          way('lecture', 'Lecture with pauses', sp + '#slides', 'the slides and scripts', 'Slides and scripts') +
+          ck('voice', 'Voice: speaks, and students press Talk (or hold Space) to answer; typing always works') + (st.voice ? ck('handsFree', 'Students may turn on Hands-free (18+): the microphone stays on. Untick for a class under 18') : '')}</div>`;
+      }
     }
-    h += `<div class="sc-acts"><button type="button" class="cv-pill" data-pa="try" data-id="${id}"${off}>Try it as a student</button>${it.slides ? '' : `<a class="cv-pill ghost" href="studio.html?from=places&l=${encodeURIComponent(it.id)}">Open in Teacher Studio</a>`}</div>
-      <p class="cv-muted">Try it opens your latest draft. Nothing you do there is saved or shown to anyone.</p>
-      <div class="sc-acts">${it.pub ? `<button type="button" class="cv-pill" data-pa="share" data-id="${id}">Share</button>${it.slides ? `<a class="cv-pill ghost" href="slides.html?l=${encodeURIComponent(it.id)}&amp;view=1">View lesson</a>` : ''}<button type="button" class="cv-pill ghost" data-pa="unpub" data-id="${id}"${busy ? ' disabled' : ''}>${LX.sure ? 'Press again: students lose access' : 'Unpublish'}</button><button type="button" class="cv-pill" data-pa="publish" data-id="${id}"${pubOff}>Publish changes</button>` : `<button type="button" class="cv-pill" data-pa="publish" data-id="${id}"${pubOff}>Publish to students</button>`}</div>
-      ${!ready && !LX.loading ? '<p class="cv-muted">Finish drafting every slide (Lecture with pauses › Open), then you can publish.</p>' : ''}
-      <p class="sc-note" role="status">${esc(busy || LX.msg)}</p>
-      <p class="cv-muted"><a class="sc-link" href="studio.html?from=places&l=${encodeURIComponent(it.id)}">More in Teacher Studio</a></p>
-      <div class="sc-danger">${LX.del ? `<p><b>Delete "${esc(it.title)}"?</b> The lesson, its slides and scripts are removed for good. This can't be undone.</p><div class="sc-acts"><button type="button" class="cv-pill sc-del" data-pa="delyes" data-id="${id}"${busy ? ' disabled' : ''}>Yes, delete this lesson</button><button type="button" class="cv-pill ghost" data-pa="delno">Keep it</button></div>` : `<button type="button" class="cv-pill ghost sc-del" data-pa="del" data-id="${id}"${busy || it.pub ? ' disabled' : ''}>Delete lesson</button>${it.pub ? '<p class="cv-muted">Unpublish this lesson before you can delete it.</p>' : ''}`}</div>`;
+    h += `<div class="sc-r sc-rday"><span>Day</span><span class="sc-row"><input type="date" id="sc-mv" value="${it.d ? key(it.d) : nextMeetKey(c)}" aria-label="Day for ${esc(it.title)}"><button type="button" class="cv-pill ghost" data-pa="move" data-id="${id}"${busy ? ' disabled' : ''}>${it.d ? 'Move' : 'Put on this day'}</button></span></div>`;
+    if (it.d) h += `<button type="button" class="sc-link sc-rlink" data-pa="todrafts" data-id="${id}"${busy ? ' disabled' : ''}>Take it off the calendar</button>`;
+    if (it.pub) h += row('<span>Share link</span><em>no account needed</em>', `data-pa="share" data-id="${id}"`);
+    h += row(`<span>More</span><em>${LX.more ? '' : (it.pub ? 'View, Teacher Studio, Unpublish' : 'Teacher Studio, Delete')}</em>`, `data-pa="lxmore" aria-expanded="${!!LX.more}"`);
+    h += '</div>';
+    if (LX.more) {
+      h += '<div class="sc-more">';
+      if (it.pub && it.slides) h += `<a class="sc-link" href="${sp}&amp;view=1">View the published lesson</a>`;
+      if (it.slides) h += `<a class="sc-link" href="${studio}">Open in Teacher Studio</a>`;
+      if (it.pub && !changed) h += `<button type="button" class="sc-link" data-pa="publish" data-id="${id}"${dis}>Publish again</button>`;
+      if (it.pub) h += `<button type="button" class="sc-link sc-del" data-pa="unpub" data-id="${id}"${busy ? ' disabled' : ''}>${LX.sure ? 'Press again: students lose access' : 'Unpublish'}</button>`;
+      h += `<div class="sc-danger">${LX.del ? `<p><b>Delete "${esc(it.title)}"?</b> The lesson, its slides and scripts are removed for good. This can't be undone.</p><div class="sc-acts"><button type="button" class="cv-pill sc-del" data-pa="delyes" data-id="${id}"${busy ? ' disabled' : ''}>Yes, delete this lesson</button><button type="button" class="cv-pill ghost" data-pa="delno">Keep it</button></div>` : `<button type="button" class="cv-pill ghost sc-del" data-pa="del" data-id="${id}"${busy || it.pub ? ' disabled' : ''}>Delete lesson</button>${it.pub ? '<p class="cv-muted">Unpublish it first, then you can delete it.</p>' : ''}`}</div>`;
+      h += '</div>';
+    }
     return h;
   }
   /* ---------- v3.1.77 (LES-342): students' results in the teacher's day panel ----------
@@ -775,7 +815,8 @@
       const latest = await PB.latestRelease(db, id);
       const r = await PB.publish({db, id, shared: it.pub, html, latest, setShared: v => PB.setShared(db, id, v), onProgress: t => { LX.busy = t; deps.render(); }});
       if (r.cancelled) LX.msg = 'Couldn\'t publish it. Check the internet connection and try again.';
-      else LX.msg = (r.again ? 'v' + r.version + ' is published again. ' : 'v' + r.version + ' is live for students. ') + 'They can open it from this calendar.' + (r.missing && r.missing.length ? ' Warning: it uses ' + r.missing.length + ' file' + (r.missing.length === 1 ? '' : 's') + ' that aren\'t on Worldview (' + r.missing.slice(0, 4).join(', ') + ').' : '');
+      else { LX.rel = {version: r.version, published_at: new Date().toISOString()}; CH[id] = false; if (LX.L) LX.L.updated = LX.rel.published_at; }
+      if (!r.cancelled) LX.msg = (r.again ? 'v' + r.version + ' is published again. ' : 'v' + r.version + ' is live for students. ') + 'They can open it from this calendar.' + (r.missing && r.missing.length ? ' Warning: it uses ' + r.missing.length + ' file' + (r.missing.length === 1 ? '' : 's') + ' that aren\'t on Worldview (' + r.missing.slice(0, 4).join(', ') + ').' : '');
     } catch (e) { LX.msg = (e.version ? 'v' + e.version + ' is published, but its files aren\'t locked in yet: ' : 'Couldn\'t publish it: ') + (e.message || e) + (e.version ? ' Press Publish changes to try again.' : ''); }
     LX.busy = ''; await deps.reload(); deps.render();
   }
@@ -793,6 +834,7 @@
     if (!next.conversation && !next.lecture) { LX.msg = 'Keep at least one way on, so students have a way to start.'; deps.render(); return; }
     LX.styles = next; LX.msg = 'Saving…'; deps.render();
     const ok = await saveStyles(id, next), it = mineItem(id);
+    if (ok && LX.L && LX.id === id) LX.L.updated = new Date(Date.now() + 5000).toISOString();
     LX.msg = ok ? 'Saved. ' + (it && it.pub ? 'Students get this when you publish changes.' : 'Students get this when you publish.') : 'Couldn\'t save that. Check the internet connection and try again.';
     deps.render();
   }
@@ -957,7 +999,9 @@
       case 'resopen': RES.open = RES.open === d.r ? '' : d.r; RES.stack = ''; if (RES.open) setTimeout(() => { const x = document.querySelector('.rs-x'); if (x) x.focus(); }, 30); break;
       case 'resclose': { const was = RES.open; RES.open = ''; deps.render(); setTimeout(() => { const m = [...document.querySelectorAll('[data-r]')].find(x => x.dataset.r === was); if (m) m.focus(); }, 30); return; }
       case 'resstack': RES.stack = RES.stack === d.k ? '' : d.k; break;
-      case 'resall': RES.all = !RES.all; break;
+      case 'resall': RES.all = d.open ? true : !RES.all; if (d.open) setTimeout(() => { const x = document.querySelector('.rs-list,.rs'); if (x) x.scrollIntoView({block: 'start', behavior: 'smooth'}); }, 60); break;
+      case 'lxways': LX.ways = !LX.ways; break;
+      case 'lxmore': LX.more = !LX.more; break;
       case 'resrefresh': { const it = mineItem(d.id); RC.key = ''; if (it) { loadRuns(it, true); return; } break; }
       case 'closeday': P.sel = null; break;
       case 'mon': P.month = new Date(P.month.getFullYear(), P.month.getMonth() + (+d.n), 1); break;
