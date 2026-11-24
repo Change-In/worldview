@@ -1,0 +1,67 @@
+/* Teach (v3.1.95, NAV-253/NAV-254): one calm page. Colours come from teacher.css (the same as Home). */
+.tc { max-width:1120px; margin:0 auto; padding:12px 16px 40px; }
+.top .backto { display:inline-flex; align-items:center; gap:6px; max-width:min(320px, 52vw); height:34px; padding:0 12px 2px 10px; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--ink); text-decoration:none; font-size:14px; font-weight:600; flex:none; }
+.top .backto .ar { font-size:20px; line-height:1; }
+.top .backto .bt { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.linkbtn { appearance:none; border:0; background:none; padding:0; color:var(--accent-700); font:inherit; font-size:14px; font-weight:650; cursor:pointer; text-decoration:underline; }
+.linkbtn[disabled] { opacity:.5; cursor:default; }
+.tc-h1 { font-size:clamp(30px, 6vw, 44px); line-height:1.08; margin:18px 0 16px; }
+#startview { max-width:680px; margin:0 auto; display:grid; gap:14px; }
+.tc-ask { background:var(--card); border:1px solid var(--line); border-radius:20px; padding:12px; display:grid; gap:10px; }
+.tc-ask textarea { border:0; background:transparent; font-size:17px; line-height:1.5; min-height:132px; resize:vertical; padding:6px; }
+.tc-ask textarea:focus-visible { outline:none; }
+.tc-ask:focus-within { border-color:var(--accent); }
+.tc-adds { display:flex; flex-wrap:wrap; gap:8px; }
+.tc-add { position:relative; display:inline-flex; align-items:center; min-height:38px; padding:6px 14px; border-radius:999px; border:1px solid var(--line); background:var(--paper); color:var(--ink); font-size:14px; font-weight:600; text-decoration:none; cursor:pointer; }
+.tc-add input { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; }
+.tc-add:focus-within, .tc-add:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.tc-add.on { background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
+.tc-files { display:flex; flex-wrap:wrap; gap:8px; }
+.tc-files:empty { display:none; }
+.tc-file { display:inline-flex; align-items:center; gap:8px; padding:4px 6px 4px 4px; border-radius:12px; background:var(--soft); font-size:13px; max-width:100%; }
+.tc-file img { width:40px; height:40px; object-fit:cover; border-radius:8px; }
+.tc-file span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px; }
+.tc-file button { appearance:none; border:0; background:none; cursor:pointer; color:var(--ink-soft); font-size:16px; width:28px; height:28px; }
+.tc-go { min-height:48px; padding:10px 26px; font-size:16px; }
+.tc-prog { display:grid; gap:6px; }
+.tc-prog p { margin:0; }
+.tc-msg { margin:0; color:var(--warn); font-weight:600; font-size:14px; }
+.tc-msg:empty { display:none; }
+.tc-msg.ok { color:var(--ok); }
+.tc-mine { margin-top:18px; display:grid; gap:8px; }
+.tc-mine h2 { font-size:22px; }
+.tc-row { display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:14px; background:var(--card); border:1px solid var(--line); color:var(--ink); text-decoration:none; }
+.tc-row img, .tc-row .ph { width:64px; height:40px; border-radius:6px; object-fit:cover; background:var(--soft); flex:none; }
+.tc-row b { display:block; font-weight:650; }
+.tc-row em { font-style:normal; font-size:13px; color:var(--ink-soft); }
+.tc-row:hover { border-color:var(--accent); }
+.tc-adv { margin-top:8px; }
+/* the lesson */
+.tc-head { display:grid; gap:6px; margin-bottom:12px; }
+.tc-title { font:400 clamp(24px, 4.5vw, 34px)/1.15 Georgia, "Times New Roman", serif; border:1px solid transparent; background:transparent; border-radius:10px; padding:4px 6px; margin-left:-6px; width:100%; }
+.tc-title:hover, .tc-title:focus { border-color:var(--line); background:var(--card); outline:none; }
+.chip.warn { background:var(--warn-100); color:var(--warn); }
+.tc-grid { display:grid; grid-template-columns:minmax(0, 1fr); gap:16px; align-items:start; }
+@media (min-width:900px) { .tc-grid { grid-template-columns:minmax(0, 420px) minmax(0, 1fr); } .tc-side { position:sticky; top:12px; } }
+.tc-preview .phone iframe { height:min(700px, 72vh); min-height:460px; }
+.tc-under { margin-top:8px; }
+.tc-side { display:grid; gap:12px; }
+.tc-side h2 { font-size:21px; }
+.tc-change textarea { min-height:84px; font-size:16px; }
+.tc-ideas { display:flex; flex-wrap:wrap; gap:6px; }
+.tc-ideas button { appearance:none; border:1px solid var(--line); background:var(--paper); border-radius:999px; padding:5px 12px; font-size:13px; font-weight:600; cursor:pointer; min-height:32px; }
+.tc-ideas button:hover { border-color:var(--accent); }
+.tc-share .big { min-height:46px; width:100%; font-size:15px; }
+.tc-link { display:flex; gap:8px; align-items:center; }
+.tc-link input { flex:1; min-width:0; font-size:13px; }
+.tc-share label.toggle { display:flex; gap:10px; align-items:center; font-weight:600; font-size:14px; min-height:36px; }
+.tc-share select { width:100%; min-height:40px; border-radius:12px; border:1px solid var(--line); background:var(--paper); padding:6px 10px; }
+.tc-more summary { cursor:pointer; font-weight:700; list-style:none; }
+.tc-more summary::-webkit-details-marker { display:none; }
+.tc-more summary::after { content:" ›"; color:var(--ink-soft); }
+.tc-more[open] summary::after { content:" ⌄"; }
+.tc-morelist { display:grid; gap:2px; margin-top:6px; }
+.tc-morelist a, .tc-morelist button { appearance:none; border:0; background:none; text-align:left; padding:9px 2px; color:var(--ink); font:inherit; font-weight:600; text-decoration:none; cursor:pointer; display:grid; gap:1px; border-top:1px solid var(--line); }
+.tc-morelist #del { color:var(--warn); }
+.tc-morelist p { margin:8px 0 0; }
+@media (max-width:899px) { .tc-preview .phone iframe { height:56vh; min-height:360px; } }

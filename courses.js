@@ -253,6 +253,8 @@
     home:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1z"/></svg>',
     courses:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18M3 12h18M3 17h18"/><circle cx="7" cy="7" r="1.9" fill="currentColor"/><circle cx="15" cy="12" r="1.9" fill="currentColor"/><circle cx="10" cy="17" r="1.9" fill="currentColor"/></svg>',
     profile:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/></svg>',
+    // v3.1.95 (NAV-253): Teach, a board on a stand
+    teach:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="11" rx="1.5"/><path d="M8 8.5h8M8 11.5h5M12 15v3M8.5 20.5 12 18l3.5 2.5"/></svg>',
     search:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
     chev:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>',
   };
@@ -260,7 +262,7 @@
   /* ---------------- DOM ---------------- */
   const bar = document.createElement('nav');
   bar.id = 'wv-tabbar'; bar.hidden = true; bar.setAttribute('aria-label', 'Main sections');
-  bar.innerHTML = `<div class="wv-tabbar-in"><button type="button" data-tabbar="home">${ICON.home}<span>Home</span></button><button type="button" data-tabbar="places">${ICON.places}<span>School</span></button><button type="button" data-tabbar="explore">${ICON.search}<span>Explore</span></button><button type="button" data-tabbar="profile">${ICON.profile}<span>Profile</span></button></div>`;
+  bar.innerHTML = `<div class="wv-tabbar-in"><button type="button" data-tabbar="home">${ICON.home}<span>Home</span></button><button type="button" data-tabbar="places">${ICON.places}<span>School</span></button><button type="button" data-tabbar="explore">${ICON.search}<span>Explore</span></button><button type="button" data-tabbar="teach">${ICON.teach}<span>Teach</span></button><button type="button" data-tabbar="profile">${ICON.profile}<span>Profile</span></button></div>`;
   const view = document.createElement('section');
   view.id = 'courses-view'; view.className = 'cv'; view.hidden = true; view.setAttribute('aria-label', 'School and Explore');
   document.body.append(view, bar);
@@ -333,7 +335,7 @@
   }
   function publishedSection(label) {
     if (PUB === null) return '<div class="cv-lab">' + label + '</div><p class="cv-muted" style="margin:0">Loading…</p>';
-    if (!PUB.length) return '<div class="cv-lab">' + label + '</div><a class="cv-find" href="studio.html" style="text-decoration:none"><span class="cv-find-i">+</span><span><b>Nothing published yet</b><span>Make a lesson in Teacher Studio and press Publish. It appears here.</span></span></a>';
+    if (!PUB.length) return '<div class="cv-lab">' + label + '</div><a class="cv-find" href="teach.html" style="text-decoration:none"><span class="cv-find-i">+</span><span><b>Nothing published yet</b><span>Make a lesson in Teach and press Publish. It appears here.</span></span></a>';
     return '<div class="cv-lab">' + label + '</div>' + PUB.map(p => `<div class="cv-course cv-real"><span class="t"><b>${esc(p.title)}</b>${chip(p.version ? 'Published v' + p.version : 'Shared', 'ok')}</span><span class="nx">${p.at ? 'Published ' + esc(new Date(p.at).toLocaleDateString([], {month: 'short', day: 'numeric'})) + ' · ' : ''}Students open it with a link, no account needed</span>
       <div class="cv-row" style="flex-wrap:wrap"><a class="cv-pill" href="${playLink(p.id)}" target="_blank" rel="noopener" style="text-decoration:none">Open lesson</a><button type="button" class="cv-pill ghost" data-copylink="${p.id}">Copy link</button><a class="cv-pill ghost" href="studio.html?l=${p.id}&side=pub" style="text-decoration:none">Results</a><a class="cv-pill ghost" href="studio.html?l=${p.id}" style="text-decoration:none">Edit</a></div></div>`).join('');
   }
@@ -350,7 +352,7 @@
   /* ---------------- screens ---------------- */
 function scrHome() {
     S.cat = ''; S.sub = 'All';
-    return `<div class="ex-hero"><h2>Anyone can build a lesson</h2><p>Make a lesson once, and anyone can learn from it by talking with an AI. <a class="sc-link" href="studio.html?from=explore">Build a lesson</a></p></div><label class="cv-search">${ICON.search}<input id="cv-q" type="search" placeholder="Search lessons" value="${esc(S.query)}" autocomplete="off"></label><div class="ex-grid" id="cv-results">${results()}</div>` + footnote;
+    return `<div class="ex-hero"><h2>Anyone can build a lesson</h2><p>Make a lesson once, and anyone can learn from it by talking with an AI. <a class="sc-link" href="teach.html">Teach something</a></p></div><label class="cv-search">${ICON.search}<input id="cv-q" type="search" placeholder="Search lessons" value="${esc(S.query)}" autocomplete="off"></label><div class="ex-grid" id="cv-results">${results()}</div>` + footnote;
   }
   const WP = () => window.WorldviewPlaces;
   function scrTeacher() {
@@ -379,7 +381,7 @@ function scrHome() {
     const q = S.query.trim().toLowerCase();
     const list = shown().filter(c => (!S.cat || c.cat === S.cat) && (!S.cat || S.sub === 'All' || c.sub === S.sub) && (!q || [c.title, c.by, c.sub, CATS.find(x => x.id === c.cat).name, ...c.chapters.flat()].join(' ').toLowerCase().includes(q))).sort(sortFns[S.sort]);
     const real = S.cat ? [] : REAL().filter(p => !q || (p.title || '').toLowerCase().includes(q));
-    return real.map(exReal).join('') + list.map(exCard).join('') || `<div class="ex-empty">Nothing here yet. <a href="studio.html?from=explore">Be the first to teach it</a></div>`;
+    return real.map(exReal).join('') + list.map(exCard).join('') || `<div class="ex-empty">Nothing here yet. <a href="teach.html">Be the first to teach it</a></div>`;
   }
   const sortSeg = () => `<div class="pl-sorts" role="group" aria-label="Sort">${[['popular','Popular'],['new','New'],['rated','Top rated']].map(([k, l]) => `<button type="button" data-sort="${k}" class="${S.sort === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
   const searchBox = () => `<label class="cv-search">${ICON.search}<input id="cv-q" type="search" placeholder="Search lessons, subjects, teachers" value="${esc(S.query)}" autocomplete="off"></label>`;
@@ -591,6 +593,7 @@ function scrHome() {
   bar.addEventListener('click', e => {
     const b = e.target.closest('[data-tabbar]'); if (!b) return;
     const t = b.dataset.tabbar;
+    if (t === 'teach') { location.href = 'teach.html'; return; } // NAV-253: its own page, one tap from anywhere
     if (t === 'places' || t === 'explore') { S.area = t; S.sheet = null; if (t === 'places') WP().home(); else { S.expanded = null; S.scr = 'home'; } if (S.open) render(); else openCourses(); view.scrollTop = 0; return; }
     jumpDeck(t);
     if (S.open) requestAnimationFrame(() => requestAnimationFrame(closeCourses)); else syncBar();

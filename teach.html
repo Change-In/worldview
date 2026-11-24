@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<script>/* The old GitHub Pages address sends everyone to Worldview's real address (Cloudflare), keeping the page and its ?l= etc. */if(location.hostname==="change-in.github.io")location.replace("https://worldview.cristianjperezb.workers.dev"+location.pathname.replace(/^\/worldview/,"")+location.search+location.hash);</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Teach · Worldview</title>
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="teacher.css?v=3.1.39">
+<link rel="stylesheet" href="teach.css?v=3.1.95">
+</head>
+<body>
+<!-- NAV-253, NAV-254, LES-384, BUS-104 (v3.1.95): one Teach page for anyone signed in.
+     Start: say what you want to teach (or add photos, notes, slides) and Worldview makes the lesson.
+     Lesson (?l=): the lesson as a student sees it, one "Change something" box, and Share. Everything else is under More. -->
+<div class="tc">
+  <div class="top"><a class="backto" id="backto" href="./" aria-label="Back to Worldview"><span class="ar" aria-hidden="true">‹</span><span class="bt" id="backt">Worldview</span></a><b class="grow">Teach</b><span class="status" id="saved" role="status"></span></div>
+
+  <div class="card" id="signedout" hidden>
+    <h2>Sign in first</h2>
+    <p>Teaching uses your Worldview account, so your lessons are kept for you. Sign in on Worldview, then come back.</p>
+    <div class="row"><a class="btn" href="./">Go to Worldview</a></div>
+  </div>
+  <p class="muted" id="loading">Loading…</p>
+
+  <!-- START -->
+  <section id="startview" hidden>
+    <h1 class="tc-h1">What do you want to teach?</h1>
+    <div class="tc-ask">
+      <textarea id="what" rows="5" maxlength="20000" placeholder="For example: how compound interest works, for first-year students. Ten minutes, with one worked example." aria-label="What you want to teach"></textarea>
+      <div class="tc-files" id="files"></div>
+      <div class="tc-adds">
+        <label class="tc-add"><input type="file" id="pick" accept="image/*,.txt,.md,text/plain" multiple><span>+ Photos or notes</span></label>
+        <a class="tc-add" id="pdfadd" href="slides.html?from=teach"><span>+ Slides (PDF)</span></a>
+        <button type="button" class="tc-add" id="talk" hidden><span>Talk instead</span></button>
+      </div>
+    </div>
+    <div class="row"><button type="button" class="btn tc-go" id="make">Make my lesson</button></div>
+    <div class="tc-prog" id="prog" hidden><div class="bar"><i id="progbar"></i></div><p id="progt"></p><p class="muted small">Keep this page open. It takes about a minute.</p></div>
+    <p class="tc-msg" id="makemsg" role="alert"></p>
+    <p class="muted small">Worldview writes it, you try it as a student, then share it. You can change anything first. Free for now: 3 new lessons a month.</p>
+
+    <section class="tc-mine" id="mine" hidden><h2>Your lessons</h2><div id="minelist"></div></section>
+    <p class="muted small tc-adv">Advanced: <a href="studio.html?from=teach">Teacher Studio</a> builds a lesson as code with your own AI on a computer.</p>
+  </section>
+
+  <!-- THE LESSON -->
+  <section id="lessonview" hidden>
+    <header class="tc-head">
+      <input class="tc-title" id="title" maxlength="90" aria-label="Lesson name" autocomplete="off">
+      <div class="row"><span class="chip" id="state">Draft · only you see it</span><span class="muted small" id="flag"></span></div>
+    </header>
+    <div class="tc-grid">
+      <div class="tc-preview">
+        <div class="phone"><iframe id="frame" title="The lesson as a student sees it" allow="microphone; autoplay; fullscreen"></iframe></div>
+        <div class="row tc-under"><span class="muted small">This is what students see. Nothing you do here is saved.</span><span class="grow"></span><a class="linkbtn" id="full" target="_blank" rel="noopener">Open full screen</a></div>
+      </div>
+      <div class="tc-side">
+        <div class="card tc-change">
+          <h2>Change something</h2>
+          <textarea id="ask" rows="3" maxlength="1000" placeholder="Say it in plain words. For example: make it shorter, use simpler words, add an example about rent." aria-label="What to change"></textarea>
+          <div class="tc-ideas" id="ideas"><button type="button" data-idea="Make it shorter">Shorter</button><button type="button" data-idea="Use simpler words">Simpler words</button><button type="button" data-idea="Add one worked example">Add an example</button><button type="button" data-idea="Ask the student more questions along the way">More questions</button></div>
+          <div class="row"><button type="button" class="btn" id="send">Change it</button><span class="grow"></span><button type="button" class="linkbtn" id="undo" hidden>Undo</button></div>
+          <p class="tc-msg" id="chmsg" role="status"></p>
+        </div>
+        <div class="card tc-share" id="share"></div>
+        <details class="card tc-more"><summary>More</summary>
+          <div class="tc-morelist">
+            <a id="edit" href="#">Edit slide by slide <span class="muted small">every slide's words, goals and the end questions</span></a>
+            <a id="studio" href="#">Teacher Studio <span class="muted small">advanced: the lesson as code</span></a>
+            <button type="button" id="unpub" hidden>Unpublish <span class="muted small">students can't open it; results are kept</span></button>
+            <button type="button" id="del">Delete lesson</button>
+            <p class="muted small" id="cost"></p>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="places-classes.js?v=3.1.94"></script>
+<script src="lesson-publish.js?v=3.1.72"></script>
+<script src="teach.js?v=3.1.95"></script>
+</body>
+</html>

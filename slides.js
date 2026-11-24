@@ -24,7 +24,10 @@
   /* Back goes to the class's calendar in Teacher view, never to the School home. */
   /* v3.1.91 (BUG-536): back opens the same class, and the lesson's panel when there is a lesson (#places/<class>/<lesson>). */
   const classHref = (id, lid) => './#places' + (id || lid ? '/' + encodeURIComponent(id || '-') : '') + (lid ? '/' + encodeURIComponent(lid) : '');
+  // v3.1.95 (NAV-253): opened from the Teach page: back goes to Teach, and a finished lesson opens there
+  const FROM_TEACH = new URLSearchParams(location.search).get('from') === 'teach';
   const setBack = id => {
+    if (FROM_TEACH) { const b = $('#backto'), href = row && row.id ? 'teach.html?l=' + encodeURIComponent(row.id) : 'teach.html'; b.href = href; b.innerHTML = '<span class="ar" aria-hidden="true">‹</span><span class="bt">Teach</span>'; b.setAttribute('aria-label', 'Back to Teach'); const m = document.querySelector('.top .mark'); if (m) { m.href = href; m.setAttribute('aria-label', 'Back to Teach'); } return; }
     const c = id && WC.get(id), href = classHref(c ? c.id : '', row && row.id), name = c ? c.name : 'School', b = $('#backto');
     b.href = href; b.innerHTML = '<span class="ar" aria-hidden="true">‹</span><span class="bt">' + esc(name) + '</span>'; b.setAttribute('aria-label', 'Back to ' + name);
     const m = document.querySelector('.top .mark'); if (m) { m.href = href; m.setAttribute('aria-label', 'Back to ' + name); }
@@ -201,6 +204,7 @@
     }
     busy = false; curQ = null; renderQueue();
     const done = Q.filter(x => x.state === 'done');
+    if (Q.length === 1 && done.length === 1 && FROM_TEACH) { location.replace('teach.html?l=' + encodeURIComponent(done[0].row.id)); return; }
     if (Q.length === 1 && done.length === 1) { row = done[0].row; L = done[0].L; history.replaceState(null, '', 'slides.html?l=' + row.id); return openLesson(); }
     row = null; L = null;
     if (done.length) toast(done.length === 1 ? 'One lesson is drafted.' : done.length + ' lessons are drafted.');
@@ -673,8 +677,8 @@
       $('#for').innerHTML = classOptions(); $('#for').value = (classOfRow() || {}).id || WC.list()[0].id; setBack((classOfRow() || {}).id); resumeRow = row; row = null;
       show('newview'); $('#nvh').textContent = 'Choose the PDF again to finish this lesson'; $('#nvp').textContent = 'Its slides never finished saving. Choose the same presentation again and it is drafted into this lesson.'; return;
     }
-    $('#for').innerHTML = classOptions();
-    const want = WC.get(q.get('class')) || WC.list()[0]; $('#for').value = want.id; setBack(want.id);
+    $('#for').innerHTML = (FROM_TEACH ? '<option value="">No course</option>' : '') + classOptions();
+    const want = WC.get(q.get('class')) || WC.list()[0]; $('#for').value = FROM_TEACH && !q.get('class') ? '' : want.id; setBack(want.id);
     $('#for').addEventListener('change', () => setBack($('#for').value));
     if (DAY) $('#nvp').textContent = 'It goes on ' + new Date(DAY + 'T12:00:00').toLocaleDateString([], {weekday: 'long', month: 'long', day: 'numeric'}) + '. Choose one or more presentations saved as PDFs. Worldview writes what the AI will say on each slide, the goals, and questions for the end. You can change all of it before students see anything.';
     show('newview');
